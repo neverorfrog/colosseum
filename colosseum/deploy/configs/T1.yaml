@@ -34,7 +34,7 @@ common:
   ]
 
 policy:
-  policy_path: "colosseum/deploy/models/T1.pt"
+  policy_path: "models/booster_gym.pt"
   num_actions: 12
   num_observations: 52
   gait_frequency: 1
