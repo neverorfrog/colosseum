@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://mydomain.org/mysite/mjlab/simulation_layer/">
       
       
-        <link rel="prev" href="../overview/">
+        <link rel="prev" href="../scene_layer/">
       
       
       
@@ -461,6 +461,62 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../task_layer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Task Layer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scene_layer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scene Layer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -546,546 +602,6 @@
 
 
 <h1 id="deep-dive-simulation-layer">Deep Dive: Simulation Layer</h1>
-<p>Let me search for detailed information about the simulation layer and MuJoCo Warp integration.Perfect! Now I have comprehensive information about the simulation layer. Let me give you a detailed deep dive.</p>
-<hr />
-<h1 id="simulation-layerr-deep-dive">🔬 <strong>Simulation Layerr - Deep Dive</strong></h1>
-<h2 id="1-what-is-mujoco-warp"><strong>1. What is MuJoCo Warp?</strong></h2>
-<p><strong>MuJoCo Warp (mjwarp)</strong> is a GPU-accelerated batched version of MuJoCo built on top of <strong>NVIDIA Warp</strong>. Here's what makes it special:</p>
-<h3 id="key-concepts"><strong>Key Concepts:</strong></h3>
-<p><strong>Standard MuJoCo:</strong></p>
-<pre><code class="language-python"># CPU-based, single environment
-model = mujoco.MjModel.from_xml_path(&quot;robot.xml&quot;)
-data = mujoco.MjData(model)
-mujoco.mj_step(model, data)  # One env, runs on CPU
-</code></pre>
-<p><strong>MuJoCo Warp:</strong></p>
-<pre><code class="language-python"># GPU-based, batched environments
-wp_model = mjwarp.put_model(mj_model)  # Upload to GPU
-wp_data = mjwarp.put_data(mj_model, mj_data, nworld=4096)  # 4096 parallel worlds
-mjwarp.step(wp_model, wp_data)  # All 4096 envs step in parallel on GPU!
-</code></pre>
-<h3 id="what-is-nworld"><strong>What is "nworld"?</strong></h3>
-<ul>
-<li><strong>nworld</strong> = number of parallel environments (worlds)</li>
-<li>Each world has its own state: <code>qpos</code>, <code>qvel</code>, <code>qacc</code>, <code>ctrl</code>, etc.</li>
-<li>All worlds share the <strong>same model</strong> (same robot, same physics parameters)</li>
-<li>Arrays are shaped: <code>(nworld, original_dim)</code></li>
-</ul>
-<p>Example:</p>
-<pre><code class="language-python">qpos.shape = (4096, nq)  # 4096 environments, nq joint positions each
-qvel.shape = (4096, nv)  # 4096 environments, nv velocities each
-</code></pre>
-<hr />
-<h2 id="2-simulation-class-architecture"><strong>2. Simulation Class Architecture</strong></h2>
-<p>Let's break down the <code>Simulation</code> class step by step:</p>
-<h3 id="initialization-flow"><strong>Initialization Flow:</strong></h3>
-<pre><code class="language-python">class Simulation:
-    def __init__(self, num_envs: int, cfg: SimulationCfg, 
-                 model: mujoco.MjModel, device: str):
-</code></pre>
-<p><strong>Step 1: Setup Device</strong></p>
-<pre><code class="language-python">self.device = device  # e.g., &quot;cuda:0&quot;
-self.wp_device = wp.get_device(device)  # Warp device object
-self.num_envs = num_envs  # Number of parallel environments
-</code></pre>
-<p><strong>Step 2: Create MuJoCo CPU Model (Template)</strong></p>
-<pre><code class="language-python">self._mj_model = model  # Standard MuJoCo model (CPU)
-self._mj_data = mujoco.MjData(model)  # Single env data (CPU)
-mujoco.mj_forward(self._mj_model, self._mj_data)  # Initialize
-</code></pre>
-<ul>
-<li>This creates the "template" that will be replicated across all GPU environments</li>
-</ul>
-<p><strong>Step 3: Upload to GPU with Warp</strong></p>
-<pre><code class="language-python">with wp.ScopedDevice(self.wp_device):
-    # Upload model to GPU
-    self._wp_model = mjwarp.put_model(self._mj_model)
-
-    # Configure options
-    self._wp_model.opt.ls_parallel = cfg.ls_parallel  # Parallel linesearch
-
-    # Upload data and create nworld copies
-    self._wp_data = mjwarp.put_data(
-        self._mj_model,
-        self._mj_data,
-        nworld=self.num_envs,  # Create 4096 parallel worlds
-        nconmax=cfg.nconmax,   # Max contacts per world
-        njmax=cfg.njmax         # Max constraints per world
-    )
-</code></pre>
-<p><strong>Step 4: Create Bridges (PyTorch Interop)</strong></p>
-<pre><code class="language-python">self._model_bridge = WarpBridge(self._wp_model, nworld=self.num_envs)
-self._data_bridge = WarpBridge(self._wp_data)
-</code></pre>
-<ul>
-<li>These wrap Warp arrays to make them behave like PyTorch tensors</li>
-<li>Enables zero-copy memory sharing between Warp and PyTorch</li>
-</ul>
-<p><strong>Step 5: CUDA Graph Optimization</strong></p>
-<pre><code class="language-python">self.use_cuda_graph = (
-    self.wp_device.is_cuda and 
-    wp.is_mempool_enabled(self.wp_device)
-)
-self.create_graph()  # Pre-record GPU operations
-</code></pre>
-<p><strong>Step 6: NaN Guard</strong></p>
-<pre><code class="language-python">self.nan_guard = NanGuard(cfg.nan_guard, self.num_envs, self._mj_model)
-</code></pre>
-<ul>
-<li>Debugging tool to detect and log NaN/Inf values</li>
-</ul>
-<hr />
-<h2 id="3-cuda-graphs-performance-optimization"><strong>3. CUDA Graphs - Performance Optimization</strong></h2>
-<h3 id="what-are-cuda-graphs"><strong>What are CUDA Graphs?</strong></h3>
-<p>CUDA graphs <strong>record</strong> a sequence of GPU operations once, then <strong>replay</strong> them with near-zero overhead.</p>
-<p><strong>Without CUDA Graphs:</strong></p>
-<pre><code class="language-python"># Every step incurs kernel launch overhead
-for _ in range(1000):
-    mjwarp.step(model, data)  # Launch kernels, CPU overhead each time
-</code></pre>
-<p><strong>With CUDA Graphs:</strong></p>
-<pre><code class="language-python"># Record once
-with wp.ScopedCapture() as capture:
-    mjwarp.step(model, data)  # Record all kernels
-step_graph = capture.graph
-
-# Replay 1000x with minimal overhead
-for _ in range(1000):
-    wp.capture_launch(step_graph)  # Just replay, super fast!
-</code></pre>
-<p><strong>In mjlab:</strong></p>
-<pre><code class="language-python">def create_graph(self):
-    if self.use_cuda_graph:
-        # Record step graph
-        with wp.ScopedCapture() as capture:
-            mjwarp.step(self.wp_model, self.wp_data)
-        self.step_graph = capture.graph
-
-        # Record forward graph
-        with wp.ScopedCapture() as capture:
-            mjwarp.forward(self.wp_model, self.wp_data)
-        self.forward_graph = capture.graph
-</code></pre>
-<p><strong>Performance Impact:</strong>
-- ~2-3x speedup for batched simulations
-- Reduces CPU-GPU synchronization overhead
-- Critical for high-throughput RL training</p>
-<hr />
-<h2 id="4-core-simulation-methods"><strong>4. Core Simulation Methods</strong></h2>
-<h3 id="forward-compute-forward-kinematics"><strong>forward() - Compute forward kinematics</strong></h3>
-<pre><code class="language-python">def forward(self):
-    with wp.ScopedDevice(self.wp_device):
-        if self.use_cuda_graph and self.forward_graph is not None:
-            wp.capture_launch(self.forward_graph)  # Use cached graph
-        else:
-            mjwarp.forward(self.wp_model, self.wp_data)  # Run directly
-</code></pre>
-<p><strong>What it does:</strong>
-- Computes derived quantities from <code>qpos</code>, <code>qvel</code>
-- Updates: <code>xpos</code>, <code>xmat</code>, <code>xquat</code> (body positions/orientations)
-- Updates: <code>xipos</code>, <code>ximat</code> (body inertial frame positions/orientations)
-- Does NOT integrate physics or apply forces</p>
-<p><strong>When to use:</strong>
-- After manually setting <code>qpos</code>/<code>qvel</code>
-- To update visualization without stepping physics</p>
-<h3 id="step-integrate-physics"><strong>step() - Integrate physics</strong></h3>
-<pre><code class="language-python">def step(self):
-    with wp.ScopedDevice(self.wp_device):
-        with self.nan_guard.watch(self.data):  # Detect NaNs
-            if self.use_cuda_graph and self.step_graph is not None:
-                wp.capture_launch(self.step_graph)
-            else:
-                mjwarp.step(self.wp_model, self.wp_data)
-</code></pre>
-<p><strong>What it does:</strong>
-- <strong>Complete physics step</strong>: forward → inverse → forces → constraints → integration
-- Updates <code>qpos</code>, <code>qvel</code> based on <code>ctrl</code> (control inputs)
-- Resolves contacts, applies constraints
-- Advances simulation by <code>dt</code> (timestep)</p>
-<p><strong>The Full MuJoCo Pipeline:</strong></p>
-<pre><code>1. mj_forward()    - Kinematics from qpos/qvel
-2. mj_inverse()    - Compute qacc from forces
-3. mj_collision()  - Detect collisions
-4. mj_sensor()     - Update sensor readings  
-5. mj_integrate()  - Update qpos/qvel
-</code></pre>
-<hr />
-<h2 id="5-warpbridge-pytorch-interoperability"><strong>5. WarpBridge - PyTorch Interoperability</strong></h2>
-<p>The <strong>WarpBridge</strong> and <strong>TorchArray</strong> classes enable seamless PyTorch operations on Warp data.</p>
-<h3 id="problem"><strong>Problem:</strong></h3>
-<ul>
-<li>Warp uses <code>wp.array</code> (GPU arrays)</li>
-<li>PyTorch uses <code>torch.Tensor</code></li>
-<li>Need to share memory without copying</li>
-</ul>
-<h3 id="solution-zero-copy-wrapping"><strong>Solution: Zero-Copy Wrapping</strong></h3>
-<pre><code class="language-python">class TorchArray:
-    def __init__(self, wp_array: wp.array, nworld: int | None = None):
-        self._wp_array = wp_array
-        self._tensor = wp.to_torch(wp_array)  # Zero-copy conversion!
-</code></pre>
-<p><strong>Key Features:</strong></p>
-<p><strong>1. Zero-Copy Memory Sharing:</strong></p>
-<pre><code class="language-python"># wp_data.qpos is a Warp array
-# But accessing it returns a TorchArray that wraps a PyTorch tensor
-qpos = sim.data.qpos  # TorchArray wrapping torch.Tensor
-qpos[0, :] = new_positions  # Writes directly to GPU memory!
-</code></pre>
-<p><strong>2. Automatic Broadcasting for Domain Randomization:</strong></p>
-<pre><code class="language-python"># If nworld &gt; 1 and first dim has stride 0 (shared across envs)
-if self._tensor.stride(0) == 0 and self._tensor.shape[0] == 1:
-    new_shape = (nworld,) + self._tensor.shape[1:]
-    self._tensor = self._tensor.expand(new_shape)
-</code></pre>
-<p>This handles model fields that are shared initially but can be expanded for per-env randomization.</p>
-<p><strong>3. PyTorch Operations Work Seamlessly:</strong></p>
-<pre><code class="language-python"># All PyTorch operations work!
-qpos = sim.data.qpos  # TorchArray
-mean_qpos = qpos.mean(dim=0)  # Works!
-qpos_clipped = torch.clamp(qpos, min=-1, max=1)  # Works!
-loss = (qpos - target).pow(2).sum()  # Works!
-</code></pre>
-<p><strong>4. Read-Only for CUDA Graph Safety:</strong></p>
-<pre><code class="language-python"># This is FORBIDDEN (would break CUDA graphs):
-sim.data.qpos = new_tensor  # AttributeError!
-
-# This is CORRECT (in-place modification):
-sim.data.qpos[:] = new_tensor  # ✓ Memory address unchanged
-</code></pre>
-<h3 id="warpbridge-class"><strong>WarpBridge Class:</strong></h3>
-<pre><code class="language-python">class WarpBridge:
-    &quot;&quot;&quot;Wraps mjwarp objects to expose Warp arrays as PyTorch tensors.&quot;&quot;&quot;
-
-    def __getattr__(self, name: str):
-        # Cache wrapped arrays
-        if name in self._wrapped_cache:
-            return self._wrapped_cache[name]
-
-        val = getattr(self._struct, name)
-
-        # Wrap Warp arrays as TorchArray
-        if isinstance(val, wp.array):
-            wrapped = TorchArray(val, nworld=self._nworld)
-            self._wrapped_cache[name] = wrapped
-            return wrapped
-
-        return val
-</code></pre>
-<p><strong>Usage:</strong></p>
-<pre><code class="language-python"># Accessing data through bridge
-sim.data.qpos  # Returns TorchArray (behaves like torch.Tensor)
-sim.data.qvel  # Returns TorchArray
-sim.data.ctrl  # Returns TorchArray
-
-# All are zero-copy, directly accessing GPU memory!
-</code></pre>
-<hr />
-<h2 id="6-data-layout-key-arrays"><strong>6. Data Layout &amp; Key Arrays</strong></h2>
-<h3 id="configuration-arrays-model"><strong>Configuration Arrays (Model):</strong></h3>
-<pre><code class="language-python"># Stored in sim.model (mjwarp.Model)
-model.body_mass        # (nbody,) - mass of each body
-model.body_pos         # (nbody, 3) - position in parent frame
-model.jnt_range        # (nv, 2) - joint limits [min, max]
-model.actuator_gainprm # (nu, 10) - actuator gain parameters
-model.geom_friction    # (ngeom, 3) - friction coefficients
-</code></pre>
-<h3 id="state-arrays-data"><strong>State Arrays (Data):</strong></h3>
-<pre><code class="language-python"># Stored in sim.data (mjwarp.Data)
-# All have shape (nworld, ...)
-
-# --- Configuration Space ---
-data.qpos    # (nworld, nq) - generalized positions
-data.qvel    # (nworld, nv) - generalized velocities
-data.qacc    # (nworld, nv) - generalized accelerations
-
-# --- Control &amp; Actuation ---
-data.ctrl    # (nworld, nu) - control inputs to actuators
-data.actuator_force  # (nworld, nu) - forces produced by actuators
-
-# --- Cartesian Space ---
-data.xpos    # (nworld, nbody, 3) - body positions (world frame)
-data.xmat    # (nworld, nbody, 3, 3) - body orientations (rotation matrices)
-data.xquat   # (nworld, nbody, 4) - body orientations (quaternions)
-data.xipos   # (nworld, nbody, 3) - body inertial frame positions
-data.cvel    # (nworld, nbody, 6) - body velocities (CoM frame)
-
-# --- Geometry ---
-data.geom_xpos  # (nworld, ngeom, 3) - geom positions (world)
-data.geom_xmat  # (nworld, ngeom, 3, 3) - geom orientations
-
-# --- Sites (markers/sensors) ---
-data.site_xpos  # (nworld, nsite, 3) - site positions
-data.site_xmat  # (nworld, nsite, 3, 3) - site orientations
-
-# --- External Forces ---
-data.xfrc_applied  # (nworld, nbody, 6) - external forces/torques
-
-# --- Contacts ---
-data.contact       # Contact information (complex structure)
-data.ncon          # (nworld,) - number of contacts per world
-
-# --- Other ---
-data.subtree_com   # (nworld, nbody, 3) - subtree center of mass
-data.qfrc_applied  # (nworld, nv) - applied forces in joint space
-</code></pre>
-<h3 id="understanding-qpos-vs-joint_pos"><strong>Understanding qpos vs joint_pos:</strong></h3>
-<p><strong>qpos</strong> (generalized positions):
-- Includes ALL degrees of freedom
-- For floating base: <code>[root_x, root_y, root_z, root_quat_w, root_quat_x, root_quat_y, root_quat_z, joint1, joint2, ...]</code>
-- Shape: <code>(nworld, nq)</code> where <code>nq = 7 (if floating) + num_joints</code></p>
-<p><strong>joint_pos</strong> (just articulated joints):
-- Only the actuated/fixed joints
-- Excludes the free joint (floating base)
-- Shape: <code>(nworld, nv)</code> where <code>nv = num_joints</code></p>
-<p><strong>Accessing through Entity:</strong></p>
-<pre><code class="language-python">robot.data.joint_pos  # Just joints: (nworld, nv)
-robot.data.root_link_pos_w  # Just root position: (nworld, 3)
-robot.data.root_link_quat_w  # Just root orientation: (nworld, 4)
-</code></pre>
-<hr />
-<h2 id="7-domain-randomization"><strong>7. Domain Randomization</strong></h2>
-<p>One of mjlab's coolest features: <strong>per-environment model parameters</strong>!</p>
-<h3 id="how-it-works"><strong>How it Works:</strong></h3>
-<p><strong>Step 1: Identify Fields to Randomize</strong></p>
-<pre><code class="language-python"># EventManager collects fields that need per-env randomization
-fields = [&quot;geom_friction&quot;, &quot;body_mass&quot;, &quot;actuator_gainprm&quot;]
-</code></pre>
-<p><strong>Step 2: Expand Model Fields</strong></p>
-<pre><code class="language-python">sim.expand_model_fields(fields)
-</code></pre>
-<p><strong>Step 3: The Magic - repeat_array_kernel</strong></p>
-<pre><code class="language-python">@wp.kernel
-def repeat_array_kernel(src, nelems_per_world, dst):
-    tid = wp.tid()
-    src_idx = tid % nelems_per_world
-    dst[tid] = src[src_idx]
-</code></pre>
-<p><strong>What happens:</strong></p>
-<pre><code class="language-python"># BEFORE expansion:
-geom_friction.shape = (1, ngeom, 3)  # Shared across all envs
-geom_friction.stride(0) = 0  # Stride-0 means shared
-
-# AFTER expansion:
-geom_friction.shape = (nworld, ngeom, 3)  # Per-env values!
-geom_friction.stride(0) != 0  # Now can be modified per-env
-</code></pre>
-<p><strong>Step 4: Randomize Per Environment</strong></p>
-<pre><code class="language-python"># Now you can set different values for each environment!
-for i in range(num_envs):
-    sim.model.geom_friction[i, :, 0] = random.uniform(0.5, 1.5)
-</code></pre>
-<p><strong>Real Example from mjlab:</strong></p>
-<pre><code class="language-python"># In EventManager - randomize foot friction
-def randomize_friction(env):
-    robot = env.scene[&quot;robot&quot;]
-    foot_geom_ids = robot.indexing.geom_ids[foot_indices]
-
-    # Generate random friction for each environment
-    random_friction = torch.rand(num_envs, device=device) * 0.9 + 0.3  # [0.3, 1.2]
-
-    # Apply to each environment
-    env.sim.model.geom_friction[:, foot_geom_ids, 0] = random_friction.unsqueeze(-1)
-</code></pre>
-<hr />
-<h2 id="8-configuration-simulationcfg"><strong>8. Configuration - SimulationCfg</strong></h2>
-<h3 id="mujococfg-physics-parameters"><strong>MujocoCfg - Physics Parameters:</strong></h3>
-<pre><code class="language-python">@dataclass
-class MujocoCfg:
-    # Time
-    timestep: float = 0.002  # 2ms physics timestep (500 Hz)
-
-    # Integration
-    integrator: &quot;euler&quot; | &quot;implicitfast&quot; = &quot;implicitfast&quot;
-    # - euler: explicit Euler (fast, less stable)
-    # - implicitfast: semi-implicit (stable, recommended)
-
-    # Solver
-    solver: &quot;newton&quot; | &quot;cg&quot; | &quot;pgs&quot; = &quot;newton&quot;
-    # - newton: Newton-Raphson (accurate, slower)
-    # - cg: Conjugate Gradient (fast, good for many contacts)
-    # - pgs: Projected Gauss-Seidel (fastest, less accurate)
-
-    iterations: int = 100  # Max solver iterations
-    tolerance: float = 1e-8  # Convergence tolerance
-
-    ls_iterations: int = 50  # Line search iterations
-    ls_tolerance: float = 0.01  # Line search tolerance
-
-    # Friction
-    cone: &quot;pyramidal&quot; | &quot;elliptic&quot; = &quot;pyramidal&quot;
-    # - pyramidal: 4-sided friction cone (faster)
-    # - elliptic: smooth friction cone (more accurate)
-
-    impratio: float = 1.0  # Ratio of friction coefficients
-
-    # Other
-    gravity: tuple = (0, 0, -9.81)  # m/s²
-</code></pre>
-<h3 id="simulationcfg-batch-settings"><strong>SimulationCfg - Batch Settings:</strong></h3>
-<pre><code class="language-python">@dataclass
-class SimulationCfg:
-    # Contact/constraint allocation per world
-    nconmax: int | None = None  # Max contacts per env
-    njmax: int | None = None    # Max constraints per env
-
-    # Performance
-    ls_parallel: bool = True  # Parallel line search (faster!)
-
-    # Sensors
-    contact_sensor_maxmatch: int = 64  # Max contact sensor pairs
-
-    # Debugging
-    nan_guard: NanGuardCfg = field(default_factory=NanGuardCfg)
-</code></pre>
-<p><strong>Why nconmax and njmax matter:</strong>
-- Contacts are stored in <strong>heterogeneous arrays</strong>
-- Different environments can have different numbers of contacts
-- But we need to allocate enough space for the worst case
-- If <code>None</code>, mjlab uses heuristics based on model complexity</p>
-<hr />
-<h2 id="9-nan-guard-debugging-tool"><strong>9. NaN Guard - Debugging Tool</strong></h2>
-<p>When training fails due to NaN, NaN Guard saves you:</p>
-<h3 id="how-it-works_1"><strong>How It Works:</strong></h3>
-<pre><code class="language-python">class NanGuard:
-    def __init__(self, cfg, num_envs, mj_model):
-        self.buffer = deque(maxlen=cfg.buffer_size)  # Rolling buffer
-
-    def capture(self, wp_data):
-        &quot;&quot;&quot;Save current state to buffer&quot;&quot;&quot;
-        # Extract qpos, qvel, act for all envs
-        states = np.empty((num_envs, state_size))
-        for i in range(num_envs):
-            mujoco.mj_getState(model, data, states[i], mjSTATE_PHYSICS)
-        self.buffer.append({&quot;step&quot;: step, &quot;states&quot;: states})
-
-    @contextmanager
-    def watch(self, wp_data):
-        &quot;&quot;&quot;Capture before, check after&quot;&quot;&quot;
-        self.capture(wp_data)  # Before step
-        yield
-        self.check_and_dump(wp_data)  # After step
-</code></pre>
-<p><strong>Usage in Simulation:</strong></p>
-<pre><code class="language-python">def step(self):
-    with self.nan_guard.watch(self.data):  # Automatic capture &amp; check
-        mjwarp.step(self.wp_model, self.wp_data)
-</code></pre>
-<p><strong>When NaN Detected:</strong></p>
-<pre><code class="language-python"># Dumps to /tmp/mjlab/nan_dumps/nan_dump_20250103_123456.npz
-{
-    &quot;states_step_000000&quot;: states[bad_envs],  # 100 steps before NaN
-    &quot;states_step_000001&quot;: states[bad_envs],
-    ...
-    &quot;states_step_000099&quot;: states[bad_envs],  # Last good state
-    &quot;_metadata&quot;: {
-        &quot;nan_env_ids&quot;: [42, 103, ...],  # Which envs had NaN
-        &quot;detection_step&quot;: 12543,
-        &quot;model_file&quot;: &quot;model_20250103_123456.mjb&quot;
-    }
-}
-</code></pre>
-<p><strong>Replay NaN States:</strong></p>
-<pre><code class="language-bash">python scripts/nan_viz.py /tmp/mjlab/nan_dumps/nan_dump_20250103_123456.npz
-</code></pre>
-<hr />
-<h2 id="10-performance-characteristics"><strong>10. Performance Characteristics</strong></h2>
-<h3 id="typical-setup"><strong>Typical Setup:</strong></h3>
-<pre><code class="language-python">num_envs = 4096
-physics_dt = 0.002  # 500 Hz
-control_dt = 0.01   # 100 Hz (decimation = 5)
-</code></pre>
-<h3 id="performance-benchmarks-rtx-4090"><strong>Performance Benchmarks (RTX 4090):</strong></h3>
-<table>
-<thead>
-<tr>
-<th>Configuration</th>
-<th>Physics Steps/sec</th>
-<th>Speedup vs CPU</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>1 env (CPU)</td>
-<td>~5,000</td>
-<td>1x</td>
-</tr>
-<tr>
-<td>1024 envs (GPU)</td>
-<td>~2,000,000</td>
-<td>400x</td>
-</tr>
-<tr>
-<td>4096 envs (GPU)</td>
-<td>~6,000,000</td>
-<td>1200x</td>
-</tr>
-</tbody>
-</table>
-<p><strong>With CUDA Graphs:</strong>
-- Additional ~2-3x speedup
-- ~15,000,000 steps/sec with 4096 envs!</p>
-<h3 id="memory-usage"><strong>Memory Usage:</strong></h3>
-<pre><code class="language-python"># Rough estimate per environment:
-memory_per_env = (
-    nq * 8 +      # qpos (float64)
-    nv * 8 +      # qvel (float64)
-    nu * 8 +      # ctrl (float64)
-    nbody * 24 +  # xpos (3 * float64)
-    nbody * 72 +  # xmat (9 * float64)
-    ...
-)
-# Typical humanoid: ~50 KB/env
-# 4096 envs: ~200 MB
-</code></pre>
-<hr />
-<h2 id="11-key-insights"><strong>11. Key Insights</strong></h2>
-<h3 id="why-is-warp-mujoco-so-fast"><strong>Why is Warp + MuJoCo So Fast?</strong></h3>
-<ol>
-<li><strong>GPU Parallelism</strong>: 4096 envs run simultaneously on thousands of CUDA cores</li>
-<li><strong>Batched Operations</strong>: Single kernel launch for all envs</li>
-<li><strong>CUDA Graphs</strong>: Zero kernel launch overhead</li>
-<li><strong>Memory Locality</strong>: All data in GPU memory (no CPU-GPU transfers)</li>
-<li><strong>Optimized Solver</strong>: Parallel line search, efficient constraint solving</li>
-</ol>
-<h3 id="design-trade-offs"><strong>Design Trade-offs:</strong></h3>
-<p><strong>Pros:</strong>
-- ✅ Massive throughput (millions of steps/sec)
-- ✅ Perfect for RL training (need lots of samples)
-- ✅ Zero-copy PyTorch integration
-- ✅ Per-env domain randomization</p>
-<p><strong>Cons:</strong>
-- ❌ All envs must have same model structure
-- ❌ Memory overhead for batching
-- ❌ Contact/constraint limits are per-env, must allocate for worst case
-- ❌ CUDA graphs require fixed memory addresses (why WarpBridge is read-only)</p>
-<hr />
-<h2 id="12-common-patterns"><strong>12. Common Patterns</strong></h2>
-<h3 id="reading-state"><strong>Reading State:</strong></h3>
-<pre><code class="language-python"># Through Entity (recommended - high-level)
-qpos = robot.data.joint_pos  # (num_envs, nv)
-qvel = robot.data.joint_vel  # (num_envs, nv)
-
-# Through Simulation (low-level)
-qpos = sim.data.qpos[:, robot.indexing.joint_q_adr]  # Manual indexing
-</code></pre>
-<h3 id="writing-state"><strong>Writing State:</strong></h3>
-<pre><code class="language-python"># Through Entity
-robot.write_joint_position_to_sim(new_qpos, joint_ids=None, env_ids=[0, 1, 2])
-
-# Through Simulation (direct)
-sim.data.qpos[:, joint_q_adr] = new_qpos  # In-place!
-</code></pre>
-<h3 id="stepping"><strong>Stepping:</strong></h3>
-<pre><code class="language-python"># High-level (through Environment)
-env.step(action)  # Handles decimation, events, etc.
-
-# Low-level (direct)
-sim.data.ctrl[:] = control_inputs
-sim.step()  # Single physics step
-</code></pre>
-<hr />
-<p>This is the foundation everything else builds on. The simulation layer handles <strong>all</strong> the heavy lifting of running thousands of parallel physics simulations on the GPU!</p>
-<p>Want to dive into how the Entity layer works next? Or any specific aspect of the simulation layer you want to explore further?</p>
 
 
 
@@ -1123,7 +639,7 @@ sim.step()  # Single physics step
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../overview/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Overview">
+          <a href="../scene_layer/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Scene Layer">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -1133,7 +649,7 @@ sim.step()  # Single physics step
                 Previous
               </span>
               <div class="md-ellipsis">
-                Overview
+                Scene Layer
               </div>
             </div>
           </a>
