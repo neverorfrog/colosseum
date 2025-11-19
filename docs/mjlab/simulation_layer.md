@@ -4,7 +4,7 @@ Let me search for detailed information about the simulation layer and MuJoCo War
 
 ---
 
-# 🔬 **Simulation Layer - Deep Dive**
+# 🔬 **Simulation Layerr - Deep Dive**
 
 ## **1. What is MuJoCo Warp?**
 
