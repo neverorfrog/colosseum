@@ -5,6 +5,7 @@
 **mjlab** is a GPU-accelerated reinforcement learning environment framework for robotics, built on top of MuJoCo Warp. It provides Isaac Lab's proven manager-based API with MuJoCo's simplicity and performance.
 
 **Key characteristics:**
+
 - **Massive parallelization**: Run 4096+ environments simultaneously on GPU
 - **Manager-based architecture**: Declarative configuration for rewards, observations, actions, and events
 - **MuJoCo native**: Direct access to mjModel/mjData structures
@@ -47,6 +48,7 @@ mjlab is organized into three abstraction layers, each with a clear responsibili
 **Purpose**: Run GPU-accelerated physics across thousands of parallel environments.
 
 **Key components:**
+
 - `Simulation`: Wrapper around MuJoCo Warp's batched simulator
 - `mjwarp.Model`: Compiled physics model (immutable)
 - `mjwarp.Data`: Simulation state arrays (qpos, qvel, xpos, etc.) with shape `(num_envs, ...)`
@@ -75,6 +77,7 @@ all_positions = sim.data.qpos  # shape: (4096, nq)
 
 #### **Entity**
 Represents a physical object (robot, terrain, obstacle). Provides:
+
 - High-level data access: `robot.data.joint_pos`, `robot.data.root_link_pos_w`
 - Coordinate frame transformations (world ↔ body, COM ↔ link)
 - Name-based component access: `robot.find_joints(".*_knee")`
@@ -141,6 +144,7 @@ next_obs, reward, done, info = env.step(action)
 
 #### **Managers**
 Execute collections of related terms:
+
 - `ActionManager`: Converts policy outputs → sim commands
 - `ObservationManager`: Extracts state → policy inputs  
 - `RewardManager`: Computes scalar rewards
@@ -232,6 +236,7 @@ def body_height_reward(env: ManagerBasedRlEnv, asset_cfg: SceneEntityCfg) -> tor
 ```
 
 **Why this pattern?**
+
 - ✅ **Efficient**: Name → index mapping happens once, not every step
 - ✅ **Flexible**: Support regex patterns: `".*_knee"` → `[5, 12]`
 - ✅ **Declarative**: Configs are readable, shareable, modifiable
@@ -357,20 +362,24 @@ obs, reward, done, info = env.step(action)
 ## Key Takeaways
 
 1. **Three layers** work together but stay decoupled:
+
    - Simulation: Physics (doesn't know about robots)
    - Scene: Objects (doesn't know about tasks)
    - Task: MDP (uses scene and sim)
 
 2. **Compilation creates the index mapping**:
+
    - XML → MjSpec → `compile()` → MjModel (indices assigned)
    - EntityIndexing reads these indices from MjModel
 
 3. **Term-based pattern** separates concerns:
+
    - Config: What to compute (declarative)
    - Resolution: Map names → indices (once at init)
    - Execution: Fast computation (every step)
 
 4. **SceneEntityCfg** is the bridge:
+
    - Stores entity name + component patterns
    - Resolves to indices during init
    - Passed to term functions at runtime
@@ -386,6 +395,7 @@ Now that you understand the architecture, you can dive deeper:
 - **[Simulation Layer](simulation_layer.md)**: MuJoCo Warp and GPU parallelization
 
 Or explore specific topics:
+
 - How to create custom reward terms
 - How domain randomization works
 - How to add new sensors
