@@ -41,4 +41,5 @@ jobs:
         run: pip install mkdocs mkdocs-material
 
       # Step 4: Build the documentation and deploy it to the gh-pages branch
-      # T
+      - name: Deploy to GitHub Pages
+        run: mkdocs gh-deploy --force --clean
