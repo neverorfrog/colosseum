@@ -10,7 +10,7 @@ nav:
   - COLOSSEUM:
     - Getting Started: colosseum/getting_started.md
   - MJLAB:
-    - Structure: mjlab/structure.md
+    - Overview: mjlab/overview.md          
     - Simulation Layer: mjlab/simulation_layer.md
 
 theme:
