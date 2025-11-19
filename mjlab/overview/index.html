@@ -1207,11 +1207,13 @@
 <h1 id="mjlab-architecture-overview">mjlab Architecture Overview</h1>
 <h2 id="what-is-mjlab">What is mjlab?</h2>
 <p><strong>mjlab</strong> is a GPU-accelerated reinforcement learning environment framework for robotics, built on top of MuJoCo Warp. It provides Isaac Lab's proven manager-based API with MuJoCo's simplicity and performance.</p>
-<p><strong>Key characteristics:</strong>
-- <strong>Massive parallelization</strong>: Run 4096+ environments simultaneously on GPU
-- <strong>Manager-based architecture</strong>: Declarative configuration for rewards, observations, actions, and events
-- <strong>MuJoCo native</strong>: Direct access to mjModel/mjData structures
-- <strong>Fast iteration</strong>: Lightweight installation, quick startup, standard Python debugging</p>
+<p><strong>Key characteristics:</strong></p>
+<ul>
+<li><strong>Massive parallelization</strong>: Run 4096+ environments simultaneously on GPU</li>
+<li><strong>Manager-based architecture</strong>: Declarative configuration for rewards, observations, actions, and events</li>
+<li><strong>MuJoCo native</strong>: Direct access to mjModel/mjData structures</li>
+<li><strong>Fast iteration</strong>: Lightweight installation, quick startup, standard Python debugging</li>
+</ul>
 <hr />
 <h2 id="the-three-layer-architecture">The Three-Layer Architecture</h2>
 <p>mjlab is organized into three abstraction layers, each with a clear responsibility:</p>
@@ -1241,10 +1243,12 @@
 </code></pre>
 <h3 id="1-simulation-layer-lowest">1. Simulation Layer (Lowest)</h3>
 <p><strong>Purpose</strong>: Run GPU-accelerated physics across thousands of parallel environments.</p>
-<p><strong>Key components:</strong>
-- <code>Simulation</code>: Wrapper around MuJoCo Warp's batched simulator
-- <code>mjwarp.Model</code>: Compiled physics model (immutable)
-- <code>mjwarp.Data</code>: Simulation state arrays (qpos, qvel, xpos, etc.) with shape <code>(num_envs, ...)</code></p>
+<p><strong>Key components:</strong></p>
+<ul>
+<li><code>Simulation</code>: Wrapper around MuJoCo Warp's batched simulator</li>
+<li><code>mjwarp.Model</code>: Compiled physics model (immutable)</li>
+<li><code>mjwarp.Data</code>: Simulation state arrays (qpos, qvel, xpos, etc.) with shape <code>(num_envs, ...)</code></li>
+</ul>
 <p><strong>What it does:</strong></p>
 <pre><code class="language-python"># Create 4096 parallel physics simulations
 sim = Simulation(num_envs=4096, model=compiled_model, device=&quot;cuda&quot;)
@@ -1261,10 +1265,12 @@ all_positions = sim.data.qpos  # shape: (4096, nq)
 <p><strong>Purpose</strong>: Organize physical objects and provide convenient access to their state.</p>
 <p><strong>Key components:</strong></p>
 <h4 id="entity"><strong>Entity</strong></h4>
-<p>Represents a physical object (robot, terrain, obstacle). Provides:
-- High-level data access: <code>robot.data.joint_pos</code>, <code>robot.data.root_link_pos_w</code>
-- Coordinate frame transformations (world ↔ body, COM ↔ link)
-- Name-based component access: <code>robot.find_joints(".*_knee")</code></p>
+<p>Represents a physical object (robot, terrain, obstacle). Provides:</p>
+<ul>
+<li>High-level data access: <code>robot.data.joint_pos</code>, <code>robot.data.root_link_pos_w</code></li>
+<li>Coordinate frame transformations (world ↔ body, COM ↔ link)</li>
+<li>Name-based component access: <code>robot.find_joints(".*_knee")</code></li>
+</ul>
 <h4 id="entityindexing"><strong>EntityIndexing</strong></h4>
 <p>Maps component names to global MuJoCo indices:</p>
 <pre><code class="language-python"># After compilation and initialization
@@ -1313,12 +1319,14 @@ obs = env.reset()
 next_obs, reward, done, info = env.step(action)
 </code></pre>
 <h4 id="managers"><strong>Managers</strong></h4>
-<p>Execute collections of related terms:
-- <code>ActionManager</code>: Converts policy outputs → sim commands
-- <code>ObservationManager</code>: Extracts state → policy inputs<br />
-- <code>RewardManager</code>: Computes scalar rewards
-- <code>TerminationManager</code>: Checks episode end conditions
-- <code>EventManager</code>: Handles resets, domain randomization</p>
+<p>Execute collections of related terms:</p>
+<ul>
+<li><code>ActionManager</code>: Converts policy outputs → sim commands</li>
+<li><code>ObservationManager</code>: Extracts state → policy inputs  </li>
+<li><code>RewardManager</code>: Computes scalar rewards</li>
+<li><code>TerminationManager</code>: Checks episode end conditions</li>
+<li><code>EventManager</code>: Handles resets, domain randomization</li>
+</ul>
 <p><strong>How it works:</strong></p>
 <pre><code class="language-python"># Define task declaratively
 cfg = ManagerBasedRlEnvCfg(
@@ -1390,11 +1398,13 @@ for term_name, term_cfg in cfg.rewards.items():
 
     return body_pos[:, 2]  # Z-height of torso
 </code></pre>
-<p><strong>Why this pattern?</strong>
-- ✅ <strong>Efficient</strong>: Name → index mapping happens once, not every step
-- ✅ <strong>Flexible</strong>: Support regex patterns: <code>".*_knee"</code> → <code>[5, 12]</code>
-- ✅ <strong>Declarative</strong>: Configs are readable, shareable, modifiable
-- ✅ <strong>Type-safe</strong>: Term functions have clean signatures</p>
+<p><strong>Why this pattern?</strong></p>
+<ul>
+<li>✅ <strong>Efficient</strong>: Name → index mapping happens once, not every step</li>
+<li>✅ <strong>Flexible</strong>: Support regex patterns: <code>".*_knee"</code> → <code>[5, 12]</code></li>
+<li>✅ <strong>Declarative</strong>: Configs are readable, shareable, modifiable</li>
+<li>✅ <strong>Type-safe</strong>: Term functions have clean signatures</li>
+</ul>
 <hr />
 <h2 id="sceneentitycfg-the-connection-point">SceneEntityCfg: The Connection Point</h2>
 <p><code>SceneEntityCfg</code> is the <strong>glue</strong> between managers and entities.</p>
@@ -1492,8 +1502,12 @@ obs, reward, done, info = env.step(action)
 <hr />
 <h2 id="key-takeaways">Key Takeaways</h2>
 <ol>
-<li><strong>Three layers</strong> work together but stay decoupled:</li>
-<li>Simulation: Physics (doesn't know about robots)</li>
+<li>
+<p><strong>Three layers</strong> work together but stay decoupled:</p>
+</li>
+<li>
+<p>Simulation: Physics (doesn't know about robots)</p>
+</li>
 <li>Scene: Objects (doesn't know about tasks)</li>
 <li>
 <p>Task: MDP (uses scene and sim)</p>
@@ -1501,14 +1515,18 @@ obs, reward, done, info = env.step(action)
 <li>
 <p><strong>Compilation creates the index mapping</strong>:</p>
 </li>
-<li>XML → MjSpec → <code>compile()</code> → MjModel (indices assigned)</li>
+<li>
+<p>XML → MjSpec → <code>compile()</code> → MjModel (indices assigned)</p>
+</li>
 <li>
 <p>EntityIndexing reads these indices from MjModel</p>
 </li>
 <li>
 <p><strong>Term-based pattern</strong> separates concerns:</p>
 </li>
-<li>Config: What to compute (declarative)</li>
+<li>
+<p>Config: What to compute (declarative)</p>
+</li>
 <li>Resolution: Map names → indices (once at init)</li>
 <li>
 <p>Execution: Fast computation (every step)</p>
@@ -1516,7 +1534,9 @@ obs, reward, done, info = env.step(action)
 <li>
 <p><strong>SceneEntityCfg</strong> is the bridge:</p>
 </li>
-<li>Stores entity name + component patterns</li>
+<li>
+<p>Stores entity name + component patterns</p>
+</li>
 <li>Resolves to indices during init</li>
 <li>Passed to term functions at runtime</li>
 </ol>
@@ -1528,11 +1548,13 @@ obs, reward, done, info = env.step(action)
 <li><strong><a href="../task_layer/">Task Layer</a></strong>: Managers, terms, and MDP configuration  </li>
 <li><strong><a href="../simulation_layer/">Simulation Layer</a></strong>: MuJoCo Warp and GPU parallelization</li>
 </ul>
-<p>Or explore specific topics:
-- How to create custom reward terms
-- How domain randomization works
-- How to add new sensors
-- How to integrate mjlab with colosseum</p>
+<p>Or explore specific topics:</p>
+<ul>
+<li>How to create custom reward terms</li>
+<li>How domain randomization works</li>
+<li>How to add new sensors</li>
+<li>How to integrate mjlab with colosseum</li>
+</ul>
 
 
 
