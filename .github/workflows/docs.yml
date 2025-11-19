@@ -10,6 +10,10 @@ on:
       - 'docs/**'
       - 'mkdocs.yml'
 
+# Add permissions for the workflow to write to the repository
+permissions:
+  contents: write
+
 # Allow only one concurrent deployment, skipping runs queued between the run in-progress and the latest queued.
 concurrency:
   group: "pages"
@@ -22,6 +26,8 @@ jobs:
       # Step 1: Check out the repository so the workflow can access it
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history for gh-deploy
 
       # Step 2: Set up Python, which is required by MkDocs
       - name: Set up Python
@@ -35,6 +41,4 @@ jobs:
         run: pip install mkdocs mkdocs-material
 
       # Step 4: Build the documentation and deploy it to the gh-pages branch
-      # This command creates a `gh-pages` branch automatically
-      - name: Deploy to GitHub Pages
-        run: mkdocs gh-deploy --force --clean
+      # T
