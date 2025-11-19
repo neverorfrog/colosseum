@@ -15,14 +15,14 @@ from booster_robotics_sdk_python import (
     RobotMode,
 )
 
-from colosseum.deploy.utils.command import (
+from src.deploy.utils.command import (
     create_first_frame_rl_cmd,
     create_prepare_cmd,
 )
-from colosseum.deploy.utils.policy import Policy
-from colosseum.deploy.utils.remote_control_service import RemoteControlService
-from colosseum.deploy.utils.rotate import rotate_vector_inverse_rpy
-from colosseum.deploy.utils.timer import Timer, TimerConfig
+from src.deploy.utils.policy import Policy
+from src.deploy.utils.remote_control_service import RemoteControlService
+from src.deploy.utils.rotate import rotate_vector_inverse_rpy
+from src.deploy.utils.timer import Timer, TimerConfig
 
 
 class Controller:

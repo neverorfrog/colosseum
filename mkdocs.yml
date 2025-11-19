@@ -1,0 +1,68 @@
+site_name: Colosseum
+site_description: Colosseum Documentation
+copyright: "2025, Colosseum Team"
+site_url: https://mydomain.org/mysite # TODO
+repo_url: https://github.com/neverorfrog/colosseum.git
+repo_name: neverorfrog/colosseum
+
+nav:
+  - Overview: index.md
+  - COLOSSEUM:
+    - Getting Started: colosseum/getting_started.md
+  - MJLAB:
+    - Structure: mjlab/structure.md
+
+theme:
+  name: material
+  favicon: assets/logo.png
+  logo: assets/logo_bw.png
+  font:
+    text: Red Hat Text
+    code: JetBrains Mono
+
+  palette:
+    # Palette toggle for automatic mode
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+
+  features:
+    - content.tabs.link
+    - content.code.copy
+    - content.action.edit
+    - content.code.annotate
+    - content.tooltips
+    - content.code.select
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+
+  icon:
+    edit: material/pencil
+    view: material/eye
+    repo: fontawesome/brands/github
+
+extra_css:
+  - stylesheets/extra.css
