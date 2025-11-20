@@ -1272,11 +1272,15 @@ all_positions = sim.data.qpos  # shape: (4096, nq)
 <li>Name-based component access: <code>robot.find_joints(".*_knee")</code></li>
 </ul>
 <h4 id="entityindexing"><strong>EntityIndexing</strong></h4>
-<p>Maps component names to global MuJoCo indices:</p>
+<p>Stores MjSpec elements (bodies, joints, geoms, sites) and their global MuJoCo indices:</p>
 <pre><code class="language-python"># After compilation and initialization
-robot.joint_names  # (&quot;hip_pitch&quot;, &quot;knee&quot;, &quot;ankle&quot;)
-robot.find_joints(&quot;knee&quot;)  # Returns: ([5], [&quot;robot/knee&quot;])
-#                                      ↑ Global MuJoCo index
+robot.indexing.bodies     # Tuple of MjsBody objects from MjSpec
+robot.indexing.body_ids   # Tensor([1, 2, 3, ...]) - global MuJoCo indices
+
+# Entity provides convenient name-based access:
+robot.body_names          # (&quot;torso&quot;, &quot;head&quot;, &quot;left_foot&quot;) - names without prefix
+robot.find_bodies(&quot;torso&quot;)  # Returns: ([1], [&quot;torso&quot;]) - index and name
+#                                       ↑ Global MuJoCo index
 </code></pre>
 <h4 id="scene"><strong>Scene</strong></h4>
 <p>Container for all entities and sensors:</p>
@@ -1301,13 +1305,13 @@ robot_spec = mujoco.MjSpec.from_file(&quot;robot.xml&quot;)
 mj_model = scene.compile()  # ← MuJoCo assigns global indices here
 
 # 4. Initialize entities with the compiled model
-scene.initialize(mj_model)  # ← EntityIndexing reads indices
+scene.initialize(mj_model)  # ← Entity creates EntityIndexing
 
 # 5. Now entity knows its indices
-robot.indexing.body_names  # [&quot;robot/torso&quot;, &quot;robot/head&quot;, ...]
-#                              These ARE the global MuJoCo indices!
+robot.body_names  # (&quot;torso&quot;, &quot;head&quot;, &quot;left_foot&quot;) - stripped of prefix
+robot.indexing.body_ids  # tensor([1, 2, 3]) - global MuJoCo indices
 </code></pre>
-<p><strong>Key insight</strong>: After compilation, entity components have <strong>global MuJoCo indices</strong>. EntityIndexing stores these for fast name-based lookup.</p>
+<p><strong>Key insight</strong>: After compilation, MuJoCo assigns global indices to all components. During initialization, <code>Entity._compute_indexing()</code> reads these indices from the MjSpec objects and stores them in <code>EntityIndexing</code> for fast access.</p>
 <hr />
 <h3 id="3-task-environment-layer-highest">3. Task / Environment Layer (Highest)</h3>
 <p><strong>Purpose</strong>: Define the reinforcement learning problem (MDP) and orchestrate its execution.</p>
@@ -1477,10 +1481,16 @@ env = ManagerBasedRlEnv(cfg, device=&quot;cuda&quot;)
 
     # 2d. Initialize scene with compiled model
     scene.initialize(mj_model, sim.model, sim.data)
-        # Each entity creates EntityIndexing
-        robot.indexing = EntityIndexing(mj_model, name_prefix=&quot;robot&quot;)
-            # Stores: body_names = [&quot;robot/torso&quot;, &quot;robot/head&quot;]
-            #         These ARE the global MuJoCo indices [1, 2]
+        # Each entity computes its indexing
+        entity.initialize(mj_model, sim.model, sim.data)
+            # Inside Entity._compute_indexing():
+            bodies = tuple([b for b in entity.spec.bodies[1:]])  # MjSpec bodies
+            body_ids = torch.tensor([b.id for b in bodies])      # Extract IDs
+            entity.indexing = EntityIndexing(
+                bodies=bodies,      # MjSpec objects
+                body_ids=body_ids,  # tensor([1, 2, 3, ...])
+                # ... other fields (joints, geoms, sites, etc.)
+            )
 
     # 2e. Load managers
     env.load_managers()
@@ -1489,7 +1499,7 @@ env = ManagerBasedRlEnv(cfg, device=&quot;cuda&quot;)
             asset_cfg = term.params[&quot;asset_cfg&quot;]
             asset_cfg.resolve(scene)
                 entity = scene[&quot;robot&quot;]
-                indices, names = entity.find_bodies(&quot;torso&quot;)  # Returns ([1], [&quot;robot/torso&quot;])
+                indices, names = entity.find_bodies(&quot;torso&quot;)  # Returns ([1], [&quot;torso&quot;])
                 asset_cfg.body_ids = [1]  # STORED
 
 # 3. RUNTIME: Step environment

@@ -2,30 +2,30 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://mydomain.org/mysite/</loc>
-         <lastmod>2025-11-19</lastmod>
+         <lastmod>2025-11-20</lastmod>
     </url>
     <url>
          <loc>https://mydomain.org/mysite/colosseum/getting_started/</loc>
-         <lastmod>2025-11-19</lastmod>
+         <lastmod>2025-11-20</lastmod>
     </url>
     <url>
          <loc>https://mydomain.org/mysite/colosseum/setup/</loc>
-         <lastmod>2025-11-19</lastmod>
+         <lastmod>2025-11-20</lastmod>
     </url>
     <url>
          <loc>https://mydomain.org/mysite/mjlab/overview/</loc>
-         <lastmod>2025-11-19</lastmod>
+         <lastmod>2025-11-20</lastmod>
     </url>
     <url>
          <loc>https://mydomain.org/mysite/mjlab/scene_layer/</loc>
-         <lastmod>2025-11-19</lastmod>
+         <lastmod>2025-11-20</lastmod>
     </url>
     <url>
          <loc>https://mydomain.org/mysite/mjlab/simulation_layer/</loc>
-         <lastmod>2025-11-19</lastmod>
+         <lastmod>2025-11-20</lastmod>
     </url>
     <url>
          <loc>https://mydomain.org/mysite/mjlab/task_layer/</loc>
-         <lastmod>2025-11-19</lastmod>
+         <lastmod>2025-11-20</lastmod>
     </url>
 </urlset>
