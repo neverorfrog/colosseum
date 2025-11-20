@@ -83,12 +83,16 @@ Represents a physical object (robot, terrain, obstacle). Provides:
 - Name-based component access: `robot.find_joints(".*_knee")`
 
 #### **EntityIndexing**
-Maps component names to global MuJoCo indices:
+Stores MjSpec elements (bodies, joints, geoms, sites) and their global MuJoCo indices:
 ```python
 # After compilation and initialization
-robot.joint_names  # ("hip_pitch", "knee", "ankle")
-robot.find_joints("knee")  # Returns: ([5], ["robot/knee"])
-#                                      ↑ Global MuJoCo index
+robot.indexing.bodies     # Tuple of MjsBody objects from MjSpec
+robot.indexing.body_ids   # Tensor([1, 2, 3, ...]) - global MuJoCo indices
+
+# Entity provides convenient name-based access:
+robot.body_names          # ("torso", "head", "left_foot") - names without prefix
+robot.find_bodies("torso")  # Returns: ([1], ["torso"]) - index and name
+#                                       ↑ Global MuJoCo index
 ```
 
 #### **Scene**
@@ -117,14 +121,14 @@ robot_spec = mujoco.MjSpec.from_file("robot.xml")
 mj_model = scene.compile()  # ← MuJoCo assigns global indices here
 
 # 4. Initialize entities with the compiled model
-scene.initialize(mj_model)  # ← EntityIndexing reads indices
+scene.initialize(mj_model)  # ← Entity creates EntityIndexing
 
 # 5. Now entity knows its indices
-robot.indexing.body_names  # ["robot/torso", "robot/head", ...]
-#                              These ARE the global MuJoCo indices!
+robot.body_names  # ("torso", "head", "left_foot") - stripped of prefix
+robot.indexing.body_ids  # tensor([1, 2, 3]) - global MuJoCo indices
 ```
 
-**Key insight**: After compilation, entity components have **global MuJoCo indices**. EntityIndexing stores these for fast name-based lookup.
+**Key insight**: After compilation, MuJoCo assigns global indices to all components. During initialization, `Entity._compute_indexing()` reads these indices from the MjSpec objects and stores them in `EntityIndexing` for fast access.
 
 ---
 
@@ -334,10 +338,16 @@ env = ManagerBasedRlEnv(cfg, device="cuda")
     
     # 2d. Initialize scene with compiled model
     scene.initialize(mj_model, sim.model, sim.data)
-        # Each entity creates EntityIndexing
-        robot.indexing = EntityIndexing(mj_model, name_prefix="robot")
-            # Stores: body_names = ["robot/torso", "robot/head"]
-            #         These ARE the global MuJoCo indices [1, 2]
+        # Each entity computes its indexing
+        entity.initialize(mj_model, sim.model, sim.data)
+            # Inside Entity._compute_indexing():
+            bodies = tuple([b for b in entity.spec.bodies[1:]])  # MjSpec bodies
+            body_ids = torch.tensor([b.id for b in bodies])      # Extract IDs
+            entity.indexing = EntityIndexing(
+                bodies=bodies,      # MjSpec objects
+                body_ids=body_ids,  # tensor([1, 2, 3, ...])
+                # ... other fields (joints, geoms, sites, etc.)
+            )
     
     # 2e. Load managers
     env.load_managers()
@@ -346,7 +356,7 @@ env = ManagerBasedRlEnv(cfg, device="cuda")
             asset_cfg = term.params["asset_cfg"]
             asset_cfg.resolve(scene)
                 entity = scene["robot"]
-                indices, names = entity.find_bodies("torso")  # Returns ([1], ["robot/torso"])
+                indices, names = entity.find_bodies("torso")  # Returns ([1], ["torso"])
                 asset_cfg.body_ids = [1]  # STORED
 
 # 3. RUNTIME: Step environment
