@@ -1,5 +1,6 @@
 [project]
 name = "colosseum"
+version = "0.1.0"
 requires-python = "==3.11"
 
 [tool.pixi.workspace]
@@ -11,34 +12,23 @@ channels = [
 platforms = ["linux-64"]
 preview = ["pixi-build"]
 
-[tool.pixi.dependencies]
-# pybind11 = ">=3.0.1,<4"
-# pybind11-stubgen = ">=2.4.2,<3"
-# ros-jazzy-fastrtps = ">=2.14.4,<3"
-# ros-jazzy-fastcdr = ">=2.2.5,<3"
-# foonathan-memory = ">=0.7.3,<0.8"
-# evdev = ">=1.9.2,<2"
-# setuptools = ">=80.9.0,<81"
-# tensorboard = ">=2.20.0,<3"
-# pyyaml = ">=6.0.3,<7"
-# imageio = ">=2.37.0,<3"
-# wandb = ">=0.22.2,<0.23"
-# tensordict = "==0.5.0"
-
 [tool.pixi.pypi-dependencies]
+colosseum = {path = ".", editable = true}
 fast_td3 = {git = "https://github.com/younggyoseo/FastTD3.git", branch = "main"}
 sshkeyboard = "==2.3.1"
-mujoco = "==3.3.7"
 
 [tool.pixi.feature.gpu.system-requirements]
 cuda = "12.0"
 
+[tool.pixi.feature.gpu.pypi-dependencies]
+mjlab = {git = "https://github.com/neverorfrog/mjlab.git", branch = "main"}
+
 [tool.pixi.feature.gpu.dependencies]
 cuda-version = "12.6.*"
-pytorch-gpu = "*"
+pytorch-gpu = "==2.7.0"
 
 [tool.pixi.feature.cpu.dependencies]
-pytorch-cpu = "*"
+pytorch-cpu = "==2.7.0"
 
 [tool.pixi.environments]
 cpu = ["cpu"]
@@ -60,3 +50,17 @@ docs = { cmd = "mkdocs serve", description = "Serve the docs locally" }
 [tool.pixi.feature.cpu.tasks]
 deploy-cpu = "python -m colosseum.scripts.deploy"
 play-mujoco-cpu = "python -m colosseum.scripts.play_mujoco"
+
+[tool.ty.environment]
+extra-paths = ["typings"]
+
+[tool.ty.src]
+include = ["src", "tests"]
+exclude = ["typings", "models"]
+
+[build-system]
+requires = ["uv_build>=0.8.19,<0.9.0"]
+build-backend = "uv_build"
+
+[project.entry-points."mjlab.tasks"]
+colosseum = "colosseum.train.tasks"
