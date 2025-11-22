@@ -12,7 +12,7 @@ nav:
   - MJLAB:
     - Overview: mjlab/overview.md
     - Task Layer: mjlab/task_layer.md
-    - Scene Layer: mjlab/scene_layer.md 
+    - Scene Layer: mjlab/scene_layer.md
     - Simulation Layer: mjlab/simulation_layer.md
 
 theme:

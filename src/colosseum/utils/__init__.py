@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+
 def project_root() -> Path:
     current_dir = os.path.dirname(os.path.abspath(__file__))
     max_iterations = 100  # Set a limit for the number of iterations
@@ -15,6 +16,7 @@ def project_root() -> Path:
     raise FileNotFoundError(
         "requirements.txt not found in any parent directories within the iteration limit"
     )
+
 
 def src_dir() -> Path:
     return Path(project_root()) / "src" / "colosseum"

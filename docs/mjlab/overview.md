@@ -20,7 +20,7 @@ mjlab is organized into three abstraction layers, each with a clear responsibili
 ```
 ┌─────────────────────────────────────────┐
 │     TASK / ENVIRONMENT LAYER            │  ← Highest abstraction
-│  (ManagerBasedRlEnv)                    │     
+│  (ManagerBasedRlEnv)                    │
 │  - Defines MDP (rewards, obs, actions)  │     What to optimize
 │  - Managers orchestrate term execution  │
 │  - gym.Env interface for RL training    │
@@ -28,7 +28,7 @@ mjlab is organized into three abstraction layers, each with a clear responsibili
                    │ uses
 ┌──────────────────▼──────────────────────┐
 │        SCENE LAYER                      │  ← Middle abstraction
-│  (Scene, Entity, Sensors)               │     
+│  (Scene, Entity, Sensors)               │
 │  - Physical objects (robot, terrain)    │     What exists
 │  - Name → index mapping                 │
 │  - Entity data access (poses, vels)     │
@@ -36,7 +36,7 @@ mjlab is organized into three abstraction layers, each with a clear responsibili
                    │ creates/updates
 ┌──────────────────▼──────────────────────┐
 │      SIMULATION LAYER                   │  ← Lowest abstraction
-│  (Simulation, MuJoCo Warp)              │     
+│  (Simulation, MuJoCo Warp)              │
 │  - GPU-accelerated physics              │     How it moves
 │  - Batched parallel execution           │
 │  - Direct mjModel/mjData access         │
@@ -150,7 +150,7 @@ next_obs, reward, done, info = env.step(action)
 Execute collections of related terms:
 
 - `ActionManager`: Converts policy outputs → sim commands
-- `ObservationManager`: Extracts state → policy inputs  
+- `ObservationManager`: Extracts state → policy inputs
 - `RewardManager`: Computes scalar rewards
 - `TerminationManager`: Checks episode end conditions
 - `EventManager`: Handles resets, domain randomization
@@ -210,10 +210,10 @@ Manager resolves names → indices **once**:
 for term_name, term_cfg in cfg.rewards.items():
     # Get the asset_cfg from params
     asset_cfg = term_cfg.params["asset_cfg"]
-    
+
     # Resolve it against the scene
     asset_cfg.resolve(scene)
-    
+
     # What resolve() does:
     entity = scene[asset_cfg.name]  # Get robot Entity
     indices, names = entity.find_bodies("torso")  # Returns ([3], ["robot/torso"])
@@ -231,11 +231,11 @@ Term functions execute with resolved configs:
 def body_height_reward(env: ManagerBasedRlEnv, asset_cfg: SceneEntityCfg) -> torch.Tensor:
     # Get entity (fast dict lookup)
     entity = env.scene[asset_cfg.name]
-    
+
     # Use pre-resolved indices (no string matching!)
     body_pos = entity.data.body_pos_w[:, asset_cfg.body_ids]  # Direct indexing
     #                                      ↑ Already [3]
-    
+
     return body_pos[:, 2]  # Z-height of torso
 ```
 
@@ -259,11 +259,11 @@ def body_height_reward(env: ManagerBasedRlEnv, asset_cfg: SceneEntityCfg) -> tor
 class SceneEntityCfg:
     # Entity reference
     name: str  # "robot"
-    
+
     # Component selection (before resolve)
     body_names: str | tuple[str, ...] | None  # "torso" or ("head", "torso")
     body_ids: list[int] | slice  # slice(None) by default
-    
+
     # Same pattern for joints, geoms, sites
     joint_names: ...
     joint_ids: ...
@@ -274,12 +274,12 @@ class SceneEntityCfg:
 ```python
 def resolve(self, scene: Scene) -> None:
     entity = scene[self.name]
-    
+
     # If body_names provided, resolve to indices
     if self.body_names is not None:
         indices, names = entity.find_bodies(self.body_names)
         self.body_ids = indices  # Store for runtime
-    
+
     # Repeat for joints, geoms, sites...
 ```
 
@@ -326,16 +326,16 @@ env = ManagerBasedRlEnv(cfg, device="cuda")
     scene = Scene(cfg.scene, device="cuda")
         # Each entity creates its MjSpec
         robot.spec = mujoco.MjSpec.from_file("robot.xml")
-    
+
     # 2b. Compile scene → MjModel
     mj_model = scene.compile()
         # MuJoCo assigns global indices to all bodies, joints, etc.
         # mj_model.names().body_names = ["world", "robot/torso", "robot/head", ...]
         #                                   0          1              2
-    
+
     # 2c. Create simulation
     sim = Simulation(num_envs=4096, model=mj_model, device="cuda")
-    
+
     # 2d. Initialize scene with compiled model
     scene.initialize(mj_model, sim.model, sim.data)
         # Each entity computes its indexing
@@ -348,7 +348,7 @@ env = ManagerBasedRlEnv(cfg, device="cuda")
                 body_ids=body_ids,  # tensor([1, 2, 3, ...])
                 # ... other fields (joints, geoms, sites, etc.)
             )
-    
+
     # 2e. Load managers
     env.load_managers()
         reward_manager = RewardManager(cfg.rewards, env)
@@ -401,7 +401,7 @@ obs, reward, done, info = env.step(action)
 Now that you understand the architecture, you can dive deeper:
 
 - **[Scene Layer](scene_layer.md)**: Entity, compilation, and indexing details
-- **[Task Layer](task_layer.md)**: Managers, terms, and MDP configuration  
+- **[Task Layer](task_layer.md)**: Managers, terms, and MDP configuration
 - **[Simulation Layer](simulation_layer.md)**: MuJoCo Warp and GPU parallelization
 
 Or explore specific topics:

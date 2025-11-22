@@ -1,1 +1,0 @@
-from colosseum.robots.cartpole.cartpole_constants import get_cartpole_robot_cfg as get_cartpole_robot_cfg

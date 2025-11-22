@@ -1,12 +1,15 @@
-import os
-import sys
-import yaml
-import select
 import argparse
+import os
+import select
+import sys
+
+import mujoco
+import mujoco.viewer
 import numpy as np
 import torch
-import mujoco, mujoco.viewer
+import yaml
 from fast_td3 import load_policy
+
 
 def quat_rotate_inverse(q, v):
     q_w = q[-1]
@@ -19,8 +22,14 @@ def quat_rotate_inverse(q, v):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--task", required=True, type=str, help="Name of the task to run.")
-    parser.add_argument("--checkpoint", type=str, help="Path of model checkpoint to load. Overrides config file if provided.")
+    parser.add_argument(
+        "--task", required=True, type=str, help="Name of the task to run."
+    )
+    parser.add_argument(
+        "--checkpoint",
+        type=str,
+        help="Path of model checkpoint to load. Overrides config file if provided.",
+    )
     args = parser.parse_args()
     cfg_file = os.path.join("colosseum/envs", "{}.yaml".format(args.task))
     with open(cfg_file, "r", encoding="utf-8") as f:
@@ -54,11 +63,16 @@ if __name__ == "__main__":
                 dof_damping[i] = cfg["control"]["damping"][name]
                 found = True
         if not found:
-            raise ValueError(f"PD gain of joint {mujoco.mj_id2name(mj_model, mujoco.mjtObj.mjOBJ_ACTUATOR, i)} were not defined")
+            raise ValueError(
+                f"PD gain of joint {mujoco.mj_id2name(mj_model, mujoco.mjtObj.mjOBJ_ACTUATOR, i)} were not defined"
+            )
     mj_data.qpos = np.concatenate(
         [
             np.array(cfg["init_state"]["pos"], dtype=np.float32),
-            np.array(cfg["init_state"]["rot"][3:4] + cfg["init_state"]["rot"][0:3], dtype=np.float32),
+            np.array(
+                cfg["init_state"]["rot"][3:4] + cfg["init_state"]["rot"][0:3],
+                dtype=np.float32,
+            ),
             default_dof_pos,
         ]
     )
@@ -91,7 +105,10 @@ if __name__ == "__main__":
                     else:
                         raise ValueError
                 except ValueError:
-                    print("Invalid input. Enter three numeric values.\nSet command (x, y, yaw): ", end="")
+                    print(
+                        "Invalid input. Enter three numeric values.\nSet command (x, y, yaw): ",
+                        end="",
+                    )
             dof_pos = mj_data.qpos.astype(np.float32)[7:]
             dof_vel = mj_data.qvel.astype(np.float32)[6:]
             quat = mj_data.sensor("orientation").data[[1, 2, 3, 0]].astype(np.float32)
@@ -109,15 +126,29 @@ if __name__ == "__main__":
                 obs[12:24] = (dof_pos - default_dof_pos) * cfg["normalization"]["dof_pos"]
                 obs[24:36] = dof_vel * cfg["normalization"]["dof_vel"]
                 obs[36:48] = actions
-                obs[48] = np.cos(2 * np.pi * gait_process_left) * (gait_frequency > 1.0e-8)
-                obs[49] = np.sin(2 * np.pi * gait_process_left) * (gait_frequency > 1.0e-8)
-                obs[50] = np.cos(2 * np.pi * gait_process_right) * (gait_frequency > 1.0e-8)
-                obs[51] = np.sin(2 * np.pi * gait_process_right) * (gait_frequency > 1.0e-8)
-                
+                obs[48] = np.cos(2 * np.pi * gait_process_left) * (
+                    gait_frequency > 1.0e-8
+                )
+                obs[49] = np.sin(2 * np.pi * gait_process_left) * (
+                    gait_frequency > 1.0e-8
+                )
+                obs[50] = np.cos(2 * np.pi * gait_process_right) * (
+                    gait_frequency > 1.0e-8
+                )
+                obs[51] = np.sin(2 * np.pi * gait_process_right) * (
+                    gait_frequency > 1.0e-8
+                )
+
                 dist = policy.act(torch.tensor(obs).unsqueeze(0))
                 actions[:] = dist.loc.detach().numpy()
-                actions[:] = np.clip(actions, -cfg["normalization"]["clip_actions"], cfg["normalization"]["clip_actions"])
-                dof_targets[:] = default_dof_pos + cfg["control"]["action_scale"] * actions
+                actions[:] = np.clip(
+                    actions,
+                    -cfg["normalization"]["clip_actions"],
+                    cfg["normalization"]["clip_actions"],
+                )
+                dof_targets[:] = (
+                    default_dof_pos + cfg["control"]["action_scale"] * actions
+                )
             mj_data.ctrl = np.clip(
                 dof_stiffness * (dof_targets - dof_pos) - dof_damping * dof_vel,
                 mj_model.actuator_ctrlrange[:, 0],
@@ -127,5 +158,9 @@ if __name__ == "__main__":
             viewer.cam.lookat[:] = mj_data.qpos.astype(np.float32)[0:3]
             viewer.sync()
             it += 1
-            gait_process_left = np.fmod(gait_process_left + cfg["sim"]["dt"] * gait_frequency, 1.0)
-            gait_process_right = np.fmod(gait_process_right + cfg["sim"]["dt"] * gait_frequency, 1.0)
+            gait_process_left = np.fmod(
+                gait_process_left + cfg["sim"]["dt"] * gait_frequency, 1.0
+            )
+            gait_process_right = np.fmod(
+                gait_process_right + cfg["sim"]["dt"] * gait_frequency, 1.0
+            )

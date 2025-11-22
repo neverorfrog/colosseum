@@ -1,7 +1,8 @@
-# TODO: check dimensions 
+# TODO: check dimensions
 # TODO: check how the actor is extracted in deploy script
 
 import torch
+
 
 class ActorCritic(torch.nn.Module):
 
@@ -25,7 +26,9 @@ class ActorCritic(torch.nn.Module):
             torch.nn.ELU(),
             torch.nn.Linear(128, num_act),
         )
-        self.logstd = torch.nn.parameter.Parameter(torch.full((1, num_act), fill_value=-2.0), requires_grad=True)
+        self.logstd = torch.nn.parameter.Parameter(
+            torch.full((1, num_act), fill_value=-2.0), requires_grad=True
+        )
 
     def act(self, obs):
         action_mean = self.actor(obs)

@@ -10,13 +10,17 @@ env/
 .virtualenv/
 .venv/
 env.bak/
-venv.bak/   
+venv.bak/
 
 
 # Ignore distribution/build directories and files
 build/
 dist/
 *.egg-info/
-.eggs/  
+.eggs/
 site/
 site-packages/
+
+# Models and logs
+logs/
+wandb/

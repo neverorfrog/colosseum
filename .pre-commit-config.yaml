@@ -2,7 +2,7 @@ default_language_version:
   python: python3
 
 
-exclude: ^robots
+exclude: ^robots|^typings
 repos:
   - repo: https://github.com/psf/black
     rev: 24.10.0
