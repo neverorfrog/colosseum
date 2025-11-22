@@ -1219,7 +1219,7 @@
 <p>mjlab is organized into three abstraction layers, each with a clear responsibility:</p>
 <pre><code>┌─────────────────────────────────────────┐
 │     TASK / ENVIRONMENT LAYER            │  ← Highest abstraction
-│  (ManagerBasedRlEnv)                    │     
+│  (ManagerBasedRlEnv)                    │
 │  - Defines MDP (rewards, obs, actions)  │     What to optimize
 │  - Managers orchestrate term execution  │
 │  - gym.Env interface for RL training    │
@@ -1227,7 +1227,7 @@
                    │ uses
 ┌──────────────────▼──────────────────────┐
 │        SCENE LAYER                      │  ← Middle abstraction
-│  (Scene, Entity, Sensors)               │     
+│  (Scene, Entity, Sensors)               │
 │  - Physical objects (robot, terrain)    │     What exists
 │  - Name → index mapping                 │
 │  - Entity data access (poses, vels)     │
@@ -1235,7 +1235,7 @@
                    │ creates/updates
 ┌──────────────────▼──────────────────────┐
 │      SIMULATION LAYER                   │  ← Lowest abstraction
-│  (Simulation, MuJoCo Warp)              │     
+│  (Simulation, MuJoCo Warp)              │
 │  - GPU-accelerated physics              │     How it moves
 │  - Batched parallel execution           │
 │  - Direct mjModel/mjData access         │
@@ -1326,7 +1326,7 @@ next_obs, reward, done, info = env.step(action)
 <p>Execute collections of related terms:</p>
 <ul>
 <li><code>ActionManager</code>: Converts policy outputs → sim commands</li>
-<li><code>ObservationManager</code>: Extracts state → policy inputs  </li>
+<li><code>ObservationManager</code>: Extracts state → policy inputs</li>
 <li><code>RewardManager</code>: Computes scalar rewards</li>
 <li><code>TerminationManager</code>: Checks episode end conditions</li>
 <li><code>EventManager</code>: Handles resets, domain randomization</li>
@@ -1555,7 +1555,7 @@ obs, reward, done, info = env.step(action)
 <p>Now that you understand the architecture, you can dive deeper:</p>
 <ul>
 <li><strong><a href="../scene_layer/">Scene Layer</a></strong>: Entity, compilation, and indexing details</li>
-<li><strong><a href="../task_layer/">Task Layer</a></strong>: Managers, terms, and MDP configuration  </li>
+<li><strong><a href="../task_layer/">Task Layer</a></strong>: Managers, terms, and MDP configuration</li>
 <li><strong><a href="../simulation_layer/">Simulation Layer</a></strong>: MuJoCo Warp and GPU parallelization</li>
 </ul>
 <p>Or explore specific topics:</p>
