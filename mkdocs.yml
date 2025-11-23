@@ -9,6 +9,7 @@ nav:
   - Overview: index.md
   - COLOSSEUM:
     - Getting Started: colosseum/getting_started.md
+    - Cartpole: colosseum/cartpole.md
   - MJLAB:
     - Overview: mjlab/overview.md
     - Task Layer: mjlab/task_layer.md
