@@ -1,0 +1,2002 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Colosseum Documentation">
+      
+      
+      
+        <link rel="canonical" href="https://mydomain.org/mysite/colosseum/cartpole/">
+      
+      
+        <link rel="prev" href="../getting_started/">
+      
+      
+        <link rel="next" href="../../mjlab/overview/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/logo.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.0">
+    
+    
+      
+        <title>Cartpole - Colosseum</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.618322db.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Red+Hat+Text:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Red Hat Text";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#tutorial-creating-a-cartpole-balancing-task" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Colosseum" class="md-header__button md-logo" aria-label="Colosseum" data-md-component="logo">
+      
+  <img src="../../assets/logo_bw.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Colosseum
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Cartpole
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m14.3 16-.7-2h-3.2l-.7 2H7.8L11 7h2l3.2 9zM20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12zm-9.15 3.96h2.3L12 9z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_2" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to system preference"  type="radio" name="__palette" id="__palette_2">
+    
+      <label class="md-header__button md-icon" title="Switch to system preference" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/neverorfrog/colosseum.git" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    neverorfrog/colosseum
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Colosseum" class="md-nav__button md-logo" aria-label="Colosseum" data-md-component="logo">
+      
+  <img src="../../assets/logo_bw.png" alt="logo">
+
+    </a>
+    Colosseum
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/neverorfrog/colosseum.git" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    neverorfrog/colosseum
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    COLOSSEUM
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    COLOSSEUM
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting_started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cartpole
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cartpole
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-the-cartpole-robot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. The CartPole Robot
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. The CartPole Robot">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#model-description" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Model Description
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#xml-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        XML Structure
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-designing-the-mdp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Designing the MDP
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Designing the MDP">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#observations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Observations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#actions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Actions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rewards" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rewards
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Rewards">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-stay-alive-constant-positive-reward" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Stay Alive - Constant Positive Reward
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-pole-upright-exponential-kernel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Pole Upright - Exponential Kernel
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-effort-penalty-actuator-force" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Effort Penalty - Actuator Force
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reward-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reward Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#terminations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Terminations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Terminations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-time-out-maximum-episode-length" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Time Out - Maximum Episode Length
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-pole-fallen-angle-threshold" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Pole Fallen - Angle Threshold
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#termination-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Termination Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-domain-randomization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Domain Randomization
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Domain Randomization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#reset-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reset Events
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Reset Events">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#event-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Event Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-complete-environment-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Complete Environment Configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-key-design-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Key Design Decisions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Key Design Decisions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-velocity-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why Velocity Control?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-these-rewards" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why These Rewards?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-45-termination" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why 45° Termination?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-training-tips" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Training Tips
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Training Tips">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#hyperparameter-tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hyperparameter Tuning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#debugging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Debugging
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-extensions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Extensions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7. Extensions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#swing-up-task" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Swing-Up Task
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#moving-target" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Moving Target
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#double-pole" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Double Pole
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MJLAB
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    MJLAB
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mjlab/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mjlab/task_layer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Task Layer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mjlab/scene_layer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scene Layer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mjlab/simulation_layer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simulation Layer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-the-cartpole-robot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. The CartPole Robot
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. The CartPole Robot">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#model-description" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Model Description
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#xml-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        XML Structure
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-designing-the-mdp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Designing the MDP
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Designing the MDP">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#observations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Observations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#actions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Actions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rewards" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rewards
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Rewards">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-stay-alive-constant-positive-reward" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Stay Alive - Constant Positive Reward
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-pole-upright-exponential-kernel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Pole Upright - Exponential Kernel
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-effort-penalty-actuator-force" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Effort Penalty - Actuator Force
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reward-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reward Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#terminations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Terminations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Terminations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-time-out-maximum-episode-length" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Time Out - Maximum Episode Length
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-pole-fallen-angle-threshold" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Pole Fallen - Angle Threshold
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#termination-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Termination Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-domain-randomization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Domain Randomization
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Domain Randomization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#reset-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reset Events
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Reset Events">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#event-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Event Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-complete-environment-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Complete Environment Configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-key-design-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Key Design Decisions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Key Design Decisions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-velocity-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why Velocity Control?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-these-rewards" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why These Rewards?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-45-termination" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why 45° Termination?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-training-tips" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Training Tips
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Training Tips">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#hyperparameter-tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hyperparameter Tuning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#debugging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Debugging
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-extensions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Extensions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7. Extensions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#swing-up-task" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Swing-Up Task
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#moving-target" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Moving Target
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#double-pole" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Double Pole
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/neverorfrog/colosseum.git/edit/master/docs/colosseum/cartpole.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="tutorial-creating-a-cartpole-balancing-task">Tutorial: Creating a CartPole Balancing Task</h1>
+<p>This tutorial walks through creating a complete CartPole balancing task in colosseum using mjlab. You'll learn how to apply the concepts from the Task Layer to build a working RL environment from scratch.</p>
+<h2 id="overview">Overview</h2>
+<p><strong>Goal</strong>: Train a policy to balance a pole on a moving cart using velocity control.</p>
+<p><strong>What you'll learn:</strong>
+- Setting up a scene with a simple robot
+- Designing reward functions for a balancing task
+- Configuring observations for pole balancing
+- Defining termination conditions
+- Adding domain randomization</p>
+<hr />
+<h2 id="1-the-cartpole-robot">1. The CartPole Robot</h2>
+<h3 id="model-description">Model Description</h3>
+<p>The CartPole consists of:
+- <strong>Cart</strong>: Slides along the x-axis
+- <strong>Pole</strong>: Hinges on the cart, rotates around the y-axis
+- <strong>Control</strong>: Velocity actuator on the cart's slide joint</p>
+<h3 id="xml-structure">XML Structure</h3>
+<pre><code class="language-xml">&lt;mujoco model=&quot;cartpole&quot;&gt;
+  &lt;worldbody&gt;
+    &lt;body name=&quot;cart&quot; pos=&quot;0 0 0&quot;&gt;
+      &lt;joint name=&quot;slide&quot; type=&quot;slide&quot; axis=&quot;1 0 0&quot; /&gt;
+      &lt;geom type=&quot;box&quot; size=&quot;0.2 0.1 0.1&quot; /&gt;
+
+      &lt;body name=&quot;pole&quot; pos=&quot;0 0 0.1&quot;&gt;
+        &lt;joint name=&quot;hinge&quot; type=&quot;hinge&quot; axis=&quot;0 1 0&quot; /&gt;
+        &lt;geom type=&quot;capsule&quot; fromto=&quot;0 0 0 0 0 1&quot; size=&quot;0.05&quot; /&gt;
+      &lt;/body&gt;
+    &lt;/body&gt;
+  &lt;/worldbody&gt;
+
+  &lt;actuator&gt;
+    &lt;velocity name=&quot;slide_velocity&quot; joint=&quot;slide&quot; ctrlrange=&quot;-20 20&quot; kv=&quot;20&quot;/&gt;
+  &lt;/actuator&gt;
+&lt;/mujoco&gt;
+</code></pre>
+<p><strong>Key joints:</strong>
+- <code>slide</code>: Cart position along x-axis
+- <code>hinge</code>: Pole angle from vertical</p>
+<hr />
+<h2 id="2-designing-the-mdp">2. Designing the MDP</h2>
+<h3 id="observations">Observations</h3>
+<p>The agent needs to observe:
+1. <strong>Cart position</strong> - Where the cart is
+2. <strong>Cart velocity</strong> - How fast the cart is moving
+3. <strong>Pole angle</strong> - How tilted the pole is
+4. <strong>Pole angular velocity</strong> - How fast the pole is rotating</p>
+<pre><code class="language-python">from mjlab.managers.manager_term_config import (
+    ObservationGroupCfg,
+    ObservationTermCfg,
+)
+from mjlab.managers.scene_entity_config import SceneEntityCfg
+from mjlab.envs import mdp
+
+def create_cartpole_observations() -&gt; ObservationGroupCfg:
+    &quot;&quot;&quot;Create CartPole observations.&quot;&quot;&quot;
+    return ObservationGroupCfg(
+        policy=ObservationTermCfg(
+            # Cart position (slide joint)
+            cart_pos=ObservationTermCfg(
+                func=mdp.joint_pos,
+                params={&quot;asset_cfg&quot;: SceneEntityCfg(&quot;cart&quot;, joint_names=&quot;slide&quot;)},
+            ),
+            # Cart velocity
+            cart_vel=ObservationTermCfg(
+                func=mdp.joint_vel,
+                params={&quot;asset_cfg&quot;: SceneEntityCfg(&quot;cart&quot;, joint_names=&quot;slide&quot;)},
+            ),
+            # Pole angle (hinge joint)
+            pole_angle=ObservationTermCfg(
+                func=mdp.joint_pos,
+                params={&quot;asset_cfg&quot;: SceneEntityCfg(&quot;cart&quot;, joint_names=&quot;hinge&quot;)},
+            ),
+            # Pole angular velocity
+            pole_vel=ObservationTermCfg(
+                func=mdp.joint_vel,
+                params={&quot;asset_cfg&quot;: SceneEntityCfg(&quot;cart&quot;, joint_names=&quot;hinge&quot;)},
+            ),
+        )
+    )
+</code></pre>
+<p><strong>Observation space</strong>: 4-dimensional vector <code>[cart_pos, cart_vel, pole_angle, pole_vel]</code></p>
+<h3 id="actions">Actions</h3>
+<p>The policy outputs a single value controlling cart velocity:</p>
+<pre><code class="language-python">from mjlab.envs.mdp.actions import JointVelocityActionCfg
+
+def create_cartpole_actions() -&gt; dict[str, JointVelocityActionCfg]:
+    &quot;&quot;&quot;Create CartPole actions.&quot;&quot;&quot;
+    return {
+        &quot;cart_velocity&quot;: JointVelocityActionCfg(
+            asset_name=&quot;cart&quot;,
+            actuator_names=[&quot;slide_velocity&quot;],
+            scale=20.0,  # Scale [-1, 1] → [-20, 20] m/s
+        ),
+    }
+</code></pre>
+<p><strong>Action space</strong>: 1-dimensional, policy outputs in range [-1, 1]</p>
+<h3 id="rewards">Rewards</h3>
+<p>We design three reward terms:</p>
+<h4 id="1-stay-alive-constant-positive-reward">1. Stay Alive - Constant Positive Reward</h4>
+<p>Encourage the agent to keep the episode running:</p>
+<pre><code class="language-python">def is_alive(env: ManagerBasedRlEnv) -&gt; torch.Tensor:
+    &quot;&quot;&quot;Constant reward for staying alive.&quot;&quot;&quot;
+    return torch.ones(env.num_envs, device=env.device)
+</code></pre>
+<p><strong>Intuition</strong>: Every timestep the pole stays balanced earns reward.</p>
+<h4 id="2-pole-upright-exponential-kernel">2. Pole Upright - Exponential Kernel</h4>
+<p>Reward for keeping the pole vertical using cosine of angle:</p>
+<pre><code class="language-python">def pole_upright_reward(
+    env: ManagerBasedRlEnv,
+    asset_cfg: SceneEntityCfg,
+    std: float,
+) -&gt; torch.Tensor:
+    &quot;&quot;&quot;Reward for keeping pole upright using cosine of angle.&quot;&quot;&quot;
+    asset = env.scene[asset_cfg.name]
+
+    # Get pole angle from hinge joint
+    pole_angle = asset.data.joint_pos[:, asset_cfg.joint_ids].squeeze(-1)
+
+    # Use cosine: 1.0 when upright (0°), -1.0 when inverted (180°)
+    alignment = torch.cos(pole_angle)
+
+    # Apply exponential kernel for smooth gradient
+    error = 1.0 - alignment  # 0 when upright, 2 when inverted
+    reward = torch.exp(-error**2 / std**2)
+
+    return reward  # shape: (num_envs,)
+</code></pre>
+<p><strong>Why cosine?</strong>
+- <code>cos(0°) = 1.0</code> → Pole perfectly upright (maximum reward)
+- <code>cos(90°) = 0.0</code> → Pole horizontal
+- <code>cos(180°) = -1.0</code> → Pole inverted</p>
+<p><strong>Exponential kernel</strong> provides smooth gradients for learning.</p>
+<h4 id="3-effort-penalty-actuator-force">3. Effort Penalty - Actuator Force</h4>
+<p>Penalize large control efforts to encourage energy-efficient solutions:</p>
+<pre><code class="language-python">def actuator_effort_penalty(
+    env: ManagerBasedRlEnv,
+    asset_cfg: SceneEntityCfg,
+) -&gt; torch.Tensor:
+    &quot;&quot;&quot;Penalize actuator force magnitude (L2 norm).&quot;&quot;&quot;
+    asset = env.scene[asset_cfg.name]
+
+    # Sum squared forces across all actuators
+    effort_squared = torch.sum(
+        torch.square(asset.data.actuator_force), 
+        dim=1
+    )
+
+    return effort_squared  # Returns cost (always positive)
+</code></pre>
+<p><strong>Note</strong>: Function returns <strong>cost</strong> (positive), config uses <strong>negative weight</strong> to make it a penalty.</p>
+<h4 id="reward-configuration">Reward Configuration</h4>
+<pre><code class="language-python">from mjlab.managers.manager_term_config import RewardTermCfg
+
+def create_cartpole_rewards() -&gt; dict[str, RewardTermCfg]:
+    &quot;&quot;&quot;Create CartPole rewards.&quot;&quot;&quot;
+    return {
+        &quot;alive&quot;: RewardTermCfg(
+            func=mdp.is_alive,
+            weight=1.0,  # Positive: we want this
+        ),
+        &quot;pole_upright&quot;: RewardTermCfg(
+            func=pole_upright_reward,
+            weight=1.0,  # Positive: we want this
+            params={
+                &quot;asset_cfg&quot;: SceneEntityCfg(&quot;cart&quot;, joint_names=&quot;hinge&quot;),
+                &quot;std&quot;: 0.5,
+            }
+        ),
+        &quot;effort&quot;: RewardTermCfg(
+            func=actuator_effort_penalty,
+            weight=-0.01,  # NEGATIVE: penalize high effort
+            params={
+                &quot;asset_cfg&quot;: SceneEntityCfg(&quot;cart&quot;),
+            }
+        ),
+    }
+</code></pre>
+<p><strong>Reward computation example</strong> (dt=0.02):
+- <code>alive</code>: 1.0 × 1.0 × 0.02 = 0.02
+- <code>pole_upright</code>: 0.9 × 1.0 × 0.02 = 0.018
+- <code>effort</code>: 100.0 × (-0.01) × 0.02 = -0.02
+- <strong>Total</strong>: 0.02 + 0.018 - 0.02 = 0.018</p>
+<h3 id="terminations">Terminations</h3>
+<p>Define when episodes should end:</p>
+<h4 id="1-time-out-maximum-episode-length">1. Time Out - Maximum Episode Length</h4>
+<pre><code class="language-python">def time_out(env: ManagerBasedRlEnv) -&gt; torch.Tensor:
+    &quot;&quot;&quot;Terminate episodes that exceed maximum duration.&quot;&quot;&quot;
+    return env.episode_length_buf &gt;= env.max_episode_length
+</code></pre>
+<p><strong>Configuration</strong>: <code>time_out=True</code> (this is a natural ending, not a failure)</p>
+<h4 id="2-pole-fallen-angle-threshold">2. Pole Fallen - Angle Threshold</h4>
+<pre><code class="language-python">def pole_angle_limit(
+    env: ManagerBasedRlEnv,
+    threshold: float,  # In radians
+    asset_cfg: SceneEntityCfg,
+) -&gt; torch.Tensor:
+    &quot;&quot;&quot;Terminate when pole angle exceeds threshold.&quot;&quot;&quot;
+    asset = env.scene[asset_cfg.name]
+
+    # Get pole angle from hinge joint
+    pole_angle = asset.data.joint_pos[:, asset_cfg.joint_ids].squeeze(-1)
+
+    # Check if absolute angle exceeds threshold
+    fallen = torch.abs(pole_angle) &gt; threshold
+
+    return fallen  # shape: (num_envs,), dtype: bool
+</code></pre>
+<p><strong>Threshold</strong>: π/4 radians (45°) - pole fallen if tilted beyond this</p>
+<h4 id="termination-configuration">Termination Configuration</h4>
+<pre><code class="language-python">from mjlab.managers.manager_term_config import TerminationTermCfg
+
+def create_cartpole_terminations() -&gt; dict[str, TerminationTermCfg]:
+    &quot;&quot;&quot;Create CartPole terminations.&quot;&quot;&quot;
+    return {
+        &quot;time_out&quot;: TerminationTermCfg(
+            func=mdp.time_out,
+            time_out=True,  # Natural ending (not failure)
+        ),
+        &quot;pole_fallen&quot;: TerminationTermCfg(
+            func=pole_angle_limit,
+            time_out=False,  # Failure condition
+            params={
+                &quot;asset_cfg&quot;: SceneEntityCfg(&quot;cart&quot;, joint_names=&quot;hinge&quot;),
+                &quot;threshold&quot;: 0.785,  # π/4 radians = 45°
+            }
+        ),
+    }
+</code></pre>
+<hr />
+<h2 id="3-domain-randomization">3. Domain Randomization</h2>
+<p>Add robustness through randomized initial conditions:</p>
+<h3 id="reset-events">Reset Events</h3>
+<p>Randomize initial pole angle on each episode reset:</p>
+<pre><code class="language-python">def reset_pole_angle(
+    env: ManagerBasedEnv,
+    env_ids: torch.Tensor,
+    angle_range: tuple[float, float],
+    asset_cfg: SceneEntityCfg,
+) -&gt; None:
+    &quot;&quot;&quot;Set random initial pole angle.&quot;&quot;&quot;
+    asset = env.scene[asset_cfg.name]
+
+    # Sample random angles
+    angles = torch.rand(len(env_ids), device=env.device)
+    angles = angles * (angle_range[1] - angle_range[0]) + angle_range[0]
+
+    # Apply to simulation
+    asset.write_joint_state_to_sim(
+        position=angles.unsqueeze(-1),
+        velocity=torch.zeros(len(env_ids), 1, device=env.device),
+        joint_ids=asset_cfg.joint_ids,
+        env_ids=env_ids
+    )
+</code></pre>
+<h4 id="event-configuration">Event Configuration</h4>
+<pre><code class="language-python">from mjlab.managers.manager_term_config import EventTermCfg
+
+def create_cartpole_events() -&gt; dict[str, EventTermCfg]:
+    &quot;&quot;&quot;Create CartPole events.&quot;&quot;&quot;
+    return {
+        &quot;reset_pole&quot;: EventTermCfg(
+            func=reset_pole_angle,
+            mode=&quot;reset&quot;,  # Trigger on environment reset
+            params={
+                &quot;asset_cfg&quot;: SceneEntityCfg(&quot;cart&quot;, joint_names=&quot;hinge&quot;),
+                &quot;angle_range&quot;: (-0.1, 0.1),  # ±0.1 rad from vertical
+            }
+        ),
+    }
+</code></pre>
+<p><strong>Effect</strong>: Each episode starts with pole at slightly different angle, improving robustness.</p>
+<hr />
+<h2 id="4-complete-environment-configuration">4. Complete Environment Configuration</h2>
+<p>Putting it all together:</p>
+<pre><code class="language-python">from mjlab.envs import ManagerBasedRlEnvCfg
+from mjlab.scene import SceneCfg
+from mjlab.sim import MujocoCfg, SimulationCfg
+
+# Scene setup
+SCENE_CFG = SceneCfg(
+    num_envs=64,
+    extent=1.0,
+    entities={&quot;cart&quot;: get_cartpole_robot_cfg()},
+)
+
+# Simulation configuration
+SIM_CFG = SimulationCfg(
+    mujoco=MujocoCfg(
+        timestep=0.02,  # 50Hz control frequency
+        iterations=1,
+    ),
+)
+
+# Environment configuration
+CARTPOLE_ENV_CFG = ManagerBasedRlEnvCfg(
+    # Scene and simulation
+    scene=SCENE_CFG,
+    sim=SIM_CFG,
+
+    # MDP components
+    observations=create_cartpole_observations(),
+    actions=create_cartpole_actions(),
+    rewards=create_cartpole_rewards(),
+    terminations=create_cartpole_terminations(),
+    events=create_cartpole_events(),
+
+    # Episode settings
+    decimation=1,  # No decimation (control freq = physics freq)
+    episode_length_s=10.0,  # 10 second episodes
+)
+</code></pre>
+<hr />
+<h2 id="5-key-design-decisions">5. Key Design Decisions</h2>
+<h3 id="why-velocity-control">Why Velocity Control?</h3>
+<p><strong>Velocity actuators</strong> are simpler than position control for this task:
+- Direct control over cart speed
+- No need for PD controller tuning
+- Natural for continuous control</p>
+<h3 id="why-these-rewards">Why These Rewards?</h3>
+<ol>
+<li><strong>Stay alive</strong>: Sparse signal - encourages longer episodes</li>
+<li><strong>Pole upright</strong>: Dense signal - guides learning with smooth gradients</li>
+<li><strong>Effort penalty</strong>: Encourages efficiency - prevents aggressive movements</li>
+</ol>
+<p><strong>Balance</strong>: Dense rewards (pole upright) provide learning signal, sparse rewards (stay alive) provide task objective.</p>
+<h3 id="why-45-termination">Why 45° Termination?</h3>
+<ul>
+<li>Too strict (e.g., 10°): Agent never learns, episodes too short</li>
+<li>Too loose (e.g., 80°): Agent learns bad policies, unsafe behaviors</li>
+<li>45°: Sweet spot - allows exploration while preventing complete failures</li>
+</ul>
+<hr />
+<h2 id="6-training-tips">6. Training Tips</h2>
+<h3 id="hyperparameter-tuning">Hyperparameter Tuning</h3>
+<p><strong>Reward weights:</strong>
+- Start with <code>alive=1.0</code>, <code>pole_upright=1.0</code>, <code>effort=-0.01</code>
+- If agent too aggressive: Increase effort penalty (e.g., -0.05)
+- If agent too passive: Decrease effort penalty (e.g., -0.001)</p>
+<p><strong>Termination threshold:</strong>
+- Start loose (60°), tighten during training (45° → 30°)
+- Use curriculum learning to gradually increase difficulty</p>
+<p><strong>Episode length:</strong>
+- Start short (5s), increase as agent improves (10s → 20s)
+- Prevents long episodes of poor performance early in training</p>
+<h3 id="debugging">Debugging</h3>
+<p><strong>Common issues:</strong></p>
+<ol>
+<li><strong>Agent pushes cart to limits</strong>: Increase effort penalty or add cart position penalty</li>
+<li><strong>Pole oscillates</strong>: Increase <code>std</code> in pole_upright reward for smoother gradients</li>
+<li><strong>Episodes too short</strong>: Loosen termination threshold or increase rewards</li>
+<li><strong>No learning</strong>: Check observation scaling, verify rewards are non-zero</li>
+</ol>
+<hr />
+<h2 id="7-extensions">7. Extensions</h2>
+<p>Once basic balancing works, try:</p>
+<h3 id="swing-up-task">Swing-Up Task</h3>
+<p>Start with pole hanging down, swing up and balance:</p>
+<pre><code class="language-python">&quot;swing_up_reward&quot;: RewardTermCfg(
+    func=pole_energy_reward,  # Reward kinetic + potential energy
+    weight=0.5,
+    params={&quot;asset_cfg&quot;: SceneEntityCfg(&quot;cart&quot;, joint_names=&quot;hinge&quot;)},
+)
+</code></pre>
+<h3 id="moving-target">Moving Target</h3>
+<p>Add cart position command to track:</p>
+<pre><code class="language-python">&quot;track_position&quot;: RewardTermCfg(
+    func=mdp.track_position_exp,
+    weight=0.5,
+    params={
+        &quot;command_name&quot;: &quot;target_pos&quot;,
+        &quot;asset_cfg&quot;: SceneEntityCfg(&quot;cart&quot;, joint_names=&quot;slide&quot;),
+    }
+)
+</code></pre>
+<h3 id="double-pole">Double Pole</h3>
+<p>Add second pole for increased difficulty:</p>
+<pre><code class="language-xml">&lt;body name=&quot;pole2&quot; pos=&quot;0 0 1&quot;&gt;
+  &lt;joint name=&quot;hinge2&quot; type=&quot;hinge&quot; axis=&quot;0 1 0&quot; /&gt;
+  &lt;geom type=&quot;capsule&quot; fromto=&quot;0 0 0 0 0 0.5&quot; size=&quot;0.03&quot; /&gt;
+&lt;/body&gt;
+</code></pre>
+<hr />
+<h2 id="summary">Summary</h2>
+<p><strong>What we built:</strong>
+- Simple 2-DoF robot (cart + pole)
+- 4D observation space (positions + velocities)
+- 1D action space (cart velocity)
+- 3 reward terms (alive, upright, effort)
+- 2 termination conditions (timeout, fallen)
+- Reset randomization (initial pole angle)</p>
+<p><strong>Key takeaways:</strong>
+1. <strong>Reward design matters</strong>: Balance dense and sparse rewards
+2. <strong>Terminations enable learning</strong>: Not too strict, not too loose
+3. <strong>Domain randomization helps</strong>: Randomize initial conditions
+4. <strong>Iterate and tune</strong>: Start simple, add complexity gradually</p>
+<p><strong>Next steps:</strong>
+- Train the policy using your preferred RL algorithm (PPO, SAC, etc.)
+- Visualize learned behaviors
+- Try the suggested extensions
+- Apply these patterns to more complex robots!</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../getting_started/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Getting Started">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Getting Started
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../../mjlab/overview/" class="md-footer__link md-footer__link--next" aria-label="Next: Overview">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Overview
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      2025, Colosseum Team
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+      <div class="md-progress" data-md-component="progress" role="progressbar"></div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.tabs.link", "content.code.copy", "content.action.edit", "content.code.annotate", "content.tooltips", "content.code.select", "navigation.instant", "navigation.instant.progress", "navigation.tracking", "navigation.sections", "navigation.top", "navigation.footer"], "search": "../../assets/javascripts/workers/search.7a47a382.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.e71a0d61.min.js"></script>
+      
+    
+  </body>
+</html>
