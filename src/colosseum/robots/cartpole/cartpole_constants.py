@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import mujoco
-from mjlab.actuator import Actuator, ActuatorCfg, XmlMotorActuatorCfg
+from mjlab.actuator import XmlMotorActuatorCfg
 from mjlab.entity import Entity, EntityArticulationInfoCfg, EntityCfg
 
 from colosseum.utils import src_dir

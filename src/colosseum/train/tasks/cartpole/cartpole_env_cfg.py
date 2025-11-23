@@ -30,7 +30,7 @@ viewer_config = ViewerConfig(
 # ====== Simulation Configuration ======
 from mjlab.sim import MujocoCfg, SimulationCfg
 
-simulation_config: SimulationCfg = SimulationCfg(
+simulation_config = SimulationCfg(
     mujoco=MujocoCfg(
         timestep=0.02,
         iterations=1,

@@ -24,3 +24,4 @@ site-packages/
 # Models and logs
 logs/
 wandb/
+.vscode/settings.json
