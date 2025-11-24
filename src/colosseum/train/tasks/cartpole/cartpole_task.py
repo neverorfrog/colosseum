@@ -1,45 +1,7 @@
-# ====== Scene Definition ======
 from mjlab.managers.scene_entity_config import SceneEntityCfg
-from mjlab.scene import SceneCfg
-from mjlab.terrains import TerrainImporterCfg
-
-from colosseum.robots.cartpole.cartpole_constants import CARTPOLE_ROBOT_CFG
-
-scene_config = SceneCfg(
-    terrain=TerrainImporterCfg(
-        terrain_type="plane",
-    ),
-    num_envs=512,
-    extent=1.0,
-    entities={"robot": CARTPOLE_ROBOT_CFG},
-)
-
-# ====== Viewer Configuration ======
-from mjlab.viewer import ViewerConfig
-
-viewer_config = ViewerConfig(
-    origin_type=ViewerConfig.OriginType.ASSET_BODY,
-    asset_name="robot",
-    body_name="pole",
-    distance=3.0,
-    elevation=10.0,
-    azimuth=90.0,
-)
-
-
-# ====== Simulation Configuration ======
-from mjlab.sim import MujocoCfg, SimulationCfg
-
-simulation_config = SimulationCfg(
-    mujoco=MujocoCfg(
-        timestep=0.02,
-        iterations=1,
-    ),
-)
-
 
 # ====== Actions and Observations ======
-from mjlab.envs.mdp.actions import JointEffortActionCfg, JointVelocityActionCfg
+from mjlab.envs.mdp.actions import JointEffortActionCfg
 from mjlab.managers.manager_term_config import ActionTermCfg
 
 actions: dict[str, ActionTermCfg] = {
@@ -55,7 +17,7 @@ from mjlab.managers.manager_term_config import (
     ObservationTermCfg,
 )
 
-from colosseum.train.tasks.cartpole.cartpole_mdp import joint_pos, joint_vel
+from colosseum.train.tasks.cartpole.mdp_functions import joint_pos, joint_vel
 
 policy_terms: dict[str, ObservationTermCfg] = {
     "cart_pos": ObservationTermCfg(
@@ -93,10 +55,7 @@ from mjlab.envs.mdp.terminations import time_out
 # ======== Rewards ========
 from mjlab.managers.manager_term_config import RewardTermCfg
 
-from colosseum.train.tasks.cartpole.cartpole_mdp import (
-    effort_cost,
-    upright_reward,
-)
+from colosseum.train.tasks.cartpole.mdp_functions import effort_cost, upright_reward
 
 rewards: dict[str, RewardTermCfg] = {
     "upright": RewardTermCfg(
@@ -115,7 +74,7 @@ rewards: dict[str, RewardTermCfg] = {
 # ====== Terminations =======
 from mjlab.managers.manager_term_config import TerminationTermCfg
 
-from colosseum.train.tasks.cartpole.cartpole_mdp import pole_fallen
+from colosseum.train.tasks.cartpole.mdp_functions import pole_fallen
 
 terminations: dict[str, TerminationTermCfg] = {
     "time_out": TerminationTermCfg(func=time_out, time_out=True),
@@ -153,25 +112,3 @@ events: dict[str, EventTermCfg] = {
         },
     ),
 }
-
-# ==== Env Config =======
-from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnvCfg
-
-env_config = ManagerBasedRlEnvCfg(
-    scene=scene_config,
-    observations=observations,
-    actions=actions,
-    rewards=rewards,
-    events=events,
-    terminations=terminations,
-    sim=simulation_config,
-    viewer=viewer_config,
-    decimation=1,
-    episode_length_s=10.0,
-)
-
-
-# === RL Agent =======
-from mjlab.rl import RslRlOnPolicyRunnerCfg
-
-rl_config = RslRlOnPolicyRunnerCfg(max_iterations=500, wandb_project="mjlab_cartpole")
