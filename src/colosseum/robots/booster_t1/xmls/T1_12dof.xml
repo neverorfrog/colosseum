@@ -123,7 +123,7 @@
   <worldbody>
     <light name="spotlight" mode="targetbodycom" target="Trunk" pos="0 -2 4" exponent="20"/>
     <body name="Trunk" pos="0 0 .7" childclass="t1">
-      <freejoint/>
+      <freejoint name="floating_base_joint"/>
       <inertial pos="0.054281 8.47449e-06 0.0893932" quat="0.999999 -0.000254757 -0.00132228 -0.000215148" mass="19.4304" diaginertia="0.502019 0.3531 0.207324" />
       <site name='imu'/>
       <camera name="track" pos="1.248 -0.947 0.5" xyaxes="0.628 0.779 -0.000 -0.274 0.221 0.936" mode="trackcom"/>

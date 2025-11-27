@@ -41,3 +41,6 @@ cartpole = "colosseum.train.tasks.cartpole"
 [tool.ruff]
 src = ["src"]
 indent-width = 2
+
+[tool.pixi.activation.env]
+MUJOCO_GL="osmesa"

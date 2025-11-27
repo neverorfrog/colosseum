@@ -75,7 +75,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/94/54/e7d793b573f298e1c9013b8c4dade17d481164aa517d1d7148619c2cedbf/markdown_it_py-4.0.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/3c/2e/8d0c2ab90a8c1d9a24f0399058ab8519a3279d1bd4289511d74e909f060e/markupsafe-3.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl
-      - pypi: git+https://github.com/neverorfrog/mjlab.git?branch=main#d4f16bc66dc0792ecfe4de3f2608b60bbc81f01a
+      - pypi: git+https://github.com/neverorfrog/mjlab.git?branch=main#0f78b383f75473caf889c1742c6b4037829849c0
       - pypi: https://files.pythonhosted.org/packages/3a/cb/28ce52eb94390dda42599c98ea0204d74799e4d8047a0eb559b6fd648056/ml_dtypes-0.5.4-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/9a/73/7d3b2010baa0b5eb1e4dfa9e4385e89b6716be76f2fa21a6c0fe34b68e5a/moviepy-2.2.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/43/e3/7d92a15f894aa0c9c4b49b8ee9ac9850d6e63b03c9c32c0367a13ae62209/mpmath-1.3.0-py3-none-any.whl
@@ -441,7 +441,7 @@ packages:
 - pypi: ./
   name: colosseum
   version: 0.1.0
-  sha256: 7e50ef73e31d52591e801ee3c91e02743c0f034dbe334b74a79ca53761661cda
+  sha256: f28f41e1ea510a9ba6c1c9ef4a9841c81cdf173b350eebbf164446006ebf0949
   requires_python: ==3.12.*
   editable: true
 - pypi: https://files.pythonhosted.org/packages/c9/56/e7e69b427c3878352c2fb9b450bd0e19ed552753491d39d7d0a2f5226d41/cryptography-46.0.3-cp311-abi3-manylinux_2_28_x86_64.whl
@@ -1325,7 +1325,7 @@ packages:
   license_family: MIT
   size: 11676
   timestamp: 1734157119152
-- pypi: git+https://github.com/neverorfrog/mjlab.git?branch=main#d4f16bc66dc0792ecfe4de3f2608b60bbc81f01a
+- pypi: git+https://github.com/neverorfrog/mjlab.git?branch=main#0f78b383f75473caf889c1742c6b4037829849c0
   name: mjlab
   version: 0.1.0
   requires_dist:
