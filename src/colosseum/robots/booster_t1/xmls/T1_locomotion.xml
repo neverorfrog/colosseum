@@ -34,10 +34,10 @@
         <light directional="true" diffuse=".4 .4 .4" specular="0.1 0.1 0.1" pos="0 0 5.0" dir="0 0 -1" castshadow="false" />
         <light directional="true" diffuse=".6 .6 .6" specular="0.2 0.2 0.2" pos="0 0 4" dir="0 0 -1" />
         <geom name="ground" type="plane" pos="0 0 0" size="0 0 1" material="matplane" condim="1"/>
-        <body name="Trunk" pos="0 0 0.7">
+        <body name="Trunk" pos="0 0 0.66">
             <inertial pos="0.054281 8.47449e-06 0.0893932" quat="0.999999 -0.000254757 -0.00132228 -0.000215148" mass="19.4304" diaginertia="0.502019 0.3531 0.207324" />
             <site name='imu' size='0.01' pos='0.0 0.0 0.0' />
-            <joint type="free" />
+            <joint type="free"  name="floating_base_joint"/>
             <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.76 0.76 0.76 1.0" mesh="Trunk" />
             <geom size="0.075 0.1 0.15" pos="0.06 0 0.12" type="box" rgba="0.76 0.76 0.76 0.0" />
             <geom pos="0.0625 0 0.243" type="mesh" contype="0" conaffinity="0" group="1" rgba="0.4 0.4 0.4 1.0" mesh="H1" />

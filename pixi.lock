@@ -75,13 +75,13 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/94/54/e7d793b573f298e1c9013b8c4dade17d481164aa517d1d7148619c2cedbf/markdown_it_py-4.0.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/3c/2e/8d0c2ab90a8c1d9a24f0399058ab8519a3279d1bd4289511d74e909f060e/markupsafe-3.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl
-      - pypi: git+https://github.com/neverorfrog/mjlab.git?branch=main#0f78b383f75473caf889c1742c6b4037829849c0
+      - pypi: git+https://github.com/neverorfrog/mjlab.git?branch=main#39f7aeb723953cd9269dfe862f1608f3b2e3f35b
       - pypi: https://files.pythonhosted.org/packages/3a/cb/28ce52eb94390dda42599c98ea0204d74799e4d8047a0eb559b6fd648056/ml_dtypes-0.5.4-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/9a/73/7d3b2010baa0b5eb1e4dfa9e4385e89b6716be76f2fa21a6c0fe34b68e5a/moviepy-2.2.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/43/e3/7d92a15f894aa0c9c4b49b8ee9ac9850d6e63b03c9c32c0367a13ae62209/mpmath-1.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/5c/a2/488517a43ccf5a4b6b6eca6dd4ede0bd82b043d1539dd6bb908a19f8efd3/msgspec-0.20.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://py.mujoco.org/mujoco/mujoco-3.3.8.dev835329730-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
-      - pypi: git+https://github.com/google-deepmind/mujoco_warp?rev=e605c406363805d949b75d50dd5ffb3d79bc3f70#e605c406363805d949b75d50dd5ffb3d79bc3f70
+      - pypi: git+https://github.com/google-deepmind/mujoco_warp?rev=46b4421c19a9d72eeeb7ed8c083d275746513d38#46b4421c19a9d72eeeb7ed8c083d275746513d38
       - pypi: https://files.pythonhosted.org/packages/07/c7/d64168da60332c17d24c0d2f08bdf3987e8d1ae9d84b5bbd0eec2eb26a55/networkx-3.6-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/d2/1d/1b658dbd2b9fa9c4c9f32accbfc0205d532c8c6194dc0f2a4c0428e7128a/nodeenv-1.9.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/b6/23/2a1b231b8ff672b4c450dac27164a8b2ca7d9b7144f9c02d2396518352eb/numpy-2.3.5-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
@@ -126,7 +126,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/1e/db/4254e3eabe8020b458f1a747140d32277ec7a271daf1d235b70dc0b4e6e3/requests-2.32.5-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/25/7a/b0178788f8dc6cafce37a212c99565fa1fe7872c70c6c9c1e1a372d9d88f/rich-14.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/04/4c/f9b8a05faca3d9e0a6397c90d13acb9307c9792b2bff621430c58b1d6e76/rpds_py-0.29.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/49/82/f92e99ac06b8af3e7057c740816832b4f1a43b3589072b55d012d0ceb4d7/rsl_rl_lib-3.1.3-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/d8/fd/11d5b88be193493c53b4633732eb628e49b9f802efbaf3350c3265c61abf/rsl_rl_lib-3.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/d1/75/e5d44be90525cd28503e7f836d077ae6663ec0687a13ba7810b4114b3668/rtree-1.4.1-py3-none-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/79/2e/415119c9ab3e62249e18c2b082c07aff907a273741b3f8160414b0e9193c/scipy-1.16.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/4b/b6/ce7c502a366f4835b1f9c057753f6989a92d3c70cbadb168193f5fb7499b/sentry_sdk-2.46.0-py2.py3-none-any.whl
@@ -441,7 +441,7 @@ packages:
 - pypi: ./
   name: colosseum
   version: 0.1.0
-  sha256: f28f41e1ea510a9ba6c1c9ef4a9841c81cdf173b350eebbf164446006ebf0949
+  sha256: 7005ec02aedc0c3c0856cdef0616cb9cd82612e2ec8af8a8b54fc2afef3a8197
   requires_python: ==3.12.*
   editable: true
 - pypi: https://files.pythonhosted.org/packages/c9/56/e7e69b427c3878352c2fb9b450bd0e19ed552753491d39d7d0a2f5226d41/cryptography-46.0.3-cp311-abi3-manylinux_2_28_x86_64.whl
@@ -1325,7 +1325,7 @@ packages:
   license_family: MIT
   size: 11676
   timestamp: 1734157119152
-- pypi: git+https://github.com/neverorfrog/mjlab.git?branch=main#0f78b383f75473caf889c1742c6b4037829849c0
+- pypi: git+https://github.com/neverorfrog/mjlab.git?branch=main#39f7aeb723953cd9269dfe862f1608f3b2e3f35b
   name: mjlab
   version: 0.1.0
   requires_dist:
@@ -1336,13 +1336,13 @@ packages:
   - torchrunx>=0.3.4
   - warp-lang ; sys_platform != 'darwin'
   - warp-lang ; sys_platform == 'darwin'
-  - mujoco-warp @ git+https://github.com/google-deepmind/mujoco_warp@e605c406363805d949b75d50dd5ffb3d79bc3f70
+  - mujoco-warp @ git+https://github.com/google-deepmind/mujoco_warp@46b4421c19a9d72eeeb7ed8c083d275746513d38
   - mujoco<=3.3.8
   - trimesh>=4.8.3
   - viser>=1.0.16
   - moviepy
   - tensordict
-  - rsl-rl-lib
+  - rsl-rl-lib>=3.2.0
   - tensorboard>=2.20.0
   - onnxscript>=0.5.4
   - wandb>=0.22.3
@@ -1496,7 +1496,7 @@ packages:
   - usd-core ; extra == 'usd'
   - pillow ; extra == 'usd'
   requires_python: '>=3.9'
-- pypi: git+https://github.com/google-deepmind/mujoco_warp?rev=e605c406363805d949b75d50dd5ffb3d79bc3f70#e605c406363805d949b75d50dd5ffb3d79bc3f70
+- pypi: git+https://github.com/google-deepmind/mujoco_warp?rev=46b4421c19a9d72eeeb7ed8c083d275746513d38#46b4421c19a9d72eeeb7ed8c083d275746513d38
   name: mujoco-warp
   version: 0.0.1
   requires_dist:
@@ -2127,10 +2127,10 @@ packages:
   version: 0.29.0
   sha256: ad7bd570be92695d89285a4b373006930715b78d96449f686af422debb4d3949
   requires_python: '>=3.10'
-- pypi: https://files.pythonhosted.org/packages/49/82/f92e99ac06b8af3e7057c740816832b4f1a43b3589072b55d012d0ceb4d7/rsl_rl_lib-3.1.3-py3-none-any.whl
+- pypi: https://files.pythonhosted.org/packages/d8/fd/11d5b88be193493c53b4633732eb628e49b9f802efbaf3350c3265c61abf/rsl_rl_lib-3.2.0-py3-none-any.whl
   name: rsl-rl-lib
-  version: 3.1.3
-  sha256: aaaacf096c6b2e157640083c75e5cfe1efc0b73c8b3767eeeb1609cde28df49f
+  version: 3.2.0
+  sha256: 5e822900d1cccf3f7fc02875bdb5612388785b8de5f9c2a5a0074f3d8363859a
   requires_dist:
   - torch>=2.6.0
   - torchvision>=0.5.0

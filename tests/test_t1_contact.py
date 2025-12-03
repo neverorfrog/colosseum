@@ -1,10 +1,9 @@
 # src/colosseum/tests/test_t1_contacts.py
-import mujoco
 from mjlab.scene import Scene
 from mjlab.scene import SceneCfg
 from mjlab.sensor import ContactSensorCfg, ContactMatch, ContactSensor
 from mjlab.terrains import TerrainImporterCfg
-from colosseum.robots.booster_t1.t1_constants import T1_ROBOT_CFG
+from colosseum.robots.booster_t1.t1_loco_constants import get_robot_cfg
 from mjlab.sim.sim import Simulation, SimulationCfg
 import mujoco.viewer as viewer
 
@@ -29,7 +28,7 @@ scene_cfg = SceneCfg(
     terrain=TerrainImporterCfg(terrain_type="plane"),
     num_envs=1,
     extent=1.0,
-    entities={"robot": T1_ROBOT_CFG},
+    entities={"robot": get_robot_cfg()},
     sensors=(feet_ground_cfg,),
 )
 
@@ -40,7 +39,7 @@ if __name__ == "__main__":
     model = scene.compile()
     
     # Create simulation
-    sim_cfg = SimulationCfg(njmax=46)
+    sim_cfg = SimulationCfg(njmax=64)
     sim = Simulation(num_envs=1, cfg=sim_cfg, model=model, device="cuda")
     
     # Attach scene to simulation
@@ -52,7 +51,7 @@ if __name__ == "__main__":
     print(f"Sensor data shape - force: {sensor.data.force.shape}")
     
     print("\n=== Running simulation ===")
-    for i in range(100):
+    for i in range(1000):
         # Apply zero control (robot just stands/falls naturally)
         sim.data.ctrl[:, :] = 0.0
         
@@ -69,5 +68,5 @@ if __name__ == "__main__":
             print(f"  Left foot force Z: {sensor.data.force[0, 0, 2].item():.2f} N")
             print(f"  Right foot force Z: {sensor.data.force[0, 1, 2].item():.2f} N")     
             
-        print("\n=== Launching viewer ===")
-        viewer.launch(sim.mj_model)         
+    print("\n=== Launching viewer ===")
+    viewer.launch(sim.mj_model)         
