@@ -39,10 +39,10 @@ def step(self, action):
     for _ in range(self.cfg.decimation):
         self.action_manager.apply_action()
         self.sim.step()
-    
+
     # 2. Compute reward ← RewardManager called here
     reward = self.reward_manager.compute(dt=self.step_dt)
-    
+
     # 3. Compute observations, terminations, etc.
     ...
     return obs, reward, done, info
@@ -53,23 +53,23 @@ def step(self, action):
 ```python
 def compute(self, dt: float) -> torch.Tensor:
     self._reward_buf[:] = 0.0
-    
+
     for name, term_cfg in zip(self._term_names, self._term_cfgs):
         if term_cfg.weight == 0.0:
             continue
-            
+
         # Call term function
         value = term_cfg.func(self._env, **term_cfg.params)
-        
+
         # Apply weight and dt
         value = value * term_cfg.weight * dt
-        
+
         # Accumulate into total reward
         self._reward_buf += value
-        
+
         # Track for logging
         self._episode_sums[name] += value
-        
+
     return self._reward_buf  # shape: (num_envs,)
 ```
 
@@ -153,7 +153,7 @@ def my_reward(
         env: Environment instance (access to scene, sim, managers)
         asset_cfg: Resolved entity configuration (has .joint_ids, .body_ids, etc.)
         Additional params from RewardTermCfg.params
-    
+
     Returns:
         Tensor of shape (num_envs,) with reward-per-second values
     """
@@ -194,11 +194,11 @@ def joint_acceleration_l2(env, asset_cfg):
 def joint_pos_limits(env, asset_cfg):
     asset = env.scene[asset_cfg.name]
     joint_pos = asset.data.joint_pos[:, asset_cfg.joint_ids]
-    
+
     # Get limits from asset
     soft_limits = asset.data.soft_joint_pos_limits[:, asset_cfg.joint_ids]
     lower, upper = soft_limits[:, :, 0], soft_limits[:, :, 1]
-    
+
     # Penalize violations
     violation = torch.sum(
         (joint_pos < lower).float() * torch.square(joint_pos - lower) +
@@ -231,10 +231,10 @@ class JointPositionAction(ActionTerm):
     def __init__(self, cfg, env):
         super().__init__(cfg, env)
         # Initialize buffers, limits, etc.
-    
+
     def process_actions(self, actions: torch.Tensor) -> None:
         # Store/preprocess actions
-        
+
     def apply_actions(self) -> None:
         # Write to simulation
 ```
@@ -253,12 +253,12 @@ ActionManager participates in every `env.step()`:
 def step(self, action):
     # 1. Process action ONCE ← process_actions() called here
     self.action_manager.process_action(action)
-    
+
     # 2. Apply action MULTIPLE times (decimation loop)
     for _ in range(self.cfg.decimation):
         self.action_manager.apply_action()  # ← apply_actions() called here
         self.sim.step()  # Physics step
-    
+
     # 3. Compute observations, rewards, etc.
     ...
 ```
@@ -269,14 +269,14 @@ def step(self, action):
 def process_action(self, action: torch.Tensor):
     """Split action vector and pass to each term."""
     # Action has shape (num_envs, total_action_dim)
-    
+
     # Split action by term dimensions
     idx = 0
     for term in self._terms.values():
         term_action = action[:, idx:idx + term.action_dim]
         term.process_actions(term_action)  # Call term's process method
         idx += term.action_dim
-    
+
     # Store for access (e.g., action_rate penalties)
     self._prev_action[:] = self._action
     self._action[:] = action
@@ -333,7 +333,7 @@ Converts policy output to target joint positions:
 def process_actions(self, actions):
     # Scale and offset
     self._processed_actions = actions * self.scale + self.offset + self._default_joint_pos
-    
+
     # Clip to joint limits
     self._processed_actions = torch.clamp(
         self._processed_actions,
@@ -358,7 +358,7 @@ Converts policy output to target joint velocities:
 def process_actions(self, actions):
     # Scale
     self._processed_actions = actions * self.scale
-    
+
     # Clip to velocity limits
     self._processed_actions = torch.clamp(
         self._processed_actions,
@@ -385,7 +385,7 @@ actions = {
         joint_names=[".*_arm_.*"],  # 7 DoF
     ),
     "gripper_pos": JointPositionActionCfg(
-        asset_name="robot", 
+        asset_name="robot",
         joint_names=[".*_finger_.*"],  # 2 DoF
     ),
 }
@@ -410,34 +410,34 @@ class MyCustomActionCfg(ActionTermCfg):
 
 class MyCustomAction(ActionTerm):
     cfg: MyCustomActionCfg
-    
+
     def __init__(self, cfg: MyCustomActionCfg, env):
         super().__init__(cfg, env)
-        
+
         # Resolve asset and indices
         self._joint_ids = self._asset.find_joints(cfg.joint_names)[0]
-        
+
         # Create buffers
         self._processed_actions = torch.zeros(
             (env.num_envs, len(self._joint_ids)),
             device=env.device
         )
-    
+
     @property
     def action_dim(self) -> int:
         """Return dimensionality of this action term."""
         return len(self._joint_ids)
-    
+
     @property
     def raw_action(self) -> torch.Tensor:
         """Return the raw processed actions (for logging)."""
         return self._processed_actions
-    
+
     def process_actions(self, actions: torch.Tensor) -> None:
         """Process actions from policy."""
         # Scale, clip, transform as needed
         self._processed_actions = actions * self.cfg.scale
-    
+
     def apply_actions(self) -> None:
         """Apply actions to simulation."""
         # Write to sim (position, velocity, or torque targets)
@@ -508,10 +508,10 @@ def step(self, action):
     for _ in range(self.cfg.decimation):
         self.action_manager.apply_action()
         self.sim.step()
-    
+
     # 2. Compute observations ← ObservationManager called here
     obs = self.observation_manager.compute()
-    
+
     # 3. Compute rewards, terminations, etc.
     ...
     return obs, reward, done, info
@@ -523,27 +523,27 @@ def step(self, action):
 def compute(self) -> dict[str, torch.Tensor]:
     """Compute observations for all groups."""
     observations = {}
-    
+
     for group_name, group_cfg in self._group_obs_term_cfgs.items():
         # Compute each term in the group
         group_obs = []
-        
+
         for term_name, term_cfg in group_cfg.items():
             # 1. Compute raw observation
             obs = term_cfg.func(self._env, **term_cfg.params)
-            
+
             # 2. Apply processing pipeline
             obs = self._apply_noise(obs, term_cfg.noise)
             obs = self._apply_clip(obs, term_cfg.clip)
             obs = self._apply_scale(obs, term_cfg.scale)
             obs = self._apply_delay(obs, term_cfg.delay_cfg)
             obs = self._apply_history(obs, term_cfg.history_cfg)
-            
+
             group_obs.append(obs)
-        
+
         # 3. Concatenate all observations in group
         observations[group_name] = torch.cat(group_obs, dim=-1)
-    
+
     return observations  # {"policy": (num_envs, N), "critic": (num_envs, M), ...}
 ```
 
@@ -767,7 +767,7 @@ def my_observation(
         env: Environment instance
         asset_cfg: Resolved entity configuration
         Additional params from ObservationTermCfg.params
-    
+
     Returns:
         Tensor of shape (num_envs, obs_dim)
     """
@@ -798,18 +798,18 @@ def height_above_terrain(
 ) -> torch.Tensor:
     """Vertical distance from base to terrain."""
     asset = env.scene[asset_cfg.name]
-    
+
     # Get base position in world frame
     base_pos_w = asset.data.root_link_pos_w  # (num_envs, 3)
-    
+
     # Query terrain height at base x,y position
     terrain_height = env.scene.terrain.get_height_at_position(
         base_pos_w[:, :2]  # (num_envs, 2) - x,y only
     )  # Returns (num_envs,)
-    
+
     # Compute vertical distance
     height = base_pos_w[:, 2] - terrain_height
-    
+
     return height.unsqueeze(-1)  # (num_envs, 1)
 ```
 
@@ -885,19 +885,19 @@ def step(self, action):
     for _ in range(self.cfg.decimation):
         self.action_manager.apply_action()
         self.sim.step()
-    
+
     # 2. Compute observations and rewards
     obs = self.observation_manager.compute()
     reward = self.reward_manager.compute(dt=self.step_dt)
-    
+
     # 3. Check terminations ← TerminationManager called here
     dones = self.termination_manager.compute()
-    
+
     # 4. Reset terminated environments
     if dones["terminated"].any() or dones["truncated"].any():
         reset_ids = torch.where(dones["terminated"] | dones["truncated"])[0]
         self._reset_idx(reset_ids)
-    
+
     return obs, reward, dones, info
 ```
 
@@ -908,17 +908,17 @@ def compute(self) -> dict[str, torch.Tensor]:
     """Check all termination conditions."""
     self._terminated_buf[:] = False
     self._truncated_buf[:] = False
-    
+
     for name, term_cfg in zip(self._term_names, self._term_cfgs):
         # Call term function
         value = term_cfg.func(self._env, **term_cfg.params)  # bool tensor
-        
+
         # Accumulate using OR logic
         if term_cfg.time_out:
             self._truncated_buf |= value  # Episode timeout
         else:
             self._terminated_buf |= value  # Episode failure
-    
+
     return {
         "terminated": self._terminated_buf,  # Failed episodes
         "truncated": self._truncated_buf,    # Natural endings
@@ -996,14 +996,14 @@ def base_orientation_limit(
 ) -> torch.Tensor:
     """Terminate if robot tilts beyond thresholds."""
     asset = env.scene[asset_cfg.name]
-    
+
     # Convert quaternion to roll, pitch
     roll, pitch, _ = quat_to_euler_xyz(asset.data.root_quat_w)
-    
+
     # Check if either angle exceeds threshold
     roll_violation = torch.abs(roll) > roll_threshold
     pitch_violation = torch.abs(pitch) > pitch_threshold
-    
+
     return roll_violation | pitch_violation
 ```
 
@@ -1017,7 +1017,7 @@ def illegal_contact(
     """Terminate if undesired body contacts exceed threshold."""
     # Assume contact sensor tracks specific bodies (e.g., torso, thighs)
     contact_forces = env.scene.sensors[sensor_cfg.name].data.net_forces_w_norm
-    
+
     # Any contact above threshold triggers termination
     return torch.any(contact_forces > threshold, dim=-1)
 ```
@@ -1030,13 +1030,13 @@ def joint_pos_out_of_limit(
 ) -> torch.Tensor:
     """Terminate if joints exceed their position limits."""
     asset = env.scene[asset_cfg.name]
-    
+
     joint_pos = asset.data.joint_pos[:, asset_cfg.joint_ids]
     joint_limits = asset.data.soft_joint_pos_limits[:, asset_cfg.joint_ids]
-    
+
     lower_limit = joint_limits[:, :, 0]
     upper_limit = joint_limits[:, :, 1]
-    
+
     # Check if any joint violates limits
     out_of_limits = (joint_pos < lower_limit) | (joint_pos > upper_limit)
     return torch.any(out_of_limits, dim=-1)
@@ -1051,9 +1051,9 @@ def joint_vel_limit(
 ) -> torch.Tensor:
     """Terminate if any joint velocity exceeds threshold."""
     asset = env.scene[asset_cfg.name]
-    
+
     joint_vel = asset.data.joint_vel[:, asset_cfg.joint_ids]
-    
+
     # Check if any joint is too fast
     exceeds_limit = torch.abs(joint_vel) > max_velocity
     return torch.any(exceeds_limit, dim=-1)
@@ -1073,7 +1073,7 @@ def my_termination(
         env: Environment instance
         asset_cfg: Resolved entity configuration
         Additional params from TerminationTermCfg.params
-    
+
     Returns:
         Bool tensor of shape (num_envs,) - True for envs that should terminate
     """
@@ -1089,14 +1089,14 @@ def out_of_bounds(
 ) -> torch.Tensor:
     """Terminate if robot leaves allowed area."""
     asset = env.scene[asset_cfg.name]
-    
+
     # Get base position
     pos = asset.data.root_link_pos_w[:, :2]  # (num_envs, 2) - x, y
-    
+
     # Check boundaries
     x_violation = (pos[:, 0] < x_range[0]) | (pos[:, 0] > x_range[1])
     y_violation = (pos[:, 1] < y_range[0]) | (pos[:, 1] > y_range[1])
-    
+
     return x_violation | y_violation
 ```
 
@@ -1124,7 +1124,7 @@ terminations = {
         func=mdp.time_out,
         time_out=True,  # Don't treat as failure
     ),
-    
+
     # Terminations - failures
     "base_contact": TerminationTermCfg(
         func=mdp.illegal_contact,
@@ -1208,9 +1208,9 @@ EventManager is called at different times based on mode:
 ```python
 def __init__(self, cfg):
     # ... scene and simulation setup ...
-    
+
     self.load_managers()  # Creates EventManager
-    
+
     # Apply startup events ← EventManager called here
     if "startup" in self.event_manager.available_modes:
         self.event_manager.apply(
@@ -1224,14 +1224,14 @@ def __init__(self, cfg):
 ```python
 def step(self, action):
     # ... process actions, step physics, compute rewards ...
-    
+
     # Check terminations
     dones = self.termination_manager.compute()
-    
+
     # Reset terminated environments ← EventManager called here
     if dones["terminated"].any() or dones["truncated"].any():
         reset_ids = torch.where(dones["terminated"] | dones["truncated"])[0]
-        
+
         if "reset" in self.event_manager.available_modes:
             self.event_manager.apply(
                 mode="reset",
@@ -1244,14 +1244,14 @@ def step(self, action):
 ```python
 def step(self, action):
     # ... process actions, step physics ...
-    
+
     # Apply interval events ← EventManager called here
     if "interval" in self.event_manager.available_modes:
         self.event_manager.apply(
             mode="interval",
             dt=self.step_dt
         )
-    
+
     # ... compute observations, rewards, terminations ...
 ```
 
@@ -1265,10 +1265,10 @@ def apply(self, mode: str, env_ids: torch.Tensor | None = None, dt: float = 0.0)
         if mode == "interval":
             if not self._should_trigger_interval(term_cfg, dt):
                 continue
-            
+
             # Sample which environments to affect
             env_ids = self._sample_interval_envs(term_cfg)
-        
+
         # Call event function
         term_cfg.func(self._env, env_ids=env_ids, **term_cfg.params)
 ```
@@ -1292,7 +1292,7 @@ events = {
             "mass_distribution_params": (0.8, 1.2),  # 80% to 120% of default
         }
     ),
-    
+
     # Reset: randomize initial joint positions (every reset)
     "reset_joints": EventTermCfg(
         func=mdp.reset_joints_by_offset,
@@ -1303,7 +1303,7 @@ events = {
             "velocity_range": (-0.1, 0.1),  # ±0.1 rad/s
         }
     ),
-    
+
     # Interval: push robot randomly every 2-5 seconds
     "push_robot": EventTermCfg(
         func=mdp.push_by_setting_velocity,
@@ -1338,15 +1338,15 @@ def randomize_rigid_body_mass(
 ) -> None:
     """Randomize link masses (affects dynamics)."""
     asset = env.scene[asset_cfg.name]
-    
+
     # Get default masses
     default_masses = asset.data.default_mass[env_ids, asset_cfg.body_ids]
-    
+
     # Sample random scaling factors
     scale = torch.rand(len(env_ids), len(asset_cfg.body_ids), device=env.device)
     scale = scale * (mass_distribution_params[1] - mass_distribution_params[0]) + \
             mass_distribution_params[0]
-    
+
     # Apply randomized masses
     asset.data.mass[env_ids, asset_cfg.body_ids] = default_masses * scale
 ```
@@ -1362,14 +1362,14 @@ def randomize_actuator_gains(
 ) -> None:
     """Randomize PD controller gains."""
     asset = env.scene[asset_cfg.name]
-    
+
     # Sample random gains
     stiffness = torch.rand(len(env_ids), len(asset_cfg.joint_ids), device=env.device)
     stiffness = stiffness * (stiffness_range[1] - stiffness_range[0]) + stiffness_range[0]
-    
+
     damping = torch.rand(len(env_ids), len(asset_cfg.joint_ids), device=env.device)
     damping = damping * (damping_range[1] - damping_range[0]) + damping_range[0]
-    
+
     # Apply to actuators
     asset.set_joint_stiffness(stiffness, joint_ids=asset_cfg.joint_ids, env_ids=env_ids)
     asset.set_joint_damping(damping, joint_ids=asset_cfg.joint_ids, env_ids=env_ids)
@@ -1388,14 +1388,14 @@ def reset_joints_by_offset(
 ) -> None:
     """Set random initial joint positions and velocities."""
     asset = env.scene[asset_cfg.name]
-    
+
     # Sample random offsets from default pose
     pos_offset = torch.rand(len(env_ids), len(asset_cfg.joint_ids), device=env.device)
     pos_offset = pos_offset * (position_range[1] - position_range[0]) + position_range[0]
-    
+
     vel = torch.rand(len(env_ids), len(asset_cfg.joint_ids), device=env.device)
     vel = vel * (velocity_range[1] - velocity_range[0]) + velocity_range[0]
-    
+
     # Apply to simulation
     default_pos = asset.data.default_joint_pos[env_ids, asset_cfg.joint_ids]
     asset.write_joint_state_to_sim(
@@ -1417,21 +1417,21 @@ def reset_root_state_uniform(
 ) -> None:
     """Set random initial base position, orientation, and velocity."""
     asset = env.scene[asset_cfg.name]
-    
+
     # Sample random pose
     pos = torch.zeros(len(env_ids), 3, device=env.device)
     pos[:, 0] = torch.rand(len(env_ids)) * (pose_range["x"][1] - pose_range["x"][0]) + pose_range["x"][0]
     pos[:, 1] = torch.rand(len(env_ids)) * (pose_range["y"][1] - pose_range["y"][0]) + pose_range["y"][0]
     pos[:, 2] = torch.rand(len(env_ids)) * (pose_range["z"][1] - pose_range["z"][0]) + pose_range["z"][0]
-    
+
     # Random orientation (yaw only for simplicity)
     yaw = torch.rand(len(env_ids)) * (pose_range["yaw"][1] - pose_range["yaw"][0]) + pose_range["yaw"][0]
     quat = quat_from_euler_xyz(torch.zeros_like(yaw), torch.zeros_like(yaw), yaw)
-    
+
     # Random velocity
     lin_vel = torch.zeros(len(env_ids), 3, device=env.device)
     lin_vel[:, 0] = torch.rand(len(env_ids)) * (velocity_range["x"][1] - velocity_range["x"][0]) + velocity_range["x"][0]
-    
+
     # Apply to simulation
     asset.write_root_state_to_sim(
         root_state=torch.cat([pos, quat, lin_vel, torch.zeros(len(env_ids), 3)], dim=-1),
@@ -1451,16 +1451,16 @@ def push_by_setting_velocity(
 ) -> None:
     """Apply random velocity impulse to robot base."""
     asset = env.scene[asset_cfg.name]
-    
+
     # Sample random velocity
     vel = torch.zeros(len(env_ids), 3, device=env.device)
     vel[:, 0] = torch.rand(len(env_ids)) * (velocity_range["x"][1] - velocity_range["x"][0]) + velocity_range["x"][0]
     vel[:, 1] = torch.rand(len(env_ids)) * (velocity_range["y"][1] - velocity_range["y"][0]) + velocity_range["y"][0]
-    
+
     # Get current state and modify velocity
     root_state = asset.data.root_state_w[env_ids].clone()
     root_state[:, 7:10] += vel  # Add to existing velocity
-    
+
     # Write back to simulation
     asset.write_root_velocity_to_sim(root_state[:, 7:13], env_ids=env_ids)
 ```
@@ -1514,7 +1514,7 @@ def my_event(
         env_ids: Tensor of environment indices to modify
         asset_cfg: Resolved entity configuration
         Additional params from EventTermCfg.params
-    
+
     Returns:
         None (modifies simulation state as side effect)
     """
@@ -1524,13 +1524,13 @@ def my_event(
 ```python
 def my_event(env, env_ids, asset_cfg):
     asset = env.scene[asset_cfg.name]
-    
+
     # Read current state
     joint_pos = asset.data.joint_pos[env_ids, asset_cfg.joint_ids]
-    
+
     # Modify state
     new_joint_pos = joint_pos + torch.randn_like(joint_pos) * 0.1
-    
+
     # Write back to simulation
     asset.write_joint_state_to_sim(
         position=new_joint_pos,
@@ -1589,7 +1589,7 @@ class UniformVelocityCommand(CommandTerm):
     def __init__(self, cfg, env):
         super().__init__(cfg, env)
         # Initialize command buffers
-    
+
     def compute(self, dt: float) -> torch.Tensor:
         # Generate/resample commands
         return self._command  # shape: (num_envs, command_dim)
@@ -1614,17 +1614,17 @@ def step(self, action):
     for _ in range(self.cfg.decimation):
         self.action_manager.apply_action()
         self.sim.step()
-    
+
     # 2. Update commands ← CommandManager called here
     if hasattr(self, 'command_manager'):
         self.command_manager.compute(dt=self.step_dt)
-    
+
     # 3. Compute observations (may include commands)
     obs = self.observation_manager.compute()
-    
+
     # 4. Compute rewards (may use commands for tracking)
     reward = self.reward_manager.compute(dt=self.step_dt)
-    
+
     ...
 ```
 
@@ -1634,26 +1634,26 @@ def step(self, action):
 def compute(self, dt: float) -> dict[str, torch.Tensor]:
     """Update and resample commands as needed."""
     commands = {}
-    
+
     for name, term in self._terms.items():
         # Update resampling timer
         term._time_left -= dt
-        
+
         # Check if it's time to resample
         env_ids = torch.where(term._time_left <= 0)[0]
-        
+
         if len(env_ids) > 0:
             # Resample command for these environments
             term.resample(env_ids)
-            
+
             # Reset timers with new random intervals
             term._time_left[env_ids] = torch.rand(len(env_ids)) * \
                 (term.cfg.resampling_time_range[1] - term.cfg.resampling_time_range[0]) + \
                 term.cfg.resampling_time_range[0]
-        
+
         # Store current command
         commands[name] = term.command
-    
+
     return commands  # {"base_velocity": (num_envs, 3), "heading": (num_envs, 1), ...}
 ```
 
@@ -1689,28 +1689,28 @@ commands = {
 ```python
 class UniformVelocityCommand(CommandTerm):
     """Sample target velocities from uniform distribution."""
-    
+
     def __init__(self, cfg, env):
         super().__init__(cfg, env)
-        
+
         # Command buffer: (num_envs, 3) for [vx, vy, omega_z]
         self._command = torch.zeros(env.num_envs, 3, device=env.device)
-    
+
     def resample(self, env_ids: torch.Tensor):
         """Sample new velocity commands."""
         # Sample from uniform distribution
         self._command[env_ids, 0] = torch.rand(len(env_ids)) * \
             (self.cfg.ranges["lin_vel_x"][1] - self.cfg.ranges["lin_vel_x"][0]) + \
             self.cfg.ranges["lin_vel_x"][0]
-        
+
         self._command[env_ids, 1] = torch.rand(len(env_ids)) * \
             (self.cfg.ranges["lin_vel_y"][1] - self.cfg.ranges["lin_vel_y"][0]) + \
             self.cfg.ranges["lin_vel_y"][0]
-        
+
         self._command[env_ids, 2] = torch.rand(len(env_ids)) * \
             (self.cfg.ranges["ang_vel_z"][1] - self.cfg.ranges["ang_vel_z"][0]) + \
             self.cfg.ranges["ang_vel_z"][0]
-    
+
     @property
     def command(self) -> torch.Tensor:
         return self._command
@@ -1720,26 +1720,26 @@ class UniformVelocityCommand(CommandTerm):
 ```python
 class UniformPoseCommand(CommandTerm):
     """Sample target end-effector poses."""
-    
+
     def __init__(self, cfg, env):
         super().__init__(cfg, env)
-        
+
         # Command buffer: (num_envs, 7) for [x, y, z, qw, qx, qy, qz]
         self._command = torch.zeros(env.num_envs, 7, device=env.device)
         self._command[:, 3] = 1.0  # Initialize with identity quaternion
-    
+
     def resample(self, env_ids: torch.Tensor):
         """Sample new pose commands within workspace."""
         # Sample position
         self._command[env_ids, 0] = torch.rand(len(env_ids)) * \
             (self.cfg.ranges["x"][1] - self.cfg.ranges["x"][0]) + self.cfg.ranges["x"][0]
-        
+
         self._command[env_ids, 1] = torch.rand(len(env_ids)) * \
             (self.cfg.ranges["y"][1] - self.cfg.ranges["y"][0]) + self.cfg.ranges["y"][0]
-        
+
         self._command[env_ids, 2] = torch.rand(len(env_ids)) * \
             (self.cfg.ranges["z"][1] - self.cfg.ranges["z"][0]) + self.cfg.ranges["z"][0]
-        
+
         # Sample orientation (random quaternions)
         self._command[env_ids, 3:] = random_quaternion(len(env_ids), device=self.device)
 ```
@@ -1800,14 +1800,14 @@ def track_lin_vel_xy_exp(
     # Get current velocity
     asset = env.scene[asset_cfg.name]
     lin_vel_b = asset.data.root_lin_vel_b[:, :2]  # x, y in base frame
-    
+
     # Get commanded velocity
     command = env.command_manager.get_command(command_name)
     command_vel = command[:, :2]  # x, y components
-    
+
     # Compute tracking error
     error = torch.sum(torch.square(lin_vel_b - command_vel), dim=-1)
-    
+
     # Exponential reward
     return torch.exp(-error / std**2)
 ```
@@ -1857,30 +1857,30 @@ class MyCustomCommandCfg(CommandTermCfg):
 
 class MyCustomCommand(CommandTerm):
     cfg: MyCustomCommandCfg
-    
+
     def __init__(self, cfg: MyCustomCommandCfg, env):
         super().__init__(cfg, env)
-        
+
         # Initialize command buffer
         self._command = torch.zeros(
             env.num_envs,
             self.command_dim,
             device=env.device
         )
-        
+
         # Resample for all environments initially
         self.resample(torch.arange(env.num_envs, device=env.device))
-    
+
     @property
     def command_dim(self) -> int:
         """Dimensionality of the command."""
         return len(self.cfg.ranges)
-    
+
     @property
     def command(self) -> torch.Tensor:
         """Return current command."""
         return self._command
-    
+
     def resample(self, env_ids: torch.Tensor):
         """Generate new commands for specified environments."""
         # Sample from your distribution

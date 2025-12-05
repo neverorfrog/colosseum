@@ -37,10 +37,14 @@ build-backend = "uv_build"
 
 [project.entry-points."mjlab.tasks"]
 cartpole = "colosseum.train.tasks.cartpole"
+velocity = "colosseum.train.tasks.velocity"
 
 [tool.ruff]
 src = ["src"]
 indent-width = 2
 
-[tool.pixi.activation.env]
-MUJOCO_GL="osmesa"
+# [tool.pixi.activation.env]
+# MUJOCO_GL="osmesa"
+
+[tool.pixi.dependencies]
+pytest = ">=9.0.1,<10"

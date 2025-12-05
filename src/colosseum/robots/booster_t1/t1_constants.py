@@ -1,81 +1,168 @@
+"""Booster T1 robot configuration for mjlab."""
+
 import mujoco
-from mjlab.entity import EntityCfg, Entity
-from colosseum.utils import src_dir
 import mujoco.viewer as viewer
+from pathlib import Path
 
-# Paths
-T1_LOCOMOTION_XML = src_dir() / "robots" / "booster_t1" / "xmls" / "T1_locomotion.xml"
-T1_SERIAL_XML = src_dir() / "robots" / "booster_t1" / "xmls" / "T1_serial.xml"
+from mjlab.entity import EntityCfg, Entity, EntityArticulationInfoCfg
+from mjlab.actuator import BuiltinPositionActuatorCfg
 
-assert T1_LOCOMOTION_XML.exists(), f"XML not found: {T1_LOCOMOTION_XML}"
-assert T1_SERIAL_XML.exists(), f"XML not found: {T1_SERIAL_XML}"
+from colosseum.utils import src_dir
+from colosseum.robots.booster_t1.t1_actuators import (
+    T1_ACTUATOR_HIP_PITCH,
+    T1_ACTUATOR_HIP_ROLL,
+    T1_ACTUATOR_HIP_YAW,
+    T1_ACTUATOR_KNEE,
+    T1_ACTUATOR_ANKLE_PITCH,
+    T1_ACTUATOR_ANKLE_ROLL,
+    T1_ACTUATOR_NECK,
+    T1_ACTUATOR_ARM,
+    T1_ACTUATOR_WAIST,
+)
+from colosseum.robots.booster_t1.t1_contacts import (
+    FEET_ONLY_COLLISION,
+    FULL_COLLISION,
+    FULL_COLLISION_WITHOUT_SELF,
+)
 
-# Action scales
-T1_LOCOMOTION_ACTION_SCALE = 0.5  # For training
-T1_SERIAL_ACTION_SCALE = 0.5      # For deployment
+# Path to unified base XML (23-DOF full body)
+# Locomotion (12-DOF) vs Full-body (23-DOF) is controlled by which actuators are added
+T1_BASE_XML = src_dir() / "robots" / "booster_t1" / "xmls" / "T1_23dof.xml"
 
-def get_t1_locomotion_spec() -> mujoco.MjSpec:
-    """T1 with legs only (12 DOF) - for training."""
-    return mujoco.MjSpec.from_file(str(T1_LOCOMOTION_XML))
+assert T1_BASE_XML.exists(), f"XML not found: {T1_BASE_XML}"
 
-def get_t1_serial_spec() -> mujoco.MjSpec:
-    """T1 full body (23 DOF) - for deployment."""
-    return mujoco.MjSpec.from_file(str(T1_SERIAL_XML))
+##
+# Spec functions
+##
 
-# Locomotion keyframe - simple, upright pose for training
+def get_t1_spec() -> mujoco.MjSpec:
+    """Load T1 base model (23 DOF structure, actuators added via Python)."""
+    return mujoco.MjSpec.from_file(str(T1_BASE_XML))
+
+##
+# Keyframe config
+##
+
 LOCOMOTION_HOME_KEYFRAME = EntityCfg.InitialStateCfg(
-    pos=(0, 0, 0.67),
+    pos=(0, 0, 0.665),
     joint_pos={
         ".*Hip_Pitch": -0.2,
         ".*Knee_Pitch": 0.4,
-        ".*Ankle_Pitch": -0.25,
-        ".*": 0.0,  # All other joints (Hip_Roll, Hip_Yaw, Ankle_Roll)
+        ".*Ankle_Pitch": -0.2,
+        ".*": 0.0,
     },
     joint_vel={".*": 0.0},
 )
 
+FULLBODY_HOME_KEYFRAME = EntityCfg.InitialStateCfg(
+    pos=(0, 0, 0.665),
+    joint_pos={
+        # Arms (explicit names to ensure they're set correctly)
+        "Left_Shoulder_Roll": -1.0,
+        "Left_Elbow_Yaw": -0.4,
+        "Right_Shoulder_Roll": 0.4,
+        "Right_Elbow_Yaw": 0.4,
+        # Legs (regex patterns)
+        ".*Hip_Pitch": -0.2,
+        ".*Knee_Pitch": 0.4,
+        ".*Ankle_Pitch": -0.2,
+    },
+    joint_vel={".*": 0.0},
+)
+
+
+##
+# Articulation Configurations
+##
+
+# 12-DOF Locomotion (legs only)
+T1_LOCOMOTION_ARTICULATION = EntityArticulationInfoCfg(
+    actuators=(
+        T1_ACTUATOR_HIP_PITCH,
+        T1_ACTUATOR_HIP_ROLL,
+        T1_ACTUATOR_HIP_YAW,
+        T1_ACTUATOR_KNEE,
+        T1_ACTUATOR_ANKLE_PITCH,
+        T1_ACTUATOR_ANKLE_ROLL,
+    ),
+    soft_joint_pos_limit_factor=0.9,
+)
+
+# 23-DOF Full Body (head + arms + waist + legs)
+T1_FULLBODY_ARTICULATION = EntityArticulationInfoCfg(
+    actuators=(
+        T1_ACTUATOR_NECK,
+        T1_ACTUATOR_ARM,
+        T1_ACTUATOR_WAIST,
+        T1_ACTUATOR_HIP_PITCH,
+        T1_ACTUATOR_HIP_ROLL,
+        T1_ACTUATOR_HIP_YAW,
+        T1_ACTUATOR_KNEE,
+        T1_ACTUATOR_ANKLE_PITCH,
+        T1_ACTUATOR_ANKLE_ROLL,
+    ),
+    soft_joint_pos_limit_factor=0.9,
+)
+
+##
+# Robot Configuration Functions
+##
+
 def get_t1_locomotion_robot_cfg() -> EntityCfg:
-    """Get T1 locomotion config (12 DOF legs only) - for training."""
+    """
+    Get T1 locomotion config (12 DOF legs only) - for training.
+
+    Uses the full 23-DOF XML base but only adds actuators for the 12 leg joints.
+    Upper body joints (head, arms, waist) remain passive.
+    """
     return EntityCfg(
-        spec_fn=get_t1_locomotion_spec,
         init_state=LOCOMOTION_HOME_KEYFRAME,
+        collisions=(FEET_ONLY_COLLISION,),
+        spec_fn=get_t1_spec,
+        articulation=T1_LOCOMOTION_ARTICULATION,
     )
 
-# Convenience shorthand
-T1_ROBOT_CFG = get_t1_locomotion_robot_cfg()
+def get_t1_fullbody_robot_cfg() -> EntityCfg:
+    """
+    Get T1 full body config (23 DOF) - for deployment/manipulation.
+
+    Uses the full 23-DOF XML base and adds actuators for all joints
+    (head, arms, waist, and legs).
+    """
+    return EntityCfg(
+        init_state=FULLBODY_HOME_KEYFRAME,
+        collisions=(FEET_ONLY_COLLISION,),
+        spec_fn=get_t1_spec,
+        articulation=T1_FULLBODY_ARTICULATION,
+    )
+
+# Convenience shorthands
+T1_ROBOT_CFG = get_t1_fullbody_robot_cfg()
+# T1_FULLBODY_CFG = get_t1_fullbody_robot_cfg()
+
+# Compute ACTION_SCALE dictionary from actuator configs (for locomotion)
+T1_ACTION_SCALE: dict[str, float] = {}
+for a in T1_LOCOMOTION_ARTICULATION.actuators:
+    assert isinstance(a, BuiltinPositionActuatorCfg)
+    e = a.effort_limit
+    s = a.stiffness
+    names = a.joint_names_expr
+    assert e is not None
+    for n in names:
+        T1_ACTION_SCALE[n] = 0.25 * e / s
+
+# Compute ACTION_SCALE dictionary for full body
+T1_FULLBODY_ACTION_SCALE: dict[str, float] = {}
+for a in T1_FULLBODY_ARTICULATION.actuators:
+    assert isinstance(a, BuiltinPositionActuatorCfg)
+    e = a.effort_limit
+    s = a.stiffness
+    names = a.joint_names_expr
+    assert e is not None
+    for n in names:
+        T1_FULLBODY_ACTION_SCALE[n] = 0.25 * e / s
 
 if __name__ == "__main__":
-    print("\n=== Testing T1 Locomotion Model ===")
     robot = Entity(T1_ROBOT_CFG)
     model = robot.spec.compile()
-    data = mujoco.MjData(model)
-
-    # Reset to keyframe
-    mujoco.mj_resetDataKeyframe(model, data, model.key("init_state").id)
-
-    # Compare keyframe vs actual
-    print("\n=== Keyframe vs Actual Joint Positions ===")
-    keyframe = model.key("init_state")
-    print(f"{'Joint Name':20s} | {'Keyframe (rad)':>15s} | {'Actual (rad)':>15s} | {'Diff (rad)':>15s}")
-    print("-" * 75)
-    for i, name in enumerate(robot.joint_names):
-        keyframe_pos = keyframe.qpos[i]
-        actual_pos = data.qpos[i]
-        diff = actual_pos - keyframe_pos
-        print(f"{name:20s} | {keyframe_pos:15.6f} | {actual_pos:15.6f} | {diff:15.6f}")
-
-    print(f"\n=== Total DOF: {len(robot.joint_names)} ===")
-    print("Launching viewer...")
-    print("TIP: Press SPACE to pause/unpause the simulation")
-
-    # Create viewer handle with paused state
-    with viewer.launch_passive(model, data) as v:
-        v.opt.flags[mujoco.mjtVisFlag.mjVIS_CONTACTPOINT] = True
-        v.sync()
-
-        # Start paused - user must press space to start
-        paused = True
-        while v.is_running():
-            if not paused:
-                mujoco.mj_step(model, data)
-            v.sync()
+    viewer.launch(model)

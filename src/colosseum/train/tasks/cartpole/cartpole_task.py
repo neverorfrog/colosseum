@@ -1,8 +1,7 @@
-from mjlab.managers.scene_entity_config import SceneEntityCfg
-
 # ====== Actions and Observations ======
 from mjlab.envs.mdp.actions import JointEffortActionCfg
 from mjlab.managers.manager_term_config import ActionTermCfg
+from mjlab.managers.scene_entity_config import SceneEntityCfg
 
 actions: dict[str, ActionTermCfg] = {
     "joint_position": JointEffortActionCfg(
@@ -55,7 +54,10 @@ from mjlab.envs.mdp.terminations import time_out
 # ======== Rewards ========
 from mjlab.managers.manager_term_config import RewardTermCfg
 
-from colosseum.train.tasks.cartpole.mdp_functions import effort_cost, upright_reward
+from colosseum.train.tasks.cartpole.mdp_functions import (
+    effort_cost,
+    upright_reward,
+)
 
 rewards: dict[str, RewardTermCfg] = {
     "upright": RewardTermCfg(

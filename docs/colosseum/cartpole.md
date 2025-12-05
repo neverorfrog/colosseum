@@ -32,14 +32,14 @@ The CartPole consists of:
     <body name="cart" pos="0 0 0">
       <joint name="slide" type="slide" axis="1 0 0" />
       <geom type="box" size="0.2 0.1 0.1" />
-      
+
       <body name="pole" pos="0 0 0.1">
         <joint name="hinge" type="hinge" axis="0 1 0" />
         <geom type="capsule" fromto="0 0 0 0 0 1" size="0.05" />
       </body>
     </body>
   </worldbody>
-  
+
   <actuator>
     <velocity name="slide_velocity" joint="slide" ctrlrange="-20 20" kv="20"/>
   </actuator>
@@ -148,17 +148,17 @@ def pole_upright_reward(
 ) -> torch.Tensor:
     """Reward for keeping pole upright using cosine of angle."""
     asset = env.scene[asset_cfg.name]
-    
+
     # Get pole angle from hinge joint
     pole_angle = asset.data.joint_pos[:, asset_cfg.joint_ids].squeeze(-1)
-    
+
     # Use cosine: 1.0 when upright (0°), -1.0 when inverted (180°)
     alignment = torch.cos(pole_angle)
-    
+
     # Apply exponential kernel for smooth gradient
     error = 1.0 - alignment  # 0 when upright, 2 when inverted
     reward = torch.exp(-error**2 / std**2)
-    
+
     return reward  # shape: (num_envs,)
 ```
 
@@ -180,13 +180,13 @@ def actuator_effort_penalty(
 ) -> torch.Tensor:
     """Penalize actuator force magnitude (L2 norm)."""
     asset = env.scene[asset_cfg.name]
-    
+
     # Sum squared forces across all actuators
     effort_squared = torch.sum(
-        torch.square(asset.data.actuator_force), 
+        torch.square(asset.data.actuator_force),
         dim=1
     )
-    
+
     return effort_squared  # Returns cost (always positive)
 ```
 
@@ -252,13 +252,13 @@ def pole_angle_limit(
 ) -> torch.Tensor:
     """Terminate when pole angle exceeds threshold."""
     asset = env.scene[asset_cfg.name]
-    
+
     # Get pole angle from hinge joint
     pole_angle = asset.data.joint_pos[:, asset_cfg.joint_ids].squeeze(-1)
-    
+
     # Check if absolute angle exceeds threshold
     fallen = torch.abs(pole_angle) > threshold
-    
+
     return fallen  # shape: (num_envs,), dtype: bool
 ```
 
@@ -306,11 +306,11 @@ def reset_pole_angle(
 ) -> None:
     """Set random initial pole angle."""
     asset = env.scene[asset_cfg.name]
-    
+
     # Sample random angles
     angles = torch.rand(len(env_ids), device=env.device)
     angles = angles * (angle_range[1] - angle_range[0]) + angle_range[0]
-    
+
     # Apply to simulation
     asset.write_joint_state_to_sim(
         position=angles.unsqueeze(-1),
@@ -372,14 +372,14 @@ CARTPOLE_ENV_CFG = ManagerBasedRlEnvCfg(
     # Scene and simulation
     scene=SCENE_CFG,
     sim=SIM_CFG,
-    
+
     # MDP components
     observations=create_cartpole_observations(),
     actions=create_cartpole_actions(),
     rewards=create_cartpole_rewards(),
     terminations=create_cartpole_terminations(),
     events=create_cartpole_events(),
-    
+
     # Episode settings
     decimation=1,  # No decimation (control freq = physics freq)
     episode_length_s=10.0,  # 10 second episodes
