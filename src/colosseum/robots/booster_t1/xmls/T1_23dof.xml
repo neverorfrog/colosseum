@@ -376,12 +376,11 @@
   </worldbody>
 
   <sensor>
-    <gyro site="imu" name="gyro"/>
-    <velocimeter site="imu" name="imu_lin_vel"/>
-    <accelerometer site="imu" name="imu_lin_acc"/>
-    <gyro site="imu" name="imu_ang_vel"/>
-    <framequat objtype="site" objname="imu" name="orientation"/>
-    <subtreeangmom body="Trunk" name="root_angmom"/>
+    <gyro name="imu_ang_vel" site="imu"/>
+    <velocimeter name="imu_lin_vel" site="imu"/>
+    <accelerometer name="imu_lin_acc" site="imu"/>
+    <framequat name="orientation" objtype="site" objname="imu"/>
+    <subtreeangmom name="root_angmom" body="Trunk"/>
   </sensor>
 
   <actuator>

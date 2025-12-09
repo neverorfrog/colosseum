@@ -8,13 +8,13 @@ from mjlab.tasks.velocity.mdp import UniformVelocityCommandCfg
 from mjlab.tasks.velocity.velocity_env_cfg import make_velocity_env_cfg
 
 from colosseum.robots.booster_t1.t1_constants import (
-  T1_ACTION_SCALE,
-  get_t1_robot_cfg,
+  ACTION_SCALE,
+  get_robot_cfg,
+  FOOT_GEOM_NAMES,
 )
 from colosseum.robots.booster_t1.t1_contacts import (
   FEET_GROUND_CONTACT_SENSOR,
   SELF_COLLISION_SENSOR,
-  T1_FOOT_GEOM_NAMES,
 )
 
 
@@ -23,10 +23,10 @@ def booster_t1_rough_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
   cfg = make_velocity_env_cfg()
 
   # Use T1 robot config from t1_constants
-  cfg.scene.entities = {"robot": get_t1_robot_cfg()}
+  cfg.scene.entities = {"robot": get_robot_cfg()}
 
   # Foot sites for observations and rewards
-  site_names = ("left_foot", "right_foot")
+  # site_names = ("left_foot", "right_foot")
 
   # Contact sensors from t1_contacts
   cfg.scene.sensors = (FEET_GROUND_CONTACT_SENSOR, SELF_COLLISION_SENSOR)
@@ -38,7 +38,7 @@ def booster_t1_rough_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
   # Configure action scale (uniform 0.25 for all joints)
   joint_pos_action = cfg.actions["joint_pos"]
   assert isinstance(joint_pos_action, JointPositionActionCfg)
-  joint_pos_action.scale = T1_ACTION_SCALE
+  joint_pos_action.scale = ACTION_SCALE
 
   # Viewer configuration
   cfg.viewer.body_name = "Trunk"
@@ -47,7 +47,7 @@ def booster_t1_rough_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
   assert cfg.commands is not None
   twist_cmd = cfg.commands["twist"]
   assert isinstance(twist_cmd, UniformVelocityCommandCfg)
-  twist_cmd.viz.z_offset = 0.665
+  twist_cmd.viz.z_offset = 0.3
 
   # Configure foot height observation
   # cfg.observations["critic"].terms["foot_height"].params[
@@ -56,7 +56,7 @@ def booster_t1_rough_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
   cfg.observations["critic"].terms.pop("foot_height", None)
 
   # Configure foot friction event with T1 foot geoms
-  cfg.events["foot_friction"].params["asset_cfg"].geom_names = T1_FOOT_GEOM_NAMES
+  cfg.events["foot_friction"].params["asset_cfg"].geom_names = FOOT_GEOM_NAMES
 
   # T1-specific pose standards (all 23 joints)
   cfg.rewards["pose"].params["std_standing"] = {".*": 0.05}
