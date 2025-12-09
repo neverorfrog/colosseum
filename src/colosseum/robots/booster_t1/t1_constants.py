@@ -5,20 +5,9 @@ import mujoco.viewer as viewer
 from pathlib import Path
 
 from mjlab.entity import EntityCfg, Entity, EntityArticulationInfoCfg
-from mjlab.actuator import BuiltinPositionActuatorCfg
+from mjlab.actuator import XmlPositionActuatorCfg
 
 from colosseum.utils import src_dir
-from colosseum.robots.booster_t1.t1_actuators import (
-    T1_ACTUATOR_HIP_PITCH,
-    T1_ACTUATOR_HIP_ROLL,
-    T1_ACTUATOR_HIP_YAW,
-    T1_ACTUATOR_KNEE,
-    T1_ACTUATOR_ANKLE_PITCH,
-    T1_ACTUATOR_ANKLE_ROLL,
-    T1_ACTUATOR_NECK,
-    T1_ACTUATOR_ARM,
-    T1_ACTUATOR_WAIST,
-)
 from colosseum.robots.booster_t1.t1_contacts import (
     FEET_ONLY_COLLISION,
     FULL_COLLISION,
@@ -58,7 +47,7 @@ FULLBODY_HOME_KEYFRAME = EntityCfg.InitialStateCfg(
     pos=(0, 0, 0.665),
     joint_pos={
         # Arms (explicit names to ensure they're set correctly)
-        "Left_Shoulder_Roll": -1.0,
+        "Left_Shoulder_Roll": -0.4,
         "Left_Elbow_Yaw": -0.4,
         "Right_Shoulder_Roll": 0.4,
         "Right_Elbow_Yaw": 0.4,
@@ -75,31 +64,37 @@ FULLBODY_HOME_KEYFRAME = EntityCfg.InitialStateCfg(
 # Articulation Configurations
 ##
 
-# 12-DOF Locomotion (legs only)
-T1_LOCOMOTION_ARTICULATION = EntityArticulationInfoCfg(
+# 23-DOF Full Body - uses actuators defined in XML
+# The XML contains position actuators with kp=75, kv=5 for all 23 joints
+T1_ARTICULATION = EntityArticulationInfoCfg(
     actuators=(
-        T1_ACTUATOR_HIP_PITCH,
-        T1_ACTUATOR_HIP_ROLL,
-        T1_ACTUATOR_HIP_YAW,
-        T1_ACTUATOR_KNEE,
-        T1_ACTUATOR_ANKLE_PITCH,
-        T1_ACTUATOR_ANKLE_ROLL,
-    ),
-    soft_joint_pos_limit_factor=0.9,
-)
-
-# 23-DOF Full Body (head + arms + waist + legs)
-T1_FULLBODY_ARTICULATION = EntityArticulationInfoCfg(
-    actuators=(
-        T1_ACTUATOR_NECK,
-        T1_ACTUATOR_ARM,
-        T1_ACTUATOR_WAIST,
-        T1_ACTUATOR_HIP_PITCH,
-        T1_ACTUATOR_HIP_ROLL,
-        T1_ACTUATOR_HIP_YAW,
-        T1_ACTUATOR_KNEE,
-        T1_ACTUATOR_ANKLE_PITCH,
-        T1_ACTUATOR_ANKLE_ROLL,
+        XmlPositionActuatorCfg(
+            joint_names_expr=(
+                ".*AAHead_yaw",
+                ".*Head_pitch",
+                ".*Left_Shoulder_Pitch",
+                ".*Left_Shoulder_Roll",
+                ".*Left_Elbow_Pitch",
+                ".*Left_Elbow_Yaw",
+                ".*Right_Shoulder_Pitch",
+                ".*Right_Shoulder_Roll",
+                ".*Right_Elbow_Pitch",
+                ".*Right_Elbow_Yaw",
+                ".*Waist",
+                ".*Left_Hip_Pitch",
+                ".*Left_Hip_Roll",
+                ".*Left_Hip_Yaw",
+                ".*Left_Knee_Pitch",
+                ".*Left_Ankle_Pitch",
+                ".*Left_Ankle_Roll",
+                ".*Right_Hip_Pitch",
+                ".*Right_Hip_Roll",
+                ".*Right_Hip_Yaw",
+                ".*Right_Knee_Pitch",
+                ".*Right_Ankle_Pitch",
+                ".*Right_Ankle_Roll",
+            ),
+        ),
     ),
     soft_joint_pos_limit_factor=0.9,
 )
@@ -108,59 +103,55 @@ T1_FULLBODY_ARTICULATION = EntityArticulationInfoCfg(
 # Robot Configuration Functions
 ##
 
-def get_t1_locomotion_robot_cfg() -> EntityCfg:
+def get_t1_robot_cfg() -> EntityCfg:
     """
-    Get T1 locomotion config (12 DOF legs only) - for training.
+    Get T1 robot config (23 DOF full body).
 
-    Uses the full 23-DOF XML base but only adds actuators for the 12 leg joints.
-    Upper body joints (head, arms, waist) remain passive.
-    """
-    return EntityCfg(
-        init_state=LOCOMOTION_HOME_KEYFRAME,
-        collisions=(FEET_ONLY_COLLISION,),
-        spec_fn=get_t1_spec,
-        articulation=T1_LOCOMOTION_ARTICULATION,
-    )
-
-def get_t1_fullbody_robot_cfg() -> EntityCfg:
-    """
-    Get T1 full body config (23 DOF) - for deployment/manipulation.
-
-    Uses the full 23-DOF XML base and adds actuators for all joints
-    (head, arms, waist, and legs).
+    Uses actuators defined in the XML with kp=75, kv=5 for all joints.
+    This matches the mjlab approach for velocity tracking tasks.
     """
     return EntityCfg(
         init_state=FULLBODY_HOME_KEYFRAME,
         collisions=(FEET_ONLY_COLLISION,),
         spec_fn=get_t1_spec,
-        articulation=T1_FULLBODY_ARTICULATION,
+        articulation=T1_ARTICULATION,
     )
 
-# Convenience shorthands
-T1_ROBOT_CFG = get_t1_fullbody_robot_cfg()
-# T1_FULLBODY_CFG = get_t1_fullbody_robot_cfg()
+# Convenience shorthand
+T1_ROBOT_CFG = get_t1_robot_cfg()
 
-# Compute ACTION_SCALE dictionary from actuator configs (for locomotion)
-T1_ACTION_SCALE: dict[str, float] = {}
-for a in T1_LOCOMOTION_ARTICULATION.actuators:
-    assert isinstance(a, BuiltinPositionActuatorCfg)
-    e = a.effort_limit
-    s = a.stiffness
-    names = a.joint_names_expr
-    assert e is not None
-    for n in names:
-        T1_ACTION_SCALE[n] = 0.25 * e / s
+##
+# Action Scale (uniform for all joints, matching mjlab)
+##
 
-# Compute ACTION_SCALE dictionary for full body
-T1_FULLBODY_ACTION_SCALE: dict[str, float] = {}
-for a in T1_FULLBODY_ARTICULATION.actuators:
-    assert isinstance(a, BuiltinPositionActuatorCfg)
-    e = a.effort_limit
-    s = a.stiffness
-    names = a.joint_names_expr
-    assert e is not None
-    for n in names:
-        T1_FULLBODY_ACTION_SCALE[n] = 0.25 * e / s
+# All 23 joints use the same action scale of 0.25
+T1_JOINT_NAMES = [
+    "AAHead_yaw",
+    "Head_pitch",
+    "Left_Shoulder_Pitch",
+    "Left_Shoulder_Roll",
+    "Left_Elbow_Pitch",
+    "Left_Elbow_Yaw",
+    "Right_Shoulder_Pitch",
+    "Right_Shoulder_Roll",
+    "Right_Elbow_Pitch",
+    "Right_Elbow_Yaw",
+    "Waist",
+    "Left_Hip_Pitch",
+    "Left_Hip_Roll",
+    "Left_Hip_Yaw",
+    "Left_Knee_Pitch",
+    "Left_Ankle_Pitch",
+    "Left_Ankle_Roll",
+    "Right_Hip_Pitch",
+    "Right_Hip_Roll",
+    "Right_Hip_Yaw",
+    "Right_Knee_Pitch",
+    "Right_Ankle_Pitch",
+    "Right_Ankle_Roll",
+]
+
+T1_ACTION_SCALE: dict[str, float] = {name: 0.25 for name in T1_JOINT_NAMES}
 
 if __name__ == "__main__":
     robot = Entity(T1_ROBOT_CFG)

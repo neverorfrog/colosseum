@@ -9,8 +9,7 @@ from mjlab.tasks.velocity.velocity_env_cfg import make_velocity_env_cfg
 
 from colosseum.robots.booster_t1.t1_constants import (
   T1_ACTION_SCALE,
-  T1_ROBOT_CFG,
-  T1_FULLBODY_ACTION_SCALE,
+  get_t1_robot_cfg,
 )
 from colosseum.robots.booster_t1.t1_contacts import (
   FEET_GROUND_CONTACT_SENSOR,
@@ -24,17 +23,7 @@ def booster_t1_rough_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
   cfg = make_velocity_env_cfg()
 
   # Use T1 robot config from t1_constants
-  cfg.scene.entities = {"robot": T1_ROBOT_CFG}
-  
-  # Determine number of actuated joints from robot config
-  assert T1_ROBOT_CFG.articulation is not None
-  num_actuated_joints = sum(
-    len(actuator.joint_names_expr) 
-    for actuator in T1_ROBOT_CFG.articulation.actuators
-  )
-  
-  # Determine which action scale to use
-  action_scale = T1_FULLBODY_ACTION_SCALE if num_actuated_joints > 12 else T1_ACTION_SCALE
+  cfg.scene.entities = {"robot": get_t1_robot_cfg()}
 
   # Foot sites for observations and rewards
   site_names = ("left_foot", "right_foot")
@@ -46,10 +35,10 @@ def booster_t1_rough_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
   if cfg.scene.terrain is not None and cfg.scene.terrain.terrain_generator is not None:
     cfg.scene.terrain.terrain_generator.curriculum = True
 
-  # Configure action scale based on number of joints
+  # Configure action scale (uniform 0.25 for all joints)
   joint_pos_action = cfg.actions["joint_pos"]
   assert isinstance(joint_pos_action, JointPositionActionCfg)
-  joint_pos_action.scale = action_scale
+  joint_pos_action.scale = T1_ACTION_SCALE
 
   # Viewer configuration
   cfg.viewer.body_name = "Trunk"
@@ -61,74 +50,66 @@ def booster_t1_rough_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
   twist_cmd.viz.z_offset = 0.665
 
   # Configure foot height observation
-  cfg.observations["critic"].terms["foot_height"].params[
-    "asset_cfg"
-  ].site_names = site_names
+  # cfg.observations["critic"].terms["foot_height"].params[
+  #   "asset_cfg"
+  # ].site_names = site_names
+  cfg.observations["critic"].terms.pop("foot_height", None)
 
   # Configure foot friction event with T1 foot geoms
   cfg.events["foot_friction"].params["asset_cfg"].geom_names = T1_FOOT_GEOM_NAMES
 
-  # T1-specific pose standards - configure joint_names to only track actuated joints
-  # This is critical: the default uses ".*" which matches ALL 23 joints,
-  # but we only want to track the actuated joints (12 for locomotion, 23 for fullbody)
-  if num_actuated_joints > 12:
-    # Fullbody: track all joints
-    cfg.rewards["pose"].params["asset_cfg"].joint_names = (".*",)
-  else:
-    # Locomotion: track only leg joints
-    cfg.rewards["pose"].params["asset_cfg"].joint_names = (
-      ".*Hip_Pitch",
-      ".*Hip_Roll", 
-      ".*Hip_Yaw",
-      ".*Knee_Pitch",
-      ".*Ankle_Pitch",
-      ".*Ankle_Roll",
-    )
-  
+  # T1-specific pose standards (all 23 joints)
   cfg.rewards["pose"].params["std_standing"] = {".*": 0.05}
-  
-  # Base walking/running standards for legs
+
   cfg.rewards["pose"].params["std_walking"] = {
+    # Lower body
     r".*Hip_Pitch": 0.3,
     r".*Hip_Roll": 0.15,
     r".*Hip_Yaw": 0.15,
     r".*Knee_Pitch": 0.35,
     r".*Ankle_Pitch": 0.25,
     r".*Ankle_Roll": 0.1,
+    # Waist
+    r".*Waist": 0.15,
+    # Arms
+    r".*Shoulder_Pitch": 0.15,
+    r".*Shoulder_Roll": 0.15,
+    r".*Elbow_Pitch": 0.15,
+    r".*Elbow_Yaw": 0.15,
+    # Head
+    r".*Head.*": 0.1,
   }
+
   cfg.rewards["pose"].params["std_running"] = {
+    # Lower body
     r".*Hip_Pitch": 0.5,
     r".*Hip_Roll": 0.2,
     r".*Hip_Yaw": 0.2,
     r".*Knee_Pitch": 0.6,
     r".*Ankle_Pitch": 0.35,
     r".*Ankle_Roll": 0.15,
+    # Waist
+    r".*Waist": 0.2,
+    # Arms
+    r".*Shoulder_Pitch": 0.5,
+    r".*Shoulder_Roll": 0.2,
+    r".*Elbow_Pitch": 0.35,
+    r".*Elbow_Yaw": 0.2,
+    # Head
+    r".*Head.*": 0.15,
   }
-  
-  # If using fullbody (23 joints), add upper body standards
-  if num_actuated_joints > 12:
-    cfg.rewards["pose"].params["std_walking"].update({
-      r".*Neck.*": 0.1,
-      r".*Shoulder.*": 0.2,
-      r".*Elbow.*": 0.2,
-      r".*Wrist.*": 0.2,
-      r".*Waist.*": 0.15,
-    })
-    cfg.rewards["pose"].params["std_running"].update({
-      r".*Neck.*": 0.15,
-      r".*Shoulder.*": 0.3,
-      r".*Elbow.*": 0.3,
-      r".*Wrist.*": 0.3,
-      r".*Waist.*": 0.2,
-    })
 
   # Configure body-based rewards
   cfg.rewards["upright"].params["asset_cfg"].body_names = ("Trunk",)
   cfg.rewards["body_ang_vel"].params["asset_cfg"].body_names = ("Trunk",)
 
   # Configure foot-site-based rewards
+  # for reward_name in ["foot_clearance", "foot_swing_height", "foot_slip"]:
+    # cfg.rewards[reward_name].params["asset_cfg"].site_names = site_names
+    
+  # Remove foot-site-dependent rewards since T1 doesn't have foot sites defined
   for reward_name in ["foot_clearance", "foot_swing_height", "foot_slip"]:
-    cfg.rewards[reward_name].params["asset_cfg"].site_names = site_names
+    cfg.rewards.pop(reward_name, None)
 
   # Reward weights tuning
   cfg.rewards["body_ang_vel"].weight = -0.05
