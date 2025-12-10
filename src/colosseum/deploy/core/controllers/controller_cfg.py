@@ -1,14 +1,14 @@
-from typing import Callable, List, Optional
-from dataclasses import MISSING
-
+from typing import Callable, List, Optional, TypeVar
+from dataclasses import field
+import torch
 from colosseum.deploy.core.utils.isaaclab.configclass import configclass
 
 
 @configclass
 class PrepareStateCfg:
-    stiffness: List[float] = MISSING
-    damping: List[float] = MISSING
-    joint_pos: List[float] = MISSING
+    stiffness: List[float] = field(default_factory=list)
+    damping: List[float] = field(default_factory=list)
+    joint_pos: List[float] = field(default_factory=list)
 
 
 @configclass
@@ -29,25 +29,25 @@ class BoosterRobotControllerCfg:
 
 @configclass
 class RobotCfg:
-    name: str = MISSING
+    name: str = field(default_factory=str)
 
-    joint_names: list[str] = MISSING
-    body_names: list[str] = MISSING
+    joint_names: list[str] = field(default_factory=list)
+    body_names: list[str] = field(default_factory=list)
 
-    sim_joint_names: list[str] = MISSING
-    sim_body_names: list[str] = MISSING
+    sim_joint_names: list[str] = field(default_factory=list)
+    sim_body_names: list[str] = field(default_factory=list)
 
-    joint_stiffness: List[float] = MISSING
-    joint_damping: List[float] = MISSING
+    joint_stiffness: List[float] = field(default_factory=list)
+    joint_damping: List[float] = field(default_factory=list)
+    
+    default_joint_pos: List[float] = field(default_factory=list)
+    effort_limit: List[float] = field(default_factory=list)
 
-    default_joint_pos: List[float] = MISSING
-    effort_limit: List[float] = MISSING
+    parallel_joint_indices: List[int] = field(default_factory=list)
 
-    parallel_joint_indices: List[int] = MISSING
+    mjcf_path: str = field(default_factory=str)
 
-    mjcf_path: str = MISSING
-
-    prepare_state: PrepareStateCfg = MISSING
+    prepare_state: PrepareStateCfg = field(default_factory=PrepareStateCfg)
 
     def __post_init__(self):
         assert (
@@ -68,12 +68,12 @@ class VelocityCommandCfg:
 
 @configclass
 class PolicyCfg:
-    constructor: Callable = MISSING
+    constructor: Callable
 
 
 @configclass
 class EvaluatorCfg:
-    constructor: Callable = MISSING
+    constructor: Callable
     # Rendering
     render: bool = True
 
@@ -84,10 +84,9 @@ class ControllerCfg:
     """
 
     policy_dt: float = 0.02
-    robot: RobotCfg = MISSING
+    robot: RobotCfg = field(default_factory=RobotCfg)
     vel_command: Optional[VelocityCommandCfg] = None
-    policy: PolicyCfg = MISSING
-
+    policy: PolicyCfg = field(default_factory=PolicyCfg)
     mujoco: MujocoControllerCfg = MujocoControllerCfg()
     booster: BoosterRobotControllerCfg = BoosterRobotControllerCfg()
     evaluator: Optional[EvaluatorCfg] = None

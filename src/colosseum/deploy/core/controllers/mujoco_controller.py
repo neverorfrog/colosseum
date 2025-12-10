@@ -7,7 +7,7 @@ import numpy as np
 import torch
 import mujoco
 import mujoco.viewer
-from booster_assets import BOOSTER_ASSETS_DIR
+from booster_assets import BOOSTER_ASSETS_DIR # TODO: change to colosseum_assets
 
 from colosseum.deploy.core.controllers.base_controller import BaseController, VelocityCommand
 from colosseum.deploy.core.controllers.controller_cfg import ControllerCfg
@@ -63,6 +63,7 @@ class MujocoController(BaseController):
                     end="",
                 )
 
+    # TODO: make observations uniform with training pipeline
     def update_state(self) -> None:
         dof_pos = self.mj_data.qpos.astype(np.float32)[7:]
         dof_vel = self.mj_data.qvel.astype(np.float32)[6:]

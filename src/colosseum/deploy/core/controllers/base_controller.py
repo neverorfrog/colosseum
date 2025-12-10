@@ -167,7 +167,7 @@ class BaseController:
         self.robot = BoosterRobot(cfg.robot)
         self.vel_command = None  # type: ignore
         if self.cfg.vel_command is not None:
-            self.vel_command = VelocityCommand(cfg.vel_command)
+            self.vel_command = VelocityCommand(self.cfg.vel_command)
         self.policy = self.cfg.policy.constructor(self.cfg.policy, self)
 
     def start(self):
