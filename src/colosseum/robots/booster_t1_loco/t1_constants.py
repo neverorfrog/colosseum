@@ -11,18 +11,8 @@ from mjlab.actuator import XmlPositionActuatorCfg
 from colosseum.utils import src_dir
 from colosseum.robots.booster_t1.t1_contacts import (
     FEET_ONLY_COLLISION,
-)
-
-from colosseum.robots.booster_t1.t1_actuators import (
-    T1_ACTUATOR_HIP_PITCH,
-    T1_ACTUATOR_HIP_ROLL,
-    T1_ACTUATOR_HIP_YAW,
-    T1_ACTUATOR_KNEE,
-    T1_ACTUATOR_ANKLE_PITCH,
-    T1_ACTUATOR_ANKLE_ROLL,
-    T1_ACTUATOR_NECK,
-    T1_ACTUATOR_ARM,
-    T1_ACTUATOR_WAIST,
+    FULL_COLLISION,
+    FULL_COLLISION_WITHOUT_SELF,
 )
 
 ##
@@ -80,20 +70,38 @@ JOINT_NAMES = [
 ]
 
 
-# 23-DOF Full Body
+# 23-DOF Full Body - uses actuators defined in XML
+# The XML contains position actuators with kp=75, kv=5 for all 23 joints
 ARTICULATION = EntityArticulationInfoCfg(
     actuators=(
-        T1_ACTUATOR_NECK,
-        T1_ACTUATOR_ARM,
-        T1_ACTUATOR_WAIST,
-        T1_ACTUATOR_HIP_PITCH,
-        T1_ACTUATOR_HIP_ROLL,
-        T1_ACTUATOR_HIP_YAW,
-        T1_ACTUATOR_KNEE,
-        T1_ACTUATOR_ANKLE_PITCH,
-        T1_ACTUATOR_ANKLE_ROLL,
+        XmlPositionActuatorCfg(
+            joint_names_expr=(
+                ".*AAHead_yaw",
+                ".*Head_pitch",
+                ".*Left_Hip_Pitch",
+                ".*Left_Hip_Roll",
+                ".*Left_Hip_Yaw",
+                ".*Left_Knee_Pitch",
+                ".*Left_Ankle_Pitch",
+                ".*Left_Ankle_Roll",
+                ".*Right_Hip_Pitch",
+                ".*Right_Hip_Roll",
+                ".*Right_Hip_Yaw",
+                ".*Right_Knee_Pitch",
+                ".*Right_Ankle_Pitch",
+                ".*Right_Ankle_Roll",
+                ".*Waist",
+                ".*Left_Shoulder_Pitch",
+                ".*Left_Shoulder_Roll",
+                ".*Left_Elbow_Pitch",
+                ".*Left_Elbow_Yaw",
+                ".*Right_Shoulder_Pitch",
+                ".*Right_Shoulder_Roll",
+                ".*Right_Elbow_Pitch",
+                ".*Right_Elbow_Yaw",
+            ),
+        ),
     ),
-    soft_joint_pos_limit_factor=0.9,
 )
 
 ##

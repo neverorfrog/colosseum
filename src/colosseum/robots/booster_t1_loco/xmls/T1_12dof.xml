@@ -1,38 +1,41 @@
 <mujoco model="T1">
-  <compiler angle="radian" autolimits="true"/>
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
 
-  <option iterations="3" ls_iterations="5" timestep=".002" integrator="Euler">
-    <flag eulerdamp="disable"/>
-  </option>
+  <option integrator="implicitfast"/>
 
   <asset>
     <material name="light_gray" rgba="0.76 0.76 0.76 1"/>
     <material name="medium_gray" rgba="0.4 0.4 0.4 1"/>
 
-    <mesh file="meshes/Trunk.STL"/>
-    <mesh file="meshes/H1.STL"/>
-    <mesh file="meshes/H2.STL"/>
-    <mesh file="meshes/AL1.STL"/>
-    <mesh file="meshes/AL2.STL"/>
-    <mesh file="meshes/AL3.STL"/>
-    <mesh file="meshes/left_hand_link.STL"/>
-    <mesh file="meshes/AR1.STL"/>
-    <mesh file="meshes/AR2.STL"/>
-    <mesh file="meshes/AR3.STL"/>
-    <mesh file="meshes/right_hand_link.STL"/>
-    <mesh file="meshes/Waist.STL"/>
-    <mesh file="meshes/Hip_Pitch_Left.STL"/>
-    <mesh file="meshes/Hip_Roll_Left.STL"/>
-    <mesh file="meshes/Hip_Yaw_Left.STL"/>
-    <mesh file="meshes/Shank_Left.STL"/>
-    <mesh file="meshes/Ankle_Cross_Left.STL"/>
-    <mesh file="meshes/left_foot_link.STL"/>
-    <mesh file="meshes/Hip_Pitch_Right.STL"/>
-    <mesh file="meshes/Hip_Roll_Right.STL"/>
-    <mesh file="meshes/Hip_Yaw_Right.STL"/>
-    <mesh file="meshes/Shank_Right.STL"/>
-    <mesh file="meshes/Ankle_Cross_Right.STL"/>
-    <mesh file="meshes/right_foot_link.STL"/>
+    <!-- Torso mesh -->
+    <mesh name="Trunk" file="meshes/Trunk.STL"/>
+
+    <!-- Leg meshes -->
+    <mesh name="Hip_Pitch_Left" file="meshes/Hip_Pitch_Left.STL"/>
+    <mesh name="Hip_Roll_Left" file="meshes/Hip_Roll_Left.STL"/>
+    <mesh name="Hip_Yaw_Left" file="meshes/Hip_Yaw_Left.STL"/>
+    <mesh name="Shank_Left" file="meshes/Shank_Left.STL"/>
+    <mesh name="Ankle_Cross_Left" file="meshes/Ankle_Cross_Left.STL"/>
+    <mesh name="left_foot_link" file="meshes/left_foot_link.STL"/>
+    <mesh name="Hip_Pitch_Right" file="meshes/Hip_Pitch_Right.STL"/>
+    <mesh name="Hip_Roll_Right" file="meshes/Hip_Roll_Right.STL"/>
+    <mesh name="Hip_Yaw_Right" file="meshes/Hip_Yaw_Right.STL"/>
+    <mesh name="Shank_Right" file="meshes/Shank_Right.STL"/>
+    <mesh name="Ankle_Cross_Right" file="meshes/Ankle_Cross_Right.STL"/>
+    <mesh name="right_foot_link" file="meshes/right_foot_link.STL"/>
+
+    <!-- Visual-only meshes (not in kinematic chain) -->
+    <mesh name="H1" file="meshes/H1.STL"/>
+    <mesh name="H2" file="meshes/H2.STL"/>
+    <mesh name="AL1" file="meshes/AL1.STL"/>
+    <mesh name="AL2" file="meshes/AL2.STL"/>
+    <mesh name="AL3" file="meshes/AL3.STL"/>
+    <mesh name="left_hand_link" file="meshes/left_hand_link.STL"/>
+    <mesh name="AR1" file="meshes/AR1.STL"/>
+    <mesh name="AR2" file="meshes/AR2.STL"/>
+    <mesh name="AR3" file="meshes/AR3.STL"/>
+    <mesh name="right_hand_link" file="meshes/right_hand_link.STL"/>
+    <mesh name="Waist" file="meshes/Waist.STL"/>
   </asset>
 
   <default>
@@ -57,35 +60,34 @@
       <joint frictionloss="0.1"/>
 
       <default class="hip_pitch">
-        <joint axis="0 1 0" range="-1.8 1.57"/>
+        <joint axis="0 1 0" range="-1.8 1.57" damping="0.15" armature="0.3" frictionloss="0.2"/>
       </default>
       <default class="hip_roll">
-        <joint axis="1 0 0"/>
+        <joint axis="1 0 0" damping="0.15" armature="0.3" frictionloss="0.2"/>
       </default>
       <default class="hip_yaw">
-        <joint axis="0 0 1" range="-1 1"/>
+        <joint axis="0 0 1" range="-1 1" damping="0.15" armature="0.3" frictionloss="0.2"/>
       </default>
       <default class="knee">
-        <joint axis="0 1 0" range="0 2.34"/>
+        <joint axis="0 1 0" range="0 2.34" damping="0.15" armature="0.3" frictionloss="0.2"/>
       </default>
       <default class="ankle_pitch">
-        <joint axis="0 1 0" range="-0.87 0.35"/>
+        <joint axis="0 1 0" range="-0.87 0.35" damping="0.15" armature="0.3" frictionloss="0.1"/>
       </default>
       <default class="ankle_roll">
-        <joint axis="1 0 0" range="-0.44 0.44"/>
+        <joint axis="1 0 0" range="-0.44 0.44" damping="0.15" armature="0.3" frictionloss="0.1"/>
       </default>
     </default>
   </default>
 
   <worldbody>
-    <light name="spotlight" mode="targetbodycom" target="Trunk" pos="0 -2 4" exponent="20"/>
+    <light pos="1 0 3.5" dir="0 0 -1" directional="true"/>
     <body name="Trunk" pos="0 0 .66" childclass="t1">
       <freejoint name="floating_base_joint"/>
       <inertial pos="0.054281 8.47449e-06 0.0893932" quat="0.999999 -0.000254757 -0.00132228 -0.000215148" mass="19.4304" diaginertia="0.502019 0.3531 0.207324"/>
       <site name='imu'/>
-      <camera name="track" pos="1.248 -0.947 0.5" xyaxes="0.628 0.779 -0.000 -0.274 0.221 0.936" mode="trackcom"/>
 
-      <!-- Visual geoms -->
+      <!-- Visual-only geoms (head, arms, waist - not in kinematic chain) -->
       <geom class="visual" type="mesh" rgba="0.76 0.76 0.76 1.0" mesh="Trunk"/>
       <geom class="visual" pos="0.0625 0 0.243" type="mesh" rgba="0.4 0.4 0.4 1.0" mesh="H1"/>
       <geom class="visual" pos="0.0625 0 0.30485" type="mesh" rgba="0.4 0.4 0.4 1.0" mesh="H2"/>
@@ -133,10 +135,13 @@
                   <geom class="visual" mesh="left_foot_link"/>
                   <geom name="left_foot" class="foot"/>
                   <site name="left_foot"/>
-                  <geom name="left_foot_1" class="foot_sphere" pos="0.1015 0.04 -0.02"/>
-                  <geom name="left_foot_2" class="foot_sphere" pos="0.1015 -0.04 -0.02"/>
-                  <geom name="left_foot_3" class="foot_sphere" pos="-0.1015 0.04 -0.02"/>
-                  <geom name="left_foot_4" class="foot_sphere" pos="-0.1015 -0.04 -0.02"/>
+
+                  <!-- Foot contact spheres (5-point contact for better stability) -->
+                  <geom name="left_foot_1" class="foot_sphere" pos="-0.1 0.025 -0.02"/>
+                  <geom name="left_foot_2" class="foot_sphere" pos="-0.1 -0.025 -0.02"/>
+                  <geom name="left_foot_3" class="foot_sphere" pos="0.11 0.03 -0.02"/>
+                  <geom name="left_foot_4" class="foot_sphere" pos="0.11 -0.03 -0.02"/>
+                  <geom name="left_foot_5" class="foot_sphere" pos="0.12 0 -0.02"/>
                 </body>
               </body>
             </body>
@@ -178,10 +183,13 @@
                   <geom class="visual" mesh="right_foot_link"/>
                   <geom name="right_foot" class="foot"/>
                   <site name="right_foot"/>
-                  <geom name="right_foot_1" class="foot_sphere" pos="0.1015 0.04 -0.02"/>
-                  <geom name="right_foot_2" class="foot_sphere" pos="0.1015 -0.04 -0.02"/>
-                  <geom name="right_foot_3" class="foot_sphere" pos="-0.1015 0.04 -0.02"/>
-                  <geom name="right_foot_4" class="foot_sphere" pos="-0.1015 -0.04 -0.02"/>
+
+                  <!-- Foot contact spheres (5-point contact for better stability) -->
+                  <geom name="right_foot_1" class="foot_sphere" pos="-0.1 0.025 -0.02"/>
+                  <geom name="right_foot_2" class="foot_sphere" pos="-0.1 -0.025 -0.02"/>
+                  <geom name="right_foot_3" class="foot_sphere" pos="0.11 0.03 -0.02"/>
+                  <geom name="right_foot_4" class="foot_sphere" pos="0.11 -0.03 -0.02"/>
+                  <geom name="right_foot_5" class="foot_sphere" pos="0.12 0 -0.02"/>
                 </body>
               </body>
             </body>
@@ -192,18 +200,11 @@
   </worldbody>
 
   <sensor>
-    <gyro site="imu" name="gyro"/>
-    <velocimeter site="imu" name="local_linvel"/>
-    <accelerometer site="imu" name="accelerometer"/>
-    <framezaxis objtype="site" objname="imu" name="upvector"/>
-    <framexaxis objtype="site" objname="imu" name="forwardvector"/>
-    <framelinvel objtype="site" objname="imu" name="global_linvel"/>
-    <frameangvel objtype="site" objname="imu" name="global_angvel"/>
-    <framepos objtype="site" objname="imu" name="position"/>
-    <framequat objtype="site" objname="imu" name="orientation"/>
-    <framelinvel objtype="site" objname="left_foot" name="left_foot_global_linvel"/>
-    <framelinvel objtype="site" objname="right_foot" name="right_foot_global_linvel"/>
-    <framepos objtype="site" objname="left_foot" name="left_foot_pos"/>
-    <framepos objtype="site" objname="right_foot" name="right_foot_pos"/>
+    <gyro name="imu_ang_vel" site="imu"/>
+    <velocimeter name="imu_lin_vel" site="imu"/>
+    <accelerometer name="imu_lin_acc" site="imu"/>
+    <framequat name="orientation" objtype="site" objname="imu"/>
+    <subtreeangmom name="root_angmom" body="Trunk"/>
   </sensor>
+
 </mujoco>

@@ -13,7 +13,7 @@ from mjlab.sensor import ContactMatch, ContactSensorCfg
 # - No self-collisions
 # - Most stable for training
 FEET_ONLY_COLLISION = CollisionCfg(
-    geom_names_expr=(r"^(left|right)_foot_sphere.*link$",),  # Only match sphere links
+    geom_names_expr=(r"^(left|right)_foot.*link$",),
     contype=0,
     conaffinity=1,
     condim=3,
