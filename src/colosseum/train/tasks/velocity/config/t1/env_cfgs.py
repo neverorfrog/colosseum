@@ -47,7 +47,7 @@ def booster_t1_rough_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
   assert cfg.commands is not None
   twist_cmd = cfg.commands["twist"]
   assert isinstance(twist_cmd, UniformVelocityCommandCfg)
-  twist_cmd.viz.z_offset = 0.3
+  twist_cmd.viz.z_offset = 0.0
 
   # Configure foot height observation
   cfg.observations["critic"].terms["foot_height"].params[
