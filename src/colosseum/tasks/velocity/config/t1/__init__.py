@@ -2,7 +2,7 @@
 
 from mjlab.tasks.registry import register_mjlab_task
 from mjlab.tasks.velocity.rl import VelocityOnPolicyRunner
-from colosseum.train.tasks.velocity.rl import booster_t1_ppo_runner_cfg
+from colosseum.tasks.velocity.rl import booster_t1_ppo_runner_cfg
 from .env_cfgs import (
   booster_t1_flat_env_cfg,
   booster_t1_rough_env_cfg,

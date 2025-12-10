@@ -6,7 +6,7 @@ import pytest
 def test_t1_env_cfgs_imports():
   """Test that T1 env_cfgs can be imported."""
   # This will fail if there are syntax errors or missing imports
-  from colosseum.train.tasks.velocity.config.t1 import (
+  from colosseum.tasks.velocity.config.t1 import (
     booster_t1_flat_env_cfg,
     booster_t1_rough_env_cfg,
   )
@@ -19,7 +19,7 @@ def test_t1_rough_env_cfg_structure():
   """Test that rough env cfg returns proper structure."""
   pytest.importorskip("mujoco")  # Skip if mujoco not available
 
-  from colosseum.train.tasks.velocity.config.t1 import booster_t1_rough_env_cfg
+  from colosseum.tasks.velocity.config.t1 import booster_t1_rough_env_cfg
 
   cfg = booster_t1_rough_env_cfg(play=False)
 
@@ -48,7 +48,7 @@ def test_t1_flat_env_cfg_structure():
   """Test that flat env cfg returns proper structure."""
   pytest.importorskip("mujoco")  # Skip if mujoco not available
 
-  from colosseum.train.tasks.velocity.config.t1 import booster_t1_flat_env_cfg
+  from colosseum.tasks.velocity.config.t1 import booster_t1_flat_env_cfg
 
   cfg = booster_t1_flat_env_cfg(play=False)
 
@@ -62,7 +62,7 @@ def test_t1_play_mode():
   """Test that play mode applies correct overrides."""
   pytest.importorskip("mujoco")  # Skip if mujoco not available
 
-  from colosseum.train.tasks.velocity.config.t1 import booster_t1_rough_env_cfg
+  from colosseum.tasks.velocity.config.t1 import booster_t1_rough_env_cfg
 
   cfg = booster_t1_rough_env_cfg(play=True)
 

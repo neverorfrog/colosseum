@@ -430,7 +430,7 @@ from mjlab.tasks.velocity.velocity_env_cfg import make_velocity_env_cfg
 from colosseum.tasks.velocity.observations import VELOCITY_OBS_ORDER
 
 # Import MDP wrappers
-from colosseum.train.tasks.velocity.mdp import observations as obs_mdp
+from colosseum.tasks.velocity.mdp import observations as obs_mdp
 
 from colosseum.robots.booster_t1.t1_constants import T1_ROBOT_CFG
 
@@ -1326,7 +1326,7 @@ No functional changes needed, but update to use new MDP wrappers:
 
 ```python
 # In env_cfgs.py
-from colosseum.train.tasks.velocity.mdp import observations as obs_mdp
+from colosseum.tasks.velocity.mdp import observations as obs_mdp
 
 cfg.observations = {
     "policy": {

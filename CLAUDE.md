@@ -124,7 +124,7 @@ Tasks are registered via the `mjlab.tasks` entry point in `pyproject.toml`:
 
 ```toml
 [project.entry-points."mjlab.tasks"]
-cartpole = "colosseum.train.tasks.cartpole"
+cartpole = "colosseum.tasks.cartpole"
 ```
 
 Each task module must:

@@ -16,7 +16,7 @@ from mjlab.managers.manager_term_config import (
     ObservationTermCfg,
 )
 
-from colosseum.train.tasks.cartpole.mdp_functions import joint_pos, joint_vel
+from colosseum.tasks.cartpole.mdp_functions import joint_pos, joint_vel
 
 policy_terms: dict[str, ObservationTermCfg] = {
     "cart_pos": ObservationTermCfg(
@@ -54,7 +54,7 @@ from mjlab.envs.mdp.terminations import time_out
 # ======== Rewards ========
 from mjlab.managers.manager_term_config import RewardTermCfg
 
-from colosseum.train.tasks.cartpole.mdp_functions import (
+from colosseum.tasks.cartpole.mdp_functions import (
     effort_cost,
     upright_reward,
 )
@@ -76,7 +76,7 @@ rewards: dict[str, RewardTermCfg] = {
 # ====== Terminations =======
 from mjlab.managers.manager_term_config import TerminationTermCfg
 
-from colosseum.train.tasks.cartpole.mdp_functions import pole_fallen
+from colosseum.tasks.cartpole.mdp_functions import pole_fallen
 
 terminations: dict[str, TerminationTermCfg] = {
     "time_out": TerminationTermCfg(func=time_out, time_out=True),

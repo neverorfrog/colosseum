@@ -1,22 +1,50 @@
 [project]
 name = "colosseum"
 version = "0.1.0"
-requires-python = "==3.12.*"
+requires-python = "==3.11.*"
 
+# ============================================
+# PIXI WORKSPACE CONFIGURATION
+# ============================================
 [tool.pixi.workspace]
-channels = [
-  "https://prefix.dev/conda-forge",
-]
+channels = ["conda-forge","https://prefix.dev/conda-forge","robostack-jazzy"]
 platforms = ["linux-64"]
+preview = ["pixi-build"]
+
+[tool.pixi.dependencies]
+pytest = ">=9.0.1,<10"
+
+[tool.pixi.pypi-dependencies]
+colosseum = {path = ".", editable = true}
 
 [tool.pixi.environments]
-default = ["gpu"]
+default = ["train"]
+deploy = ["deploy"]
 docs = { features = ["docs"], no-default-feature = true, solve-group = "default" }
 
-[tool.pixi.feature.gpu.pypi-dependencies]
-colosseum = {path = ".", editable = true}
+# ============================================
+# TRAIN FEATURE
+# ============================================
+[tool.pixi.feature.train.pypi-dependencies]
 mjlab = {git = "https://github.com/mujocolab/mjlab.git", branch = "main"}
 
+[build-system]
+requires = ["uv_build>=0.8.19,<0.9.0"]
+build-backend = "uv_build"
+
+[project.entry-points."mjlab.tasks"]
+cartpole = "colosseum.tasks.cartpole"
+velocity = "colosseum.tasks.velocity"
+
+# ============================================
+# DEPLOY FEATURE
+# ============================================
+[tool.pixi.feature.deploy.dependencies]
+booster_robotics_sdk = {git = "https://github.com/neverorfrog/booster_robotics_sdk.git", branch = "main"}
+
+# ============================================
+# DOCS FEATURE
+# ============================================
 [tool.pixi.feature.docs.dependencies]
 mkdocs-material = ">=9.6.14,<10"
 
@@ -24,6 +52,9 @@ mkdocs-material = ">=9.6.14,<10"
 build-docs = "mkdocs build --strict"
 docs = { cmd = "mkdocs serve", description = "Serve the docs locally" }
 
+# ============================================
+# OTHER TOOLS
+# ============================================
 [tool.ty.environment]
 extra-paths = ["typings"]
 
@@ -31,17 +62,6 @@ extra-paths = ["typings"]
 include = ["src", "tests"]
 exclude = ["typings", "models"]
 
-[build-system]
-requires = ["uv_build>=0.8.19,<0.9.0"]
-build-backend = "uv_build"
-
-[project.entry-points."mjlab.tasks"]
-cartpole = "colosseum.train.tasks.cartpole"
-velocity = "colosseum.train.tasks.velocity"
-
 [tool.ruff]
 src = ["src"]
 indent-width = 2
-
-[tool.pixi.dependencies]
-pytest = ">=9.0.1,<10"

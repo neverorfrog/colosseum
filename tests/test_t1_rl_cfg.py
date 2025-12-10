@@ -5,7 +5,7 @@ import pytest
 
 def test_t1_rl_cfg_imports():
   """Test that T1 RL config can be imported."""
-  from colosseum.train.tasks.velocity.rl import booster_t1_ppo_runner_cfg
+  from colosseum.tasks.velocity.rl import booster_t1_ppo_runner_cfg
 
   assert callable(booster_t1_ppo_runner_cfg)
 
@@ -14,7 +14,7 @@ def test_t1_ppo_runner_cfg_structure():
   """Test that PPO runner config returns proper structure."""
   pytest.importorskip("mjlab")  # Skip if mjlab not available
 
-  from colosseum.train.tasks.velocity.rl import booster_t1_ppo_runner_cfg
+  from colosseum.tasks.velocity.rl import booster_t1_ppo_runner_cfg
 
   cfg = booster_t1_ppo_runner_cfg()
 

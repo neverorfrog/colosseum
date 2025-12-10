@@ -1,22 +1,8 @@
-"""Shared definitions for velocity tracking task.
+"""Velocity tracking tasks for humanoid robots.
 
-This module provides constants and functions that work in both
-training (mjlab) and deployment (booster_deploy) contexts.
+This module registers velocity tracking tasks for different robot configurations.
+Importing this module will register all available task variants.
 """
 
-__all__ = [
-    "ACTION_SCALE",
-    "DEFAULT_JOINT_POS",
-]
-
-# ============================================================================
-# Action Configuration
-# ============================================================================
-
-# Action scale factor (applied to normalized policy output)
-# This should match the scale in your training config's JointPositionActionCfg
-ACTION_SCALE = 0.25
-
-# Default joint positions (standing pose)
-# This is defined per-robot in robot configs, but can be referenced here
-# for consistency between training and deployment
+# Import robot-specific configs to trigger task registration
+from colosseum.tasks.velocity.config import t1  # noqa: F401
