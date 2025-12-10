@@ -1,0 +1,3 @@
+[submodule "external/booster_robotics_sdk"]
+	path = external/booster_robotics_sdk
+	url = https://github.com/neverorfrog/booster_robotics_sdk.git
