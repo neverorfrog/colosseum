@@ -46,12 +46,18 @@ booster_robotics_sdk = {git = "https://github.com/neverorfrog/booster_robotics_s
 ros-humble-booster-interface = {git = "https://github.com/neverorfrog/booster_robotics_sdk_ros2.git", branch = "main", subdirectory = "booster_ros2_interface"}
 cuda-version = "12.6.*"
 pytorch-gpu = "*"
+ros-humble-rclpy = ">=3.3.4,<4"
+nanobind = ">=2.4,<3"
 
 [tool.pixi.feature.deploy.pypi-dependencies]
 colosseum = {path = ".", editable = true}
 
 [tool.pixi.feature.deploy.system-requirements]
 cuda = "12.0"
+
+[tool.pixi.feature.deploy.tasks]
+deploy = "python src/colosseum/deploy/scripts/deploy.py"
+gen-booster-stubs = { cmd = "python -m nanobind.stubgen -m booster_robotics_sdk_python -o typings/booster_robotics_sdk_python.pyi", description = "Generate stubs for booster_robotics_sdk_python into typings/" }
 
 # ============================================
 # DOCS FEATURE
