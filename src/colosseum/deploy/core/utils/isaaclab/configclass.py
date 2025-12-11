@@ -10,7 +10,7 @@ import types
 from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import MISSING, Field, dataclass, field, replace
-from typing import Any, ClassVar
+from typing import Any, ClassVar, dataclass_transform
 
 from .dict import class_to_dict, update_class_from_dict
 
@@ -22,12 +22,9 @@ Wrapper around dataclass.
 """
 
 
-def __dataclass_transform__():
-    """Add annotations decorator for PyLance."""
-    return lambda a: a
-
-
-@__dataclass_transform__()
+@dataclass_transform(
+    field_specifiers=(Field, field),
+)
 def configclass(cls, **kwargs):
     """Wrapper around `dataclass` functionality to add extra checks and utilities.
 
@@ -164,12 +161,12 @@ def _replace_class_with_kwargs(obj: object, **kwargs) -> object:
     Returns:
         The new object.
     """
-    return replace(obj, **kwargs)
+    return replace(obj, **kwargs)  # type: ignore
 
 
 def _copy_class(obj: object) -> object:
     """Return a new object with the same fields as the original."""
-    return replace(obj)
+    return replace(obj)  # type: ignore
 
 
 """
@@ -274,7 +271,7 @@ def _validate(obj: object, prefix: str = "") -> list[str]:
     else:
         return missing_fields
 
-    for key, value in obj_dict.items():
+    for key, value in obj_dict.items():  # type: ignore
         # disregard builtin attributes
         if key.startswith("__"):
             continue

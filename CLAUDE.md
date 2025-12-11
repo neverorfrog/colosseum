@@ -81,32 +81,108 @@ rewards = {
 
 During initialization, `SceneEntityCfg.resolve()` converts `body_names="torso"` → `body_ids=[3]` (global MuJoCo index). At runtime, term functions use these pre-resolved indices for efficient tensor operations.
 
+### Three-Layer MDP Architecture (Training/Deployment Sharing)
+
+Colosseum implements a novel three-layer architecture for MDP functions (observations, rewards, etc.) that eliminates code duplication between training and deployment:
+
+**Layer 1: Universal MDP Functions** (`src/colosseum/mdp/`)
+- Robot-agnostic, physics-based pure functions
+- Examples: `compute_projected_gravity()`, `exponential_reward_kernel()`
+- Dependencies: Only torch and math utilities
+- Used by: All robots and tasks, both training and deployment
+
+**Layer 2: Robot-Specific MDP Functions** (`src/colosseum/robots/*/mdp/`)
+- Functions specific to one robot platform
+- Examples: `compute_foot_contact_state()` (T1-specific sensor processing)
+- Dependencies: Layer 1 functions, robot constants
+- Used by: Multiple tasks using the same robot
+
+**Layer 3: Task-Specific MDP Functions** (`src/colosseum/tasks/*/mdp/`)
+- Functions specific to one task, split into two modules:
+  - `observations.py`: **Pure functions** (shared between training and deployment)
+  - `wrappers.py`: **Training wrappers** (mjlab interface adapters, training-only)
+- Examples: `compute_velocity_commands()`, `compute_joint_pos_rel()`
+- Dependencies: Layer 1 and Layer 2 functions
+- Used by: Training configs (via wrappers) AND deployment policies (via pure functions)
+
+**Key Benefits:**
+- ✅ **Single Source of Truth**: Observation logic defined once in pure functions
+- ✅ **Guaranteed Consistency**: Training and deployment use identical computation
+- ✅ **Easy Maintenance**: Change observation → works everywhere automatically
+- ✅ **Testable**: Pure functions are independently unit-testable
+- ✅ **Clear Separation**: Computation (pure functions) vs. integration (wrappers)
+
+**Example Flow:**
+```python
+# Layer 1: Universal
+def compute_projected_gravity(quat: Tensor) -> Tensor:
+    # Generic quaternion rotation (works for any robot)
+    ...
+
+# Layer 3: Task-specific pure function
+def compute_base_ang_vel(robot_data) -> Tensor:
+    return robot_data.root_ang_vel_b  # Works in training AND deployment
+
+# Layer 3: Training wrapper (training-only)
+def base_ang_vel(env: ManagerBasedRlEnv, asset_cfg: SceneEntityCfg) -> Tensor:
+    robot = env.scene[asset_cfg.name]
+    return compute_base_ang_vel(robot.data)  # Calls pure function
+
+# Deployment: Direct use of pure function
+class VelocityPolicy(Policy):
+    def compute_observation(self):
+        obs = compute_base_ang_vel(self.robot.data)  # Same pure function!
+```
+
+See `docs/SHARED_OBSERVATIONS.md` for detailed implementation guide.
+
 ## Directory Structure
 
 ```
 src/colosseum/
+├── mdp/              # Layer 1: Universal MDP functions (robot-agnostic)
+│   ├── observations.py  # Pure observation functions (e.g., projected_gravity)
+│   └── rewards.py       # Pure reward functions (e.g., exponential_kernel)
+│
 ├── robots/           # Robot definitions and constants
 │   ├── booster_t1/   # Booster T1 humanoid
 │   │   ├── xmls/     # MuJoCo XML models
-│   │   │   ├── T1_12dof.xml   # 12-DOF locomotion model
-│   │   │   └── T1_23dof.xml   # 23-DOF full body model
+│   │   │   ├── T1_12dof.xml   # 12-DOF locomotion model (DEPRECATED)
+│   │   │   └── T1_23dof.xml   # 23-DOF full body model (unified)
 │   │   ├── t1_actuators.py    # Motor specs and actuator configs
 │   │   ├── t1_contacts.py     # Collision and contact sensor configs
-│   │   └── t1_constants.py    # Spec loaders and entity configs
+│   │   ├── t1_constants.py    # Spec loaders and entity configs (training)
+│   │   ├── mdp/               # Layer 2: T1-specific MDP functions
+│   │   │   └── observations.py  # T1-specific observations (e.g., foot_contact)
+│   │   └── deploy/            # Deployment configurations
+│   │       └── robot_cfg.py     # T1 deployment configs (12/23 DOF)
 │   └── cartpole/     # CartPole balancing demo
-├── train/            # Training tasks
-│   └── tasks/        # Task implementations
-│       ├── cartpole/ # CartPole balancing task
-│       │   ├── cartpole_scene.py  # Scene configuration
-│       │   ├── cartpole_task.py   # MDP (actions, obs, rewards, terminations, events)
-│       │   └── mdp_functions.py   # Custom term functions
-│       └── velocity/ # Velocity tracking task (T1)
-│           ├── config/  # Robot-specific configs
-│           ├── mdp/     # MDP term functions
-│           └── rl/      # RL algorithm configs
-├── deploy/           # Deployment configurations
-│   ├── configs/      # Deployment configs
-│   └── envs/         # Deployment environments
+│
+├── tasks/            # Task definitions (training + deployment shared code)
+│   ├── cartpole/     # CartPole balancing task
+│   │   ├── cartpole_scene.py  # Scene configuration
+│   │   ├── cartpole_task.py   # MDP (actions, obs, rewards, terminations, events)
+│   │   └── mdp_functions.py   # Custom term functions
+│   └── velocity/     # Velocity tracking task
+│       ├── config/   # Training configurations (robot-specific)
+│       │   └── t1/
+│       │       └── env_cfgs.py  # T1 velocity env config
+│       ├── mdp/      # Layer 3: Task-specific MDP functions
+│       │   ├── observations.py  # Pure observation functions (SHARED)
+│       │   └── wrappers.py      # Training wrappers (mjlab-only)
+│       └── rl/       # RL algorithm configs
+│
+├── deploy/           # Deployment infrastructure
+│   ├── core/
+│   │   ├── controllers/  # Base controller abstractions
+│   │   └── utils/
+│   │       ├── registry.py         # Task registry
+│   │       └── robot_registry.py   # Robot registry (NEW)
+│   └── tasks/        # Task deployment implementations
+│       └── velocity/
+│           ├── policy.py    # Robot-agnostic velocity policy
+│           └── configs.py   # Example deployment configs
+│
 ├── play/             # Evaluation/playback utilities
 └── utils/            # Shared utilities (path helpers)
 
@@ -260,6 +336,76 @@ def my_reward(env: ManagerBasedRlEnv, asset_cfg: SceneEntityCfg) -> torch.Tensor
     entity = env.scene[asset_cfg.name]
     data = entity.data.body_pos_w[:, asset_cfg.body_ids]  # Pre-resolved indices
     return compute_reward(data)
+```
+
+## Robot-Agnostic Deployment
+
+Colosseum provides a robot registry system that decouples deployment policies from specific robot platforms.
+
+### Robot Registry
+
+Robots are registered separately from tasks, allowing policies to work with any robot configuration:
+
+```python
+# Robot configuration (in robots/booster_t1/deploy/robot_cfg.py)
+from colosseum.deploy.core.controllers import RobotCfg
+
+T1_23DOF_DEPLOY_CFG = RobotCfg(
+    name="Booster_T1_23DOF",
+    joint_names=[...],          # Real robot order
+    sim_joint_names=[...],      # Simulation order (alphabetical)
+    joint_stiffness=[...],
+    joint_damping=[...],
+    default_joint_pos=[...],
+    effort_limit=[...],
+    mjcf_path="path/to/T1_23dof.xml",
+)
+
+# Task configuration combines robot + policy
+from colosseum.deploy.tasks.velocity import VelocityPolicyCfg
+
+cfg = ControllerCfg(
+    robot=T1_23DOF_DEPLOY_CFG,  # Plug in any robot!
+    policy=VelocityPolicyCfg(checkpoint_path="models/velocity.pt"),
+)
+```
+
+### Automatic Joint Mapping
+
+The deployment system automatically handles joint order differences between simulation (alphabetical) and real hardware:
+
+```python
+# In RobotData (automatically computed from joint_names and sim_joint_names)
+self.real2sim_joint_indexes = [...]  # Maps real → sim order
+self.sim2real_joint_indexes = [...]  # Maps sim → real order
+
+# Observations use sim order (policy expects this)
+obs = compute_joint_pos(robot.data, joint_map=robot.data.real2sim_joint_indexes)
+
+# Actions use real order (hardware expects this)
+targets = action[robot.data.sim2real_joint_indexes] * scale + default_pos
+```
+
+### Using Deployment
+
+```python
+# Option 1: Use registered task
+from colosseum.deploy import get_task, list_tasks
+
+print(list_tasks())  # {'t1_23dof_velocity': <ControllerCfg>, ...}
+cfg = get_task("t1_23dof_velocity")
+
+# Option 2: Create custom configuration
+from colosseum.robots.booster_t1.deploy import T1_12DOF_DEPLOY_CFG
+cfg = ControllerCfg(
+    robot=T1_12DOF_DEPLOY_CFG,  # Swap to 12-DOF version
+    policy=VelocityPolicyCfg(...),
+)
+
+# Run deployment
+from colosseum.deploy.core.controllers import MujocoController
+controller = MujocoController(cfg)
+controller.run()
 ```
 
 ## Common Patterns

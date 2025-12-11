@@ -5,6 +5,7 @@ MuJoCo simulation and real robot deployment.
 """
 
 from .base_controller import BaseController, BoosterRobot, Commands, Policy, RobotData, VelocityCommand
+from .booster_robot_controller import BoosterRobotController, BoosterRobotPortal
 from .controller_cfg import (
   BoosterRobotControllerCfg,
   ControllerCfg,
@@ -20,6 +21,8 @@ from .mujoco_controller import MujocoController
 __all__ = [
   "BaseController",
   "BoosterRobot",
+  "BoosterRobotController",
+  "BoosterRobotPortal",
   "Commands",
   "Policy",
   "RobotData",
