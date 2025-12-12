@@ -53,7 +53,7 @@ class ObservationSpec(ABC):
         """
         pass
 
-    def compute_total_size(self, num_joints: int) -> int:
+    def compute_size(self, num_joints: int) -> int:
         """Compute total observation size.
 
         Args:
@@ -97,7 +97,7 @@ class ObservationSpec(ABC):
         Raises:
             ValueError: If observation doesn't match spec.
         """
-        expected_size = self.compute_total_size(num_joints)
+        expected_size = self.compute_size(num_joints)
 
         # Check size
         if obs.shape[-1] != expected_size:
@@ -158,7 +158,7 @@ class ObservationSpec(ABC):
             Formatted description string.
         """
         sizes = self.get_all_component_sizes(num_joints)
-        total = self.compute_total_size(num_joints)
+        total = self.compute_size(num_joints)
 
         lines = [
             f"{self.__class__.__name__} Observation Specification",

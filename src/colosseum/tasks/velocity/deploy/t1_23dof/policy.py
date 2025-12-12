@@ -9,6 +9,7 @@ import torch
 
 from colosseum.deploy.core.controllers import BaseController, Policy
 from colosseum.tasks.velocity.mdp.observation_spec import VELOCITY_OBS_SPEC
+from colosseum.deploy.core.controllers import PolicyCfg
 
 
 class T1VelocityPolicy(Policy):
@@ -18,7 +19,7 @@ class T1VelocityPolicy(Policy):
     """
 
     def __init__(self, checkpoint_path: str, controller: BaseController):
-        super().__init__(None, controller)  # No PolicyCfg needed
+        super().__init__(PolicyCfg(), controller)  # TODO: policy cfg needed
         self.robot = controller.robot
         self.vel_command = controller.vel_command
 

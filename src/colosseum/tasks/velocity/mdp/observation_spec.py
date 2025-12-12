@@ -5,7 +5,6 @@ It can be manually defined or derived from training ObservationGroupCfg.
 """
 
 from typing import List
-import torch
 
 from colosseum.deploy.core.observation_spec import ObservationSpec
 
