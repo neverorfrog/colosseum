@@ -22,12 +22,13 @@ class VelocityObservationSpec(ObservationSpec):
         This matches the order in ObservationGroupCfg.terms from training.
         """
         return [
-            "velocity_commands",   # (3,) - [vx, vy, vyaw]
-            "base_ang_vel",        # (3,) - [wx, wy, wz] in base frame
-            "projected_gravity",   # (3,) - gravity in base frame
-            "joint_pos_rel",       # (num_joints,) - relative to default
-            "joint_vel",           # (num_joints,) - joint velocities
-            "last_action",         # (num_joints,) - previous action
+            "base_lin_vel",  # (3,) - [vx, vy, vz] in base frame
+            "base_ang_vel",  # (3,) - [wx, wy, wz] in base frame
+            "projected_gravity",  # (3,) - gravity in base frame
+            "joint_pos_rel",  # (num_joints,) - relative to default
+            "joint_vel",  # (num_joints,) - joint velocities
+            "last_action",  # (num_joints,) - previous action
+            "velocity_commands",  # (3,) - desired [vx, vy, vyaw]
         ]
 
     def get_component_size(self, component_name: str, num_joints: int) -> int:
@@ -41,7 +42,12 @@ class VelocityObservationSpec(ObservationSpec):
             Size (number of dimensions) of this component.
         """
         # Fixed-size components
-        if component_name in ["velocity_commands", "base_ang_vel", "projected_gravity"]:
+        if component_name in [
+            "base_lin_vel",
+            "base_ang_vel",
+            "projected_gravity",
+            "velocity_commands",
+        ]:
             return 3
 
         # Joint-dependent components
@@ -110,7 +116,7 @@ class VelocityObservationSpec(ObservationSpec):
             )
 
         print(f"✓ Training config validated against {spec.__class__.__name__}")
-        print(f"  Total observation size: {spec.compute_total_size(num_joints)}")
+        print(f"  Total observation size: {spec.total_size(num_joints)}")
         print(f"  Components: {', '.join(spec.observation_names)}")
 
         return spec

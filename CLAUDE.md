@@ -34,6 +34,17 @@ The project uses:
 - NVIDIA GPU required for training (MuJoCo Warp)
 - `MUJOCO_GL=osmesa` environment variable (set automatically by Pixi)
 
+**IMPORTANT: Always use `pixi run python` for Python commands:**
+```bash
+# Correct
+pixi run python script.py
+
+# Incorrect
+python script.py  # Will fail with ModuleNotFoundError
+```
+
+This ensures the correct environment with all dependencies (mjlab, booster_robotics_sdk, etc.) is active.
+
 ### Code Quality
 
 Ruff is configured with:
@@ -342,6 +353,11 @@ def my_reward(env: ManagerBasedRlEnv, asset_cfg: SceneEntityCfg) -> torch.Tensor
 
 Colosseum provides a robot registry system that decouples deployment policies from specific robot platforms.
 
+**Deployment Documentation:**
+- See `docs/BOOSTER_T1_DEPLOYMENT_GUIDE.md` for complete deployment guide
+- See `docs/HOLOSOMA_INFERENCE_ANALYSIS.md` for technical architecture analysis
+- See `docs/DEPLOYMENT_ARCHITECTURE.md` for system design overview
+
 ### Robot Registry
 
 Robots are registered separately from tasks, allowing policies to work with any robot configuration:
@@ -407,6 +423,43 @@ from colosseum.deploy.core.controllers import MujocoController
 controller = MujocoController(cfg)
 controller.run()
 ```
+
+### Sim-to-Sim Testing (MuJoCo Simulation)
+
+Before deploying to real hardware, **always test in MuJoCo simulation first**:
+
+```bash
+# Test velocity task in MuJoCo simulation
+pixi run python -m colosseum.deploy.core.controllers.mujoco_controller \
+    --robot-cfg t1_23dof \
+    --policy-cfg velocity \
+    --model-path models/t1_velocity_policy.onnx \
+    --use-joystick  # Optional: use joystick control
+```
+
+**Key Differences Between Sim-to-Sim and Real Robot:**
+- **Sim-to-Sim**: Tests in MuJoCo using same deployment controller as real robot
+  - Validates: policy loading, observation processing, action scaling, PD gains
+  - Uses: Position actuators (MuJoCo applies internal PD control)
+  - Safety: Can iterate quickly without risk to hardware
+- **Real Robot**: Deploys to physical Booster T1 via Booster SDK
+  - Adds: Network communication (DDS), IMU noise, motor dynamics, latency
+  - Uses: Same position control interface (robot firmware applies PD control @ 500Hz)
+  - Requires: Matching PD gains from training (stored in ONNX metadata)
+
+**Critical Consistency Requirements:**
+1. **PD Gains**: Deployment gains MUST match training gains exactly
+   - Training gains computed from motor specs (`t1_actuators.py`)
+   - Stored in ONNX model metadata during export
+   - Loaded and applied in `robot_cfg.py`
+2. **Actuator Type**: Use position actuators (not motor actuators)
+   - Training: `BuiltinPositionActuatorCfg` (MuJoCo applies PD internally)
+   - Deployment: Position targets sent to robot (firmware applies PD @ 500Hz)
+   - Mismatch causes: oscillations, instability, or sluggish behavior
+3. **Observation Space**: Must be identical (dimensions, scales, names)
+4. **Action Scaling**: `policy_action_scale` must match training value
+
+See `docs/BOOSTER_T1_DEPLOYMENT_GUIDE.md` for detailed deployment instructions.
 
 ## Common Patterns
 

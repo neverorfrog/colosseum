@@ -5,9 +5,9 @@ import mujoco.viewer as viewer
 from mjlab.scene import Scene, SceneCfg
 from mjlab.terrains import TerrainImporterCfg
 
-from colosseum.robots.booster_t1.t1_constants import (
-    get_t1_locomotion_robot_cfg,
+from colosseum.robots.booster_t1.constants import (
     get_t1_fullbody_robot_cfg,
+    get_t1_locomotion_robot_cfg,
 )
 
 
@@ -69,7 +69,9 @@ def get_home_positions(use_fullbody: bool) -> dict[str, float]:
         }
 
 
-def apply_home_positions(model: mujoco.MjModel, data: mujoco.MjData, positions: dict[str, float]):
+def apply_home_positions(
+    model: mujoco.MjModel, data: mujoco.MjData, positions: dict[str, float]
+):
     """Apply home keyframe positions to actuators.
 
     Args:
@@ -81,7 +83,9 @@ def apply_home_positions(model: mujoco.MjModel, data: mujoco.MjData, positions: 
         try:
             # Add robot/ prefix for actuator names in scene
             actuator_name = f"robot/{joint_name}"
-            actuator_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, actuator_name)
+            actuator_id = mujoco.mj_name2id(
+                model, mujoco.mjtObj.mjOBJ_ACTUATOR, actuator_name
+            )
             data.ctrl[actuator_id] = target_pos
         except Exception:
             # Silently skip if actuator doesn't exist (e.g., passive joints in locomotion mode)
@@ -92,13 +96,17 @@ def main():
     print("\n=== Testing T1 Actuators - Home Keyframe Hold ===")
 
     # Choose robot configuration
-    robot_config = input("\nSelect robot configuration (1=12-DOF locomotion, 2=23-DOF full-body, default=1): ").strip()
+    robot_config = input(
+        "\nSelect robot configuration (1=12-DOF locomotion, 2=23-DOF full-body, default=1): "
+    ).strip()
     use_fullbody = robot_config == "2"
 
     print(f"\nRobot: {'23-DOF Full-Body' if use_fullbody else '12-DOF Locomotion'}")
 
     # Get robot config
-    robot_cfg = get_t1_fullbody_robot_cfg() if use_fullbody else get_t1_locomotion_robot_cfg()
+    robot_cfg = (
+        get_t1_fullbody_robot_cfg() if use_fullbody else get_t1_locomotion_robot_cfg()
+    )
 
     # Create scene with terrain using mjlab's Scene
     scene_cfg = SceneCfg(
@@ -151,9 +159,14 @@ def main():
 
                 # Print debug info every 0.5 seconds
                 if int(sim_time * 2) % 2 == 0 and sim_time > 0:
-                    trunk_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "robot/Trunk")
+                    trunk_id = mujoco.mj_name2id(
+                        model, mujoco.mjtObj.mjOBJ_BODY, "robot/Trunk"
+                    )
                     trunk_height = data.xpos[trunk_id][2]
-                    print(f"Time: {sim_time:>6.2f}s | Trunk height: {trunk_height:.3f}m", end='\r')
+                    print(
+                        f"Time: {sim_time:>6.2f}s | Trunk height: {trunk_height:.3f}m",
+                        end="\r",
+                    )
 
             v.sync()
 

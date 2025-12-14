@@ -73,12 +73,13 @@ class YourRobotVelocityPolicy(Policy):
     def compute_observation(self):
         # Compute observations following VELOCITY_OBS_SPEC
         obs = torch.cat([
-            vel_commands,
+            base_lin_vel,
             base_ang_vel,
             projected_gravity,
             joint_pos_rel,
             joint_vel,
             last_action,
+            vel_commands,
         ])
         VELOCITY_OBS_SPEC.validate_observation(obs, self.robot.num_joints)
         return obs
@@ -106,7 +107,7 @@ All velocity policies must follow `VelocityObservationSpec`:
 from colosseum.tasks.velocity.mdp.observation_spec import VELOCITY_OBS_SPEC
 
 # Get expected size
-obs_size = VELOCITY_OBS_SPEC.compute_size(num_joints=23)  # 78
+obs_size = VELOCITY_OBS_SPEC.total_size(num_joints=23)  # 81
 
 # Validate observation
 VELOCITY_OBS_SPEC.validate_observation(obs, num_joints=23)

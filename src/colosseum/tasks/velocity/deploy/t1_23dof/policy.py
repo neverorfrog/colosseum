@@ -1,15 +1,10 @@
-"""T1 23-DOF velocity tracking policy for deployment.
+"""T1 23-DOF velocity tracking policy for deployment."""
 
-This policy computes observations from sensor data following the
-VelocityObservationSpec contract defined in tasks/velocity/mdp/observation_spec.py
-"""
-
-from pathlib import Path
 import torch
 
-from colosseum.deploy.core.controllers import BaseController, Policy
+from colosseum.deploy.core.base_controller import BaseController
+from colosseum.deploy.core.policy import Policy
 from colosseum.tasks.velocity.mdp.observation_spec import VELOCITY_OBS_SPEC
-from colosseum.deploy.core.controllers import PolicyCfg
 
 
 class T1VelocityPolicy(Policy):
@@ -18,39 +13,21 @@ class T1VelocityPolicy(Policy):
     Computes observations from sensor data to match training specification.
     """
 
-    def __init__(self, checkpoint_path: str, controller: BaseController):
-        super().__init__(PolicyCfg(), controller)  # TODO: policy cfg needed
-        self.robot = controller.robot
+    def __init__(self, controller: BaseController):
+        """Initialize T1 velocity policy from controller.
+
+        Args:
+            controller: BaseController instance providing config, robot state, and commands
+        """
+        super().__init__(controller)
         self.vel_command = controller.vel_command
-
-        # Load TorchScript model
-        model_path = Path(checkpoint_path)
-        if not model_path.is_absolute():
-            # Relative to this file
-            model_path = Path(__file__).parent / model_path
-
-        if not model_path.exists():
-            raise FileNotFoundError(f"Model not found: {model_path}")
-
-        print(f"[T1VelocityPolicy] Loading model from: {model_path}")
-        self._model: torch.jit.ScriptModule = torch.jit.load(str(model_path))
-        self._model.eval()
-
-        # Action scaling (must match training!)
-        # scale = action_scale_factor * effort_limit / stiffness
-        self.action_scale_factor = 0.25  # From training config
-        self.action_scale = (
-            self.action_scale_factor
-            * self.robot.effort_limit
-            / self.robot.joint_stiffness
-        )
 
         # Verify observation size
         num_joints = self.robot.num_joints
-        expected_obs_size = VELOCITY_OBS_SPEC.compute_size(num_joints)
-        print(f"[T1VelocityPolicy] Robot: {self.robot.cfg.name}")
-        print(f"[T1VelocityPolicy] Joints: {num_joints}")
-        print(f"[T1VelocityPolicy] Expected observation size: {expected_obs_size}")
+        expected_obs_size = VELOCITY_OBS_SPEC.total_size(num_joints)
+        print(f"[Policy] Robot: {self.robot.cfg.name}")
+        print(f"[Policy] Joints: {num_joints}")
+        print(f"[Policy] Expected observation size: {expected_obs_size}")
         print(VELOCITY_OBS_SPEC.describe(num_joints))
 
     def reset(self) -> None:
@@ -77,6 +54,8 @@ class T1VelocityPolicy(Policy):
             dtype=torch.float32,
         )
 
+        # Base linear velocity (from IMU)
+        base_lin_vel = self.robot.data.root_lin_vel_b
         # Base angular velocity (from IMU)
         base_ang_vel = self.robot.data.root_ang_vel_b
 
@@ -97,12 +76,13 @@ class T1VelocityPolicy(Policy):
         # Concatenate following VelocityObservationSpec.ORDER
         obs = torch.cat(
             [
-                vel_cmd,           # (3,)
-                base_ang_vel,      # (3,)
-                projected_gravity, # (3,)
-                joint_pos_rel,     # (23,)
-                joint_vel,         # (23,)
-                last_action,       # (23,)
+                base_lin_vel,  # (3,)
+                base_ang_vel,  # (3,)
+                projected_gravity,  # (3,)
+                joint_pos_rel,  # (23,)
+                joint_vel,  # (23,)
+                last_action,  # (23,)
+                vel_cmd,  # (3,)
             ],
             dim=-1,
         )

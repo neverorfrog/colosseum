@@ -5,7 +5,8 @@ torch and math utilities. They can be used in both training and deployment.
 """
 
 import torch
-from colosseum.deploy.core.utils.isaaclab import math as lab_math
+
+from colosseum.deploy.utils.isaaclab import math as lab_math
 
 
 def compute_projected_gravity(
@@ -44,16 +45,16 @@ def compute_projected_gravity(
     # Handle both batched and unbatched
     if root_quat_w.dim() == 1:
         # Single instance (deployment)
-        return lab_math.quat_rotate_inverse(root_quat_w, gravity_w)
+        return lab_math.quat_apply_inverse(root_quat_w, gravity_w)
     else:
         # Batched (training)
         batch_size = root_quat_w.shape[0]
         if gravity_w.dim() == 1:
             gravity_w = gravity_w.unsqueeze(0).expand(batch_size, -1)
-        return lab_math.quat_rotate_inverse(root_quat_w, gravity_w)
+        return lab_math.quat_apply_inverse(root_quat_w, gravity_w)
 
 
-def quat_rotate_inverse(quat: torch.Tensor, vec: torch.Tensor) -> torch.Tensor:
+def quat_apply_inverse(quat: torch.Tensor, vec: torch.Tensor) -> torch.Tensor:
     """Rotate vector by inverse of quaternion (re-export from isaaclab.math).
 
     Args:
@@ -63,10 +64,10 @@ def quat_rotate_inverse(quat: torch.Tensor, vec: torch.Tensor) -> torch.Tensor:
     Returns:
         Rotated vector. Shape matches input.
     """
-    return lab_math.quat_rotate_inverse(quat, vec)
+    return lab_math.quat_apply_inverse(quat, vec)
 
 
 __all__ = [
     "compute_projected_gravity",
-    "quat_rotate_inverse",
+    "quat_apply_inverse",
 ]

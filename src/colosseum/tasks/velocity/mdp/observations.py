@@ -8,12 +8,11 @@ observations from sensor data.
 """
 
 import torch
-from mjlab.envs import ManagerBasedRlEnv
-from mjlab.managers import SceneEntityCfg
 from mjlab.entity import Entity
+from mjlab.envs import ManagerBasedRlEnv
+from mjlab.managers.manager_base import SceneEntityCfg
 
 from colosseum.tasks.velocity.mdp.observation_spec import VELOCITY_OBS_SPEC
-
 
 # Default asset config
 _DEFAULT_ASSET_CFG = SceneEntityCfg("robot")

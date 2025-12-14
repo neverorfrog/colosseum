@@ -54,10 +54,7 @@ from mjlab.envs.mdp.terminations import time_out
 # ======== Rewards ========
 from mjlab.managers.manager_term_config import RewardTermCfg
 
-from colosseum.tasks.cartpole.mdp_functions import (
-    effort_cost,
-    upright_reward,
-)
+from colosseum.tasks.cartpole.mdp_functions import effort_cost, upright_reward
 
 rewards: dict[str, RewardTermCfg] = {
     "upright": RewardTermCfg(

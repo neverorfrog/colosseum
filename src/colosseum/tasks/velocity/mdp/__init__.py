@@ -8,8 +8,8 @@ Deployment implementations are in tasks/velocity/deploy/<robot>/
 """
 
 from colosseum.tasks.velocity.mdp.observation_spec import (
-    VelocityObservationSpec,
     VELOCITY_OBS_SPEC,
+    VelocityObservationSpec,
 )
 from colosseum.tasks.velocity.mdp.observations import *  # noqa: F403
 

@@ -6,6 +6,7 @@ training (mjlab ObservationGroupCfg) and deployment (policy observation computat
 
 from abc import ABC, abstractmethod
 from typing import List
+
 import torch
 
 
@@ -53,7 +54,7 @@ class ObservationSpec(ABC):
         """
         pass
 
-    def compute_size(self, num_joints: int) -> int:
+    def total_size(self, num_joints: int) -> int:
         """Compute total observation size.
 
         Args:
@@ -63,8 +64,7 @@ class ObservationSpec(ABC):
             Total observation dimension.
         """
         return sum(
-            self.get_component_size(name, num_joints)
-            for name in self.observation_names
+            self.get_component_size(name, num_joints) for name in self.observation_names
         )
 
     def get_all_component_sizes(self, num_joints: int) -> dict[str, int]:
@@ -97,7 +97,7 @@ class ObservationSpec(ABC):
         Raises:
             ValueError: If observation doesn't match spec.
         """
-        expected_size = self.compute_size(num_joints)
+        expected_size = self.total_size(num_joints)
 
         # Check size
         if obs.shape[-1] != expected_size:
@@ -158,7 +158,7 @@ class ObservationSpec(ABC):
             Formatted description string.
         """
         sizes = self.get_all_component_sizes(num_joints)
-        total = self.compute_size(num_joints)
+        total = self.total_size(num_joints)
 
         lines = [
             f"{self.__class__.__name__} Observation Specification",

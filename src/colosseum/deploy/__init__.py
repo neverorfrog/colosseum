@@ -18,15 +18,10 @@ Example:
 """
 
 # Import task registry utilities (kept for backwards compatibility)
-from colosseum.deploy.core.utils.registry import (
-    register_task,
-    get_task,
-    list_tasks,
-)
+from colosseum.deploy.core.registry import TaskRegistry, register_task
 
 __all__ = [
     # Task registry (optional, task bundles can be imported directly)
     "register_task",
-    "get_task",
-    "list_tasks",
+    "TaskRegistry",
 ]

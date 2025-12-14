@@ -203,7 +203,7 @@ T1_23DOF_VELOCITY_ROBOT_CFG.joint_stiffness = [...]  # Task-specific override
 ### Steps
 
 1. **Train policy** using Colosseum training configs
-2. **Export model** as TorchScript to `tasks/<task>/deploy/<robot>/models/`
+2. **Export model** as ONNX and copy it to `tasks/<task>/deploy/<robot>/models/policy.onnx` *(run `pixi run export-velocity-onnx -- --task-id Velocity-Flat-Booster-T1 --checkpoint logs/rsl_rl/t1_velocity/<run>/model_28500.pt --output-dir tasks/velocity/deploy/t1_23dof/models` to automate this, or rename the `<run>.onnx` file that is already saved beside every checkpoint under `logs/rsl_rl/...` / `wandb/run-*`; TorchScript/raw PyTorch checkpoints remain supported for advanced debugging)*
 3. **Test in MuJoCo**:
    ```bash
    python scripts/deploy.py --task velocity_t1_23dof --mujoco
@@ -219,6 +219,8 @@ T1_23DOF_VELOCITY_ROBOT_CFG.joint_stiffness = [...]  # Task-specific override
    cd colosseum
    python scripts/deploy.py --task velocity_t1_23dof
    ```
+
+> ℹ️ Deployment policies now auto-detect `.onnx` files and run them through ONNX Runtime. Keep the exported model alongside the task (e.g., `tasks/velocity/deploy/t1_23dof/models/policy.onnx`) so the bundle stays intact when syncing to the robot. TorchScript and raw training checkpoints are still supported as fallbacks.
 
 ## Comparison: booster_deploy vs Colosseum V2
 

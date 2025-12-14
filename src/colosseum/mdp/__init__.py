@@ -11,7 +11,7 @@ from colosseum.mdp.rewards import *  # noqa: F403
 __all__ = [
     # Observations
     "compute_projected_gravity",
-    "quat_rotate_inverse",
+    "quat_apply_inverse",
     # Rewards
     "exponential_reward_kernel",
     "linear_tracking_reward",
