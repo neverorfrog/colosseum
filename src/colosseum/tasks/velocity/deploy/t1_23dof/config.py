@@ -11,7 +11,7 @@ from colosseum.deploy.config import (
     VelocityCommandConfig,
 )
 from colosseum.deploy.input import InputConfig
-from colosseum.robots.booster_t1.deploy_config import T1_23DOF_ROBOT_CFG
+from colosseum.robots.t1_23dof.deploy_config import T1_23DOF_ROBOT_CFG
 from colosseum.utils import project_root
 
 _DEFAULT_POLICY_PATH = (

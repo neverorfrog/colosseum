@@ -6,7 +6,6 @@ from mjlab.rl import (
     RslRlPpoAlgorithmCfg,
 )
 
-
 def booster_t1_ppo_runner_cfg() -> RslRlOnPolicyRunnerCfg:
     """Create RL runner configuration for Booster T1 velocity task.
 

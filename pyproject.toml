@@ -55,6 +55,8 @@ cartpole = "colosseum.tasks.cartpole"
 velocity = "colosseum.tasks.velocity"
 
 [tool.pixi.feature.train.tasks]
+train = "python -m mjlab.scripts.train"
+play = "python -m mjlab.scripts.play"
 deploy = "python -m colosseum.scripts.deploy_tyro"
 export-onnx = { cmd = "python -m colosseum.scripts.export_onnx"}
 

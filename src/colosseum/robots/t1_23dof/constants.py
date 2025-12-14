@@ -8,7 +8,7 @@ from mjlab.actuator import XmlPositionActuatorCfg
 from mjlab.entity import Entity, EntityArticulationInfoCfg, EntityCfg
 from mjlab.utils.os import update_assets
 
-from colosseum.robots.booster_t1.actuators import (
+from colosseum.robots.t1_23dof.actuators import (
     T1_ACTUATOR_ANKLE_PITCH,
     T1_ACTUATOR_ANKLE_ROLL,
     T1_ACTUATOR_ARM,
@@ -19,7 +19,7 @@ from colosseum.robots.booster_t1.actuators import (
     T1_ACTUATOR_NECK,
     T1_ACTUATOR_WAIST,
 )
-from colosseum.robots.booster_t1.contacts import FEET_ONLY_COLLISION
+from colosseum.robots.t1_23dof.contacts import FEET_ONLY_COLLISION
 from colosseum.utils import src_dir
 
 ##
@@ -28,7 +28,7 @@ from colosseum.utils import src_dir
 
 # Path to unified base XML (23-DOF full body)
 # Locomotion (12-DOF) vs Full-body (23-DOF) is controlled by which actuators are added
-XML = src_dir() / "robots" / "booster_t1" / "xmls" / "T1_23dof.xml"
+XML = src_dir() / "robots" / "t1_23dof" / "xmls" / "T1_23dof.xml"
 
 assert XML.exists(), f"XML not found: {XML}"
 

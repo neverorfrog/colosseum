@@ -7,12 +7,12 @@ from mjlab.tasks.velocity import mdp
 from mjlab.tasks.velocity.mdp import UniformVelocityCommandCfg
 from mjlab.tasks.velocity.velocity_env_cfg import make_velocity_env_cfg
 
-from colosseum.robots.booster_t1.constants import (
+from colosseum.robots.t1_23dof.constants import (
     ACTION_SCALE,
     FOOT_GEOM_NAMES,
     get_robot_cfg,
 )
-from colosseum.robots.booster_t1.contacts import (
+from colosseum.robots.t1_23dof.contacts import (
     FEET_GROUND_CONTACT_SENSOR,
     SELF_COLLISION_SENSOR,
 )

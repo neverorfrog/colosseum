@@ -5,7 +5,7 @@ from mjlab.sensor import ContactMatch, ContactSensor, ContactSensorCfg
 from mjlab.sim.sim import Simulation, SimulationCfg
 from mjlab.terrains import TerrainImporterCfg
 
-from colosseum.robots.booster_t1.constants import get_t1_locomotion_robot_cfg
+from colosseum.robots.t1_23dof.constants import get_t1_locomotion_robot_cfg
 
 # Define contact sensor
 feet_ground_cfg = ContactSensorCfg(

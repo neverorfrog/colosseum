@@ -5,7 +5,7 @@ import mujoco.viewer as viewer
 from mjlab.scene import Scene, SceneCfg
 from mjlab.terrains import TerrainImporterCfg
 
-from colosseum.robots.booster_t1.constants import (
+from colosseum.robots.t1_23dof.constants import (
     get_t1_fullbody_robot_cfg,
     get_t1_locomotion_robot_cfg,
 )

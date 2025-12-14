@@ -13,9 +13,9 @@ import numpy as np
 import torch
 from pathlib import Path
 
-from colosseum.robots.booster_t1.constants import get_spec, HOME_QPOS, JOINT_NAMES, ACTION_SCALE
-from colosseum.robots.booster_t1.deploy_config import T1_23DOF_ROBOT_CFG
-from colosseum.robots.booster_t1.actuators import (
+from colosseum.robots.t1_23dof.constants import get_spec, HOME_QPOS, JOINT_NAMES, ACTION_SCALE
+from colosseum.robots.t1_23dof.deploy_config import T1_23DOF_ROBOT_CFG
+from colosseum.robots.t1_23dof.actuators import (
     T1_ACTUATOR_NECK,
     T1_ACTUATOR_ARM,
     T1_ACTUATOR_WAIST,

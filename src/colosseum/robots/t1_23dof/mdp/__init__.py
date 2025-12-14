@@ -5,7 +5,7 @@ These functions work in both training and deployment contexts and build on
 Layer 1 universal functions.
 """
 
-from colosseum.robots.booster_t1.mdp.observations import *  # noqa: F403
+from colosseum.robots.t1_23dof.mdp.observations import *  # noqa: F403
 
 __all__ = [
     # Observations

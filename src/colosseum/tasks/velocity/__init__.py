@@ -5,4 +5,4 @@ Importing this module will register all available task variants.
 """
 
 # Import robot-specific configs to trigger task registration
-from colosseum.tasks.velocity.config import t1  # noqa: F401
+from colosseum.tasks.velocity.config import t1_23dof  # noqa: F401
