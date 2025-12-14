@@ -10,6 +10,7 @@ from colosseum.deploy.config import (
     PolicyConfig,
     VelocityCommandConfig,
 )
+from colosseum.deploy.input import InputConfig
 from colosseum.robots.booster_t1.deploy_config import T1_23DOF_ROBOT_CFG
 from colosseum.utils import project_root
 
@@ -48,6 +49,7 @@ T1_23DOF_VELOCITY = ControllerConfig(
         vy_max=0.5,  # Max lateral velocity (m/s)
         vyaw_max=1.0,  # Max yaw rate (rad/s)
     ),
+    input=InputConfig('joystick'),
     # MuJoCo simulation parameters
     mujoco=MujocoConfig(
         init_pos=(0.0, 0.0, 0.6),  # Start at 60cm height

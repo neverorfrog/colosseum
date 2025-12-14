@@ -5,6 +5,7 @@ from pydantic import Field, computed_field
 from .robot import RobotConfig
 from .policy import PolicyConfig, VelocityCommandConfig
 from .backend import MujocoConfig, BoosterConfig
+from colosseum.deploy.input import InputConfig
 
 @dataclass(frozen=True)
 class ControllerConfig:
@@ -31,6 +32,10 @@ class ControllerConfig:
     vel_command: Optional[VelocityCommandConfig] = Field(
         default=None,
         description="Velocity command configuration (for velocity tasks)"
+    )
+    input: Optional[InputConfig] = Field(
+        default=None,
+        description="Input source configuration"
     )
 
     # Backend-specific configs

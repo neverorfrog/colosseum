@@ -2,30 +2,12 @@ from __future__ import annotations
 from abc import abstractmethod
 import torch
 
-from colosseum.deploy.config import (
-    ControllerConfig,
-    VelocityCommandConfig,
-)
+from colosseum.deploy.config import ControllerConfig
 from colosseum.deploy.core.registry import TASK_REGISTRY
 from colosseum.deploy.core.policy import Policy
 from colosseum.deploy.core.robot import BoosterRobot
-
-class Commands:
-    pass
-
-class VelocityCommand(Commands):
-    lin_vel_x: float
-    lin_vel_y: float
-    ang_vel_yaw: float
-
-    def __init__(self, cfg: VelocityCommandConfig) -> None:
-        self.vx_max = cfg.vx_max
-        self.vy_max = cfg.vy_max
-        self.vyaw_max = cfg.vyaw_max
-
-        self.lin_vel_x: float = 0.0
-        self.lin_vel_y: float = 0.0
-        self.ang_vel_yaw: float = 0.0
+from colosseum.deploy.core.command import VelocityCommand
+from colosseum.deploy.input import BaseInputSource, create_input_source
 
 class BaseController:
     """Simple deployment environment skeleton and execution overview.
@@ -90,8 +72,10 @@ class BaseController:
         self.is_running: bool = False
         self.robot = BoosterRobot(cfg.robot)
         self.vel_command = None  # type: ignore
-        if self.cfg.vel_command is not None:
+        self.input_source: BaseInputSource | None = None
+        if self.cfg.vel_command is not None and self.cfg.input is not None:
             self.vel_command = VelocityCommand(self.cfg.vel_command)
+            self.input_source = create_input_source(self.cfg.input)
 
         # Get policy class from registry and instantiate
         policy_class = TASK_REGISTRY.get_policy(cfg.policy.task_name)
@@ -122,6 +106,21 @@ class BaseController:
     def stop(self) -> None:
         """Stop and clean up the deployment session."""
         self.is_running = False
+        if self.input_source is not None:
+            self.input_source.close()
+            
+    def update_command(self) -> None:
+        """Default implementation using input_source."""
+        if self.input_source is None or self.vel_command is None:
+            return
+
+        vx_norm = self.input_source.get_vx_cmd()
+        vy_norm = self.input_source.get_vy_cmd()
+        vyaw_norm = self.input_source.get_vyaw_cmd()
+
+        self.vel_command.lin_vel_x = vx_norm * self.vel_command.vx_max
+        self.vel_command.lin_vel_y = vy_norm * self.vel_command.vy_max
+        self.vel_command.ang_vel_yaw = vyaw_norm * self.vel_command.vyaw_max
 
     @abstractmethod
     def ctrl_step(self, dof_targets: torch.Tensor) -> None:

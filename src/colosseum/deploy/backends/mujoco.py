@@ -61,28 +61,6 @@ class MujocoController(BaseController):
         )
         mujoco.mj_forward(self.mj_model, self.mj_data)
 
-    def update_vel_command(self):
-        cmd: VelocityCommand = self.vel_command
-        if select.select([sys.stdin], [], [], 0)[0]:
-            try:
-                parts = sys.stdin.readline().strip().split()
-                if len(parts) == 3:
-                    (cmd.lin_vel_x, cmd.lin_vel_y, cmd.ang_vel_yaw) = map(float, parts)
-                    print(
-                        f"Updated command to: x={cmd.lin_vel_x},"
-                        f"y={cmd.lin_vel_y}, yaw={cmd.ang_vel_yaw}\n"
-                        "Set command (x, y, yaw): ",
-                        end="",
-                    )
-                else:
-                    raise ValueError
-            except ValueError:
-                print(
-                    "Invalid input. Enter three numeric values. "
-                    "Set command (x, y, yaw): ",
-                    end="",
-                )
-
     # TODO: make observations uniform with training pipeline
     # TODO: projected gravity. is it in mj_data?
     def update_state(self) -> None:
@@ -118,7 +96,7 @@ class MujocoController(BaseController):
     def ctrl_step(self, dof_targets: torch.Tensor):
         dof_targets = dof_targets.cpu().numpy()  # type: ignore
         if self.vel_command is not None:
-            self.update_vel_command()
+            self.update_command()
 
         # With position actuators, send position targets directly
         # MuJoCo applies internal PD control with actuator's stiffness/damping
@@ -132,8 +110,8 @@ class MujocoController(BaseController):
             self.viewer: mujoco.viewer.Handle = viewer
             cam: mujoco.MjvCamera = self.viewer.cam
             cam.elevation = -20
-            if self.vel_command is not None:
-                print("\nSet command (x, y, yaw): ", end="")
+            if self.vel_command is not None and self.input_source is not None:
+                print(f"\n{self.input_source.get_operation_hint()}")
             self.update_state()
             self.start()
             while self.viewer.is_running() and self.is_running:
