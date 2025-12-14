@@ -177,8 +177,8 @@ def check_action_scale():
     print(f"  Defined in constants.py as uniform {training_scale} for all {len(JOINT_NAMES)} joints")
 
     # Deployment action scale (from config.py)
-    from colosseum.tasks.velocity.deploy.t1_23dof.config import T1_23DOF_VELOCITY
-    deploy_scale = T1_23DOF_VELOCITY.policy.action_scale
+    from colosseum.tasks.velocity.deploy.t1_23dof.config import T1_23DOF_VELOCITY_ROUGH
+    deploy_scale = T1_23DOF_VELOCITY_ROUGH.policy.action_scale
     print(f"\nDeployment action scale: {deploy_scale}")
 
     matches = abs(training_scale - deploy_scale) < 1e-6

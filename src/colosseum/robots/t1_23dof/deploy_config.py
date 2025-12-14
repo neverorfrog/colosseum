@@ -5,8 +5,7 @@ PD gains are computed from motor specifications following the Unitree G1 method.
 """
 
 from colosseum.deploy.config import RobotConfig, PrepareStateConfig
-from colosseum.utils import src_dir
-
+from colosseum.robots.t1_23dof.constants import XML as T1_XML_PATH
 # T1 23-DOF Full Body Configuration
 # Hardware specs derived from motor specifications (t1_actuators.py)
 # PD gains computed using natural frequency method (ω_n = 10Hz, ζ = 2.0)
@@ -147,7 +146,7 @@ T1_23DOF_ROBOT_CFG = RobotConfig(
     parallel_joint_indices=(15, 16, 21, 22),
 
     # MuJoCo model path
-    mjcf_path=str(src_dir() / "robots" / "booster_t1" / "xmls" / "T1_23dof.xml"),
+    mjcf_path=str(T1_XML_PATH),
 
     # Prepare state (safe initialization pose for real robot)
     # Higher gains for quick stabilization during initialization
