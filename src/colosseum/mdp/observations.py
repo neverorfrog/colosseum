@@ -6,7 +6,7 @@ torch and math utilities. They can be used in both training and deployment.
 
 import torch
 
-from colosseum.deploy.utils.isaaclab import math as lab_math
+from colosseum.utils.isaaclab import math as lab_math
 
 
 def compute_projected_gravity(

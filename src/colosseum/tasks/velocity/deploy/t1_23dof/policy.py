@@ -91,7 +91,7 @@ class T1VelocityPolicy(Policy):
         VELOCITY_OBS_SPEC.validate_observation(obs, self.robot.num_joints)
 
         return obs.reshape(1, -1)
-
+    
     def inference(self) -> torch.Tensor:
         """Run policy inference and return joint targets.
 

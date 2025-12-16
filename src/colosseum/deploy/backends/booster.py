@@ -45,10 +45,9 @@ except ImportError as exc:
     _BOOSTER_SDK_IMPORT_ERROR = exc
 
 from colosseum.deploy.core.base_controller import BaseController
-from colosseum.deploy.utils.synced_array import SyncedArray
-from colosseum.deploy.utils.metrics import SyncedMetrics
-from colosseum.deploy.utils.isaaclab import math as lab_math
-from colosseum.deploy.utils.remote_control_service import RemoteControlService
+from colosseum.utils.deploy.synced_array import SyncedArray
+from colosseum.utils.deploy.metrics import SyncedMetrics
+from colosseum.utils.isaaclab import math as lab_math
 from colosseum.deploy.config import ControllerConfig
 from colosseum.deploy.core.robot import BoosterRobot
 

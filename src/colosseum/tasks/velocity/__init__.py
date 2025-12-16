@@ -1,8 +1,11 @@
-"""Velocity tracking tasks for humanoid robots.
+"""Velocity task package namespace.
 
-This module registers velocity tracking tasks for different robot configurations.
-Importing this module will register all available task variants.
+Training task registration lives under `colosseum.tasks.velocity.config.*` and
+should be imported explicitly by the train environment.
+
+Deployment task registration lives under `colosseum.tasks.velocity.deploy.*` and
+is auto-imported by the deploy registry. Keep this package lightweight to avoid
+pulling train-only dependencies at import time.
 """
 
-# Import robot-specific configs to trigger task registration
-from colosseum.tasks.velocity.config import t1_23dof  # noqa: F401
+# Intentionally no side-effect imports here.

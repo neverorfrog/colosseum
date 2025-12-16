@@ -10,7 +10,8 @@ dependencies = [
 	"pydantic>=2.12.5,<3",
 	"evdev>=1.9.2,<2",
 	"tyro>=1.0.1,<2",
-	"pytest>=8.0.2,<10",
+	"pytest>=8.0.2,<10", 
+	"mujoco>=3.4.0,<4",
 ]
 
 [tool.pixi.workspace]
@@ -26,7 +27,7 @@ preview = ["pixi-build"]
 # TRAIN FEATURE
 # ============================================
 [tool.pixi.environments.train]
-features = ["train"]
+features = ["deploy", "train"]
 no-default-feature = true
 solve-group = "train"
 
@@ -35,9 +36,6 @@ platforms = ["linux-64"]
 
 [tool.pixi.feature.train.dependencies]
 python = "3.11.*"
-pytest = ">=9.0.1,<10"
-pytorch-gpu = "*"
-onnxruntime = ">=1.22.2,<2"
 
 [tool.pixi.feature.train.system-requirements]
 cuda = "12.0"
@@ -57,8 +55,29 @@ velocity = "colosseum.tasks.velocity"
 [tool.pixi.feature.train.tasks]
 train = "python -m mjlab.scripts.train"
 play = "python -m mjlab.scripts.play"
-deploy = "python -m colosseum.scripts.deploy_tyro"
 export-onnx = { cmd = "python -m colosseum.scripts.export_onnx"}
+
+# ============================================
+# DEPLOY FEATURE
+# ============================================
+[tool.pixi.environments.deploy]
+features = ["deploy"]
+no-default-feature = true
+solve-group = "deploy"
+
+[tool.pixi.feature.deploy]
+platforms = ["linux-64"]
+
+[tool.pixi.feature.deploy.dependencies]
+python = "3.11.*"
+pytorch = "*"
+onnxruntime = ">=1.22.2,<2"
+
+[tool.pixi.feature.deploy.pypi-dependencies]
+colosseum = {path = ".", editable = true}
+
+[tool.pixi.feature.deploy.tasks]
+deploy = { cmd = "python -m colosseum.scripts.deploy", description = "Deploy trained policy" }
 
 # ============================================
 # ROBOT FEATURE

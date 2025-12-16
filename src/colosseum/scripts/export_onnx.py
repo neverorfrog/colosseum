@@ -7,7 +7,7 @@ from typing import Annotated, Optional
 
 import tyro
 
-from colosseum.deploy.utils.export import export_policy
+from colosseum.utils.train.export import export_policy
 from colosseum.deploy.core.registry import TASK_REGISTRY, auto_register_tasks
 
 

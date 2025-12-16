@@ -1,25 +1,35 @@
-"""Booster T1 robot configuration for mjlab."""
+"""Booster T1 robot configuration.
+
+Deploy only needs file paths and static constants. Training-only mjlab imports are
+guarded so deploy can import this module without mjlab installed.
+"""
 
 from pathlib import Path
 
 import mujoco
-import mujoco.viewer as viewer
-from mjlab.actuator import XmlPositionActuatorCfg
-from mjlab.entity import Entity, EntityArticulationInfoCfg, EntityCfg
-from mjlab.utils.os import update_assets
 
-from colosseum.robots.t1_23dof.actuators import (
-    T1_ACTUATOR_ANKLE_PITCH,
-    T1_ACTUATOR_ANKLE_ROLL,
-    T1_ACTUATOR_ARM,
-    T1_ACTUATOR_HIP_PITCH,
-    T1_ACTUATOR_HIP_ROLL,
-    T1_ACTUATOR_HIP_YAW,
-    T1_ACTUATOR_KNEE,
-    T1_ACTUATOR_NECK,
-    T1_ACTUATOR_WAIST,
-)
-from colosseum.robots.t1_23dof.contacts import FEET_ONLY_COLLISION
+try:  # pragma: no cover - train-only dependency
+    import mujoco.viewer as viewer
+    from mjlab.actuator import XmlPositionActuatorCfg
+    from mjlab.entity import Entity, EntityArticulationInfoCfg, EntityCfg
+    from mjlab.utils.os import update_assets
+    _MJLAB_AVAILABLE = True
+except ImportError:
+    _MJLAB_AVAILABLE = False
+
+if _MJLAB_AVAILABLE:
+    from colosseum.robots.t1_23dof.actuators import (
+        T1_ACTUATOR_ANKLE_PITCH,
+        T1_ACTUATOR_ANKLE_ROLL,
+        T1_ACTUATOR_ARM,
+        T1_ACTUATOR_HIP_PITCH,
+        T1_ACTUATOR_HIP_ROLL,
+        T1_ACTUATOR_HIP_YAW,
+        T1_ACTUATOR_KNEE,
+        T1_ACTUATOR_NECK,
+        T1_ACTUATOR_WAIST,
+    )
+    from colosseum.robots.t1_23dof.contacts import FEET_ONLY_COLLISION
 from colosseum.utils import src_dir
 
 ##
@@ -33,22 +43,20 @@ XML = src_dir() / "robots" / "t1_23dof" / "xmls" / "T1_23dof.xml"
 assert XML.exists(), f"XML not found: {XML}"
 
 
-def get_assets(meshdir: str) -> dict[str, bytes]:
-    assets: dict[str, bytes] = {}
-    update_assets(assets, XML.parent / "assets", meshdir)
-    return assets
+if _MJLAB_AVAILABLE:
+    def get_assets(meshdir: str) -> dict[str, bytes]:
+        assets: dict[str, bytes] = {}
+        update_assets(assets, XML.parent / "assets", meshdir)
+        return assets
 
 
-def get_spec() -> mujoco.MjSpec:
-    """Load T1 base model (23 DOF structure, actuators added via Python).
-
-    Note: Actuators are commented out in the XML to avoid conflicts.
-    Both training and deployment use programmatic actuators from ARTICULATION.
-    """
-    spec = mujoco.MjSpec.from_file(str(XML))
-    # Ensure no XML actuators are present (they should be commented in XML)
-    spec.actuators.clear()
-    return spec
+if _MJLAB_AVAILABLE:
+    def get_spec() -> mujoco.MjSpec:
+        """Load T1 base model (23 DOF structure, actuators added via Python)."""
+        spec = mujoco.MjSpec.from_file(str(XML))
+        # Ensure no XML actuators are present (they should be commented in XML)
+        spec.actuators.clear()
+        return spec
 
 
 ##
@@ -87,21 +95,22 @@ JOINT_NAMES = [
 ]
 
 
-# 23-DOF Full Body
-ARTICULATION = EntityArticulationInfoCfg(
-    actuators=(
-        T1_ACTUATOR_NECK,
-        T1_ACTUATOR_ARM,
-        T1_ACTUATOR_WAIST,
-        T1_ACTUATOR_HIP_PITCH,
-        T1_ACTUATOR_HIP_ROLL,
-        T1_ACTUATOR_HIP_YAW,
-        T1_ACTUATOR_KNEE,
-        T1_ACTUATOR_ANKLE_PITCH,
-        T1_ACTUATOR_ANKLE_ROLL,
-    ),
-    soft_joint_pos_limit_factor=0.9,
-)
+if _MJLAB_AVAILABLE:
+    # 23-DOF Full Body
+    ARTICULATION = EntityArticulationInfoCfg(
+        actuators=(
+            T1_ACTUATOR_NECK,
+            T1_ACTUATOR_ARM,
+            T1_ACTUATOR_WAIST,
+            T1_ACTUATOR_HIP_PITCH,
+            T1_ACTUATOR_HIP_ROLL,
+            T1_ACTUATOR_HIP_YAW,
+            T1_ACTUATOR_KNEE,
+            T1_ACTUATOR_ANKLE_PITCH,
+            T1_ACTUATOR_ANKLE_ROLL,
+        ),
+        soft_joint_pos_limit_factor=0.9,
+    )
 
 ##
 # Keyframe config
@@ -140,11 +149,14 @@ HOME_QPOS: dict[str, float] = {
     "Right_Ankle_Roll": 0.0,
 }
 
-HOME_KEYFRAME = EntityCfg.InitialStateCfg(
-    pos=(0, 0, 0.665),
-    joint_pos=HOME_QPOS,
-    joint_vel={".*": 0.0},
-)
+if _MJLAB_AVAILABLE:
+    HOME_KEYFRAME = EntityCfg.InitialStateCfg(
+        pos=(0, 0, 0.665),
+        joint_pos=HOME_QPOS,
+        joint_vel={".*": 0.0},
+    )
+else:
+    HOME_KEYFRAME = None
 
 
 ##
@@ -152,23 +164,17 @@ HOME_KEYFRAME = EntityCfg.InitialStateCfg(
 ##
 
 
-def get_robot_cfg() -> EntityCfg:
-    """
-    Get T1 robot config (23 DOF full body).
+if _MJLAB_AVAILABLE:
+    def get_robot_cfg() -> EntityCfg:
+        return EntityCfg(
+            init_state=HOME_KEYFRAME,
+            collisions=(FEET_ONLY_COLLISION,),
+            spec_fn=get_spec,
+            articulation=ARTICULATION,
+        )
 
-    Uses actuators defined in the XML with kp=75, kv=5 for all joints.
-    This matches the mjlab approach for velocity tracking tasks.
-    """
-    return EntityCfg(
-        init_state=HOME_KEYFRAME,
-        collisions=(FEET_ONLY_COLLISION,),
-        spec_fn=get_spec,
-        articulation=ARTICULATION,
-    )
-
-
-# Convenience shorthand
-ROBOT_CFG = get_robot_cfg()
+    # Convenience shorthand
+    ROBOT_CFG = get_robot_cfg()
 
 ##
 # Action Scale (uniform for all joints, matching mjlab)

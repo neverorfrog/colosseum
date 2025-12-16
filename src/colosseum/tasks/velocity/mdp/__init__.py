@@ -11,16 +11,22 @@ from colosseum.tasks.velocity.mdp.observation_spec import (
     VELOCITY_OBS_SPEC,
     VelocityObservationSpec,
 )
-from colosseum.tasks.velocity.mdp.observations import *  # noqa: F403
 
+# Export only the spec by default to avoid hard dependency on mjlab during deploy.
 __all__ = [
-    # Specification (shared contract)
     "VelocityObservationSpec",
     "VELOCITY_OBS_SPEC",
-    # Training observation functions
-    "base_ang_vel",
-    "base_lin_vel",
-    "projected_gravity",
-    "joint_pos_rel",
-    "joint_vel",
 ]
+
+# Optionally expose training observation helpers if mjlab is available
+try:  # pragma: no cover - environment-dependent
+    from colosseum.tasks.velocity.mdp.observations import *  # noqa: F403,F401
+    __all__.extend([
+        "base_ang_vel",
+        "base_lin_vel",
+        "projected_gravity",
+        "joint_pos_rel",
+        "joint_vel",
+    ])
+except Exception:  # Keep deploy lightweight if mjlab isn't installed
+    pass

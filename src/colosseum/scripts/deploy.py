@@ -1,211 +1,102 @@
 #!/usr/bin/env python3
-"""Deployment script for Colosseum tasks.
+"""Colosseum deployment CLI using Tyro.
 
-This script supports:
-- MuJoCo simulation (--mujoco)
-- Real robot deployment (default, requires Booster SDK)
-- Webots simulation (--webots, requires Webots)
+This script provides a CLI for deploying trained policies on robots or in simulation.
 
 Usage:
-    # List available tasks
-    python scripts/deploy.py --list
+    pixi run deploy -b sim -t t1-velocity
+    pixi run deploy -b robot -t t1-velocity --network-interface eth0
 
-    # Run in MuJoCo simulation
-    python scripts/deploy.py --task t1_23dof_velocity --mujoco
-
-    # Run on real robot
-    python scripts/deploy.py --task t1_23dof_velocity --net 192.168.123.161
-
-Based on booster_deploy/scripts/deploy.py
+TODO: Add Webots support
+TODO: Check with deploy.py script for consistency
 """
 
-import argparse
-import sys
+import tyro
+from typing import Literal, Optional, Annotated
+from dataclasses import replace
 from pathlib import Path
-
-# Add project root to path
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root / "src"))
-
-parser = argparse.ArgumentParser(
-    description="Deploy Colosseum tasks on simulation or real robots"
-)
-
-# Task selection (mutually exclusive with --list)
-group = parser.add_mutually_exclusive_group(required=True)
-group.add_argument("--task", type=str, help="Task name (e.g., 't1_23dof_velocity')")
-group.add_argument(
-    "-l",
-    "--list",
-    action="store_true",
-    dest="list_tasks",
-    help="List all available tasks",
-)
-
-# Deployment target
-parser.add_argument(
-    "--mujoco", action="store_true", default=False, help="Deploy in MuJoCo simulation"
-)
-parser.add_argument(
-    "--webots", action="store_true", default=False, help="Deploy in Webots simulation"
-)
-
-# Real robot options
-parser.add_argument(
-    "--net",
-    type=str,
-    default="127.0.0.1",
-    help="Network interface for SDK communication (real robot)",
-)
-
-args = parser.parse_args()
+from colosseum.deploy.core.registry import TASK_REGISTRY, auto_register_tasks
+auto_register_tasks()
+from colosseum.deploy.config.policy import PolicyConfig
+from colosseum.utils import project_root
 
 
-def discover_tasks():
-    """Discover all available task deployments.
+def _resolve_path(path: Path) -> Path:
+  if path.is_absolute():
+    return path
+  return (project_root() / path).resolve()
 
-    Scans tasks/*/deploy/*/ for deployment bundles.
 
-    Returns:
-        dict: Mapping of task names to deployment configs.
+def resolve_policy_artifact(cfg: PolicyConfig) -> Path:
+  if cfg.use_onnx:
+    raise RuntimeError(
+      "ONNX export is part of the train environment. Run `pixi run export-onnx` "
+      "or set use_onnx=False and provide a pre-exported ONNX file."
+    )
+  return _resolve_path(Path(cfg.checkpoint_path))
+
+def main(
+    task: Annotated[str, tyro.conf.arg(aliases=["-t"])] = "t1-velocity-rough",
+    backend: Annotated[Literal["mujoco", "robot", "webots"], tyro.conf.arg(aliases=["-b"])] = "mujoco",
+    checkpoint_path: Optional[str] = None,
+    network_interface: str = "lo",
+    domain_id: int = 0,
+) -> None:
+    """Deploy trained policy on robot or simulation.
+
+    Args:
+        task: Task name from registry (e.g., 't1-velocity')
+        backend: Deployment backend ('sim' for MuJoCo, 'robot' for real hardware)
+        checkpoint_path: Override checkpoint path (default: from task config)
+        network_interface: Network interface for real robot (default: 'lo')
+        domain_id: ROS2 domain ID for real robot (default: 0)
     """
-    tasks_dir = project_root / "src" / "colosseum" / "tasks"
-    discovered_tasks = {}
+    # Get task configuration from registry
+    try:
+        config = TASK_REGISTRY.get_config(task)
+    except ValueError as e:
+        print(f"[Deploy] Error: {e}")
+        print(f"[Deploy] Available tasks: {list(TASK_REGISTRY.list_tasks().keys())}")
+        return
 
-    if not tasks_dir.exists():
-        return discovered_tasks
+    policy_cfg = config.policy
 
-    # Scan tasks/*/deploy/*/
-    for task_dir in tasks_dir.iterdir():
-        if not task_dir.is_dir() or task_dir.name.startswith("_"):
-            continue
+    # Override checkpoint path if provided
+    if checkpoint_path:
+        policy_cfg = replace(policy_cfg, checkpoint_path=checkpoint_path)
 
-        deploy_dir = task_dir / "deploy"
-        if not deploy_dir.exists():
-            continue
+    artifact_path = resolve_policy_artifact(policy_cfg)
+    policy_cfg = replace(policy_cfg, checkpoint_path=str(artifact_path))
+    config = replace(config, policy=policy_cfg)
 
-        # Each subdirectory is a robot-specific deployment
-        for robot_deploy_dir in deploy_dir.iterdir():
-            if not robot_deploy_dir.is_dir() or robot_deploy_dir.name.startswith("_"):
-                continue
+    print(f"[Deploy] Task: {task}")
+    print(f"[Deploy] Robot: {config.robot.name}")
+    print(f"[Deploy] Policy: {config.policy.task_name}")
+    print(f"[Deploy] Checkpoint: {config.policy.checkpoint_path}")
+    print(f"[Deploy] Backend: {backend}")
 
-            # Check if it has __init__.py with deployment config
-            init_file = robot_deploy_dir / "__init__.py"
-            if not init_file.exists():
-                continue
+    if backend == "mujoco":
+        # MuJoCo simulation deployment
+        from colosseum.deploy.backends.mujoco import MujocoController
 
-            # Try to import and get default config
-            task_name = f"{task_dir.name}_{robot_deploy_dir.name}"
-            module_path = (
-                f"colosseum.tasks.{task_dir.name}.deploy.{robot_deploy_dir.name}"
-            )
+        print(f"[Deploy] Starting MuJoCo simulation...")
+        print(f"[Deploy] Initial position: {config.mujoco.init_pos}")
+        print(f"[Deploy] Decimation: {config.mujoco.decimation} (physics_dt={config.physics_dt:.4f}s)")
 
-            try:
-                import importlib
-
-                module = importlib.import_module(module_path)
-
-                # Look for *_DEPLOY_CFG pattern
-                for attr_name in dir(module):
-                    if attr_name.endswith("_DEPLOY_CFG") and not attr_name.startswith(
-                        "_"
-                    ):
-                        cfg = getattr(module, attr_name)
-                        discovered_tasks[task_name] = {
-                            "config": cfg,
-                            "module": module_path,
-                            "attr": attr_name,
-                        }
-                        break
-            except Exception as e:
-                print(f"Warning: Failed to import {module_path}: {e}", file=sys.stderr)
-
-    return discovered_tasks
-
-
-def main():
-    # Discover available tasks
-    print("Discovering tasks...")
-    tasks = discover_tasks()
-
-    if args.list_tasks:
-        print("\nAvailable tasks:")
-        if not tasks:
-            print("  (none found)")
-            print("\nNote: Task deployments should be in tasks/<task>/deploy/<robot>/")
-        for task_name, info in sorted(tasks.items()):
-            print(f"  {task_name:30s} : {info['module']}.{info['attr']}")
-        sys.exit(0)
-
-    # Get requested task
-    if args.task not in tasks:
-        print(f"Error: Unknown task '{args.task}'")
-        print(f"\nAvailable tasks: {list(tasks.keys())}")
-        print("\nUse --list to see all available tasks")
-        sys.exit(1)
-
-    task_cfg = tasks[args.task]["config"]
-    print(f"\nLoading task: {args.task}")
-    print(f"  Robot: {task_cfg.robot.name}")
-    print(f"  Joints: {len(task_cfg.robot.joint_names)}")
-
-    # Decide deployment target
-    if args.mujoco:
-        print("\n=== Running in MuJoCo simulation ===\n")
-        from colosseum.deploy.core.backends import MujocoController
-
-        controller = MujocoController(task_cfg)
+        controller = MujocoController(config)
         controller.run()
 
-    elif args.webots:
-        print("\n=== Running in Webots simulation ===\n")
-        # Initialize SDK for Webots
-        try:
-            from booster_robotics_sdk_python import ChannelFactory
-
-            ChannelFactory.Instance().Init(0, args.net)
-        except ImportError:
-            print(
-                "Error: booster_robotics_sdk_python not installed.\n"
-                "Please install Booster SDK for Webots simulation.\n"
-                "For MuJoCo simulation, use --mujoco instead."
-            )
-            sys.exit(1)
-
-        # Adjust ankle dampings for Webots
-        ankles = [-8, -7, -2, -1]  # Indices of ankle joints
-        for i in ankles:
-            task_cfg.robot.joint_damping[i] = 0.5
-
-        from colosseum.deploy.core.backends.booster import (
-            BoosterRobotPortal,
-        )
-
-        with BoosterRobotPortal(task_cfg, use_sim_time=True) as portal:
-            portal.run()
-
     else:
-        print(f"\n=== Running on real robot (net: {args.net}) ===\n")
-        # Initialize SDK for real robot
-        try:
-            from booster_robotics_sdk_python import ChannelFactory
+        # Real robot deployment
+        from colosseum.deploy.backends.booster import BoosterRobotPortal
 
-            ChannelFactory.Instance().Init(0, args.net)
-        except ImportError:
-            print(
-                "Error: booster_robotics_sdk_python not installed.\n"
-                "Please install Booster SDK to use real robot deployment.\n"
-                "For MuJoCo simulation, use --mujoco flag."
-            )
-            sys.exit(1)
+        print(f"[Deploy] Starting real robot deployment...")
+        print(f"[Deploy] Network interface: {network_interface}")
+        print(f"[Deploy] ROS2 domain ID: {domain_id}")
 
-        from colosseum.deploy.core.backends.booster import (
-            BoosterRobotPortal,
-        )
-
-        with BoosterRobotPortal(task_cfg, use_sim_time=False) as portal:
+        with BoosterRobotPortal(config) as portal:
             portal.run()
 
 
 if __name__ == "__main__":
-    main()
+    tyro.cli(main)

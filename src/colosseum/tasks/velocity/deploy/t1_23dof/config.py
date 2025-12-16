@@ -41,7 +41,7 @@ T1_23DOF_VELOCITY_ROUGH = ControllerConfig(
         task_name="Velocity-Rough-Booster-T1",
         checkpoint_path=str(_DEFAULT_POLICY_PATH_ROUGH),
         action_scale=0.25,  # Must match training config
-        export_checkpoint_path=str(_TRAINING_CHECKPOINT_PATH_ROUGH),
+        use_onnx=False,  # Pre-exported ONNX provided; avoid mjlab dependency during deploy
     ),
     # Velocity command limits
     vel_command=VelocityCommandConfig(
@@ -52,9 +52,9 @@ T1_23DOF_VELOCITY_ROUGH = ControllerConfig(
     input=InputConfig('joystick'),
     # MuJoCo simulation parameters
     mujoco=MujocoConfig(
-        init_pos=(0.0, 0.0, 0.66),  # Start at 60cm height
+        init_pos=(0.0, 0.0, 0.665),  # Using training default height
         init_quat=(1.0, 0.0, 0.0, 0.0),  # Upright orientation (w, x, y, z)
-        decimation=10,  # 500Hz physics / 50Hz policy
+        decimation=4,  # FIXED: Match training (200Hz physics @ 50Hz policy, dt=0.005s)
         save_states=False,  # Disable state logging by default
     ),
     # Booster robot parameters
@@ -78,7 +78,7 @@ _DEFAULT_POLICY_PATH_FLAT = (
 )
 
 _TRAINING_CHECKPOINT_PATH_FLAT = (
-    project_root() / "wandb" / "run-20251214_194727-7w8taflc" / "files" / "model_1600.pt"
+    project_root() / "wandb" / "run-20251214_194727-7w8taflc" / "files" / "model_2100.pt"
 )
 
 # Default T1 velocity deployment configuration
@@ -92,7 +92,7 @@ T1_23DOF_VELOCITY_FLAT = ControllerConfig(
         task_name="Velocity-Flat-Booster-T1",
         checkpoint_path=str(_DEFAULT_POLICY_PATH_FLAT),
         action_scale=0.25,  # Must match training config
-        export_checkpoint_path=str(_TRAINING_CHECKPOINT_PATH_FLAT),
+        use_onnx=False,  # Pre-exported ONNX provided; avoid mjlab dependency during deploy
     ),
     # Velocity command limits
     vel_command=VelocityCommandConfig(
@@ -103,9 +103,9 @@ T1_23DOF_VELOCITY_FLAT = ControllerConfig(
     input=InputConfig('joystick'),
     # MuJoCo simulation parameters
     mujoco=MujocoConfig(
-        init_pos=(0.0, 0.0, 0.66),  # Start at 60cm height
+        init_pos=(0.0, 0.0, 0.665),  # Using training default height
         init_quat=(1.0, 0.0, 0.0, 0.0),  # Upright orientation (w, x, y, z)
-        decimation=10,  # 500Hz physics / 50Hz policy
+        decimation=4,  # FIXED: Match training (200Hz physics @ 50Hz policy, dt=0.005s)
         save_states=False,  # Disable state logging by default
     ),
     # Booster robot parameters

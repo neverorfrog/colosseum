@@ -8,12 +8,47 @@ import torch
 import mujoco
 import mujoco.viewer
 
-from mjlab.utils.spec import create_position_actuator
-
 from colosseum.deploy.core.base_controller import BaseController, VelocityCommand
 
 from colosseum.deploy.config import ControllerConfig
 from colosseum.mdp.observations import compute_projected_gravity
+
+
+def _add_position_actuators_from_cfg(spec: mujoco.MjSpec, robot_cfg) -> None:
+    """Add one position actuator per joint using RobotConfig gains/limits.
+
+    This mirrors the mjlab helper but keeps deploy free of mjlab dependency.
+    """
+
+    if len(spec.actuators) > 0:
+        return  # Actuators already present in the MJCF
+
+    for i, joint_name in enumerate(robot_cfg.sim_joint_names):
+        actuator = spec.add_actuator(name=joint_name, target=joint_name)
+
+        # Configure as position actuator: torque = kp * (ctrl - q) - kd * qd
+        actuator.trntype = mujoco.mjtTrn.mjTRN_JOINT
+        actuator.dyntype = mujoco.mjtDyn.mjDYN_NONE
+        actuator.gaintype = mujoco.mjtGain.mjGAIN_FIXED
+        actuator.biastype = mujoco.mjtBias.mjBIAS_AFFINE
+
+        kp = float(robot_cfg.joint_stiffness[i])
+        kd = float(robot_cfg.joint_damping[i])
+        actuator.gainprm[0] = kp
+        actuator.biasprm[1] = -kp
+        actuator.biasprm[2] = -kd
+
+        # Allow wide ctrl range; enforce effort limits instead
+        actuator.ctrllimited = False
+        actuator.forcelimited = True
+        actuator.forcerange[:] = np.array(
+            [-robot_cfg.effort_limit[i], robot_cfg.effort_limit[i]],
+            dtype=np.float64,
+        )
+
+        # Optional joint properties
+        spec.joint(joint_name).armature = 0.3
+        spec.joint(joint_name).frictionloss = 0.8
 
 
 class MujocoController(BaseController):
@@ -22,10 +57,9 @@ class MujocoController(BaseController):
 
         mjcf_path = self.robot.cfg.mjcf_path
 
-        # Load spec from XML and add programmatic actuators
-        # (XML actuators are commented out to avoid conflicts with training)
+        # Load spec from XML and add per-joint actuators if missing
         spec = mujoco.MjSpec.from_file(mjcf_path)
-        spec.actuators.clear()  # Ensure no XML actuators
+        _add_position_actuators_from_cfg(spec, self.robot.cfg)
 
         # Add ground plane (infinite plane at z=0)
         ground_geom = spec.worldbody.add_geom()
@@ -34,16 +68,6 @@ class MujocoController(BaseController):
         ground_geom.rgba[:] = [0.5, 0.5, 0.5, 1.0]  # Gray color
         # Set ground friction (default MuJoCo friction)
         ground_geom.friction[:] = [1.0, 0.005, 0.0001]
-
-        # Add position actuators for each joint using RobotConfig gains
-        for i, joint_name in enumerate(self.robot.cfg.sim_joint_names):
-            create_position_actuator(
-                spec,
-                joint_name,
-                stiffness=self.robot.cfg.joint_stiffness[i],
-                damping=self.robot.cfg.joint_damping[i],
-                effort_limit=self.robot.cfg.effort_limit[i],
-            )
 
         # Compile spec to model
         self.mj_model = spec.compile()
@@ -66,7 +90,13 @@ class MujocoController(BaseController):
     def update_state(self) -> None:
         dof_pos = self.mj_data.qpos.astype(np.float32)[7:]
         dof_vel = self.mj_data.qvel.astype(np.float32)[6:]
-        dof_torque = self.mj_data.qfrc_actuator[6:].astype(np.float32)
+        # Prefer actuator forces if actuators exist; otherwise use last applied torque
+        if getattr(self.mj_model, "na", 0) > 0:
+            dof_torque = self.mj_data.qfrc_actuator[6:].astype(np.float32)
+        elif hasattr(self, "_last_tau"):
+            dof_torque = self._last_tau.astype(np.float32)
+        else:
+            dof_torque = np.zeros_like(dof_pos, dtype=np.float32)
 
         base_pos_w = self.mj_data.qpos.astype(np.float32)[:3]
         base_quat = self.mj_data.sensor("orientation").data.astype(np.float32)
@@ -98,11 +128,25 @@ class MujocoController(BaseController):
         if self.vel_command is not None:
             self.update_command()
 
-        # With position actuators, send position targets directly
-        # MuJoCo applies internal PD control with actuator's stiffness/damping
-        for _ in range(self.decimation):
-            self.mj_data.ctrl = dof_targets  # Position targets, not torques!
-            mujoco.mj_step(self.mj_model, self.mj_data)
+        if getattr(self.mj_model, "na", 0) > 0:
+            # Drive actuators directly (assumes position actuators)
+            for _ in range(self.decimation):
+                self.mj_data.ctrl = dof_targets
+                mujoco.mj_step(self.mj_model, self.mj_data)
+        else:
+            # Fallback: apply PD torques without actuators
+            kp = np.asarray(self.robot.cfg.joint_stiffness, dtype=np.float32)
+            kd = np.asarray(self.robot.cfg.joint_damping, dtype=np.float32)
+            effort = np.asarray(self.robot.cfg.effort_limit, dtype=np.float32)
+            q = self.mj_data.qpos.astype(np.float32)[7:]
+            qd = self.mj_data.qvel.astype(np.float32)[6:]
+            tau = kp * (dof_targets - q) - kd * qd
+            tau = np.clip(tau, -effort, effort)
+            self._last_tau = tau
+            for _ in range(self.decimation):
+                self.mj_data.qfrc_applied[:] = 0.0
+                self.mj_data.qfrc_applied[6:] = tau
+                mujoco.mj_step(self.mj_model, self.mj_data)
 
     def run(self):
         with mujoco.viewer.launch_passive(self.mj_model, self.mj_data) as viewer:

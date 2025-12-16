@@ -1,4 +1,5 @@
-"""Generic policy export helpers operating on ``PolicyConfig``."""
+"""Training-side policy export utilities (ONNX conversion, metadata).
+"""
 
 from __future__ import annotations
 

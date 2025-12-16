@@ -99,47 +99,49 @@ T1_23DOF_ROBOT_CFG = RobotConfig(
     sim_body_names=(),
 
     # PD Gains - Kp (stiffness)
-    # Computed from motor specs: Kp = I_reflected × ω_n²
-    # ω_n = 10Hz × 2π = 62.83 rad/s, I_reflected from motor specs
+    # MUST match training nominal values (100%) - training randomizes ±10% at runtime
+    # Computed from motor specs using natural_freq + damping_ratio=2.0
+    # CRITICAL: Neck uses 15Hz, Arms use 12Hz, others use 10Hz (see t1_actuators.py)
     joint_stiffness=(
-        15.99, 15.99,      # Head (small motors)
-        160.61, 160.61, 160.61, 160.61,  # Left arm
+        15.99, 15.99,      # Head (neck motor @ 15Hz) - FIXED from 7.11!
+        160.61, 160.61, 160.61, 160.61,  # Left arm (arm motor @ 12Hz) - FIXED from 111.54!
         160.61, 160.61, 160.61, 160.61,  # Right arm
-        188.76,            # Waist
-        206.83, 188.76, 188.76, 251.09, 134.05, 134.05,  # Left leg
-        206.83, 188.76, 188.76, 251.09, 134.05, 134.05,  # Right leg
+        188.76,            # Waist (waist motor @ 10Hz)
+        206.83, 188.76, 188.76, 251.09, 134.05, 134.05,  # Left leg (@ 10Hz)
+        206.83, 188.76, 188.76, 251.09, 134.05, 134.05,  # Right leg (@ 10Hz)
     ),
 
     # PD Gains - Kd (damping)
-    # Computed from motor specs: Kd = 2 × ζ × I_reflected × ω_n
-    # ζ = 2.0 (overdamped for stability)
+    # MUST match training nominal values (100%) - training randomizes ±10% at runtime
     joint_damping=(
-        0.68, 0.68,        # Head
-        8.52, 8.52, 8.52, 8.52,  # Left arm
+        0.68, 0.68,        # Head (@ 15Hz) - FIXED from 0.45!
+        8.52, 8.52, 8.52, 8.52,  # Left arm (@ 12Hz) - FIXED from 7.10!
         8.52, 8.52, 8.52, 8.52,  # Right arm
-        12.02,             # Waist
-        13.17, 12.02, 12.02, 15.98, 8.53, 8.53,  # Left leg
-        13.17, 12.02, 12.02, 15.98, 8.53, 8.53,  # Right leg
+        12.02,             # Waist (@ 10Hz)
+        13.17, 12.02, 12.02, 15.98, 8.53, 8.53,  # Left leg (@ 10Hz)
+        13.17, 12.02, 12.02, 15.98, 8.53, 8.53,  # Right leg (@ 10Hz)
     ),
 
     # Default standing pose (MUST match HOME_QPOS from constants.py for correct observations!)
+    # EXACTLY matches training constants.py HOME_QPOS
     default_joint_pos=(
         0.0, 0.0,          # Head forward
-        0.0, -1.4, 0.0, -0.4,  # Left arm (shoulder roll down, elbow yaw -0.4)
-        0.0, 1.4, 0.0, 0.4,    # Right arm (shoulder roll down, elbow yaw +0.4)
+        0.0, -1.4, 0.0, -0.4,  # Left arm (matches training)
+        0.0, 1.4, 0.0, 0.4,    # Right arm (matches training)
         0.0,               # Waist straight
-        -0.2, 0.0, 0.0, 0.4, -0.2, 0.0,  # Left leg (bent knees for standing)
-        -0.2, 0.0, 0.0, 0.4, -0.2, 0.0,  # Right leg (bent knees for standing)
+        -0.2, 0.0, 0.0, 0.4, -0.2, 0.0,  # Left leg (matches training)
+        -0.2, 0.0, 0.0, 0.4, -0.2, 0.0,  # Right leg (matches training)
     ),
 
-    # Effort limits (Nm) - from motor specifications
+    # Effort limits (Nm) - MUST match training motor specs (peak torque)
+    # From t1_actuators.py MOTOR_SPECS
     effort_limit=(
-        7.0, 7.0,          # Head
-        18.0, 18.0, 18.0, 18.0,  # Left arm
-        18.0, 18.0, 18.0, 18.0,  # Right arm
-        25.0,              # Waist
-        45.0, 25.0, 25.0, 60.0, 24.0, 15.0,  # Left leg
-        45.0, 25.0, 25.0, 60.0, 24.0, 15.0,  # Right leg
+        7.0, 7.0,          # Head (neck motor peak: 7 Nm)
+        30.0, 30.0, 30.0, 30.0,  # Left arm (arm motor peak: 30 Nm) - FIXED from 18!
+        30.0, 30.0, 30.0, 30.0,  # Right arm
+        40.0,              # Waist (waist motor peak: 40 Nm) - FIXED from 25!
+        90.0, 40.0, 40.0, 118.0, 57.0, 57.0,  # Left leg - FIXED to match motor specs!
+        90.0, 40.0, 40.0, 118.0, 57.0, 57.0,  # Right leg
     ),
 
     # Mechanically coupled joints (ankle pairs)
