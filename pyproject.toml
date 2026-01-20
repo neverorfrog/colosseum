@@ -11,7 +11,6 @@ dependencies = [
 	"evdev>=1.9.2,<2",
 	"tyro>=1.0.1,<2",
 	"pytest>=8.0.2,<10", 
-	"mujoco>=3.4.0,<4",
 ]
 
 [tool.pixi.workspace]
@@ -74,6 +73,7 @@ pytorch = "*"
 onnxruntime = ">=1.22.2,<2"
 
 [tool.pixi.feature.deploy.pypi-dependencies]
+mujoco = ">=3.4.0,<4"
 colosseum = {path = ".", editable = true}
 
 [tool.pixi.feature.deploy.tasks]
@@ -107,29 +107,29 @@ gen-booster-stubs = { cmd = "python -m nanobind.stubgen -m booster_robotics_sdk_
 # ROSSIM FEATURE
 # ============================================
 
-[tool.pixi.environments.rossim]
-features = ["rossim"]
-no-default-feature = true
-solve-group = "rossim"
+# [tool.pixi.environments.rossim]
+# features = ["rossim"]
+# no-default-feature = true
+# solve-group = "rossim"
 
-[tool.pixi.feature.rossim]
-platforms = ["linux-64"]
+# [tool.pixi.feature.rossim]
+# platforms = ["linux-64"]
 
-[tool.pixi.feature.rossim.dependencies]
-python = "3.9.*"
-ros-humble-rclpy = ">=3.3.4,<4"
-ros-humble-rmw-fastrtps-cpp = "*"
-ros-humble-rmw-fastrtps-dynamic-cpp = "*"
-ros-humble-rosidl-typesupport-fastrtps-c = "*"
-ros-humble-rosidl-typesupport-fastrtps-cpp = "*"
-ros-humble-rosidl-runtime-py = "*"
-tinyxml2 = "==9"
+# [tool.pixi.feature.rossim.dependencies]
+# python = "3.9.*"
+# ros-humble-rclpy = ">=3.3.4,<4"
+# ros-humble-rmw-fastrtps-cpp = "*"
+# ros-humble-rmw-fastrtps-dynamic-cpp = "*"
+# ros-humble-rosidl-typesupport-fastrtps-c = "*"
+# ros-humble-rosidl-typesupport-fastrtps-cpp = "*"
+# ros-humble-rosidl-runtime-py = "*"
+# tinyxml2 = "==9"
 
-[tool.pixi.feature.rossim.pypi-dependencies]
-colosseum = {path = ".", editable = true}
-tyro = ">=1.0.1,<2"
-pydantic = ">=2.12.5,<3"
-evdev = ">=1.9.2,<2"
+# [tool.pixi.feature.rossim.pypi-dependencies]
+# colosseum = {path = ".", editable = true}
+# tyro = ">=1.0.1,<2"
+# pydantic = ">=2.12.5,<3"
+# evdev = ">=1.9.2,<2"
 
 # ============================================
 # DOCS FEATURE
