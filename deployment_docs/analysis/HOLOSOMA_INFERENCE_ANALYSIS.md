@@ -227,78 +227,113 @@ class InferenceConfig:
 
 ### RobotConfig (`config/config_types/robot.py`)
 
-Defines all robot-specific parameters needed for deployment.
+Defines robot-specific parameters needed for deployment. The deployment configs are intentionally minimal - PD gains and many parameters are loaded from ONNX metadata or training configs.
 
 **Structure:**
 ```python
-@dataclass
+@dataclass(frozen=True)
 class RobotConfig:
-    # Robot identity
+    # Identity (required)
     robot_type: str  # "t1_29dof", "g1_29dof"
-    sdk_type: str    # "booster", "unitree", "ros2"
+    robot: str       # "t1", "g1"
 
-    # Joint specifications
-    num_motors: int
-    num_joints: int
-    num_upper_body_joints: int  # For task-specific masking
-    dof_names: Tuple[str, ...]  # Joint names in hardware order
+    # Default positions (required)
+    default_dof_angles: tuple[float, ...]
+    default_motor_angles: tuple[float, ...]
 
-    # Physical limits
-    joint_pos_min: Tuple[float, ...]  # Position limits (rad)
-    joint_pos_max: Tuple[float, ...]
-    joint_vel_limit: Tuple[float, ...]  # Velocity limits (rad/s)
-    motor_effort_limit: Tuple[float, ...]  # Torque limits (Nm)
+    # Mappings (required)
+    motor2joint: tuple[int, ...]
+    joint2motor: tuple[int, ...]
+    dof_names: tuple[str, ...]
+    dof_names_upper_body: tuple[str, ...]
+    dof_names_lower_body: tuple[str, ...]
 
-    # Control parameters
-    motor_kp: Optional[Tuple[float, ...]]  # PD gains (can be in ONNX)
-    motor_kd: Optional[Tuple[float, ...]]
-    default_dof_angles: Tuple[float, ...]  # Default standing pose
+    # SDK configuration (with defaults)
+    sdk_type: Literal["unitree", "booster", "ros2"] = "unitree"
+    motor_type: Literal["serial", "parallel"] = "serial"
+    message_type: Literal["HG", "GO2"] = "HG"
 
-    # Index mappings (for joint reordering)
-    motor2joint: Optional[Tuple[int, ...]]
-    joint2motor: Optional[Tuple[int, ...]]
+    # Dimensions (with defaults)
+    num_motors: int = 29
+    num_joints: int = 29
+    num_upper_body_joints: int = 14
+
+    # Link names (with defaults)
+    torso_link_name: str = "torso_link"
+    left_hand_link_name: str | None = None
+    right_hand_link_name: str | None = None
+
+    # PD gains - OPTIONAL (loaded from ONNX metadata!)
+    motor_kp: tuple[float, ...] | None = None
+    motor_kd: tuple[float, ...] | None = None
+
+    # WBT stiff startup (optional)
+    stiff_startup_pos: tuple[float, ...] | None = None
+    stiff_startup_kp: tuple[float, ...] | None = None
+    stiff_startup_kd: tuple[float, ...] | None = None
+
+    # SDK-specific (optional)
+    unitree_legged_const: dict[str, Any] | None = None
+    weak_motor_joint_index: dict[str, int] | None = None
+    motion: dict[str, list[str]] | None = None
 ```
 
-**Example (T1 29-DOF):**
+**Example (T1 29-DOF Deployment Config):**
 ```python
 t1_29dof = RobotConfig(
+    # Identity
     robot_type="t1_29dof",
+    robot="t1",
+
+    # SDK Configuration
     sdk_type="booster",
+    motor_type="serial",
     num_motors=29,
     num_joints=29,
     num_upper_body_joints=16,  # head(2) + arms(14)
 
-    # Default standing pose (head, arms, waist, legs)
+    # Default standing pose
     default_dof_angles=(
-        0.0, 0.0,  # Head: yaw, pitch (neutral)
-        0.2, -1.35, 0.0, -0.5, 0.0, 0.0, 0.0,  # Left arm (natural position)
-        0.2, 1.35, 0.0, 0.5, 0.0, 0.0, 0.0,    # Right arm (mirrored)
-        0.0,  # Waist (straight)
-        -0.2, 0.0, 0.0, 0.4, -0.25, 0.0,  # Left leg (slight knee bend)
-        -0.2, 0.0, 0.0, 0.4, -0.25, 0.0,  # Right leg (mirrored)
+        0.0, 0.0,  # head (yaw, pitch)
+        0.2, -1.35, 0.0, -0.5, 0.0, 0.0, 0.0,  # left arm
+        0.2, 1.35, 0.0, 0.5, 0.0, 0.0, 0.0,    # right arm
+        0.0,  # waist
+        -0.2, 0.0, 0.0, 0.4, -0.25, 0.0,  # left leg
+        -0.2, 0.0, 0.0, 0.4, -0.25, 0.0,  # right leg
+    ),
+    default_motor_angles=(  # Identical for T1 (no motor remapping)
+        0.0, 0.0,
+        0.2, -1.35, 0.0, -0.5, 0.0, 0.0, 0.0,
+        0.2, 1.35, 0.0, 0.5, 0.0, 0.0, 0.0,
+        0.0,
+        -0.2, 0.0, 0.0, 0.4, -0.25, 0.0,
+        -0.2, 0.0, 0.0, 0.4, -0.25, 0.0,
     ),
 
     # Joint names in T1 hardware order
     dof_names=(
         "AAHead_yaw", "Head_pitch",
-        "Left_Shoulder_Pitch", "Left_Shoulder_Roll", "Left_Shoulder_Yaw",
-        "Left_Elbow_Pitch", "Left_Elbow_Yaw", "Left_Wrist_Pitch", "Left_Wrist_Roll",
-        "Right_Shoulder_Pitch", "Right_Shoulder_Roll", "Right_Shoulder_Yaw",
-        "Right_Elbow_Pitch", "Right_Elbow_Yaw", "Right_Wrist_Pitch", "Right_Wrist_Roll",
-        "Waist_Yaw",
+        "Left_Shoulder_Pitch", "Left_Shoulder_Roll", "Left_Elbow_Pitch", "Left_Elbow_Yaw",
+        "Left_Wrist_Pitch", "Left_Wrist_Yaw", "Left_Hand_Roll",
+        "Right_Shoulder_Pitch", "Right_Shoulder_Roll", "Right_Elbow_Pitch", "Right_Elbow_Yaw",
+        "Right_Wrist_Pitch", "Right_Wrist_Yaw", "Right_Hand_Roll",
+        "Waist",
         "Left_Hip_Pitch", "Left_Hip_Roll", "Left_Hip_Yaw",
-        "Left_Knee", "Left_Ankle_Pitch", "Left_Ankle_Roll",
+        "Left_Knee_Pitch", "Left_Ankle_Pitch", "Left_Ankle_Roll",
         "Right_Hip_Pitch", "Right_Hip_Roll", "Right_Hip_Yaw",
-        "Right_Knee", "Right_Ankle_Pitch", "Right_Ankle_Roll",
+        "Right_Knee_Pitch", "Right_Ankle_Pitch", "Right_Ankle_Roll",
     ),
 
-    # PD gains (loaded from ONNX metadata if not specified)
+    # Mappings (identity for T1)
+    motor2joint=tuple(range(29)),
+    joint2motor=tuple(range(29)),
+
+    # Link names
+    torso_link_name="Trunk",
+
+    # PD gains - NOT in deployment config! Loaded from ONNX metadata.
     motor_kp=None,
     motor_kd=None,
-
-    # No joint reordering needed (motor index == joint index)
-    motor2joint=None,
-    joint2motor=None,
 )
 ```
 
@@ -307,14 +342,77 @@ t1_29dof = RobotConfig(
 1. **Why separate `motor` vs `joint`?**
    - Some robots have gearing where motor order ≠ joint order
    - Allows policies to use "canonical" joint order while hardware uses physical order
+   - T1 uses identity mapping (motor index == joint index)
 
-2. **Why optional PD gains?**
-   - Gains are **training hyperparameters** → should be exported with policy
-   - RobotConfig only provides fallback defaults
+2. **Why are PD gains optional (None)?**
+   - **Key innovation:** Gains are stored in ONNX model metadata, not deployment config!
+   - During training, gains are defined in training configs (see next section)
+   - At ONNX export, gains are embedded in model metadata
+   - At deployment runtime, BasePolicy loads gains from ONNX
+   - Config gains only used as fallback if ONNX metadata missing
+   - This ensures **single source of truth** (training config → ONNX → deployment)
 
-3. **Why tuples instead of lists?**
-   - Immutability prevents accidental modification
+3. **Why frozen dataclass?**
+   - Pydantic enforces immutability and type validation
+   - Prevents accidental config modification at runtime
    - Better for type checking and hashing
+
+### Training-Side PD Gains (Single Source of Truth)
+
+PD gains are defined in the **training configuration** and exported to ONNX metadata.
+
+**Location:** `holosoma/holosoma/config_values/robot.py`
+
+**T1 29-DOF Training Config:**
+```python
+# From holosoma training framework
+t1_29dof_waist_wrist = RobotConfig(
+    # ... robot specs ...
+    control=RobotControlConfig(
+        control_type="P",  # Position control
+        stiffness={
+            "Head_yaw": 5, "Head_pitch": 5,
+            "Hip_Yaw": 200, "Hip_Roll": 200, "Hip_Pitch": 200, "Knee": 200,
+            "Ankle_Pitch": 50, "Ankle_Roll": 50,
+            "Waist": 200,
+            "Shoulder_Pitch": 20, "Shoulder_Roll": 20,
+            "Elbow_Pitch": 20, "Elbow_Yaw": 20,
+            "Wrist_Pitch": 20, "Wrist_Yaw": 20, "Hand_Roll": 20,
+        },
+        damping={
+            "Head_yaw": 0.5, "Head_pitch": 0.5,
+            "Hip_Yaw": 5, "Hip_Roll": 5, "Hip_Pitch": 5, "Knee": 5,
+            "Ankle_Pitch": 3, "Ankle_Roll": 3,
+            "Waist": 5,
+            "Shoulder_Pitch": 0.5, "Shoulder_Roll": 0.5,
+            "Elbow_Pitch": 0.5, "Elbow_Yaw": 0.5,
+            "Wrist_Pitch": 0.5, "Wrist_Yaw": 0.5, "Hand_Roll": 0.5,
+        },
+        action_scale=0.25,
+    ),
+)
+```
+
+**Flow:**
+1. Training: Gains defined in RobotControlConfig → used by simulator
+2. Export: Gains embedded in ONNX metadata during policy export
+3. Deployment: BasePolicy loads gains from ONNX metadata at runtime
+
+**PD Gain Loading Priority:**
+```python
+# In BasePolicy._init_policy_components():
+metadata = self.policy_session.get_modelmeta().custom_metadata_map
+
+if 'motor_kp' in metadata:
+    # Load from ONNX (highest priority)
+    self.motor_kp = np.array([float(x) for x in metadata['motor_kp'].split(',')])
+elif self.robot_config.motor_kp is not None:
+    # Fallback to config override
+    self.motor_kp = np.array(self.robot_config.motor_kp)
+else:
+    # Error: No gains available
+    raise ValueError("No PD gains found in ONNX metadata or config!")
+```
 
 ### ObservationConfig (`config/config_types/observation.py`)
 
@@ -928,10 +1026,14 @@ def _init_communication_components(self):
     )
 ```
 
-**Step 5: Policy Initialization**
+**Step 5: Policy Initialization (PD Gains from ONNX Metadata)**
 ```python
 def _init_policy_components(self, model_path: str, ...):
-    """Load ONNX model and create inference function"""
+    """Load ONNX model and extract PD gains from metadata.
+
+    Key Innovation: PD gains are stored in ONNX metadata (single source of truth).
+    Training configs define gains → exported to ONNX → loaded at deployment.
+    """
 
     # 1. Load ONNX model
     self.policy_session = onnxruntime.InferenceSession(
@@ -939,15 +1041,29 @@ def _init_policy_components(self, model_path: str, ...):
         providers=['CPUExecutionProvider']  # Can use GPU if available
     )
 
-    # 2. Extract PD gains from metadata (if present)
+    # 2. Extract PD gains from metadata (primary source)
     metadata = self.policy_session.get_modelmeta().custom_metadata_map
+
     if 'motor_kp' in metadata:
-        kp_str = metadata['motor_kp']  # "206.83,188.76,..."
+        kp_str = metadata['motor_kp']  # "5,5,20,20,20,..."
         self.motor_kp = np.array([float(x) for x in kp_str.split(',')])
+        print(f"Loaded Kp gains from ONNX metadata: {self.motor_kp[:5]}...")
+    elif self.robot_config.motor_kp is not None:
+        # Fallback: Config override (rare, for debugging)
+        self.motor_kp = np.array(self.robot_config.motor_kp)
+        print("Using Kp gains from config (ONNX metadata not found)")
+    else:
+        raise ValueError("No PD gains found in ONNX metadata or config!")
 
     if 'motor_kd' in metadata:
         kd_str = metadata['motor_kd']
         self.motor_kd = np.array([float(x) for x in kd_str.split(',')])
+        print(f"Loaded Kd gains from ONNX metadata: {self.motor_kd[:5]}...")
+    elif self.robot_config.motor_kd is not None:
+        self.motor_kd = np.array(self.robot_config.motor_kd)
+        print("Using Kd gains from config (ONNX metadata not found)")
+    else:
+        raise ValueError("No PD gains found in ONNX metadata or config!")
 
     # 3. Create inference function
     def policy_act(obs_dict):
@@ -955,6 +1071,23 @@ def _init_policy_components(self, model_path: str, ...):
         return self.policy_session.run(None, obs_dict)[0]
 
     self.policy = policy_act
+```
+
+**PD Gain Flow (Training → Deployment):**
+```
+1. Training Config (holosoma/config_values/robot.py)
+   └─> RobotControlConfig.stiffness/damping dicts
+
+2. Policy Export (training script)
+   └─> Embed gains in ONNX metadata
+       metadata['motor_kp'] = "5,5,20,20,20,..."
+       metadata['motor_kd'] = "0.5,0.5,0.5,0.5,..."
+
+3. Deployment (BasePolicy initialization)
+   └─> Load gains from ONNX metadata
+       self.motor_kp = np.array([float(x) for x in metadata['motor_kp'].split(',')])
+
+Result: Single source of truth, no config duplication!
 ```
 
 **Step 3: Observation Configuration**
@@ -1697,30 +1830,33 @@ class RateLimiter:
 |--------|-------------------|----------------------|
 | **Architecture** | 3-layer (Policy, Interface, SDK) | 2-layer (Policy, Controller) |
 | **Configuration** | Pydantic + Tyro (declarative) | Dataclasses (manual) |
+| **PD Gains Source** | **ONNX metadata (single source of truth)** | Config files (duplicated) |
 | **Robot Support** | Multi-robot (Booster, Unitree, ROS2) | Single robot (Booster T1) |
 | **SDK Abstraction** | InterfaceWrapper + Factory Pattern | Direct SDK usage |
 | **Observation Processing** | Config-driven (ObservationConfig) | Hardcoded in policy |
 | **Policy Loading** | ONNX with metadata | ONNX or PyTorch |
-| **Input Handling** | Keyboard + Joystick (evdev) | Keyboard only (initially) |
+| **Input Handling** | Keyboard + Joystick (evdev) | Keyboard + Joystick |
 | **Gain Management** | Runtime adjustment (kp_level, kd_level) | Static (from config) |
 | **Latency Tracking** | Per-stage breakdown | Total only |
 | **Safety Features** | Gain scaling, position limits, mode switching | Position limits only |
 | **Documentation** | Extensive (configs, CLI help) | Minimal (code comments) |
 
 **Strengths of Holosoma Approach:**
-1. **Robot-agnostic:** Easy to port to new robots
-2. **Type-safe:** Pydantic catches config errors
-3. **Observable:** Detailed latency tracking
-4. **Flexible:** Runtime gain adjustment for safety
-5. **Ergonomic:** Tyro CLI with auto-generated help
+1. **PD Gains in ONNX Metadata:** Single source of truth (training → ONNX → deployment), no duplication
+2. **Robot-agnostic:** Easy to port to new robots
+3. **Type-safe:** Pydantic catches config errors
+4. **Observable:** Detailed latency tracking
+5. **Flexible:** Runtime gain adjustment for safety
+6. **Ergonomic:** Tyro CLI with auto-generated help
 
 **Areas for Colosseum to Adopt:**
-1. ✅ Config-driven observation processing
-2. ✅ Factory pattern for SDK abstraction
-3. ✅ Runtime gain adjustment
-4. ✅ Per-stage latency tracking
-5. ✅ Joystick support via evdev
-6. 🔲 Multi-robot support (future)
+1. ⭐ **PD gains in ONNX metadata** (eliminates duplication, ensures consistency)
+2. ✅ Config-driven observation processing
+3. ✅ Factory pattern for SDK abstraction
+4. ✅ Runtime gain adjustment
+5. ✅ Per-stage latency tracking
+6. ✅ Joystick support via evdev
+7. 🔲 Multi-robot support (future)
 
 ---
 
@@ -1743,11 +1879,13 @@ class RateLimiter:
    - Avoid blocking I/O in control loop
    - Thread safety via atomic reads, not locks
 
-4. **Training-Deployment Consistency is Critical**
-   - PD gains must match exactly
+4. **Training-Deployment Consistency is Critical (ONNX Metadata Pattern)**
+   - **Store PD gains in ONNX metadata** (single source of truth)
+   - Training configs define gains → exported to ONNX → loaded at deployment
+   - Eliminates config duplication and version mismatch issues
    - Observation processing must be identical
-   - Action scaling must be same
-   - Store hyperparameters in ONNX metadata
+   - Action scaling stored in metadata
+   - All training hyperparameters travel with the model
 
 5. **Safety is Engineered, Not Assumed**
    - Runtime gain adjustment for instability mitigation
