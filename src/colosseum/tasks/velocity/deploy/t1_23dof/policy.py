@@ -108,12 +108,14 @@ class T1VelocityPolicy(Policy):
             # Store for next step (keep in simulation order)
             self.last_action = action
 
+            # Scale actions (both action and action_scale are in simulation order)
+            scaled_action = action * self.action_scale
+
             # Map from simulation order to real robot order
             sim2real_map = self.robot.data.sim2real_joint_indexes
+            scaled_action_real = scaled_action[sim2real_map]
 
-            # Scale actions and add default positions
-            joint_targets = (
-                action[sim2real_map] * self.action_scale + self.robot.default_joint_pos
-            )
+            # Add default positions (both in real robot order now)
+            joint_targets = scaled_action_real + self.robot.default_joint_pos
 
             return joint_targets

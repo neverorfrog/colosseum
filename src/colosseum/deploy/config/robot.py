@@ -42,6 +42,9 @@ class RobotConfig:
     joint_damping: tuple[float, ...] = Field(
         description="PD gains (Kd) - must match training values exactly"
     )
+    joint_armature: tuple[float, ...] = Field(
+        description="Joint armature (reflected inertia) - must match training XML"
+    )
     default_joint_pos: tuple[float, ...] = Field(
         description="Default standing pose (joint positions in radians)"
     )
@@ -78,6 +81,7 @@ class RobotConfig:
             len(self.joint_names)
             == len(self.joint_stiffness)
             == len(self.joint_damping)
+            == len(self.joint_armature)
             == len(self.default_joint_pos)
             == len(self.effort_limit)
         )

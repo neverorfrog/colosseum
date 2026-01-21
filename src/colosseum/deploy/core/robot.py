@@ -39,6 +39,7 @@ class BoosterRobot:
     data: RobotData
     joint_stiffness: torch.Tensor
     joint_damping: torch.Tensor
+    joint_armature: torch.Tensor
     default_joint_pos: torch.Tensor
 
     def __init__(self, cfg: RobotConfig) -> None:
@@ -46,6 +47,7 @@ class BoosterRobot:
         self.data = RobotData(cfg)
         self.joint_stiffness = torch.tensor(cfg.joint_stiffness, dtype=torch.float32)
         self.joint_damping = torch.tensor(cfg.joint_damping, dtype=torch.float32)
+        self.joint_armature = torch.tensor(cfg.joint_armature, dtype=torch.float32)
         self.default_joint_pos = torch.tensor(cfg.default_joint_pos, dtype=torch.float32)
         self.effort_limit = torch.tensor(cfg.effort_limit, dtype=torch.float32)
 

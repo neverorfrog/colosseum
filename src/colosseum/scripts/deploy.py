@@ -16,7 +16,6 @@ from typing import Literal, Optional, Annotated
 from dataclasses import replace
 from pathlib import Path
 from colosseum.deploy.core.registry import TASK_REGISTRY, auto_register_tasks
-auto_register_tasks()
 from colosseum.deploy.config.policy import PolicyConfig
 from colosseum.utils import project_root
 
@@ -52,6 +51,7 @@ def main(
         domain_id: ROS2 domain ID for real robot (default: 0)
     """
     # Get task configuration from registry
+    auto_register_tasks()
     try:
         config = TASK_REGISTRY.get_config(task)
     except ValueError as e:

@@ -18,7 +18,7 @@ from mjlab.viewer import ViewerConfig
 
 viewer_config = ViewerConfig(
     origin_type=ViewerConfig.OriginType.ASSET_BODY,
-    asset_name="robot",
+    entity_name="robot",
     body_name="pole",
     distance=3.0,
     elevation=10.0,

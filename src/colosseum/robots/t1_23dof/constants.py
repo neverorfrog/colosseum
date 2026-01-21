@@ -121,16 +121,16 @@ HOME_QPOS: dict[str, float] = {
     # Head
     "AAHead_yaw": 0.0,
     "Head_pitch": 0.0,
-    # Left arm
-    "Left_Shoulder_Pitch": 0.0,
-    "Left_Shoulder_Roll": -1.4,
+    # Left arm (manufacturer's deployment values)
+    "Left_Shoulder_Pitch": 0.2,
+    "Left_Shoulder_Roll": -1.3,
     "Left_Elbow_Pitch": 0.0,
-    "Left_Elbow_Yaw": -0.4,
-    # Right arm
-    "Right_Shoulder_Pitch": 0.0,
-    "Right_Shoulder_Roll": 1.4,
+    "Left_Elbow_Yaw": -0.5,
+    # Right arm (manufacturer's deployment values)
+    "Right_Shoulder_Pitch": 0.2,
+    "Right_Shoulder_Roll": 1.3,
     "Right_Elbow_Pitch": 0.0,
-    "Right_Elbow_Yaw": 0.4,
+    "Right_Elbow_Yaw": 0.5,
     # Waist
     "Waist": 0.0,
     # Left leg
@@ -149,25 +149,19 @@ HOME_QPOS: dict[str, float] = {
     "Right_Ankle_Roll": 0.0,
 }
 
-if _MJLAB_AVAILABLE:
-    HOME_KEYFRAME = EntityCfg.InitialStateCfg(
-        pos=(0, 0, 0.665),
-        joint_pos=HOME_QPOS,
-        joint_vel={".*": 0.0},
-    )
-else:
-    HOME_KEYFRAME = None
-
-
 ##
 # Robot Configuration Functions
 ##
 
-
 if _MJLAB_AVAILABLE:
+
     def get_robot_cfg() -> EntityCfg:
         return EntityCfg(
-            init_state=HOME_KEYFRAME,
+            init_state=EntityCfg.InitialStateCfg(
+                pos=(0, 0, 0.665),
+                joint_pos=HOME_QPOS,
+                joint_vel={".*": 0.0},
+            ),
             collisions=(FEET_ONLY_COLLISION,),
             spec_fn=get_spec,
             articulation=ARTICULATION,

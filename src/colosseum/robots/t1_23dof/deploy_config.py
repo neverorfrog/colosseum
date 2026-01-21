@@ -1,7 +1,7 @@
 """Booster T1 robot configuration presets.
 
 Hardware specifications for the Booster T1 humanoid robot.
-PD gains are computed from motor specifications following the Unitree G1 method.
+PD gains and effort limits from holosoma T1 29-DOF training configuration.
 """
 
 from colosseum.deploy.config import RobotConfig, PrepareStateConfig
@@ -100,48 +100,60 @@ T1_23DOF_ROBOT_CFG = RobotConfig(
 
     # PD Gains - Kp (stiffness)
     # MUST match training nominal values (100%) - training randomizes ±10% at runtime
-    # Computed from motor specs using natural_freq + damping_ratio=2.0
-    # CRITICAL: Neck uses 15Hz, Arms use 12Hz, others use 10Hz (see t1_actuators.py)
+    # From external/holosoma/src/holosoma/holosoma/config_values/robot.py (T1 29-DOF)
+    # Head=5, Arms=20, Waist=200, Hip/Knee=200, Ankle=50
     joint_stiffness=(
-        15.99, 15.99,      # Head (neck motor @ 15Hz) - FIXED from 7.11!
-        160.61, 160.61, 160.61, 160.61,  # Left arm (arm motor @ 12Hz) - FIXED from 111.54!
-        160.61, 160.61, 160.61, 160.61,  # Right arm
-        188.76,            # Waist (waist motor @ 10Hz)
-        206.83, 188.76, 188.76, 251.09, 134.05, 134.05,  # Left leg (@ 10Hz)
-        206.83, 188.76, 188.76, 251.09, 134.05, 134.05,  # Right leg (@ 10Hz)
+        5.0, 5.0,          # Head (holosoma T1)
+        20.0, 20.0, 20.0, 20.0,  # Left arm (holosoma T1)
+        20.0, 20.0, 20.0, 20.0,  # Right arm
+        200.0,             # Waist (holosoma T1)
+        200.0, 200.0, 200.0, 200.0, 50.0, 50.0,  # Left leg (holosoma T1)
+        200.0, 200.0, 200.0, 200.0, 50.0, 50.0,  # Right leg
     ),
 
-    # PD Gains - Kd (damping)
-    # MUST match training nominal values (100%) - training randomizes ±10% at runtime
     joint_damping=(
-        0.68, 0.68,        # Head (@ 15Hz) - FIXED from 0.45!
-        8.52, 8.52, 8.52, 8.52,  # Left arm (@ 12Hz) - FIXED from 7.10!
-        8.52, 8.52, 8.52, 8.52,  # Right arm
-        12.02,             # Waist (@ 10Hz)
-        13.17, 12.02, 12.02, 15.98, 8.53, 8.53,  # Left leg (@ 10Hz)
-        13.17, 12.02, 12.02, 15.98, 8.53, 8.53,  # Right leg (@ 10Hz)
+        0.5, 0.5,          # Head (holosoma T1)
+        0.5, 0.5, 0.5, 0.5,  # Left arm (holosoma T1)
+        0.5, 0.5, 0.5, 0.5,  # Right arm
+        5.0,               # Waist (holosoma T1)
+        5.0, 5.0, 5.0, 5.0, 3.0, 3.0,  # Left leg (holosoma T1)
+        5.0, 5.0, 5.0, 5.0, 3.0, 3.0,  # Right leg
+    ),
+
+    # Joint armature (reflected inertia) - MUST match training XML!
+    # CRITICAL: All joints use 0.3 in T1_23dof.xml (60x larger than old hardcoded 0.005!)
+    # Small armature = robot falls immediately, 0.3 = stable as in training
+    joint_armature=(
+        0.3, 0.3,          # Head (from T1_23dof.xml)
+        0.3, 0.3, 0.3, 0.3,  # Left arm (from T1_23dof.xml)
+        0.3, 0.3, 0.3, 0.3,  # Right arm
+        0.3,               # Waist (from T1_23dof.xml)
+        0.3, 0.3, 0.3, 0.3, 0.3, 0.3,  # Left leg (from T1_23dof.xml)
+        0.3, 0.3, 0.3, 0.3, 0.3, 0.3,  # Right leg
     ),
 
     # Default standing pose (MUST match HOME_QPOS from constants.py for correct observations!)
     # EXACTLY matches training constants.py HOME_QPOS
+    # Arm positions from manufacturer's booster_deploy/locomotion.py (Shoulder_Pitch=0.2!)
     default_joint_pos=(
         0.0, 0.0,          # Head forward
-        0.0, -1.4, 0.0, -0.4,  # Left arm (matches training)
-        0.0, 1.4, 0.0, 0.4,    # Right arm (matches training)
+        0.2, -1.3, 0.0, -0.5,  # Left arm (manufacturer's deployment values)
+        0.2, 1.3, 0.0, 0.5,    # Right arm (manufacturer's deployment values)
         0.0,               # Waist straight
         -0.2, 0.0, 0.0, 0.4, -0.2, 0.0,  # Left leg (matches training)
         -0.2, 0.0, 0.0, 0.4, -0.2, 0.0,  # Right leg (matches training)
     ),
 
-    # Effort limits (Nm) - MUST match training motor specs (peak torque)
-    # From t1_actuators.py MOTOR_SPECS
+    # Effort limits (Nm) - MUST EXACTLY match holosoma T1 training values!
+    # CRITICAL: Action scaling = action_scale * effort_limit / stiffness
+    # From external/holosoma/src/holosoma/holosoma/config_values/robot.py (T1 29-DOF)
     effort_limit=(
-        7.0, 7.0,          # Head (neck motor peak: 7 Nm)
-        30.0, 30.0, 30.0, 30.0,  # Left arm (arm motor peak: 30 Nm) - FIXED from 18!
-        30.0, 30.0, 30.0, 30.0,  # Right arm
-        40.0,              # Waist (waist motor peak: 40 Nm) - FIXED from 25!
-        90.0, 40.0, 40.0, 118.0, 57.0, 57.0,  # Left leg - FIXED to match motor specs!
-        90.0, 40.0, 40.0, 118.0, 57.0, 57.0,  # Right leg
+        7.0, 7.0,          # Head (holosoma T1)
+        18.0, 18.0, 18.0, 18.0,  # Left arm (holosoma T1, NOT 30!)
+        18.0, 18.0, 18.0, 18.0,  # Right arm (holosoma T1, NOT 30!)
+        30.0,              # Waist (holosoma T1, NOT 40!)
+        45.0, 30.0, 30.0, 60.0, 12.0, 12.0,  # Left leg (holosoma T1)
+        45.0, 30.0, 30.0, 60.0, 12.0, 12.0,  # Right leg (holosoma T1)
     ),
 
     # Mechanically coupled joints (ankle pairs)
@@ -154,12 +166,12 @@ T1_23DOF_ROBOT_CFG = RobotConfig(
     # Higher gains for quick stabilization during initialization
     prepare_state=PrepareStateConfig(
         stiffness=(
-            5.0, 5.0,          # Head (low stiffness for safety)
-            40.0, 50.0, 20.0, 20.0,  # Left arm
-            40.0, 50.0, 20.0, 20.0,  # Right arm
-            350.0,             # Waist (high stiffness)
-            350.0, 350.0, 180.0, 350.0, 150.0, 150.0,  # Left leg (high)
-            350.0, 350.0, 180.0, 350.0, 150.0, 150.0,  # Right leg (high)
+            5.0, 5.0,          # Head (holosoma T1)
+            20.0, 20.0, 20.0, 20.0,  # Left arm (holosoma T1)
+            20.0, 20.0, 20.0, 20.0,  # Right arm
+            200.0,             # Waist (holosoma T1)
+            200.0, 200.0, 200.0, 200.0, 50.0, 50.0,  # Left leg (holosoma T1)
+            200.0, 200.0, 200.0, 200.0, 50.0, 50.0,  # Right leg
         ),
         damping=(
             0.1, 0.1,          # Head
@@ -170,13 +182,14 @@ T1_23DOF_ROBOT_CFG = RobotConfig(
             7.5, 7.5, 3.0, 5.5, 2.0, 2.0,  # Right leg
         ),
         # Slightly bent knees for stability during initialization
+        # Arms match default pose to ensure smooth prepare→normal transition
         joint_pos=(
             0.0, 0.0,          # Head
-            0.0, -1.4, 0.0, 0.0,  # Left arm
-            0.0, 1.4, 0.0, 0.0,   # Right arm
+            0.2, -1.3, 0.0, -0.5,  # Left arm (matches default!)
+            0.2, 1.3, 0.0, 0.5,    # Right arm (matches default!)
             0.0,               # Waist
-            -0.15, 0.0, 0.0, 0.2, -0.10, 0.0,  # Left leg (knees bent)
-            -0.15, 0.0, 0.0, 0.2, -0.10, 0.0,  # Right leg (knees bent)
+            -0.15, 0.0, 0.0, 0.2, -0.10, 0.0,  # Left leg (knees slightly less bent)
+            -0.15, 0.0, 0.0, 0.2, -0.10, 0.0,  # Right leg (knees slightly less bent)
         ),
     ),
 )

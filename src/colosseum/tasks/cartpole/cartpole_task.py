@@ -1,20 +1,21 @@
 # ====== Actions and Observations ======
 from mjlab.envs.mdp.actions import JointEffortActionCfg
-from mjlab.managers.manager_term_config import ActionTermCfg
-from mjlab.managers.scene_entity_config import SceneEntityCfg
+
+from mjlab.managers import (
+    ObservationGroupCfg,
+    ObservationTermCfg, 
+    ActionTermCfg, 
+    SceneEntityCfg
+)
+
 
 actions: dict[str, ActionTermCfg] = {
     "joint_position": JointEffortActionCfg(
-        asset_name="robot",
+        entity_name="robot",
         actuator_names=("slide",),
         scale=20.0,
     ),
 }
-
-from mjlab.managers.manager_term_config import (
-    ObservationGroupCfg,
-    ObservationTermCfg,
-)
 
 from colosseum.tasks.cartpole.mdp_functions import joint_pos, joint_vel
 
@@ -52,7 +53,7 @@ observations: dict[str, ObservationGroupCfg] = {
 from mjlab.envs.mdp.terminations import time_out
 
 # ======== Rewards ========
-from mjlab.managers.manager_term_config import RewardTermCfg
+from mjlab.managers import RewardTermCfg
 
 from colosseum.tasks.cartpole.mdp_functions import effort_cost, upright_reward
 
@@ -71,7 +72,7 @@ rewards: dict[str, RewardTermCfg] = {
 }
 
 # ====== Terminations =======
-from mjlab.managers.manager_term_config import TerminationTermCfg
+from mjlab.managers import TerminationTermCfg
 
 from colosseum.tasks.cartpole.mdp_functions import pole_fallen
 
@@ -88,7 +89,7 @@ from mjlab.envs.mdp import randomize_field
 
 # ====== Events ============
 from mjlab.envs.mdp.events import reset_joints_by_offset
-from mjlab.managers.manager_term_config import EventTermCfg
+from mjlab.managers import EventTermCfg
 
 events: dict[str, EventTermCfg] = {
     "reset_joints": EventTermCfg(

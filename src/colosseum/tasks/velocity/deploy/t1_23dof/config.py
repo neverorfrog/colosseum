@@ -27,7 +27,7 @@ _DEFAULT_POLICY_PATH_ROUGH = (
 )
 
 _TRAINING_CHECKPOINT_PATH_ROUGH = (
-    project_root() / "wandb" / "run-20251209_112107-dtxd5qxc" / "files" / "model_28500.pt"
+    project_root() / "wandb" / "run-20260120_174730-8no6uvrj" / "files" / "model_4550.pt"
 )
 
 # Default T1 velocity deployment configuration
@@ -78,7 +78,7 @@ _DEFAULT_POLICY_PATH_FLAT = (
 )
 
 _TRAINING_CHECKPOINT_PATH_FLAT = (
-    project_root() / "wandb" / "run-20251214_194727-7w8taflc" / "files" / "model_2100.pt"
+    project_root() / "wandb" / "run-20260120_154642-msmjomna" / "files" / "model_4000.pt"
 )
 
 # Default T1 velocity deployment configuration
@@ -97,7 +97,7 @@ T1_23DOF_VELOCITY_FLAT = ControllerConfig(
     # Velocity command limits
     vel_command=VelocityCommandConfig(
         vx_max=1.0,  # Max forward velocity (m/s)
-        vy_max=0.5,  # Max lateral velocity (m/s)
+        vy_max=1.0,  # Max lateral velocity (m/s)
         vyaw_max=1.0,  # Max yaw rate (rad/s)
     ),
     input=InputConfig('joystick'),

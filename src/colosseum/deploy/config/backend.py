@@ -14,7 +14,7 @@ class MujocoConfig:
         description="Initial orientation quaternion (w, x, y, z)"
     )
     decimation: int = Field(
-        default=10,
+        default=4,
         description="Physics steps per policy step"
     )
     save_states: bool = Field(

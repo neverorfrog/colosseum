@@ -135,63 +135,50 @@ def compute_pd_gains(
 # Actuator Configurations for 12-DOF Locomotion
 ##
 
-# TODO: Check kinematic limits (ctrllimited)
-
-# Hip Pitch (uses hip_pitch motor)
-_hip_pitch_stiffness, _hip_pitch_damping = compute_pd_gains(MOTOR_SPECS["hip_pitch"])
 T1_ACTUATOR_HIP_PITCH = BuiltinPositionActuatorCfg(
-    joint_names_expr=(".*Hip_Pitch",),
-    stiffness=_hip_pitch_stiffness,
-    damping=_hip_pitch_damping,
+    target_names_expr=(".*Hip_Pitch",),
+    stiffness=200.0,
+    damping=5.0,
     effort_limit=MOTOR_SPECS["hip_pitch"].effort_limit,
     armature=MOTOR_SPECS["hip_pitch"].reflected_inertia,
 )
 
-# Hip Roll (uses waist motor)
-_hip_roll_stiffness, _hip_roll_damping = compute_pd_gains(MOTOR_SPECS["waist"])
 T1_ACTUATOR_HIP_ROLL = BuiltinPositionActuatorCfg(
-    joint_names_expr=(".*Hip_Roll",),
-    stiffness=_hip_roll_stiffness,
-    damping=_hip_roll_damping,
+    target_names_expr=(".*Hip_Roll",),
+    stiffness=200.0,
+    damping=5.0,
     effort_limit=MOTOR_SPECS["waist"].effort_limit,
     armature=MOTOR_SPECS["waist"].reflected_inertia,
 )
 
-# Hip Yaw (uses waist motor)
-_hip_yaw_stiffness, _hip_yaw_damping = compute_pd_gains(MOTOR_SPECS["waist"])
 T1_ACTUATOR_HIP_YAW = BuiltinPositionActuatorCfg(
-    joint_names_expr=(".*Hip_Yaw",),
-    stiffness=_hip_yaw_stiffness,
-    damping=_hip_yaw_damping,
+    target_names_expr=(".*Hip_Yaw",),
+    stiffness=200.0,
+    damping=5.0,
     effort_limit=MOTOR_SPECS["waist"].effort_limit,
     armature=MOTOR_SPECS["waist"].reflected_inertia,
 )
 
-# Knee (uses knee motor)
-_knee_stiffness, _knee_damping = compute_pd_gains(MOTOR_SPECS["knee"])
 T1_ACTUATOR_KNEE = BuiltinPositionActuatorCfg(
-    joint_names_expr=(".*Knee_Pitch",),
-    stiffness=_knee_stiffness,
-    damping=_knee_damping,
+    target_names_expr=(".*Knee_Pitch",),
+    stiffness=200.0,
+    damping=5.0,
     effort_limit=MOTOR_SPECS["knee"].effort_limit,
     armature=MOTOR_SPECS["knee"].reflected_inertia,
 )
 
-# Ankle Pitch (uses ankle motor)
-_ankle_stiffness, _ankle_damping = compute_pd_gains(MOTOR_SPECS["ankle"])
 T1_ACTUATOR_ANKLE_PITCH = BuiltinPositionActuatorCfg(
-    joint_names_expr=(".*Ankle_Pitch",),
-    stiffness=_ankle_stiffness,
-    damping=_ankle_damping,
+    target_names_expr=(".*Ankle_Pitch",),
+    stiffness=50.0,
+    damping=3.0,
     effort_limit=MOTOR_SPECS["ankle"].effort_limit,
     armature=MOTOR_SPECS["ankle"].reflected_inertia,
 )
 
-# Ankle Roll (uses ankle motor)
 T1_ACTUATOR_ANKLE_ROLL = BuiltinPositionActuatorCfg(
-    joint_names_expr=(".*Ankle_Roll",),
-    stiffness=_ankle_stiffness,
-    damping=_ankle_damping,
+    target_names_expr=(".*Ankle_Roll",),
+    stiffness=50.0,
+    damping=3.0,
     effort_limit=MOTOR_SPECS["ankle"].effort_limit,
     armature=MOTOR_SPECS["ankle"].reflected_inertia,
 )
@@ -200,38 +187,26 @@ T1_ACTUATOR_ANKLE_ROLL = BuiltinPositionActuatorCfg(
 # Actuator Configurations for Full-Body (23-DOF)
 ##
 
-# Neck (uses neck motor) - Higher frequency for faster response
-_neck_natural_freq = 15.0 * 2.0 * math.pi  # 15Hz
-_neck_stiffness, _neck_damping = compute_pd_gains(
-    MOTOR_SPECS["neck"], natural_freq=_neck_natural_freq
-)
 T1_ACTUATOR_NECK = BuiltinPositionActuatorCfg(
-    joint_names_expr=("AAHead_yaw", "Head_pitch"),  # Explicit names to avoid conflicts
-    stiffness=_neck_stiffness,
-    damping=_neck_damping,
+    target_names_expr=("AAHead_yaw", "Head_pitch"),
+    stiffness=5.0,     # Holosoma T1 (was computed 15.99)
+    damping=0.5,       # Holosoma T1 (was computed 0.68)
     effort_limit=MOTOR_SPECS["neck"].effort_limit,
     armature=MOTOR_SPECS["neck"].reflected_inertia,
 )
 
-# Arms (uses arm motor) - Moderate frequency
-_arm_natural_freq = 12.0 * 2.0 * math.pi  # 12Hz
-_arm_stiffness, _arm_damping = compute_pd_gains(
-    MOTOR_SPECS["arm"], natural_freq=_arm_natural_freq
-)
 T1_ACTUATOR_ARM = BuiltinPositionActuatorCfg(
-    joint_names_expr=(".*Shoulder.*", ".*Elbow.*"),
-    stiffness=_arm_stiffness,
-    damping=_arm_damping,
+    target_names_expr=(".*Shoulder.*", ".*Elbow.*"),
+    stiffness=20.0,    # Holosoma T1 (was computed 160.61!)
+    damping=0.5,       # Holosoma T1 (was computed 8.52!)
     effort_limit=MOTOR_SPECS["arm"].effort_limit,
     armature=MOTOR_SPECS["arm"].reflected_inertia,
 )
 
-# Waist (uses waist motor)
-_waist_stiffness, _waist_damping = compute_pd_gains(MOTOR_SPECS["waist"])
 T1_ACTUATOR_WAIST = BuiltinPositionActuatorCfg(
-    joint_names_expr=("Waist",),
-    stiffness=_waist_stiffness,
-    damping=_waist_damping,
+    target_names_expr=("Waist",),
+    stiffness=200.0,   # Holosoma T1 (was computed 188.76) ✓
+    damping=5.0,       # Holosoma T1 (was computed 12.02)
     effort_limit=MOTOR_SPECS["waist"].effort_limit,
     armature=MOTOR_SPECS["waist"].reflected_inertia,
 )

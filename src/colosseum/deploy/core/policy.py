@@ -51,12 +51,19 @@ class Policy(ABC):
         self._model.eval()
 
         # Action scaling (must match training!)
-        # scale = action_scale_factor * effort_limit / stiffness
-        self.action_scale = (
-            self.config.action_scale
-            * self.robot.effort_limit
-            / self.robot.joint_stiffness
-        )
+        # Training uses: joint_target = action * scale + default_joint_pos
+        # where scale is just ACTION_SCALE (uniform 0.25 for all joints)
+        # NO effort_limit/stiffness calculation in training!
+        action_scale = self.config.action_scale
+        if isinstance(action_scale, dict):
+            # Convert dict to tensor in simulation joint order
+            action_scale_list = [action_scale.get(name, 0.25) for name in self.robot.cfg.sim_joint_names]
+            self.action_scale = torch.tensor(action_scale_list, dtype=torch.float32)
+        elif isinstance(action_scale, (int, float)):
+            # Uniform scaling for all joints (default case)
+            self.action_scale = torch.full((self.robot.num_joints,), action_scale, dtype=torch.float32)
+        else:
+            self.action_scale = torch.tensor(action_scale, dtype=torch.float32)
 
     @abstractmethod
     def reset(self) -> None:
