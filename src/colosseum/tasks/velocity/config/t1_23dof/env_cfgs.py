@@ -3,6 +3,7 @@
 from mjlab.envs import ManagerBasedRlEnvCfg
 from mjlab.envs.mdp.actions import JointPositionActionCfg
 from mjlab.managers import RewardTermCfg
+from mjlab.sensor import RayCastSensorCfg
 from mjlab.tasks.velocity import mdp
 from mjlab.tasks.velocity.mdp import UniformVelocityCommandCfg
 from mjlab.tasks.velocity.velocity_env_cfg import make_velocity_env_cfg
@@ -28,8 +29,14 @@ def booster_t1_rough_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
     # Foot sites for observations and rewards
     site_names = ("left_foot", "right_foot")
 
-    # Contact sensors from t1_contacts
-    cfg.scene.sensors = (FEET_GROUND_CONTACT_SENSOR, SELF_COLLISION_SENSOR)
+    # Set terrain_scan frame to T1's base body
+    for sensor in cfg.scene.sensors or ():
+        if sensor.name == "terrain_scan":
+            assert isinstance(sensor, RayCastSensorCfg)
+            sensor.frame.name = "Trunk"
+
+    # Append T1-specific contact sensors (preserves terrain_scan from base config)
+    cfg.scene.sensors = cfg.scene.sensors + (FEET_GROUND_CONTACT_SENSOR, SELF_COLLISION_SENSOR)
 
     # Enable terrain curriculum
     if cfg.scene.terrain is not None and cfg.scene.terrain.terrain_generator is not None:
@@ -57,6 +64,7 @@ def booster_t1_rough_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
 
     # Configure foot friction event with T1 foot geoms
     cfg.events["foot_friction"].params["asset_cfg"].geom_names = FOOT_GEOM_NAMES
+    cfg.events["base_com"].params["asset_cfg"].body_names = ("Trunk",)
 
     # T1-specific pose standards (all 23 joints)
     cfg.rewards["pose"].params["std_standing"] = {".*": 0.05}
@@ -107,10 +115,6 @@ def booster_t1_rough_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
     for reward_name in ["foot_clearance", "foot_swing_height", "foot_slip"]:
         cfg.rewards[reward_name].params["asset_cfg"].site_names = site_names
 
-    # Remove foot-site-dependent rewards since T1 doesn't have foot sites defined
-    for reward_name in ["foot_clearance", "foot_swing_height", "foot_slip"]:
-        cfg.rewards.pop(reward_name, None)
-
     # Reward weights tuning
     cfg.rewards["body_ang_vel"].weight = -0.05
     cfg.rewards["angular_momentum"].weight = -0.02
@@ -128,7 +132,7 @@ def booster_t1_rough_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
         # Effectively infinite episode length
         cfg.episode_length_s = int(1e9)
 
-        cfg.observations["policy"].enable_corruption = False
+        cfg.observations["actor"].enable_corruption = False
         cfg.events.pop("push_robot", None)
 
         if cfg.scene.terrain is not None:
@@ -149,11 +153,18 @@ def booster_t1_flat_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
     assert cfg.scene.terrain is not None
     cfg.scene.terrain.terrain_type = "plane"
     cfg.scene.terrain.terrain_generator = None
+    
+    # Remove raycast sensor and height scan (no terrain to scan).
+    cfg.scene.sensors = tuple(
+    s for s in (cfg.scene.sensors or ()) if s.name != "terrain_scan"
+    )
+    del cfg.observations["actor"].terms["height_scan"]
+    del cfg.observations["critic"].terms["height_scan"]
 
     # Disable terrain curriculum
     assert cfg.curriculum is not None
     assert "terrain_levels" in cfg.curriculum
-    del cfg.curriculum["terrain_levels"]
+    cfg.curriculum.pop("terrain_levels", None)
 
     if play:
         commands = cfg.commands

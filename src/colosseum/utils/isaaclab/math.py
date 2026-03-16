@@ -1940,8 +1940,8 @@ def interpolate_rotations(
 def interpolate_poses(
     pose_1: torch.Tensor,
     pose_2: torch.Tensor,
-    num_steps: int = None,
-    step_size: float = None,
+    num_steps: int = None, # type: ignore[assignment]
+    step_size: float = None, # type: ignore[assignment]
     perturb: bool = False,
 ) -> tuple[torch.Tensor, int]:
     """Performs linear interpolation between two poses.

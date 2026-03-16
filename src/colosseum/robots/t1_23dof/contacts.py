@@ -67,7 +67,7 @@ HANDS_FEET_COLLISION = CollisionCfg(
 FEET_GROUND_CONTACT_SENSOR = ContactSensorCfg(
     name="feet_ground_contact",
     primary=ContactMatch(
-        mode="body",
+        mode="subtree",
         pattern=r"^(left_foot_link|right_foot_link)$",
         entity="robot",
     ),
@@ -85,9 +85,10 @@ SELF_COLLISION_SENSOR = ContactSensorCfg(
     name="self_collision",
     primary=ContactMatch(mode="subtree", pattern="Trunk", entity="robot"),
     secondary=ContactMatch(mode="subtree", pattern="Trunk", entity="robot"),
-    fields=("found",),
+    fields=("found","force"),
     reduce="none",
     num_slots=1,
+    history_length=4,
 )
 
 # Hand contact sensor (for manipulation)

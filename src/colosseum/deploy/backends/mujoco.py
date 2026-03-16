@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-import sys
 from time import sleep
-import select
 import numpy as np
 import torch
 import mujoco
 import mujoco.viewer
 
-from colosseum.deploy.core.base_controller import BaseController, VelocityCommand
+from colosseum.deploy.core.base_controller import BaseController
 
 from colosseum.deploy.config import ControllerConfig
 from colosseum.mdp.observations import compute_projected_gravity

@@ -170,8 +170,8 @@ def auto_register_tasks() -> None:
     triggering their @register_task decorators.
 
     Pattern: tasks/{task_name}/deploy/{robot_config}/__init__.py
-    Example: tasks/velocity/deploy/t1_23dof/__init__.py
-             → colosseum.tasks.velocity.deploy.t1_23dof
+    Example: tasks/velocity/deploy/t1/__init__.py
+             → colosseum.tasks.velocity.deploy.t1
     """
     # Get tasks directory (relative to this file: deploy/core/registry.py)
     # Go up to src/colosseum, then down to tasks
@@ -193,12 +193,12 @@ def auto_register_tasks() -> None:
     registered_count = 0
     for task_module_path in task_modules:
         # Extract module path from file path
-        # tasks/velocity/deploy/t1_23dof/__init__.py
+        # tasks/velocity/deploy/t1/__init__.py
         # → ['colosseum', 'tasks', 'velocity', 'deploy', 't1_23dof']
         relative_path = task_module_path.relative_to(colosseum_dir.parent)
         parts = list(relative_path.parts[:-1])  # Remove __init__.py
 
-        # Build module path: colosseum.tasks.velocity.deploy.t1_23dof
+        # Build module path: colosseum.tasks.velocity.deploy.t1
         module_path = ".".join(parts)
 
         try:

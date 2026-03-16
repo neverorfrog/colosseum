@@ -1,7 +1,6 @@
-from typing import Any, Literal
+from typing import Any
 from pydantic.dataclasses import dataclass
 from pydantic import Field
-from colosseum.deploy.config.robot import RobotConfig
 
 @dataclass(frozen=True)
 class PolicyConfig:

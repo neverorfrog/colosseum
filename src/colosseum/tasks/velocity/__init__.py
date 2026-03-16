@@ -1,11 +1,66 @@
-"""Velocity task package namespace.
+"""Velocity task registration for both mjlab and colosseum registries."""
 
-Training task registration lives under `colosseum.tasks.velocity.config.*` and
-should be imported explicitly by the train environment.
+from dataclasses import dataclass
 
-Deployment task registration lives under `colosseum.tasks.velocity.deploy.*` and
-is auto-imported by the deploy registry. Keep this package lightweight to avoid
-pulling train-only dependencies at import time.
-"""
+from colosseum.config.types.task import TaskConfig, register_task
 
-# Intentionally no side-effect imports here.
+
+def _make_rough_train_cfg():
+    from colosseum.tasks.velocity.config.t1_23dof.env_cfgs import booster_t1_rough_env_cfg
+    return booster_t1_rough_env_cfg()
+
+
+def _make_rough_play_cfg():
+    from colosseum.tasks.velocity.config.t1_23dof.env_cfgs import booster_t1_rough_env_cfg
+    return booster_t1_rough_env_cfg(play=True)
+
+
+def _make_flat_train_cfg():
+    from colosseum.tasks.velocity.config.t1_23dof.env_cfgs import booster_t1_flat_env_cfg
+    return booster_t1_flat_env_cfg()
+
+
+def _make_flat_play_cfg():
+    from colosseum.tasks.velocity.config.t1_23dof.env_cfgs import booster_t1_flat_env_cfg
+    return booster_t1_flat_env_cfg(play=True)
+
+
+def _make_rl_cfg():
+    from colosseum.tasks.velocity.config.t1_23dof.rl_cfg import booster_t1_ppo_runner_cfg
+    return booster_t1_ppo_runner_cfg()
+
+
+@register_task("t1-velocity-rough")
+@dataclass(frozen=True)
+class T1VelocityRoughTask(TaskConfig):
+    name: str = "t1-velocity-rough"
+
+    @property
+    def train_env_cfg(self):
+        return _make_rough_train_cfg()
+
+    @property
+    def play_env_cfg(self):
+        return _make_rough_play_cfg()
+
+    @property
+    def rl_cfg(self):
+        return _make_rl_cfg()
+
+
+@register_task("t1-velocity-flat")
+@dataclass(frozen=True)
+class T1VelocityFlatTask(TaskConfig):
+    name: str = "t1-velocity-flat"
+
+    @property
+    def train_env_cfg(self):
+        return _make_flat_train_cfg()
+
+    @property
+    def play_env_cfg(self):
+        return _make_flat_play_cfg()
+
+    @property
+    def rl_cfg(self):
+        return _make_rl_cfg()

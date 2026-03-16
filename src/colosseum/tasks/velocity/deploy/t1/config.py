@@ -1,4 +1,4 @@
-"""T1 23-DOF velocity tracking deployment preset.
+"""T1 velocity tracking deployment preset.
 
 Complete deployment configuration for running velocity tracking on the T1 robot.
 """
@@ -11,7 +11,7 @@ from colosseum.deploy.config import (
     VelocityCommandConfig,
 )
 from colosseum.deploy.input import InputConfig
-from colosseum.robots.t1_23dof.deploy_config import T1_23DOF_ROBOT_CFG
+from colosseum.robots.t1_23dof.deploy import T1_23DOF_ROBOT_CFG
 from colosseum.utils import project_root
 
 _DEFAULT_POLICY_PATH_ROUGH = (
@@ -21,7 +21,7 @@ _DEFAULT_POLICY_PATH_ROUGH = (
     / "tasks"
     / "velocity"
     / "deploy"
-    / "t1_23dof"
+    / "t1"
     / "models"
     / "policy_rough.onnx"
 )
@@ -72,7 +72,7 @@ _DEFAULT_POLICY_PATH_FLAT = (
     / "tasks"
     / "velocity"
     / "deploy"
-    / "t1_23dof"
+    / "t1"
     / "models"
     / "policy_flat.onnx"
 )
@@ -114,4 +114,3 @@ T1_23DOF_VELOCITY_FLAT = ControllerConfig(
         metrics_max_events=2000,  # Metrics buffer size
     ),
 )
-

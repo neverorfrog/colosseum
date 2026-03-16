@@ -9,7 +9,7 @@ Architecture:
 
 Example:
     >>> # Import task-specific deployment
-    >>> from colosseum.tasks.velocity.deploy.t1_23dof import T1_23DOF_VELOCITY_DEPLOY_CFG
+    >>> from colosseum.tasks.velocity.deploy.t1 import T1_23DOF_VELOCITY_ROUGH
     >>> from colosseum.deploy.core.controllers import MujocoController
     >>>
     >>> # Run deployment

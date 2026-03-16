@@ -9,15 +9,6 @@ class RobotData:
     described in RobotCfg.joint_names
     """
 
-    joint_pos: torch.Tensor
-    joint_vel: torch.Tensor
-    feedback_torque: torch.Tensor
-    root_pos_w: torch.Tensor
-    root_quat_w: torch.Tensor
-    root_lin_vel_b: torch.Tensor
-    root_ang_vel_b: torch.Tensor
-    projected_gravity_b: torch.Tensor
-
     def __init__(self, cfg: RobotConfig) -> None:
         self.cfg = cfg
         num_joints = len(self.cfg.joint_names)
@@ -35,21 +26,15 @@ class RobotData:
 
 
 class BoosterRobot:
-    cfg: RobotConfig
-    data: RobotData
-    joint_stiffness: torch.Tensor
-    joint_damping: torch.Tensor
-    joint_armature: torch.Tensor
-    default_joint_pos: torch.Tensor
 
     def __init__(self, cfg: RobotConfig) -> None:
-        self.cfg = cfg
-        self.data = RobotData(cfg)
-        self.joint_stiffness = torch.tensor(cfg.joint_stiffness, dtype=torch.float32)
-        self.joint_damping = torch.tensor(cfg.joint_damping, dtype=torch.float32)
-        self.joint_armature = torch.tensor(cfg.joint_armature, dtype=torch.float32)
-        self.default_joint_pos = torch.tensor(cfg.default_joint_pos, dtype=torch.float32)
-        self.effort_limit = torch.tensor(cfg.effort_limit, dtype=torch.float32)
+        self.cfg: RobotConfig = cfg
+        self.data: RobotData = RobotData(cfg)
+        self.joint_stiffness: torch.Tensor = torch.tensor(cfg.joint_stiffness, dtype=torch.float32)
+        self.joint_damping: torch.Tensor = torch.tensor(cfg.joint_damping, dtype=torch.float32)
+        self.joint_armature: torch.Tensor = torch.tensor(cfg.joint_armature, dtype=torch.float32)
+        self.default_joint_pos: torch.Tensor = torch.tensor(cfg.default_joint_pos, dtype=torch.float32)
+        self.effort_limit: torch.Tensor = torch.tensor(cfg.effort_limit, dtype=torch.float32)
 
     @property
     def num_joints(self) -> int:

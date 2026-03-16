@@ -14,18 +14,18 @@ class ControllerConfig:
     Combines all configuration components for a complete deployment.
     """
 
-    # Core parameters
-    policy_dt: float = Field(
-        default=0.02,
-        description="Policy execution frequency (s). Default 0.02s = 50Hz"
-    )
-
     # Required sub-configs
     robot: RobotConfig = Field(
         description="Robot hardware configuration"
     )
     policy: PolicyConfig = Field(
         description="Policy configuration"
+    )
+
+    # Core parameters
+    policy_dt: float = Field(
+        default=0.02,
+        description="Policy execution frequency (s). Default 0.02s = 50Hz"
     )
 
     # Optional sub-configs

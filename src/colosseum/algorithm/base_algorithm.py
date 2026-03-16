@@ -1,0 +1,629 @@
+"""Base algorithm class with checkpoint utilities.
+
+Inspired by holosoma's BaseAlgo pattern, providing minimal save/load functionality
+for RL algorithms.
+"""
+
+from __future__ import annotations
+
+import time
+from abc import ABC, abstractmethod
+from collections import deque
+from pathlib import Path
+from typing import Any, Callable, Protocol, Union
+
+import numpy as np
+import torch
+from loguru import logger
+from mjlab.envs import ManagerBasedRlEnv
+from mjlab.utils import spaces as mjlab_spaces
+
+from colosseum.utils.logger import log_training_step
+
+from typing import TYPE_CHECKING
+
+import torch.nn as nn
+
+if TYPE_CHECKING:
+    from colosseum.config.types.algorithm import AlgorithmConfig
+
+# Type alias for observation structure from mjlab environments
+ObsType = Union[dict[str, Union[torch.Tensor, dict[str, torch.Tensor]]], torch.Tensor]
+
+
+class ActorProtocol(Protocol):
+    """Minimal interface required by BaseAlgorithm for actor networks."""
+    training: bool
+
+    def get_action(
+        self, obs: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]: ...
+
+    def eval(self) -> Any: ...
+
+    def train(self, mode: bool = True) -> Any: ...
+
+
+def cpu_state(state_dict: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+    """Move all tensors in state dict to CPU.
+
+    Args:
+        state_dict: State dictionary with tensors
+
+    Returns:
+        State dictionary with all tensors on CPU
+    """
+    return {
+        k: v.cpu() if isinstance(v, torch.Tensor) else v for k, v in state_dict.items()
+    }
+
+
+class BaseAlgorithm(ABC):
+    """Base class for RL algorithms with checkpoint functionality.
+
+    Provides:
+    - Abstract train() method that subclasses must implement
+    - save() and load() interface for checkpointing
+    - Metadata management for reproducibility
+    - Clean checkpoint structure
+    - Optional logging callback
+
+    Subclasses must implement:
+    - train() method (main training loop)
+    - save() method (checkpoint saving)
+    - load() method (checkpoint loading)
+
+    Args:
+        config: Algorithm configuration
+        env: Environment instance
+        device: Torch device for training (e.g., "cuda", "cpu")
+        log_fn: Optional logging callback (metrics_dict, step) -> None
+        log_interval: Logging cadence in environment steps
+    """
+
+    def __init__(
+        self,
+        config: "AlgorithmConfig",
+        env: ManagerBasedRlEnv,
+        device: str | torch.device,
+        log_fn: Callable[[dict[str, float], int], None],
+        log_interval: int,
+    ) -> None:
+        self.config = config
+        self.device = torch.device(device) if isinstance(device, str) else device
+        self.log_fn = log_fn
+        self.log_interval = int(log_interval)
+        self._metadata: dict[str, Any] = {}
+        self.seed = config.seed
+        self.actor: ActorProtocol  # Set by subclasses (e.g., PPO._build_networks)
+        self.actor_obs_normalizer: nn.Module  # Set by subclasses (e.g., PPO._build_normalizer)
+        self.critic_obs_normalizer: nn.Module  # Set by subclasses (e.g., PPO._build_normalizer)
+
+        # Instantiate environment using provided class
+        self.env = env
+        # Check if using Dict observations (mjlab-style)
+        self.use_dict_obs = isinstance(
+            self.env.single_observation_space, mjlab_spaces.Dict
+        )
+
+        # Episode tracking (universal for all episodic RL algorithms)
+        self.latest_episode_metrics: dict[str, float] | None = None
+        self.episode_lengths: deque[float] = deque(maxlen=100)  # Rolling average buffer
+        self.start_time: float | None = None
+
+        # Success rate tracking: rolling window over last 100 finished episodes
+        # Each entry is True (success) or False (failure/timeout)
+        self.episode_outcomes: deque[bool] = deque(maxlen=100)
+
+        # Optional checkpointing configuration (set by runner)
+        self._checkpoint_dir: Path | None = None
+        self._save_interval: int | None = None
+        self._last_save_step: int = -1
+
+        # Optional evaluation configuration (set by training script)
+        self._eval_env: ManagerBasedRlEnv | None = None
+        self._eval_interval: int = 0
+        self._eval_episodes: int = 10
+        self._last_eval_step: int = 0
+
+        # Setting the seed
+        self._maybe_seed()
+
+    def get_actor_obs(self, obs: ObsType) -> torch.Tensor:
+        """Extract actor observations from obs dict (rsl_rl style).
+
+        Args:
+            obs: Either a dict with "actor" key or a flat tensor
+
+        Returns:
+            Tensor of shape (num_envs, actor_obs_dim)
+        """
+        if self.use_dict_obs:
+            assert isinstance(obs, dict), "Expected dict observations but got tensor"
+            policy_obs = obs["actor"]
+            assert isinstance(
+                policy_obs, torch.Tensor
+            ), "Expected actor obs to be a tensor"
+            return policy_obs
+        assert isinstance(obs, torch.Tensor), "Expected tensor observations but got dict"
+        return obs
+
+    def get_critic_obs(self, obs: ObsType) -> torch.Tensor:
+        """Extract critic observations from obs dict (rsl_rl style).
+
+        Args:
+            obs: Either a dict with "critic" key or a flat tensor
+
+        Returns:
+            Tensor of shape (num_envs, critic_obs_dim)
+        """
+        if self.use_dict_obs:
+            assert isinstance(obs, dict), "Expected dict observations but got tensor"
+            critic_obs = obs["critic"]
+            assert isinstance(
+                critic_obs, torch.Tensor
+            ), "Expected critic obs to be a tensor"
+            return critic_obs
+        assert isinstance(obs, torch.Tensor), "Expected tensor observations but got dict"
+        return obs
+
+    def _unwrap_env(self):
+        """Get underlying environment (handles wrappers)."""
+        return getattr(self, "unwrapped_env", self.env)
+
+    def update_episode_counts(
+        self,
+        terminated: torch.Tensor,
+        truncated: torch.Tensor,
+        success_term_name: str = "arrived_at_goal",
+    ) -> None:
+        """Update rolling success rate for episodes that ended this step.
+
+        For each finished episode, appends True (success) or False (failure/timeout)
+        to a rolling deque of the last 100 episodes.
+
+        Success is determined by checking whether the specific termination term
+        (e.g., "arrived_at_goal") fired, rather than treating all non-timeout
+        terminations as success.
+
+        Args:
+            terminated: Boolean tensor (num_envs,) - True if episode terminated
+            truncated: Boolean tensor (num_envs,) - True if episode timed out
+            success_term_name: Name of the termination term that indicates success
+
+        Example:
+            >>> obs, rewards, terminated, truncated, infos = self.env.step(actions)
+            >>> self.update_episode_counts(terminated, truncated)
+        """
+        dones = terminated | truncated
+        num_done = dones.sum().item()
+        if num_done == 0:
+            return
+
+        # Check if the success termination term exists and fired
+        unwrapped = getattr(self.env, "unwrapped", self.env)
+        term_mgr = getattr(unwrapped, "termination_manager", None)
+        if term_mgr is not None and success_term_name in term_mgr.active_terms:
+            success_flags = term_mgr.get_term(success_term_name)  # [num_envs] bool
+        else:
+            # Fallback: any non-timeout termination counts as success
+            success_flags = terminated & ~truncated
+
+        # Append one outcome per finished episode
+        done_indices = dones.nonzero(as_tuple=False).squeeze(-1)
+        for idx in done_indices:
+            self.episode_outcomes.append(bool(success_flags[idx].item()))
+
+    def _log_training_metrics(
+        self,
+        step: int,
+        losses_buffer: dict[str, list[float]],
+        collection_time: float,
+        learning_time: float,
+        log_interval: int,
+        total_timesteps: int,
+        title: str = "Training",
+        use_rich: bool = True,
+        steps_per_log_step: int = 1,
+    ) -> None:
+        """Log comprehensive training metrics to W&B and Rich panel.
+
+        Generic implementation that works for all algorithms.
+        Algorithms are responsible for:
+        - Accumulating losses in losses_buffer
+        - Updating self.latest_episode_metrics from env infos
+        - Updating self.episode_lengths when episodes complete
+
+        Args:
+            step: Current training step
+            losses_buffer: Accumulated losses over log_interval
+            collection_time: Total collection phase time (seconds)
+            learning_time: Total learning phase time (seconds)
+            log_interval: Number of steps between logs
+            total_timesteps: Total training steps
+            title: Title for console output (e.g., "SAC Training")
+            use_rich: Whether to use Rich console output
+            steps_per_log_step: Env steps per log step (1 for SAC, num_steps_per_env for PPO)
+        """
+        # Average accumulated losses
+        avg_losses: dict[str, float] = {
+            k: float(np.mean(v)) for k, v in losses_buffer.items() if len(v) > 0
+        }
+
+        # Time metrics
+        assert self.start_time is not None, "start_time must be set before logging"
+
+        # Total elapsed time since training started
+        elapsed_time = time.time() - self.start_time
+
+        # Steps per second (overall average)
+        sps = int(step / elapsed_time) if elapsed_time > 0 else 0
+
+        # Interval metrics (for this logging period)
+        interval_time = collection_time + learning_time
+        fps = (
+            (self.env.num_envs * log_interval * steps_per_log_step) / interval_time
+            if interval_time > 0
+            else 0.0
+        )
+
+        # Prepare episode metrics for display
+        episode_metrics_for_display = None
+        if self.latest_episode_metrics is not None:
+            episode_metrics_for_display = self.latest_episode_metrics.copy()
+
+            # Mean/Reward: prefer rolling average from algorithm (e.g. PPO's rewbuffer)
+            # if the algorithm already added it to losses_buffer; otherwise fall back
+            # to the snapshot sum of per-step reward components from infos["log"].
+            if "mean_reward" in avg_losses:
+                episode_metrics_for_display["Mean/Reward"] = avg_losses["mean_reward"]
+            else:
+                episode_metrics_for_display["Mean/Reward"] = sum(
+                    v
+                    for k, v in self.latest_episode_metrics.items()
+                    if k.startswith("Episode_Reward/")
+                )
+
+            # Add mean episode length from tracked completed episodes
+            if len(self.episode_lengths) > 0:
+                episode_metrics_for_display["Mean/Episode_Length"] = float(
+                    np.mean(self.episode_lengths)
+                )
+
+        # Logging architecture:
+        # - log_fn: Logs to W&B (train/ and episode metrics with their original prefixes)
+        # - log_training_step: Rich console output only (no W&B to avoid duplication)
+        assert self.log_fn is not None, "log_fn must be provided for logging"
+
+        # Log training metrics to W&B
+        train_metrics = {f"train/{k}": v for k, v in avg_losses.items()}
+        train_metrics["time/interval_collection"] = (
+            collection_time  # Time for this interval
+        )
+        train_metrics["time/interval_learning"] = learning_time  # Time for this interval
+        train_metrics["time/interval_total"] = interval_time  # Time for this interval
+        train_metrics["time/elapsed"] = elapsed_time  # Total time since start
+        train_metrics["time/sps"] = sps  # Overall steps/sec
+        train_metrics["time/fps"] = fps  # Interval frames/sec
+        self.log_fn(train_metrics, step)
+
+        # Log episode metrics to W&B
+        if self.latest_episode_metrics is not None:
+            self.log_fn(self.latest_episode_metrics, step)
+        if episode_metrics_for_display is not None:
+            self.log_fn(episode_metrics_for_display, step)
+
+        # Log rolling success rate (last 100 episodes)
+        if len(self.episode_outcomes) > 0:
+            success_rate = sum(self.episode_outcomes) / len(self.episode_outcomes)
+            self.log_fn(
+                {
+                    "Episode_Success/rate": success_rate,
+                },
+                step,
+            )
+
+        # Console output (Rich or loguru) - no W&B logging
+        log_training_step(
+            step=step,
+            total_steps=total_timesteps,
+            loss_dict=avg_losses,
+            episode_metrics=episode_metrics_for_display,
+            collection_time=collection_time,
+            learning_time=learning_time,
+            elapsed_time=elapsed_time,
+            num_envs=self.env.num_envs,
+            log_interval=log_interval,
+            title=title,
+            use_rich=self.config.use_rich_logging,
+            steps_per_log_step=steps_per_log_step,
+        )
+
+    @abstractmethod
+    def train(self) -> None:
+        """Main training loop."""
+        pass
+
+    def attach_metadata(self, **kwargs: Any) -> None:
+        """Attach metadata that will be saved with checkpoints."""
+        self._metadata.update(kwargs)
+
+    def _maybe_seed(self) -> None:
+        if self.seed is None:
+            return
+        np.random.seed(self.seed)
+        torch.manual_seed(self.seed)
+        torch.backends.cudnn.deterministic = True
+
+    # --- Checkpointing helpers configured by the training driver ---
+    def configure_checkpointing(
+        self, checkpoint_dir: str | Path, save_interval: int | None
+    ) -> None:
+        """Enable periodic checkpoint saving during training."""
+        self._checkpoint_dir = Path(checkpoint_dir)
+        if save_interval is None or save_interval <= 0:
+            self._save_interval = None
+        else:
+            self._save_interval = int(save_interval)
+        self._last_save_step = 0
+
+    def _maybe_save_checkpoint(self, step: int) -> None:
+        """Save a checkpoint if configured and due at this step."""
+        if (
+            self._checkpoint_dir is None
+            or self._save_interval is None
+            or self._save_interval <= 0
+        ):
+            return
+
+        due = (step - self._last_save_step) >= self._save_interval
+        if not due:
+            return
+
+        ckpt_dir = self._checkpoint_dir
+        ckpt_dir.mkdir(parents=True, exist_ok=True)
+
+        # File name includes zero-padded step count
+        ckpt_path = ckpt_dir / f"model_{step:07d}.pt"
+        try:
+            self.save(ckpt_path, global_step=step)
+            self._last_save_step = step
+
+            # Maintain a 'latest.pt' symlink for easy discovery
+            latest_link = ckpt_dir / "latest.pt"
+            try:
+                if latest_link.exists() or latest_link.is_symlink():
+                    latest_link.unlink()
+                latest_link.symlink_to(ckpt_path.name)
+            except Exception:
+                # Fallback: copy if symlink not permitted
+                try:
+                    import shutil
+
+                    shutil.copy2(ckpt_path, latest_link)
+                except Exception:
+                    pass
+
+            # Track with W&B if available so it appears in Files
+            try:
+                import wandb  # type: ignore
+
+                if getattr(wandb, "run", None) is not None:
+                    wandb.save(str(ckpt_path), policy="now")
+            except Exception:
+                pass
+        except Exception as e:
+            logger.error(f"Failed to save checkpoint at step {step}: {e}")
+
+    # --- Evaluation helpers configured by the training driver ---
+    def configure_evaluation(
+        self, eval_env: ManagerBasedRlEnv, eval_interval: int, eval_episodes: int
+    ) -> None:
+        """Enable periodic evaluation during training."""
+        self._eval_env = eval_env
+        self._eval_interval = eval_interval
+        self._eval_episodes = eval_episodes
+        self._last_eval_step = 0
+
+    def _maybe_evaluate(self, step: int) -> None:
+        """Run evaluation if configured and due at this step."""
+        if (
+            self._eval_env is None
+            or self._eval_interval <= 0
+        ):
+            return
+
+        due = (step - self._last_eval_step) >= self._eval_interval
+        if not due:
+            return
+
+        self._last_eval_step = step
+        eval_metrics = self.evaluate(self._eval_env, self._eval_episodes)
+        self.log_fn(eval_metrics, step)
+        logger.info(
+            f"[Eval @ step {step}] "
+            + ", ".join(f"{k}: {v:.3f}" for k, v in eval_metrics.items())
+        )
+
+    def _eval_get_action(self, normalized_obs: torch.Tensor) -> torch.Tensor:
+        """Get deterministic action for evaluation. Override in subclasses if needed."""
+        actions, _, _ = self.actor.get_action(normalized_obs)
+        return actions
+
+    def _prepare_eval_actor_obs(
+        self, actor_obs: torch.Tensor, eval_env: ManagerBasedRlEnv
+    ) -> torch.Tensor:
+        """Transform raw actor obs before normalization during evaluation."""
+        return actor_obs
+
+    def evaluate(
+        self,
+        eval_env: ManagerBasedRlEnv,
+        num_episodes: int,
+        success_term_name: str = "arrived_at_goal",
+    ) -> dict[str, float]:
+        """Run deterministic evaluation episodes and return metrics."""
+        # Switch to eval mode
+        was_training = self.actor.training
+        self.actor.eval()
+        self.actor_obs_normalizer.eval()
+
+        successes: list[bool] = []
+        episode_lengths: list[int] = []
+        episode_rewards: list[float] = []
+
+        obs_dict, _ = eval_env.reset()
+        actor_obs = self.get_actor_obs(obs_dict)
+
+        current_ep_length = torch.zeros(eval_env.num_envs, device=self.device)
+        current_ep_reward = torch.zeros(eval_env.num_envs, device=self.device)
+
+        while len(successes) < num_episodes:
+            with torch.no_grad():
+                actor_obs = self._prepare_eval_actor_obs(actor_obs, eval_env)
+                normalized_obs = self.actor_obs_normalizer(actor_obs)
+                actions = self._eval_get_action(normalized_obs)
+
+            obs_dict, rewards, terminated, truncated, infos = eval_env.step(actions)
+            actor_obs = self.get_actor_obs(obs_dict)
+
+            current_ep_length += 1
+            current_ep_reward += rewards.squeeze(-1) if rewards.dim() > 1 else rewards
+
+            dones = terminated | truncated
+            if dones.any():
+                unwrapped = getattr(eval_env, "unwrapped", eval_env)
+                term_mgr = getattr(unwrapped, "termination_manager", None)
+                if term_mgr is not None and success_term_name in term_mgr.active_terms:
+                    success_flags = term_mgr.get_term(success_term_name)
+                else:
+                    success_flags = terminated & ~truncated
+
+                done_indices = dones.nonzero(as_tuple=False).squeeze(-1)
+                for idx in done_indices:
+                    if len(successes) >= num_episodes:
+                        break
+                    successes.append(bool(success_flags[idx].item()))
+                    episode_lengths.append(int(current_ep_length[idx].item()))
+                    episode_rewards.append(float(current_ep_reward[idx].item()))
+
+                current_ep_length[dones] = 0
+                current_ep_reward[dones] = 0
+
+        # Restore training mode
+        if was_training:
+            self.actor.train()
+            self.actor_obs_normalizer.train()
+
+        success_rate = sum(successes) / len(successes) if successes else 0.0
+        mean_ep_length = float(np.mean(episode_lengths)) if episode_lengths else 0.0
+        mean_ep_reward = float(np.mean(episode_rewards)) if episode_rewards else 0.0
+
+        return {
+            "eval/success_rate": success_rate,
+            "eval/mean_episode_length": mean_ep_length,
+            "eval/mean_reward": mean_ep_reward,
+        }
+
+    @abstractmethod
+    def save(self, path: str | Path, **extra_state: Any) -> None:
+        """Save checkpoint to disk."""
+        pass
+
+    @abstractmethod
+    def load(self, path: str | Path) -> dict[str, Any]:
+        """Load checkpoint from disk."""
+        pass
+
+    def _save_checkpoint(
+        self,
+        path: str | Path,
+        state_dict: dict[str, Any],
+    ) -> None:
+        """Internal helper to save checkpoint with metadata."""
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        if self._metadata:
+            state_dict["metadata"] = self._metadata
+
+        cpu_dict = {}
+        for key, value in state_dict.items():
+            if isinstance(value, dict):
+                cpu_dict[key] = (
+                    cpu_state(value)
+                    if any(isinstance(v, torch.Tensor) for v in value.values())
+                    else value
+                )
+            elif isinstance(value, torch.Tensor):
+                cpu_dict[key] = value.cpu()
+            else:
+                cpu_dict[key] = value
+
+        torch.save(cpu_dict, path)
+        logger.success(f"Checkpoint saved: {path}")
+
+    def _load_checkpoint(
+        self,
+        path: str | Path,
+        map_location: str | torch.device | None = None,
+    ) -> dict[str, Any]:
+        """Internal helper to load checkpoint."""
+        path = Path(path)
+
+        if not path.exists():
+            raise FileNotFoundError(f"Checkpoint not found: {path}")
+
+        if map_location is None:
+            map_location = self.device
+
+        checkpoint = torch.load(path, map_location=map_location, weights_only=False)
+        logger.success(f"Checkpoint loaded: {path}")
+
+        return checkpoint
+
+
+def get_latest_checkpoint(
+    checkpoint_dir: str | Path, pattern: str = "*.pt"
+) -> Path | None:
+    """Find the most recent checkpoint in a directory."""
+    checkpoint_dir = Path(checkpoint_dir)
+
+    if not checkpoint_dir.exists():
+        return None
+
+    checkpoints = list(checkpoint_dir.glob(pattern))
+
+    if not checkpoints:
+        return None
+
+    latest = max(checkpoints, key=lambda p: p.stat().st_mtime)
+    return latest
+
+
+def cleanup_old_checkpoints(
+    checkpoint_dir: str | Path,
+    keep_last_n: int = 5,
+    pattern: str = "*.pt",
+) -> None:
+    """Remove old checkpoints, keeping only the N most recent."""
+    checkpoint_dir = Path(checkpoint_dir)
+
+    if not checkpoint_dir.exists():
+        return
+
+    checkpoints = sorted(
+        checkpoint_dir.glob(pattern),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+
+    if len(checkpoints) <= keep_last_n:
+        return
+
+    for ckpt_path in checkpoints[keep_last_n:]:
+        ckpt_path.unlink()
+
+    logger.info(
+        f"Checkpoint cleanup: kept {keep_last_n}, removed {len(checkpoints) - keep_last_n}"
+    )
