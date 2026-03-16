@@ -86,7 +86,7 @@ no-default-feature = true
 solve-group = "robot"
 
 [tool.pixi.feature.robot]
-platforms = ["linux-aarch64"]
+platforms = ["linux-aarch64", "linux-64"]
 
 [tool.pixi.feature.robot.dependencies]
 python = "3.9.*"
