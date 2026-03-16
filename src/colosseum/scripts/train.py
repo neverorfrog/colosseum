@@ -7,22 +7,21 @@ This is independent of mjlab's RSL-RL runner.
 Usage:
     pixi run -e train train
     pixi run -e train train task:t1-velocity-flat algo:ppo logger:wandb
-    pixi run -e train train task:t1-velocity-flat --env.scene.num_envs 2048
-    pixi run -e train train --seed 0 --algo.learning_steps 10000000
+    pixi run -e train train task:t1-velocity-flat --task.env.scene.num-envs 2048
+    pixi run -e train train --seed 0 --algo.learning-steps 10000000
     pixi run -e train train --checkpoint ./logs/run/checkpoints/latest.pt
 """
 
 from __future__ import annotations
 
 import sys
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
 import tyro
 import wandb
 from loguru import logger
-from mjlab.envs import ManagerBasedRlEnv, ManagerBasedRlEnvCfg
+from mjlab.envs import ManagerBasedRlEnvCfg
 from mjlab.utils.torch import configure_torch_backends
 
 # Import tasks to populate registry
@@ -37,34 +36,20 @@ from colosseum.utils.logger import (
     teardown_wandb,
 )
 from colosseum.utils.torch import get_device, set_seed
+from colosseum.utils.train.env import ViewerCompatibleEnv
 
 
-@dataclass
-class _EnvOptions:
-    env: ManagerBasedRlEnvCfg
-
-
-def _make_env(env_cfg: ManagerBasedRlEnvCfg, device: str) -> ManagerBasedRlEnv:
-    return ManagerBasedRlEnv(cfg=env_cfg, device=device, render_mode=None)
+def _make_env(env_cfg: ManagerBasedRlEnvCfg, device: str) -> ViewerCompatibleEnv:
+    return ViewerCompatibleEnv(cfg=env_cfg, device=device, render_mode=None)
 
 
 def main() -> None:
     """Main PPO training entry point."""
-    # Pass 1: parse task/algo/logger subcommands; collect unrecognised args
-    config, remaining_args = tyro.cli(
+    config = tyro.cli(
         TrainConfig,
         config=(tyro.conf.CascadeSubcommandArgs,),
-        return_unknown_args=True,
     )
-
-    # Pass 2: apply --env.* overrides on top of the task's env config
-    env_options = tyro.cli(
-        _EnvOptions,
-        args=remaining_args,
-        default=_EnvOptions(env=config.task.train_env_cfg),
-        config=(tyro.conf.AvoidSubcommands, tyro.conf.FlagConversionOff),
-    )
-    env_cfg = env_options.env
+    env_cfg = config.task.env
 
     run_name = generate_run_name(
         task_name=config.task.name,

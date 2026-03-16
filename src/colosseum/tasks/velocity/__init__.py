@@ -1,6 +1,8 @@
 """Velocity task registration for both mjlab and colosseum registries."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+from mjlab.envs import ManagerBasedRlEnvCfg
 
 from colosseum.config.types.task import TaskConfig, register_task
 
@@ -34,10 +36,11 @@ def _make_rl_cfg():
 @dataclass(frozen=True)
 class T1VelocityRoughTask(TaskConfig):
     name: str = "t1-velocity-rough"
+    env: ManagerBasedRlEnvCfg = field(default_factory=_make_rough_train_cfg)
 
     @property
     def train_env_cfg(self):
-        return _make_rough_train_cfg()
+        return self.env
 
     @property
     def play_env_cfg(self):
@@ -52,10 +55,11 @@ class T1VelocityRoughTask(TaskConfig):
 @dataclass(frozen=True)
 class T1VelocityFlatTask(TaskConfig):
     name: str = "t1-velocity-flat"
+    env: ManagerBasedRlEnvCfg = field(default_factory=_make_flat_train_cfg)
 
     @property
     def train_env_cfg(self):
-        return _make_flat_train_cfg()
+        return self.env
 
     @property
     def play_env_cfg(self):

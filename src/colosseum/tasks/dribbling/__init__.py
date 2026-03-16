@@ -1,6 +1,8 @@
 """Dribbling task registration."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+from mjlab.envs import ManagerBasedRlEnvCfg
 
 from colosseum.config.types.task import TaskConfig, register_task
 
@@ -32,10 +34,11 @@ def _make_rl_cfg():
 @dataclass(frozen=True)
 class T1DribblingTask(TaskConfig):
   name: str = "t1-dribbling"
+  env: ManagerBasedRlEnvCfg = field(default_factory=_make_train_cfg)
 
   @property
   def train_env_cfg(self):
-    return _make_train_cfg()
+    return self.env
 
   @property
   def play_env_cfg(self):

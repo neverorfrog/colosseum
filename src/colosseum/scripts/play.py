@@ -11,16 +11,15 @@ Usage:
 
 from __future__ import annotations
 
-import os
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal
 
 import torch
 import tyro
 from loguru import logger
-from mjlab.envs import ManagerBasedRlEnv, ManagerBasedRlEnvCfg
+from mjlab.envs import ManagerBasedRlEnvCfg
 from mjlab.utils.torch import configure_torch_backends
 from mjlab.viewer import NativeMujocoViewer
 
@@ -30,6 +29,7 @@ import colosseum.tasks  # noqa: F401
 from colosseum.algorithm.base_algorithm import get_latest_checkpoint
 from colosseum.config.types.experiment import BaseExperimentConfig
 from colosseum.utils.torch import get_device
+from colosseum.utils.train.env import ViewerCompatibleEnv
 
 
 @dataclass(frozen=True)
@@ -60,11 +60,11 @@ def _resolve_checkpoint(checkpoint: str | None) -> Path | None:
     return None
 
 
-def _make_env(env_cfg: ManagerBasedRlEnvCfg, device: str, render_mode: str | None) -> ManagerBasedRlEnv:
-    return ManagerBasedRlEnv(cfg=env_cfg, device=device, render_mode=render_mode)
+def _make_env(env_cfg: ManagerBasedRlEnvCfg, device: str, render_mode: str | None) -> ViewerCompatibleEnv:
+    return ViewerCompatibleEnv(cfg=env_cfg, device=device, render_mode=render_mode)
 
 
-def create_agent(config: PlayConfig, env: ManagerBasedRlEnv, device: torch.device):
+def create_agent(config: PlayConfig, env: ViewerCompatibleEnv, device: torch.device):
     if config.agent == "zero":
         logger.info("Using zero-action agent")
         def zero_agent(obs_dict):
@@ -92,8 +92,8 @@ def create_agent(config: PlayConfig, env: ManagerBasedRlEnv, device: torch.devic
         algo_class = getattr(module, class_name)
 
         # Create minimal env just to get observation/action dimensions
-        from dataclasses import replace
-        dim_env_cfg = replace(config.task.train_env_cfg, scene=replace(config.task.train_env_cfg.scene, num_envs=1))
+        env_cfg = config.task.env
+        dim_env_cfg = replace(env_cfg, scene=replace(env_cfg.scene, num_envs=1))
         dim_env = _make_env(dim_env_cfg, str(device), render_mode=None)
 
         algo = algo_class(
@@ -131,9 +131,8 @@ def main() -> None:
     device = get_device(cuda=config.use_cuda, device_id=0)
     logger.info(f"Device: {device}")
 
-    env_cfg = config.task.play_env_cfg or config.task.train_env_cfg
+    env_cfg = config.task.play_env_cfg or config.task.env
     if config.num_envs != 1:
-        from dataclasses import replace
         env_cfg = replace(env_cfg, scene=replace(env_cfg.scene, num_envs=config.num_envs))
 
     render_mode = "rgb_array" if config.video else None
@@ -146,18 +145,8 @@ def main() -> None:
         _record_video(config, env, agent)
     else:
         viewer = NativeMujocoViewer(env, agent)
-        try:
-            viewer.setup()
-            viewer.sync_env_to_viewer()
-            while viewer.is_running():
-                if not viewer.tick():
-                    from time import sleep
-                    sleep(0.001)
-        except KeyboardInterrupt:
-            logger.warning("Interrupted")
-        finally:
-            viewer.close()
-            env.close()
+        viewer.run()
+        env.close()
 
 
 def _record_video(config: PlayConfig, env, agent) -> None:

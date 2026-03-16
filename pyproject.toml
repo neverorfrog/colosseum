@@ -11,6 +11,7 @@ dependencies = [
 	"evdev>=1.9.2,<2",
 	"tyro>=1.0.1,<2",
 	"pytest>=8.0.2,<10",
+	"wandb>=0.24.1,<0.25.0",
 ]
 
 [tool.pixi.workspace]
