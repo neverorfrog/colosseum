@@ -11,7 +11,7 @@ env/
 .venv/
 env.bak/
 venv.bak/
-
+external/
 
 # Ignore distribution/build directories and files
 build/

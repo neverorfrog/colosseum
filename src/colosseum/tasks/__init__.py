@@ -1,6 +1,7 @@
 """Colosseum tasks package with auto-discovery of task configurations."""
 
 # Import tasks to populate the colosseum task registry
+import colosseum.tasks.dribbling  # noqa: F401
 import colosseum.tasks.velocity  # noqa: F401
 
 try:
