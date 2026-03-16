@@ -1,51 +1,84 @@
-"""CLI utility to convert a deployment policy to ONNX using task presets."""
+#!/usr/bin/env python3
+"""Export a colosseum PPO checkpoint to ONNX.
+
+Output is placed next to the checkpoint as <task_name>_<algo_name>.onnx.
+
+Usage:
+    pixi run -e train export-onnx task:t1-velocity-flat
+    pixi run -e train export-onnx task:t1-velocity-rough --checkpoint ./wandb/latest-run/files/model_16000.pt
+"""
 
 from __future__ import annotations
 
-from dataclasses import replace
-from typing import Annotated, Optional
+import sys
+from pathlib import Path
 
 import tyro
+from loguru import logger
+from pydantic import ConfigDict
+from pydantic.dataclasses import dataclass
 
-from colosseum.utils.train.export import export_policy
-from colosseum.deploy.core.registry import TASK_REGISTRY, auto_register_tasks
+from colosseum.algorithm.base_algorithm import get_latest_checkpoint
+from colosseum.config.types.experiment import BaseExperimentConfig
+from colosseum.utils.train.export import export_policy_to_onnx
 
 
-def main(
-  task: Annotated[str, tyro.conf.arg(aliases=["-t"])] = "t1-velocity",
-  checkpoint_path: Optional[str] = None,
-  export_checkpoint_path: Optional[str] = None,
-  output_dir: Optional[str] = None,
-  filename: Optional[str] = None,
-) -> None:
-  """Export a policy preset to ONNX.
+def _resolve_checkpoint(checkpoint: str | None) -> Path | None:
+  """Resolve checkpoint path, supporting 'latest', directories, and direct paths."""
+  if not checkpoint or checkpoint.lower() == "latest":
+    ckpt_dir = Path("./logs/wandb/latest-run/checkpoints")
+    if ckpt_dir.exists():
+      return get_latest_checkpoint(ckpt_dir.resolve())
+    return None
 
-  Args:
-    task: Task identifier registered in ``TASK_REGISTRY``.
-    checkpoint_path: Override the ONNX destination path.
-    export_checkpoint_path: Override the source RSL-RL checkpoint.
-    output_dir: Override the directory where the ONNX file is stored.
-    filename: Override the ONNX filename (defaults to ``policy.onnx``).
-  """
+  p = Path(checkpoint)
+  if p.is_dir():
+    return get_latest_checkpoint(p.resolve())
+  return p.resolve() if p.exists() else None
 
-  auto_register_tasks()
-  config = TASK_REGISTRY.get_config(task)
-  policy_cfg = config.policy
 
-  if checkpoint_path:
-    policy_cfg = replace(policy_cfg, checkpoint_path=checkpoint_path)
-  if export_checkpoint_path:
-    policy_cfg = replace(policy_cfg, export_checkpoint_path=export_checkpoint_path)
-  if output_dir:
-    policy_cfg = replace(policy_cfg, export_output_dir=output_dir)
-  if filename:
-    policy_cfg = replace(policy_cfg, export_filename=filename)
+@dataclass(frozen=True, config=ConfigDict(arbitrary_types_allowed=True))
+class ExportConfig(BaseExperimentConfig):
+  """Export configuration."""
 
-  artifact = export_policy(policy_cfg)
-  print(f"[Export] Task: {task}")
-  print(f"[Export] Source checkpoint: {policy_cfg.export_checkpoint_path}")
-  print(f"[Export] Destination: {artifact}")
+  checkpoint: str = "latest"
+
+
+def main() -> None:
+  """Export a trained policy checkpoint to ONNX."""
+  config = tyro.cli(ExportConfig, config=(tyro.conf.CascadeSubcommandArgs,))
+
+  ckpt = _resolve_checkpoint(config.checkpoint)
+  if ckpt is None or not ckpt.exists():
+    logger.error(f"No checkpoint found for: {config.checkpoint}")
+    sys.exit(1)
+
+  # Export to project-level models/ directory
+  models_dir = Path("models")
+  models_dir.mkdir(exist_ok=True)
+
+  # Resolve symlinks so we get the real checkpoint name (e.g. latest.pt → model_0099483648.pt)
+  ckpt = ckpt.resolve()
+  stem = ckpt.stem
+  step = stem.split("_")[-1] if "_" in stem else stem
+  base_name = f"{config.task.name}_{config.algo.name.lower()}"
+  filename = f"{base_name}_{step}.onnx"
+  output_path = models_dir / filename
+
+  result = export_policy_to_onnx(config, ckpt, output_path)
+
+  # Create a stable latest symlink for deploy configs to reference
+  latest_link = models_dir / f"{base_name}_latest.onnx"
+  try:
+    if latest_link.exists() or latest_link.is_symlink():
+      latest_link.unlink()
+    latest_link.symlink_to(result.name)
+    logger.info(f"Symlink: {latest_link.name} -> {result.name}")
+  except OSError:
+    pass
+
+  logger.success(f"Exported: {result}")
 
 
 if __name__ == "__main__":
-  tyro.cli(main)
+  main()

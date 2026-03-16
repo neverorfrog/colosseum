@@ -12,7 +12,7 @@ from colosseum.deploy.core.observation_spec import ObservationSpec
 class VelocityObservationSpec(ObservationSpec):
     """Observation specification for velocity tracking task.
 
-    This spec matches the "policy" observation group in velocity training configs.
+    This spec matches the "actor" observation group in velocity training configs.
     """
 
     @property
@@ -80,7 +80,7 @@ class VelocityObservationSpec(ObservationSpec):
             >>> from colosseum.tasks.velocity.config.t1.env_cfgs import booster_t1_flat_env_cfg
             >>> cfg = booster_t1_flat_env_cfg()
             >>> spec = VelocityObservationSpec.from_observation_group_cfg(
-            ...     cfg.observations["policy"],
+            ...     cfg.observations["actor"],
             ...     num_joints=23
             ... )
             >>> print(spec.describe(num_joints=23))

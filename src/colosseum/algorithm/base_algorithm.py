@@ -35,6 +35,10 @@ class ActorProtocol(Protocol):
     """Minimal interface required by BaseAlgorithm for actor networks."""
     training: bool
 
+    def __call__(self, obs: torch.Tensor) -> torch.Tensor: ...
+
+    def forward(self, obs: torch.Tensor) -> torch.Tensor: ...
+
     def get_action(
         self, obs: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]: ...
@@ -42,6 +46,8 @@ class ActorProtocol(Protocol):
     def eval(self) -> Any: ...
 
     def train(self, mode: bool = True) -> Any: ...
+
+    def to(self, device: Any) -> Any: ...
 
 
 def cpu_state(state_dict: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
@@ -524,6 +530,49 @@ class BaseAlgorithm(ABC):
             "eval/mean_episode_length": mean_ep_length,
             "eval/mean_reward": mean_ep_reward,
         }
+
+    def export_onnx(self, path: str | Path) -> Path:
+        """Export the actor (with observation normalizer) to ONNX.
+
+        The exported model takes a single input "obs" and produces "actions".
+
+        Args:
+            path: Output path for the .onnx file.
+
+        Returns:
+            Resolved Path to the written ONNX file.
+        """
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        was_training = self.actor.training
+        self.actor.eval()
+        self.actor_obs_normalizer.eval()
+
+        wrapper = nn.Sequential(self.actor_obs_normalizer, self.actor).cpu()
+        obs_dim = self.env.observation_manager.group_obs_dim["actor"][0]
+        dummy = torch.zeros(1, obs_dim)
+
+        torch.onnx.export(
+            wrapper,
+            (dummy,),
+            str(path),
+            export_params=True,
+            opset_version=18,
+            input_names=["obs"],
+            output_names=["actions"],
+            dynamic_axes={},
+        )
+
+        if was_training:
+            self.actor.train()
+            self.actor_obs_normalizer.train()
+        # Move back to original device
+        self.actor.to(self.device)
+        self.actor_obs_normalizer.to(self.device)
+
+        logger.success(f"ONNX exported: {path}")
+        return path
 
     @abstractmethod
     def save(self, path: str | Path, **extra_state: Any) -> None:
