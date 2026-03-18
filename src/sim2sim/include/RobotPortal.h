@@ -26,12 +26,18 @@ class RobotPortal {
 
         void initialize();
 
+        void publishCommand(const float* joint_targets, const float* kp, const float* kd);
+
         // Delete copy constructor and assignment operator
         RobotPortal(const RobotPortal&) = delete;
         RobotPortal& operator=(const RobotPortal&) = delete;
 
         const RobotState& getState() const {
             return state;
+        }
+
+        const bool hasState() const {
+            return has_state_.load();
         }
 
         const int changeMode(booster::robot::RobotMode mode) {
@@ -41,6 +47,7 @@ class RobotPortal {
     private:
         // State
         RobotState state;
+        std::atomic<bool> has_state_{false};
 
         // LocoClient for synchronous RPC calls
         booster::robot::b1::B1LocoClient client;
@@ -58,4 +65,7 @@ class RobotPortal {
         // Utility functions
         std::array<float, 4> rpy_to_quat(const float rpy[3]) const;
         std::array<float, 3> compute_projected_gravity(const float q[4]) const;
+
+        // Command
+        booster_interface::msg::LowCmd cmd{};
 };

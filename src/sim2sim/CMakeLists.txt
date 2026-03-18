@@ -104,7 +104,7 @@ if(GTest_FOUND)
     file(
         GLOB_RECURSE TESTABLE_SOURCES
         CONFIGURE_DEPENDS
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/Policy.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/OnnxPolicy.cpp"
     )
 
     # Main test executable
@@ -142,6 +142,8 @@ install(
     LIBRARY DESTINATION lib
 )
 
+install(DIRECTORY models/ DESTINATION models)
+
 # install(
 #     EXPORT ${PROJECT_NAME}Targets
 #     FILE ${PROJECT_NAME}Targets.cmake
@@ -156,11 +158,4 @@ add_executable(main ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp)
 target_link_libraries(main PRIVATE ${CMAKE_DL_LIBS})
 install(TARGETS main RUNTIME DESTINATION bin)
 
-# Install config files
-# install(
-#     DIRECTORY config/
-#     DESTINATION share/${PROJECT_NAME}/config
-#     FILES_MATCHING
-#     PATTERN "*.yaml"
-# )
 # ====================================================

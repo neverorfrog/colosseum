@@ -1,4 +1,4 @@
-#include "Policy.h"
+#include "OnnxPolicy.h"
 #include <gtest/gtest.h>
 #include <Eigen/Dense>
 #include <string>
@@ -9,15 +9,15 @@ static std::string model_path() {
 }
 
 TEST(PolicyTest, LoadsModel) {
-    Policy policy(model_path());
-    EXPECT_EQ(policy.obs_dim(),    82);
-    EXPECT_EQ(policy.action_dim(), 82);
+    OnnxPolicy policy(model_path());
+    EXPECT_EQ(policy.input_dim(),    82);
+    EXPECT_EQ(policy.output_dim(), 82);
 }
 
 TEST(PolicyTest, IdentityForwardPass) {
-    Policy policy(model_path());
+    OnnxPolicy policy(model_path());
 
-    Eigen::VectorXf obs = Eigen::VectorXf::LinSpaced(policy.obs_dim(), 0.f, 1.f);
+    Eigen::VectorXf obs = Eigen::VectorXf::LinSpaced(policy.input_dim(), 0.f, 1.f);
     Eigen::VectorXf out = policy.infer(obs);
 
     ASSERT_EQ(out.size(), obs.size());
@@ -26,7 +26,7 @@ TEST(PolicyTest, IdentityForwardPass) {
 }
 
 TEST(PolicyTest, WrongObsDimThrows) {
-    Policy policy(model_path());
-    Eigen::VectorXf bad_obs(policy.obs_dim() + 1);
+    OnnxPolicy policy(model_path());
+    Eigen::VectorXf bad_obs(policy.input_dim() + 1);
     EXPECT_THROW(policy.infer(bad_obs), std::runtime_error);
 }

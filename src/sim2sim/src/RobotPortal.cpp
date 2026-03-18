@@ -19,11 +19,28 @@ void RobotPortal::initialize() {
     low_state_sub.InitChannel([this](const void* msg) {
         lowStateCallback(*static_cast<const booster_interface::msg::LowState*>(msg));
     });
+
     low_cmd_pub = std::make_shared<ChannelPublisher<booster_interface::msg::LowCmd>>(booster::robot::b1::kTopicJointCtrl);
     low_cmd_pub->InitChannel();
+    cmd.cmd_type(booster_interface::msg::CmdType::PARALLEL);
+    for (size_t i = 0; i < booster::robot::b1::kJointCnt; i++) {
+      booster_interface::msg::MotorCmd motor_cmd;
+      cmd.motor_cmd().push_back(motor_cmd);
+    }
+
     const char* js_device = std::getenv("JOYSTICK_DEVICE");
     if (!js_device) js_device = "/dev/input/js2";
     joystick_thread = std::thread(&RobotPortal::joystickLoop, this, std::string(js_device));
+}
+
+void RobotPortal::publishCommand(const float* joint_targets, const float* kp, const float* kd) {
+    for (int i = 0; i < booster::robot::b1::kJointCnt; i++) {
+        cmd.motor_cmd().at(i).q(joint_targets[i]);
+        cmd.motor_cmd().at(i).kp(kp[i]);
+        cmd.motor_cmd().at(i).kd(kd[i]);
+    }
+
+    low_cmd_pub->Write(&cmd);
 }
 
 RobotPortal::~RobotPortal() {
@@ -33,6 +50,8 @@ RobotPortal::~RobotPortal() {
 }
 
 void RobotPortal::lowStateCallback(const booster_interface::msg::LowState& msg) {
+    has_state_ = true;
+
     for (int i = 0; i < 3; i++) {
         state.rpy[i] = msg.imu_state().rpy()[i];
         state.gyro[i] = msg.imu_state().gyro()[i];

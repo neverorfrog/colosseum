@@ -1,37 +1,44 @@
 #pragma once
+#include "TaskConfig.h"
+#include "RobotState.h"
+#include "OnnxPolicy.h"
 
-#include <string>
-#include <vector>
-#include <Eigen/Dense>
-#include <onnxruntime/core/session/onnxruntime_cxx_api.h>
-
-// Runs an ONNX policy: flat observation vector → joint position targets.
-//
-// Usage:
-//   Policy policy("path/to/policy.onnx");
-//   Eigen::VectorXf obs = ...;          // shape (obs_dim,)
-//   Eigen::VectorXf targets = policy.infer(obs);  // shape (action_dim,)
 class Policy {
 public:
-    explicit Policy(const std::string& model_path);
+    explicit Policy(TaskConfig cfg): config_(std::move(cfg)), onnx(config_.model_path) {
+        observation.reserve(onnx.input_dim());
+    }
 
-    // Forward pass. obs must have exactly obs_dim() elements.
-    // Returns action_dim() joint position targets in simulation order.
-    Eigen::VectorXf infer(const Eigen::VectorXf& obs);
+    virtual ~Policy() = default;
 
-    int obs_dim()    const { return obs_dim_; }
-    int action_dim() const { return action_dim_; }
+    void reset() {
+        std::fill(std::begin(last_action), std::end(last_action), 0.0f);
+    }
 
-private:
-    Ort::Env            env_;
-    Ort::SessionOptions session_opts_;
-    Ort::Session        session_;
-    Ort::MemoryInfo     mem_info_;
+    std::array<float, TaskConfig::NUM_JOINTS> get_action(const RobotState& state) {
+        build_observation(state);
+        Eigen::VectorXf obs_vec = Eigen::Map<Eigen::VectorXf>(observation.data(), observation.size());
+        Eigen::VectorXf action_vec = onnx.infer(obs_vec);
+        std::array<float, TaskConfig::NUM_JOINTS> action{};
+        for (int i = 0; i < onnx.output_dim(); i++) {
+            // Match Python: store raw network output as last_action (used in obs)
+            last_action[i] = action_vec[i];
+            // Decode: scale + default pose (matches Python inference())
+            action[i] = action_vec[i] * config_.action_scale[i] + config_.default_joint_pos[i];
+        }
+        return action;
+    }
 
-    // Cached I/O names (ORT requires const char* that outlives Run())
-    std::string input_name_;
-    std::string output_name_;
+    const TaskConfig& config() const { return config_; }
 
-    int obs_dim_;
-    int action_dim_;
+
+protected:
+    TaskConfig config_;
+    float last_action[TaskConfig::NUM_JOINTS]{};
+    std::vector<float> observation;
+    OnnxPolicy onnx;
+
+    // Subclass fills obs[0..OBS_DIM-1].
+    virtual void build_observation(const RobotState& state) = 0;
+
 };

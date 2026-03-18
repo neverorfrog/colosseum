@@ -3,7 +3,7 @@ from colosseum.config.types.algorithm import PpoConfig
 PPO_DEFAULT = PpoConfig(
   name="PPO",
   target="colosseum.algorithm.ppo:PPO",
-  learning_steps=100_000_000,
+  learning_steps=500_000_000,
   num_steps_per_env=24,
   gamma=0.99,
   lam=0.95,
