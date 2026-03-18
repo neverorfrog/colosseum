@@ -12,6 +12,7 @@ env/
 env.bak/
 venv.bak/
 external/
+*/.clangd
 
 # Ignore distribution/build directories and files
 build/

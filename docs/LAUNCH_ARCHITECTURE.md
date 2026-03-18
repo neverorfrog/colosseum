@@ -1,139 +1,198 @@
 # Launch Architecture: Application-Owned Stacks
 
-## Current Architecture
+## Background: How Circus Launches Robots
 
-Circus is the **entry point** for the entire SPQR simulation stack. The user starts circus, which:
-
-1. Reads its own configs (`path_constants.yaml`, `framework_config.yaml`, `scenes/*.yaml`, `simulation_configs/*.yaml`)
-2. Launches a Docker container **per robot**, using volume mounts derived from `path_constants.yaml`
-3. Each container runs **supervisord** (`booster.conf`), which starts:
-   - `booster-motion` (priority 1, always on)
-   - `simbridge` (connects container back to circus via TCP:5555)
-   - `colosseum` or `maximus` (optional, disabled by default)
+Circus is a MuJoCo physics simulator that manages one Docker container per robot. This is not optional — Docker is intrinsic to how Circus works. The container runs `supervisord`, which starts booster-motion, simbridge, and the application binary. All three processes share the container's network namespace, which is required because DDS (FastDDS) communicates over loopback (`127.0.0.1`).
 
 ```
-User
- └─► circus (Qt GUI, host)
-       ├─ reads: path_constants.yaml, framework_config.yaml
-       ├─ reads: scenes/1v1.yaml → field + robot list
-       └─► docker run spqr:booster  (per robot)
-             └─► supervisord (booster.conf)
-                   ├─► booster-motion -config config_isaac.lua
-                   ├─► simbridge_node
-                   └─► colosseum/bin/main  OR  maximus/bin/maximus_main
+Host
+├── circus (Qt GUI, MuJoCo physics)          ← TCP server on port 5555
+└── Docker container (per robot)
+      └── supervisord
+            ├── booster-motion               ← reads DDS, computes PD torques
+            ├── simbridge_node               ← bridges TCP↔DDS
+            └── <app binary>                 ← policy node / behavior framework
 ```
 
-**Problems with this model:**
-
-- Circus owns knowledge of where every other repo lives (`path_constants.yaml` is a manual file in circus's resources)
-- `framework_config.yaml` (Docker volumes) is also in circus — but which volumes are needed depends entirely on which application is running
-- `booster.conf` enables/disables processes by commenting them out manually
-- Adding a new application means modifying circus's configs
-- Circus is the infrastructure, but it acts as the orchestrator
-
-
-## Proposed Architecture
-
-**Each application owns its own launch stack.** The application binary is the entry point. Circus becomes a reusable simulator that any application can start.
-
-```
-User
- └─► sim2sim/bin/main  OR  maximus/bin/maximus_main
-       ├─ auto-generates: path_constants.yaml  (from own binary path)
-       ├─ owns: framework_config.yaml          (its own volume needs)
-       ├─ owns: booster.conf                   (its own process list)
-       ├─ owns: entrypoint.sh                  (its own env setup)
-       ├─ owns: scenes/                        (its own scenario definitions)
-       ├─ owns: simulation_configs/            (its own game settings)
-       └─► docker run <app-image>  (per robot)
-             └─► supervisord (app's booster.conf)
-                   ├─► circus (Qt GUI, inside container or on host)
-                   ├─► booster-motion -config <app-specific>.lua
-                   ├─► simbridge_node
-                   └─► <app binary>
-```
-
-Anyone can build a new application that uses circus as a simulator by providing their own config set. Circus has no knowledge of who is using it.
+The container connects back to circus via `SERVER_IP=172.17.0.1` (Docker bridge gateway).
 
 ---
 
-## Config Classification
+## Current Architecture (Problems)
 
-### Configs that stay in Circus (circus-internal, static)
+Circus is currently the **entry point** and **orchestrator**:
 
-These are **intrinsic to the simulator** and do not depend on which application is running:
+1. Circus reads `resources/config/path_constants.yaml` — absolute paths to all sibling repos, **maintained manually**
+2. Circus reads `resources/config/framework_config.yaml` — Docker image + volume binds, using `<repo>` placeholders substituted from path_constants
+3. Circus reads `resources/scenes/*.yaml` — which robots to spawn
+4. Circus creates one Docker container per robot, volume-mounting:
+   - `<simbridge>/tools/booster_motion` → `/app/booster_motion`
+   - `<simbridge>/.pixi/envs/default` → `/app/bridge`
+   - `<maximus>/.pixi/envs/default` → `/app/maximus`
+5. Container's `entrypoint.sh` + `booster.conf` are baked into the Docker image
 
-| File | Reason |
-|------|--------|
-| `resources/config/fields/*.yaml` | Standard RoboCup field geometries — fixed by league rules |
-| Core MuJoCo XML assets | Physics model definitions, not application-specific |
+**Problems:**
+- Adding a new application requires modifying Circus's resources
+- `path_constants.yaml` is manually maintained and machine-specific
+- `booster.conf` and `entrypoint.sh` live in Circus, but their content depends entirely on which application is running
+- Volume mounts span multiple repos (simbridge, maximus, colosseum) — fragile, hard to track
+- The scene (robot count, positions) is in Circus, but it is scenario-specific to the application
 
-Circus should expose these via CLI arguments so applications can reference or override them.
+---
 
-### Configs that move to the Application
+## Proposed Architecture
 
-These depend on **which application is running** and should live with the application:
+**Each application owns its full launch stack.** The application's `main` binary is the entry point. Circus becomes a reusable simulator with no knowledge of who is using it.
 
-| File | Currently In | Moves To | Reason |
-|------|-------------|----------|--------|
-| `path_constants.yaml` | circus/resources/config/ | **generated at runtime** | Only the app knows where it lives |
-| `framework_config.yaml` | circus/resources/config/ | app/configs/ | Docker volumes depend on which app is running |
-| `booster.conf` | circus/dockerfiles/ | app/configs/ | Which processes run depends on the app |
-| `entrypoint.sh` | circus/dockerfiles/ | app/configs/ | Env vars depend on the app (TensorRT, SPQR_CONFIG_ROOT, etc.) |
-| `simulation_configs/*.yaml` | circus/resources/config/ | app/configs/simulation/ | Game settings are scenario-specific, not simulator-specific |
-| `scenes/*.yaml` | circus/resources/scenes/ | app/configs/scenes/ | Robot count, position, team are entirely app-defined |
-| `booster_motion/configs/*.lua` | simbridge/tools/ | app/configs/booster_motion/ | Which motion graph runs depends on the app (RL vs behavior) |
+### Dependency Model
+
+Each application declares its full stack as **pixi/conda dependencies**:
+
+```toml
+# sim2sim/pixi.toml
+[dependencies]
+circus                  = "*"   # from spqr channel
+simbridge               = "*"   # from spqr channel
+booster_robotics_sdk    = "==1.5.0"   # from spqr channel
+booster_robotics_sdk_ros2 = "*" # from spqr channel (provides booster-motion binary)
+sim2sim                 = { path = "." }
+```
+
+After `pixi install`, every binary lives under one root:
+```
+sim2sim/.pixi/envs/default/
+  bin/
+    circus               ← Qt simulator
+    simbridge_node       ← DDS bridge
+    booster-motion       ← PD controller
+    main                 ← policy node (sim2sim)
+  lib/
+    ...                  ← all shared libraries, rpaths resolved by conda
+  share/
+    sim2sim/configs/     ← installed application configs
+```
+
+This replaces the current fragmented volume model (four separate repo mounts) with **a single pixi environment**.
+
+### Launch Flow
+
+```
+User
+ └─► pixi run launch
+       ├─ 1. Writes /tmp/path_constants_<pid>.yaml  (just sim2sim_env path)
+       ├─ 2. Launches circus:
+       │       circus --scene configs/scenes/training_1v1.yaml
+       │              --simulation-config configs/simulation/training.yaml
+       │              --framework-config configs/framework_config.yaml
+       │              --path-constants /tmp/path_constants_<pid>.yaml
+       └─ Circus reads configs, spawns Docker container per robot:
+               └─► supervisord (from app's booster.conf)
+                     ├─► booster-motion   /app/env/bin/booster-motion
+                     ├─► simbridge_node   /app/env/bin/simbridge_node
+                     └─► sim2sim main     /app/env/bin/main
+```
+
+### path_constants.yaml (Auto-Generated, Simplified)
+
+Instead of mapping every sibling repo, the application generates a single-entry file:
+
+```yaml
+# /tmp/path_constants_<pid>.yaml  — written at runtime, never committed
+sim2sim_env: /home/user/code/spqr/colosseum/src/sim2sim/.pixi/envs/default
+```
+
+Circus substitutes `<sim2sim_env>` in `framework_config.yaml` at runtime.
+
+### framework_config.yaml (Single Volume Mount)
+
+```yaml
+# sim2sim/configs/framework_config.yaml
+image: spqr:booster
+volumes:
+  - "<sim2sim_env>:/app/env"
+  - "/dev/shm/circus_ipc:/dev/shm/circus_ipc"
+```
+
+One mount replaces the current four. All binaries and libraries are accessible at `/app/env/`.
 
 ---
 
 ## Per-Application Config Structure
 
-### sim2sim (Colosseum RL testing)
+### sim2sim (RL policy testing)
 
 ```
 colosseum/src/sim2sim/
+├── pixi.toml                          # declares circus, simbridge, booster_robotics_sdk,
+│                                      # booster_robotics_sdk_ros2, sim2sim as dependencies
 ├── configs/
-│   ├── framework_config.yaml       # volumes: simbridge + sim2sim binary
-│   ├── booster.conf                # programs: booster-motion, simbridge, sim2sim (no maximus)
-│   ├── entrypoint.sh               # no TensorRT, no SPQR_CONFIG_ROOT
+│   ├── framework_config.yaml          # image + single <sim2sim_env> volume
+│   ├── booster.conf                   # supervisord: booster-motion, simbridge, sim2sim main
+│   ├── entrypoint.sh                  # sets FASTRTPS_DEFAULT_PROFILES_FILE; starts supervisord
 │   ├── scenes/
-│   │   └── training_1v1.yaml       # 1 robot, specific spawn position for training
+│   │   └── training_1v1.yaml          # 1 robot, RL spawn position
 │   ├── simulation/
-│   │   └── training.yaml           # no game phases, unlimited time, auto-restart
+│   │   └── training.yaml              # no game phases, unlimited time
 │   └── booster_motion/
-│       └── config_t1_rl.lua        # RL-specific motion graph (no behavior tree)
-└── bin/
-    └── main                        # Entry point — generates path_constants.yaml, launches stack
+│       ├── config_t1_rl.lua           # entry: loads graph + options below
+│       ├── common_graph_define_t1_rl.lua
+│       └── common_module_options_t1_rl.lua
+└── src/
+    └── main.cpp                       # generates path_constants, launches circus, then runs policy loop
 ```
-
-**`framework_config.yaml` for sim2sim:**
-```yaml
-image: spqr:booster
-volumes:
-  - "<simbridge>/tools/booster_motion:/app/booster_motion"
-  - "<simbridge>/.pixi/envs/default:/app/bridge"
-  - "<colosseum>/src/sim2sim/.pixi/envs/default:/app/colosseum"
-  - "/dev/shm/circus_ipc:/dev/shm/circus_ipc"
-```
-No maximus volumes. No TensorRT.
 
 **`booster.conf` for sim2sim:**
 ```ini
 [program:booster-motion]
-command=/app/booster_motion/booster-motion -mode sim -config ./configs/config_t1_rl.lua
+directory=/app/env
+command=/app/env/bin/booster-motion -mode sim -config /app/env/share/sim2sim/configs/booster_motion/config_t1_rl.lua
 priority=1
+autostart=true
 
 [program:delayed-starter]
 command=/app/delayed_start.sh
 priority=2
+autostart=true
+autorestart=false
 
 [program:simbridge]
-command=/app/bridge/bin/simbridge_node
+command=/app/env/bin/simbridge_node
 autostart=false
+autorestart=true
 
-[program:colosseum]
-command=/app/colosseum/bin/main
+[program:sim2sim]
+command=/app/env/bin/main
+environment=FASTRTPS_DEFAULT_PROFILES_FILE="/app/env/share/booster_motion/fastdds_profile.xml"
 autostart=false
+autorestart=true
+```
+
+**`entrypoint.sh` for sim2sim:**
+```bash
+#!/bin/bash
+export FASTRTPS_DEFAULT_PROFILES_FILE=/app/env/share/booster_motion/fastdds_profile.xml
+/usr/bin/supervisord -n -c /app/env/share/sim2sim/configs/booster.conf
+```
+
+**`training_1v1.yaml` scene:**
+```yaml
+simulation_config: training
+teams:
+  red:
+    - type: Booster-T1
+      number: 1
+      position: [0.0, 0.0, 0.68]
+      orientation: [0.0, 0.0, 0.0]
+```
+
+**`training.yaml` simulation config:**
+```yaml
+simulation:
+  max_simulation_time: -1
+game:
+  field: fieldAdultSize
+  game_duration: -1
+  automatic_restart: true
 ```
 
 ---
@@ -142,20 +201,46 @@ autostart=false
 
 ```
 spqrbooster2026/
+├── pixi.toml                          # declares circus, simbridge, booster_robotics_sdk,
+│                                      # booster_robotics_sdk_ros2, maximus as dependencies
 ├── configs/
-│   ├── framework_config.yaml       # volumes: simbridge + maximus + TensorRT
-│   ├── booster.conf                # programs: booster-motion, simbridge, maximus (no colosseum)
-│   ├── entrypoint.sh               # TensorRT symlink, SPQR_CONFIG_ROOT, behavior tree path
+│   ├── framework_config.yaml          # image + <maximus_env> volume + TensorRT volume
+│   ├── booster.conf                   # supervisord: booster-motion, simbridge, maximus
+│   ├── entrypoint.sh                  # sets FASTRTPS, SPQR_CONFIG_ROOT, SPQR_BEHAVIOR_TREE_PATH
 │   ├── scenes/
 │   │   ├── 1v1.yaml
 │   │   └── 5v5.yaml
 │   ├── simulation/
-│   │   └── default.yaml            # full game settings, 10-minute matches
+│   │   └── default.yaml               # full game settings
 │   └── booster_motion/
-│       └── config_isaac.lua        # standard behavior graph
+│       └── config_isaac.lua           # standard behavior graph
 └── src/app/
-    └── main.cpp                    # Entry point — generates path_constants.yaml, launches stack
+    └── main.cpp                       # generates path_constants, launches circus
 ```
+
+**`framework_config.yaml` for maximus:**
+```yaml
+image: spqr:booster
+volumes:
+  - "<maximus_env>:/app/env"
+  - "<maximus_env>/tools/vision/tensorrt:/app/tensorrt"
+  - "/dev/shm/circus_ipc:/dev/shm/circus_ipc"
+```
+
+---
+
+## Docker Image Strategy
+
+The `spqr:booster` base image becomes **minimal**: only ROS2 Humble, system libraries, and `supervisord`. It no longer contains booster SDK builds (those come from the pixi env volume mount).
+
+```dockerfile
+FROM ros:humble
+RUN apt-get update && apt-get install -y supervisor libpulse0 ... && rm -rf /var/lib/apt/lists/*
+# No booster SDK builds — everything comes from the volume-mounted pixi env
+COPY delayed_start.sh /app/delayed_start.sh
+```
+
+The `entrypoint.sh` and `booster.conf` are no longer baked into the image — they are owned by the application and referenced from the mounted volume or passed via a separate bind.
 
 ---
 
@@ -163,122 +248,89 @@ spqrbooster2026/
 
 ### Step 1 — Circus accepts external config paths via CLI
 
-Circus needs to stop hardcoding its internal config paths. Instead, it should accept CLI arguments:
-
 ```bash
 circus \
   --scene /path/to/app/configs/scenes/training_1v1.yaml \
   --simulation-config /path/to/app/configs/simulation/training.yaml \
   --framework-config /path/to/app/configs/framework_config.yaml \
-  --path-constants /path/to/generated/path_constants.yaml
+  --path-constants /tmp/path_constants_<pid>.yaml
 ```
 
-Changes required in circus C++:
-- `Constants.h`: Replace hardcoded paths with runtime values set from CLI args
-- `SceneParser`: Accept scene file path as constructor argument (already partially done)
-- `RobotManager::startContainers()`: Accept framework config and path constants paths as arguments
+Changes in Circus C++:
+- `Constants.h`: replace hardcoded resource paths with runtime values from CLI
+- `SceneParser`: accept scene file path as constructor argument
+- `RobotManager::startContainers()`: accept framework config and path constants paths
 
-Circus keeps its internal configs as **defaults** (for when it's run standalone), but always prefers externally provided paths.
-
-### Step 2 — Each application generates `path_constants.yaml` at startup
-
-The application binary knows its own location at runtime. From there it can derive all sibling repo paths:
+### Step 2 — Application generates path_constants.yaml at startup
 
 ```cpp
 // In sim2sim main.cpp
-std::filesystem::path self = std::filesystem::canonical("/proc/self/exe");
-std::filesystem::path spqr_root = self.parent_path().parent_path().parent_path(); // up from bin/
+std::filesystem::path env_prefix = get_conda_prefix();  // or derive from argv[0]
 
-// Write path_constants.yaml
 YAML::Node paths;
-paths["circus"]      = (spqr_root / "circus").string();
-paths["simbridge"]   = (spqr_root / "simbridge").string();
-paths["colosseum"]   = (spqr_root / "colosseum").string();
-paths["maximus"]     = (spqr_root / "spqrbooster2026").string();
+paths["sim2sim_env"] = env_prefix.string();
 
-// Write to a temp location or pass directly to circus via CLI
-std::string out_path = "/tmp/spqr_path_constants.yaml";
-write_yaml(paths, out_path);
+std::string out = "/tmp/path_constants_" + std::to_string(getpid()) + ".yaml";
+write_yaml(paths, out);
 ```
 
-No more manually maintained `path_constants.yaml`. It is always auto-generated.
+### Step 3 — Application launches circus as subprocess
 
-### Step 3 — Each application owns its Docker configs
-
-Move `framework_config.yaml`, `booster.conf`, and `entrypoint.sh` into each application's repo under `configs/`. These files are already written — they just live in the wrong place.
-
-The application passes its own `framework_config.yaml` to circus (via CLI, Step 1) so circus knows which volumes to mount when creating containers.
-
-### Step 4 — Each application owns its scenes and simulation configs
-
-Move scene files and simulation config files from circus's resources into the application. The application passes the scene file path to circus via CLI (Step 1).
-
-Circus's `resources/config/simulation_configs/` and `resources/scenes/` directories are removed (or kept only as examples/defaults).
-
-### Step 5 — Each application owns its booster_motion Lua configs
-
-The RL-specific Lua configs (`config_t1_rl_isaac.lua`, `common_graph_define_t1_rl_isaac.lua`, etc.) move from `simbridge/tools/booster_motion/configs/` into the application repo. The Docker volume mount for booster_motion already allows injecting configs — the application just ships its own variants.
-
-### Step 6 — Application binary becomes the launch entry point
-
-The application's `main()` orchestrates startup:
-
-```
-1. Parse args (scene, robot count, etc.)
-2. Generate path_constants.yaml → /tmp/spqr_path_constants_<pid>.yaml
-3. Launch circus: circus --scene configs/scenes/training_1v1.yaml
-                         --framework-config configs/framework_config.yaml
-                         --path-constants /tmp/spqr_path_constants_<pid>.yaml
-4. Wait for circus TCP server to be ready (port 5555)
-5. Application's own main loop starts (RL training, behavior execution, etc.)
+```cpp
+std::string cmd = env_prefix / "bin/circus";
+cmd += " --scene " + config_dir + "/scenes/training_1v1.yaml";
+cmd += " --framework-config " + config_dir + "/framework_config.yaml";
+cmd += " --path-constants " + path_constants_file;
+std::system(cmd.c_str());  // or fork/exec with proper signal handling
 ```
 
-Circus handles the Docker container lifecycle (launching one container per robot in the scene). The containers use the application's `booster.conf` and `entrypoint.sh` via volume mount or baked into a shared base Docker image.
+### Step 4 — Package conda packages for the spqr channel
 
----
+| Package | Content |
+|---------|---------|
+| `circus` | circus binary + MuJoCo assets + field configs |
+| `simbridge` | `simbridge_node` binary + booster_interface ROS2 msgs |
+| `booster_robotics_sdk` | C++ headers + static lib (already exists on spqr channel) |
+| `booster_robotics_sdk_ros2` | `booster-motion` binary + Lua configs + FastDDS profile |
 
-## Docker Image Strategy
+### Step 5 — Move configs into application repos
 
-Currently there is one image: `spqr:booster`. Two options going forward:
-
-**Option A — Shared base image, app-specific configs via volumes**
-Keep `spqr:booster` as a base with booster-motion, simbridge, and ROS2 pre-installed.
-Each application mounts its own `booster.conf` and `entrypoint.sh` into the container:
-```yaml
-volumes:
-  - "<app>/configs/booster.conf:/etc/supervisor/conf.d/booster.conf"
-  - "<app>/configs/entrypoint.sh:/app/entrypoint.sh"
-```
-Pros: one image to maintain. Cons: entrypoint override is slightly awkward.
-
-**Option B — Per-application Docker images**
-`spqr:sim2sim` and `spqr:maximus` each extend the base image and bake in their own supervisord config.
-Pros: fully self-contained. Cons: more images to build and maintain.
-
-**Recommendation: Option A** initially, since the only difference between applications is which optional programs run in supervisord and which env vars are set. Volume-mounting the conf is simple and avoids image proliferation.
+| File | From | To |
+|------|------|----|
+| `framework_config.yaml` | `circus/resources/config/` | `sim2sim/configs/` and `maximus/configs/` |
+| `booster.conf` | `circus/dockerfiles/` | `sim2sim/configs/` and `maximus/configs/` |
+| `entrypoint.sh` | `circus/dockerfiles/` | `sim2sim/configs/` and `maximus/configs/` |
+| `scenes/*.yaml` | `circus/resources/scenes/` | `sim2sim/configs/scenes/` and `maximus/configs/scenes/` |
+| `simulation_configs/` | `circus/resources/config/` | `sim2sim/configs/simulation/` and `maximus/configs/simulation/` |
+| RL Lua configs | `simbridge/tools/booster_motion/configs/` | `sim2sim/configs/booster_motion/` |
 
 ---
 
 ## What Circus Loses
 
-After this change, circus's `resources/config/` directory contains only:
-- `fields/*.yaml` (standard RoboCup field definitions)
+After this change, `circus/resources/` contains only:
+- `config/fields/*.yaml` — standard RoboCup field geometries (fixed by league rules)
+- `robots/*/` — MuJoCo robot XML assets
 
-Everything else is either deleted or moved to the application repos. Circus becomes a reusable simulator binary with no opinions about who runs it or how.
+Everything else moves to the application repos. Circus becomes a reusable simulator binary.
 
 ---
 
 ## Migration Checklist
 
-- [ ] Add CLI args to circus for `--scene`, `--simulation-config`, `--framework-config`, `--path-constants`
-- [ ] Move `framework_config.yaml` to sim2sim and maximus repos
-- [ ] Move `booster.conf` and `entrypoint.sh` to sim2sim and maximus repos
-- [ ] Move `simulation_configs/` to sim2sim and maximus repos
-- [ ] Move `scenes/` to sim2sim and maximus repos
-- [ ] Move RL-specific Lua configs to colosseum/sim2sim repo
-- [ ] Add path_constants.yaml generation to sim2sim `main.cpp`
-- [ ] Add path_constants.yaml generation to maximus `main.cpp`
-- [ ] Add circus launch logic to sim2sim `main.cpp`
-- [ ] Add circus launch logic to maximus `main.cpp`
-- [ ] Remove `path_constants.yaml` from circus repo
-- [ ] Verify circus still works standalone with its own defaults (for development/debugging)
+- [ ] Add CLI args to Circus: `--scene`, `--simulation-config`, `--framework-config`, `--path-constants`
+- [ ] Package `circus` as conda package (spqr channel)
+- [ ] Package `simbridge` as conda package (spqr channel)
+- [ ] Package `booster_robotics_sdk_ros2` as conda package (spqr channel, ships `booster-motion`)
+- [ ] Add `circus`, `simbridge`, `booster_robotics_sdk_ros2` to sim2sim `pixi.toml`
+- [ ] Add `circus`, `simbridge`, `booster_robotics_sdk_ros2` to maximus `pixi.toml`
+- [ ] Create `sim2sim/configs/` with `framework_config.yaml`, `booster.conf`, `entrypoint.sh`
+- [ ] Create `sim2sim/configs/scenes/training_1v1.yaml`
+- [ ] Create `sim2sim/configs/simulation/training.yaml`
+- [ ] Move RL Lua configs to `sim2sim/configs/booster_motion/`
+- [ ] Add path_constants generation + circus launch to `sim2sim/src/main.cpp`
+- [ ] Create `maximus/configs/` with equivalent files
+- [ ] Slim down `spqr:booster` Dockerfile (remove SDK builds, keep only system deps + supervisord)
+- [ ] Remove `framework_config.yaml`, `booster.conf`, `entrypoint.sh` from Circus repo
+- [ ] Remove `scenes/` and `simulation_configs/` from Circus repo
+- [ ] Keep `path_constants.yaml` in Circus only as a fallback default (for standalone use)
