@@ -15,7 +15,7 @@ class T1VelocityFlat : public Policy {
             observation.push_back(state.gyro[0]);
             observation.push_back(state.gyro[1]);
             observation.push_back(state.gyro[2]);
-            
+
             // 2. Projected gravity (3)
             observation.push_back(state.projected_gravity[0]);
             observation.push_back(state.projected_gravity[1]);
@@ -35,9 +35,9 @@ class T1VelocityFlat : public Policy {
             for (int i = 0; i < TaskConfig::NUM_JOINTS; i++) {
                 observation.push_back(last_action[i]);
             }
-            
+
             // 6. Velocity command (3)
-            observation.push_back(0.3);
+            observation.push_back(state.v[0]);
             observation.push_back(state.v[1]);
             observation.push_back(state.v[2]);
         }

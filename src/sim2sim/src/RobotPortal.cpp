@@ -76,7 +76,7 @@ void RobotPortal::lowStateCallback(const booster_interface::msg::LowState& msg) 
 
 void RobotPortal::joystickLoop(const std::string& device) {
     static constexpr float VX_MAX   = 1.0f;
-    static constexpr float VY_MAX   = 0.5f;
+    static constexpr float VY_MAX   = 1.0f;
     static constexpr float VYAW_MAX = 1.0f;
 
     int fd = open(device.c_str(), O_RDONLY | O_NONBLOCK);
@@ -105,7 +105,7 @@ void RobotPortal::joystickLoop(const std::string& device) {
 
         axes[event.number] = event.value;
 
-        state.v[0] =  deadzone(norm(axes[1])) * VX_MAX;
+        state.v[0] = -deadzone(norm(axes[1])) * VX_MAX;
         state.v[1] = -deadzone(norm(axes[0])) * VY_MAX;
         state.v[2] = -deadzone(norm(axes[3])) * VYAW_MAX;
     }
