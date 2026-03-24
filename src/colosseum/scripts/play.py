@@ -86,8 +86,14 @@ def create_agent(config: PlayConfig, env: ViewerCompatibleEnv, device: torch.dev
             sys.exit(1)
         logger.info(f"Loading checkpoint: {checkpoint_path}")
 
+        algo_cfg = config.task.algo_cfg
+        assert algo_cfg is not None, (
+            f"Task '{config.task.name}' has no algo_cfg. "
+            "Implement the algo_cfg property in the task's __init__.py."
+        )
+
         import importlib
-        module_path, class_name = config.algo.target.rsplit(":", 1)
+        module_path, class_name = algo_cfg.target.rsplit(":", 1)
         module = importlib.import_module(module_path)
         algo_class = getattr(module, class_name)
 
@@ -97,7 +103,7 @@ def create_agent(config: PlayConfig, env: ViewerCompatibleEnv, device: torch.dev
         dim_env = _make_env(dim_env_cfg, str(device), render_mode=None)
 
         algo = algo_class(
-            config=config.algo,
+            config=algo_cfg,
             env=dim_env,
             device=device,
             log_fn=lambda _m, _s: None,
@@ -155,7 +161,9 @@ def _record_video(config: PlayConfig, env, agent) -> None:
 
     video_dir = Path("./videos")
     video_dir.mkdir(parents=True, exist_ok=True)
-    video_path = video_dir / f"{config.task.name}-{config.algo.name}.mp4"
+    algo_cfg = config.task.algo_cfg
+    algo_name = algo_cfg.name if algo_cfg is not None else "unknown"
+    video_path = video_dir / f"{config.task.name}-{algo_name}.mp4"
     logger.info(f"Recording {config.video_length} steps to {video_path}")
 
     obs, _ = env.reset()
