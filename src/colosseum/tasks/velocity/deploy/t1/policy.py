@@ -4,118 +4,118 @@ import torch
 
 from colosseum.deploy.core.base_controller import BaseController
 from colosseum.deploy.core.policy import Policy
-from colosseum.tasks.velocity.mdp.observation_spec import VELOCITY_OBS_SPEC
+from colosseum.tasks.velocity.deploy.observation_spec import VELOCITY_OBS_SPEC
 
 
 class T1VelocityPolicy(Policy):
-    """Velocity tracking policy for T1 23-DOF deployment.
+  """Velocity tracking policy for T1 23-DOF deployment.
 
-    Computes observations from sensor data to match training specification.
+  Computes observations from sensor data to match training specification.
+  """
+
+  def __init__(self, controller: BaseController):
+    """Initialize T1 velocity policy from controller.
+
+    Args:
+        controller: BaseController instance providing config, robot state, and commands
     """
+    super().__init__(controller)
+    self.vel_command = controller.vel_command
 
-    def __init__(self, controller: BaseController):
-        """Initialize T1 velocity policy from controller.
+    # Verify observation size
+    num_joints = self.robot.num_joints
+    expected_obs_size = VELOCITY_OBS_SPEC.total_size(num_joints)
+    print(f"[Policy] Robot: {self.robot.cfg.name}")
+    print(f"[Policy] Joints: {num_joints}")
+    print(f"[Policy] Expected observation size: {expected_obs_size}")
+    print(VELOCITY_OBS_SPEC.describe(num_joints))
 
-        Args:
-            controller: BaseController instance providing config, robot state, and commands
-        """
-        super().__init__(controller)
-        self.vel_command = controller.vel_command
+  def reset(self) -> None:
+    """Reset policy state at start of episode."""
+    self.last_action = torch.zeros(self.robot.num_joints, dtype=torch.float32)
+    print("[T1VelocityPolicy] Reset complete")
 
-        # Verify observation size
-        num_joints = self.robot.num_joints
-        expected_obs_size = VELOCITY_OBS_SPEC.total_size(num_joints)
-        print(f"[Policy] Robot: {self.robot.cfg.name}")
-        print(f"[Policy] Joints: {num_joints}")
-        print(f"[Policy] Expected observation size: {expected_obs_size}")
-        print(VELOCITY_OBS_SPEC.describe(num_joints))
+  def compute_observation(self) -> torch.Tensor:
+    """Compute observations from sensor data.
 
-    def reset(self) -> None:
-        """Reset policy state at start of episode."""
-        self.last_action = torch.zeros(self.robot.num_joints, dtype=torch.float32)
-        print("[T1VelocityPolicy] Reset complete")
+    Returns:
+        Observation tensor of shape (1, obs_size) matching VelocityObservationSpec.
+    """
+    # Get joint mapping (real robot order → simulation order)
+    real2sim_map = self.robot.data.real2sim_joint_indexes
 
-    def compute_observation(self) -> torch.Tensor:
-        """Compute observations from sensor data.
+    # Velocity commands (from command interface or VelocityCommand object)
+    vel_cmd = torch.tensor(
+      [
+        self.vel_command.lin_vel_x,
+        self.vel_command.lin_vel_y,
+        self.vel_command.ang_vel_yaw,
+      ],
+      dtype=torch.float32,
+    )
 
-        Returns:
-            Observation tensor of shape (1, obs_size) matching VelocityObservationSpec.
-        """
-        # Get joint mapping (real robot order → simulation order)
-        real2sim_map = self.robot.data.real2sim_joint_indexes
+    # Base linear velocity (from IMU)
+    base_lin_vel = self.robot.data.root_lin_vel_b
+    # Base angular velocity (from IMU)
+    base_ang_vel = self.robot.data.root_ang_vel_b
 
-        # Velocity commands (from command interface or VelocityCommand object)
-        vel_cmd = torch.tensor(
-            [
-                self.vel_command.lin_vel_x,
-                self.vel_command.lin_vel_y,
-                self.vel_command.ang_vel_yaw,
-            ],
-            dtype=torch.float32,
-        )
+    # Projected gravity (computed by controller from IMU)
+    projected_gravity = self.robot.data.projected_gravity_b
 
-        # Base linear velocity (from IMU)
-        base_lin_vel = self.robot.data.root_lin_vel_b
-        # Base angular velocity (from IMU)
-        base_ang_vel = self.robot.data.root_ang_vel_b
+    # Joint positions relative to default (in simulation order!)
+    joint_pos = self.robot.data.joint_pos[real2sim_map]
+    default_pos = self.robot.default_joint_pos[real2sim_map]
+    joint_pos_rel = joint_pos - default_pos
 
-        # Projected gravity (computed by controller from IMU)
-        projected_gravity = self.robot.data.projected_gravity_b
+    # Joint velocities (in simulation order!)
+    joint_vel = self.robot.data.joint_vel[real2sim_map]
 
-        # Joint positions relative to default (in simulation order!)
-        joint_pos = self.robot.data.joint_pos[real2sim_map]
-        default_pos = self.robot.default_joint_pos[real2sim_map]
-        joint_pos_rel = joint_pos - default_pos
+    # Last action (already in simulation order from previous step)
+    last_action = self.last_action
 
-        # Joint velocities (in simulation order!)
-        joint_vel = self.robot.data.joint_vel[real2sim_map]
+    # Concatenate following VelocityObservationSpec.ORDER
+    obs = torch.cat(
+      [
+        base_lin_vel,  # (3,)
+        base_ang_vel,  # (3,)
+        projected_gravity,  # (3,)
+        joint_pos_rel,  # (23,)
+        joint_vel,  # (23,)
+        last_action,  # (23,)
+        vel_cmd,  # (3,)
+      ],
+      dim=-1,
+    )
 
-        # Last action (already in simulation order from previous step)
-        last_action = self.last_action
+    # Validate
+    VELOCITY_OBS_SPEC.validate_observation(obs, self.robot.num_joints)
 
-        # Concatenate following VelocityObservationSpec.ORDER
-        obs = torch.cat(
-            [
-                base_lin_vel,  # (3,)
-                base_ang_vel,  # (3,)
-                projected_gravity,  # (3,)
-                joint_pos_rel,  # (23,)
-                joint_vel,  # (23,)
-                last_action,  # (23,)
-                vel_cmd,  # (3,)
-            ],
-            dim=-1,
-        )
+    return obs.reshape(1, -1)
 
-        # Validate
-        VELOCITY_OBS_SPEC.validate_observation(obs, self.robot.num_joints)
+  def inference(self) -> torch.Tensor:
+    """Run policy inference and return joint targets.
 
-        return obs.reshape(1, -1)
+    Returns:
+        Joint position targets in real robot order (23,).
+    """
+    with torch.no_grad():
+      # Compute observations
+      obs = self.compute_observation()
 
-    def inference(self) -> torch.Tensor:
-        """Run policy inference and return joint targets.
+      # Run model (returns normalized actions in simulation order)
+      action = self._model(obs).flatten()
 
-        Returns:
-            Joint position targets in real robot order (23,).
-        """
-        with torch.no_grad():
-            # Compute observations
-            obs = self.compute_observation()
+      # Store for next step (keep in simulation order)
+      self.last_action = action
 
-            # Run model (returns normalized actions in simulation order)
-            action = self._model(obs).flatten()
+      # Scale actions (both action and action_scale are in simulation order)
+      scaled_action = action * self.action_scale
 
-            # Store for next step (keep in simulation order)
-            self.last_action = action
+      # Map from simulation order to real robot order
+      sim2real_map = self.robot.data.sim2real_joint_indexes
+      scaled_action_real = scaled_action[sim2real_map]
 
-            # Scale actions (both action and action_scale are in simulation order)
-            scaled_action = action * self.action_scale
+      # Add default positions (both in real robot order now)
+      joint_targets = scaled_action_real + self.robot.default_joint_pos
 
-            # Map from simulation order to real robot order
-            sim2real_map = self.robot.data.sim2real_joint_indexes
-            scaled_action_real = scaled_action[sim2real_map]
-
-            # Add default positions (both in real robot order now)
-            joint_targets = scaled_action_real + self.robot.default_joint_pos
-
-            return joint_targets
+      return joint_targets

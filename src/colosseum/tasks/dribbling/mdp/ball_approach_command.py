@@ -51,6 +51,10 @@ class BallApproachCommand(CommandTerm):
   def command(self) -> torch.Tensor:
     return self.velocity_command
 
+  @property
+  def ball(self) -> torch.Tensor:
+    return self.metrics["local_ball_pos"]
+
   def _resample_command(self, env_ids: torch.Tensor) -> None:
     """Clear command and EMA state for the reset environments."""
     self.velocity_command[env_ids] = 0.0
@@ -65,10 +69,10 @@ class BallApproachCommand(CommandTerm):
     ball = self._env.scene[self.cfg.ball_entity]
 
     robot_pos_w = robot.data.root_link_pos_w[:, :2]  # (N, 2) world XY
-    ball_pos_w = ball.data.root_link_pos_w[:, :2]    # (N, 2)
+    ball_pos_w = ball.data.root_link_pos_w[:, :2]  # (N, 2)
 
     # ---- Direction robot → ball (world frame) ----
-    to_ball = ball_pos_w - robot_pos_w                         # (N, 2)
+    to_ball = ball_pos_w - robot_pos_w  # (N, 2)
     dist = to_ball.norm(dim=-1, keepdim=True).clamp(min=1e-6)  # (N, 1)
     to_ball_unit = to_ball / dist
 
@@ -80,11 +84,11 @@ class BallApproachCommand(CommandTerm):
     self._prev_direction = to_ball_unit.clone()
 
     # ---- Transform direction to robot body frame ----
-    root_quat_w = robot.data.root_link_quat_w                          # (N, 4)
+    root_quat_w = robot.data.root_link_quat_w  # (N, 4)
     quat_conj = torch.cat([root_quat_w[:, :1], -root_quat_w[:, 1:]], dim=-1)
 
     move_3d = torch.cat([to_ball_unit, torch.zeros(N, 1, device=device)], dim=-1)
-    move_body = quat_apply(quat_conj, move_3d)[:, :2]                  # (N, 2)
+    move_body = quat_apply(quat_conj, move_3d)[:, :2]  # (N, 2)
 
     # ---- Heading error: angle from forward axis to ball direction in body frame ----
     fwd = torch.tensor(
@@ -113,6 +117,8 @@ class BallApproachCommand(CommandTerm):
     robot_pos = self._env.scene[self.cfg.robot_entity].data.root_link_pos_w[:, :2]
     ball_pos = self._env.scene[self.cfg.ball_entity].data.root_link_pos_w[:, :2]
     self.metrics["ball_distance"] = (ball_pos - robot_pos).norm(dim=-1)
+    self.metrics["local_ball_pos"] = ball_pos - robot_pos
+    self.metrics["global_ball_pos"] = ball_pos
 
   def _debug_vis_impl(self, visualizer: DebugVisualizer) -> None:
     batch = visualizer.env_idx
