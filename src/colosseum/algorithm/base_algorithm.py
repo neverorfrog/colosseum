@@ -132,6 +132,9 @@ class BaseAlgorithm(ABC):
         self._eval_episodes: int = 10
         self._last_eval_step: int = 0
 
+        # Global step counter (total env transitions across the full training run)
+        self.global_step: int = 0
+
         # Setting the seed
         self._maybe_seed()
 
@@ -573,6 +576,17 @@ class BaseAlgorithm(ABC):
 
         logger.success(f"ONNX exported: {path}")
         return path
+
+    def _restore_env_step_counter(self) -> None:
+        """Restore env.common_step_counter from global_step after loading a checkpoint.
+
+        common_step_counter increments once per env.step() call (i.e. once per
+        policy step across all parallel envs), so it equals global_step / num_envs.
+        Without this, curriculum stages restart from 0 on every resume.
+        """
+        common_step = self.global_step // self.env.num_envs
+        self.env.unwrapped.common_step_counter = common_step
+        logger.info(f"Restored common_step_counter={common_step} from global_step={self.global_step}")
 
     @abstractmethod
     def save(self, path: str | Path, **extra_state: Any) -> None:

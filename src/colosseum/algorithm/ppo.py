@@ -75,7 +75,6 @@ class PPO(BaseAlgorithm):
     self._build_rollout_buffer()
     self._build_normalizer()
 
-    self.global_step: int = 0
     self.episode_length_buf = torch.zeros(self.env.num_envs, device=self.device)
 
     # Adaptive LR state (single LR for joint optimizer, RSL-RL style)
@@ -169,6 +168,7 @@ class PPO(BaseAlgorithm):
     total_timesteps = self.config.learning_steps
     steps_per_iter = self.config.num_steps_per_env * self.env.num_envs
     num_iterations = total_timesteps // steps_per_iter
+    start_iteration = self.global_step // steps_per_iter
 
     # Convert log_interval from env steps → PPO iterations (same unit as SAC's step counter)
     # This makes the W&B x-axis (global_step = total env transitions) consistent with SAC.
@@ -525,6 +525,7 @@ class PPO(BaseAlgorithm):
 
     self.global_step = checkpoint["global_step"]
     self.learning_rate = checkpoint.get("learning_rate", self.learning_rate)
+    self._restore_env_step_counter()
 
     return {
       "global_step": checkpoint["global_step"],
