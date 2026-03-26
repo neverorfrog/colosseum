@@ -77,6 +77,19 @@ HAND_CONTACT_SENSOR = ContactSensorCfg(
 )
 
 
+FOOT_BALL_CONTACT_SENSOR = ContactSensorCfg(
+  name="foot_ball_contact",
+  primary=ContactMatch(
+    mode="subtree",
+    pattern=r"^(left_foot_link|right_foot_link)$",
+    entity="robot",
+  ),
+  secondary=ContactMatch(mode="body", pattern="ball"),
+  fields=("found", "force"),
+  reduce="netforce",
+  num_slots=1,
+)
+
 TERRAIN_SCAN = RayCastSensorCfg(
   name="terrain_scan",
   frame=ObjRef(type="body", name=BASE_BODY_NAME, entity="robot"),

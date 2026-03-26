@@ -16,8 +16,16 @@ from mjlab.tasks.velocity.mdp.observations import (
 )
 from mjlab.utils.noise import UniformNoiseCfg as Unoise
 
+from colosseum.assets.ball.ball_spec import BALL_FRICTION, BALL_MASS
 from colosseum.robots.t1_23dof.constants import FOOT_SITE_NAMES
-from colosseum.tasks.dribbling.mdp.observations import ball_position
+from colosseum.tasks.dribbling.mdp.observations import (
+  ball_friction,
+  ball_mass,
+  ball_position,
+  ball_velocity,
+  base_height,
+  foot_ball_contact_force,
+)
 
 actor_terms = {
   "base_ang_vel": ObservationTermCfg(
@@ -40,11 +48,27 @@ actor_terms = {
   "actions": ObservationTermCfg(func=last_action),
   "command": ObservationTermCfg(
     func=generated_commands,
-    params={"command_name": "twist"},
+    params={"command_name": "ball_vel"},
   ),
+  # Ball observations
   "ball_pos": ObservationTermCfg(
     func=ball_position,
     noise=Unoise(n_min=-0.01, n_max=0.01),
+  ),
+  # Privileged (teacher setting — no student/teacher split yet)
+  "ball_vel_obs": ObservationTermCfg(func=ball_velocity),
+  "base_height": ObservationTermCfg(func=base_height),
+  "ball_mass": ObservationTermCfg(
+    func=ball_mass,
+    params={"ball_mass": BALL_MASS},
+  ),
+  "ball_friction": ObservationTermCfg(
+    func=ball_friction,
+    params={"ball_friction": BALL_FRICTION},
+  ),
+  "foot_ball_contact_force": ObservationTermCfg(
+    func=foot_ball_contact_force,
+    params={"sensor_name": "foot_ball_contact"},
   ),
 }
 

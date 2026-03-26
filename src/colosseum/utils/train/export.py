@@ -46,12 +46,18 @@ def export_policy_to_onnx(
   env_cfg = replace(env_cfg, scene=replace(env_cfg.scene, num_envs=1))
   env = ViewerCompatibleEnv(cfg=env_cfg, device=str(device), render_mode=None)
 
-  module_path, class_name = config.algo.target.rsplit(":", 1)
+  algo_cfg = config.task.algo_cfg
+  assert algo_cfg is not None, (
+    f"Task '{config.task.name}' has no algo_cfg. "
+    "Implement the algo_cfg property in the task's __init__.py."
+  )
+
+  module_path, class_name = algo_cfg.target.rsplit(":", 1)
   module = importlib.import_module(module_path)
   algo_class = getattr(module, class_name)
 
   algo = algo_class(
-    config=config.algo,
+    config=algo_cfg,
     env=env,
     device=device,
     log_fn=lambda _m, _s: None,

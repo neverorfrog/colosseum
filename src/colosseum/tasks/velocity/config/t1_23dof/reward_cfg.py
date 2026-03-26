@@ -37,9 +37,9 @@ rewards = {
   ),
   "upright": RewardTermCfg(
     func=flat_orientation,
-    weight=1.0,
+    weight=0.7,
     params={
-      "std": math.sqrt(0.2),
+      "std": math.sqrt(0.5),
       "asset_cfg": SceneEntityCfg("robot", body_names=(BASE_BODY_NAME)),
     },
   ),
@@ -70,7 +70,7 @@ rewards = {
   "action_rate_l2": RewardTermCfg(func=action_rate_l2, weight=-0.1),
   "air_time": RewardTermCfg(
     func=feet_air_time,
-    weight=0.0,  # Override per-robot.
+    weight=0.0,
     params={
       "sensor_name": "feet_ground_contact",
       "threshold_min": 0.05,
