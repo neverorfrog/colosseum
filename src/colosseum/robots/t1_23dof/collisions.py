@@ -20,6 +20,19 @@ FEET_ONLY_COLLISION = CollisionCfg(
   friction=(0.6,),
 )
 
+# Feet collision with inter-foot contacts enabled (for dribbling)
+# - Foot geoms collide with environment (bit 0) AND each other (bit 1)
+# - contype=3 (bits 0+1), conaffinity=3 (bits 0+1)
+# - Ground must have contype=1 (default) so bit 0 matches
+FEET_SELF_COLLISION = CollisionCfg(
+  geom_names_expr=(r"^(left|right)_foot_sphere.*link$",),
+  contype=3,
+  conaffinity=3,
+  condim=3,
+  priority=1,
+  friction=(0.6,),
+)
+
 # Full collision without self-collision
 # - All body parts collide with environment
 # - No self-collisions between robot parts

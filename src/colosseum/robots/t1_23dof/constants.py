@@ -26,7 +26,7 @@ if _MJLAB_AVAILABLE:
     T1_ACTUATOR_NECK,
     T1_ACTUATOR_WAIST,
   )
-  from colosseum.robots.t1_23dof.collisions import FEET_ONLY_COLLISION
+  from colosseum.robots.t1_23dof.collisions import FEET_ONLY_COLLISION, FEET_SELF_COLLISION
 from colosseum.utils import src_dir
 
 ##
@@ -154,14 +154,15 @@ HOME_QPOS: dict[str, float] = {
 
 if _MJLAB_AVAILABLE:
 
-  def get_robot_cfg() -> EntityCfg:
+  def get_robot_cfg(foot_self_collision: bool = False) -> EntityCfg:
+    collision = FEET_SELF_COLLISION if foot_self_collision else FEET_ONLY_COLLISION
     return EntityCfg(
       init_state=EntityCfg.InitialStateCfg(
         pos=(0, 0, 0.665),
         joint_pos=HOME_QPOS,
         joint_vel={".*": 0.0},
       ),
-      collisions=(FEET_ONLY_COLLISION,),
+      collisions=(collision,),
       spec_fn=get_spec,
       articulation=ARTICULATION,
     )

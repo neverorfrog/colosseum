@@ -46,6 +46,10 @@ actor_terms = {
     noise=Unoise(n_min=-1.5, n_max=1.5),
   ),
   "actions": ObservationTermCfg(func=last_action),
+  "gait_phase": ObservationTermCfg(
+    func=generated_commands,
+    params={"command_name": "gait_phase"},
+  ),
   "command": ObservationTermCfg(
     func=generated_commands,
     params={"command_name": "ball_vel"},

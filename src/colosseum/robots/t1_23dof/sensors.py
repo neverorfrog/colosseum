@@ -77,6 +77,38 @@ HAND_CONTACT_SENSOR = ContactSensorCfg(
 )
 
 
+FOOT_FOOT_CONTACT_SENSOR = ContactSensorCfg(
+  name="foot_foot_contact",
+  primary=ContactMatch(
+    mode="subtree",
+    pattern="left_foot_link",
+    entity="robot",
+  ),
+  secondary=ContactMatch(
+    mode="subtree",
+    pattern="right_foot_link",
+    entity="robot",
+  ),
+  fields=("found", "force"),
+  reduce="netforce",
+  num_slots=1,
+)
+
+NONFOOT_BALL_CONTACT_SENSOR = ContactSensorCfg(
+  name="nonfoot_ball_contact",
+  primary=ContactMatch(
+    mode="geom",
+    entity="robot",
+    pattern=r".+",
+    exclude=tuple(FOOT_GEOM_NAMES),
+  ),
+  secondary=ContactMatch(mode="body", pattern="ball", entity="ball"),
+  fields=("found", "force"),
+  reduce="none",
+  num_slots=1,
+  history_length=4,
+)
+
 FOOT_BALL_CONTACT_SENSOR = ContactSensorCfg(
   name="foot_ball_contact",
   primary=ContactMatch(
@@ -84,7 +116,7 @@ FOOT_BALL_CONTACT_SENSOR = ContactSensorCfg(
     pattern=r"^(left_foot_link|right_foot_link)$",
     entity="robot",
   ),
-  secondary=ContactMatch(mode="body", pattern="ball"),
+  secondary=ContactMatch(mode="body", pattern="ball", entity="ball"),
   fields=("found", "force"),
   reduce="netforce",
   num_slots=1,
