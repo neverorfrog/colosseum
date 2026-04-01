@@ -1,6 +1,4 @@
-# Problema: cambio di velocitá e non é allineata con la x del robot (incrocia le gambe)
-# Dovremmo evitare di forzare uno e uno ma forzare il piede piú vicino
-# Distanza tra i piedi
+import math  # noqa: F401
 
 from mjlab.envs.mdp import (
   action_rate_l2,
@@ -12,12 +10,16 @@ from mjlab.tasks.velocity.mdp import (
   angular_momentum_penalty,
   body_angular_velocity_penalty,
   feet_swing_height,
-  flat_orientation,
   self_collision_cost,
   soft_landing,
 )
 
-from colosseum.robots.t1_23dof.constants import BASE_BODY_NAME, FOOT_SITE_NAMES
+from colosseum.mdp.rewards import flat_orientation
+
+from colosseum.robots.t1_23dof.constants import (
+  BASE_BODY_NAME,
+  FOOT_SITE_NAMES,
+)
 from colosseum.robots.t1_23dof.sensors import (
   FOOT_FOOT_CONTACT_SENSOR,
   NONFOOT_BALL_CONTACT_SENSOR,
@@ -27,6 +29,8 @@ from colosseum.tasks.dribbling.mdp.rewards import (
   ball_vel_angle,
   ball_vel_norm,
   ball_vel_tracking,
+  feet_distance_penalty,
+  head_ball_tracking,
   pose_deviation,
   robot_ball_approach_vel,
   robot_ball_distance,
@@ -37,11 +41,19 @@ from colosseum.tasks.dribbling.mdp.rewards import (
 
 rewards = {
   # ------------------------------------------------------------------ #
+  # Head tracking reward                                                 #
+  # ------------------------------------------------------------------ #
+  "head_ball_tracking": RewardTermCfg(
+    func=head_ball_tracking,
+    weight=0.1,
+    params={"camera_name": "robot/d455_color"},
+  ),
+  # ------------------------------------------------------------------ #
   # Task rewards                                                         #
   # ------------------------------------------------------------------ #
   "ball_vel_tracking": RewardTermCfg(
     func=ball_vel_tracking,
-    weight=0.5,
+    weight=2.0,
     params={"command_name": "ball_vel", "sharpness": 1.0},
   ),
   "ball_vel_norm": RewardTermCfg(
@@ -97,10 +109,10 @@ rewards = {
     weight=-0.25,
     params={
       "sensor_name": "feet_ground_contact",
+      "height_sensor_name": "foot_height_scan",
       "target_height": 0.1,
       "command_name": "ball_vel",
       "command_threshold": 0.05,
-      "asset_cfg": SceneEntityCfg("robot", site_names=(FOOT_SITE_NAMES)),
     },
   ),
   "soft_landing": RewardTermCfg(
@@ -116,6 +128,14 @@ rewards = {
     func=self_collision_cost,
     weight=-1.0,
     params={"sensor_name": SELF_COLLISION_SENSOR.name, "force_threshold": 10.0},
+  ),
+  "feet_distance": RewardTermCfg(
+    func=feet_distance_penalty,
+    weight=-4.0,
+    params={
+      "asset_cfg": SceneEntityCfg("robot", site_names=FOOT_SITE_NAMES),
+      "min_dist": 0.15,
+    },
   ),
   "foot_foot_contact": RewardTermCfg(
     func=self_collision_cost,
@@ -158,8 +178,6 @@ rewards = {
         joint_names=(
           r"(?i).*shoulder.*",
           r"(?i).*elbow.*",
-          r"(?i).*head.*",
-          r"Waist",
         ),
       ),
       "std": 0.1,

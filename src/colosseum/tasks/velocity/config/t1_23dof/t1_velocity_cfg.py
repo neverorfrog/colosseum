@@ -15,6 +15,7 @@ from mjlab.viewer import ViewerConfig
 from colosseum.robots.t1_23dof.constants import BASE_BODY_NAME, get_robot_cfg
 from colosseum.robots.t1_23dof.sensors import (
   FEET_GROUND_CONTACT_SENSOR,
+  FOOT_HEIGHT_SCAN,
   NONFOOT_GROUND_CONTACT_SENSOR,
   SELF_COLLISION_SENSOR,
 )
@@ -29,7 +30,7 @@ def scene_cfg(play: bool = False) -> SceneCfg:
   return SceneCfg(
     terrain=TerrainEntityCfg(),
     entities={"robot": get_robot_cfg()},
-    sensors=(FEET_GROUND_CONTACT_SENSOR, NONFOOT_GROUND_CONTACT_SENSOR, SELF_COLLISION_SENSOR),
+    sensors=(FEET_GROUND_CONTACT_SENSOR, FOOT_HEIGHT_SCAN, NONFOOT_GROUND_CONTACT_SENSOR, SELF_COLLISION_SENSOR),
     num_envs=1,
     extent=10.0,
   )

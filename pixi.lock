@@ -712,11 +712,12 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/af/33/ee4519fa02ed11a94aef9559552f3b17bb863f2ecfe1a35dc7f548cde231/matplotlib_inline-0.2.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/37/8c/52f0299f1675cdfa1ab39a6028a2e5adf9032ae1118c9895c84b08af162b/mediapy-1.2.6-py3-none-any.whl
-      - pypi: git+https://github.com/neverorfrog/mjlab.git?branch=iros#f41b494af6d93fe01f6b94c37d855a3be3a818cb
+      - pypi: git+https://github.com/neverorfrog/mjlab.git?branch=cat#5919ed4dc60fd8fdc81266d1ab2c9724b58bd2c1
+      - pypi: https://files.pythonhosted.org/packages/3b/34/cba1de59a799100c084f7614b93ae7921ba14db609e04c274f90e21c405e/mjviser-0.0.9-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/a9/80/19189ea605017473660e43762dc853d2797984b3c7bf30ce656099add30c/ml_dtypes-0.5.4-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/6b/96/5c095b940de3aa6b43a71ec76275ac3537b21bd45c7499b5a17a429110fa/msgspec-0.20.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://py.mujoco.org/mujoco/mujoco-3.7.0.dev883932254-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
-      - pypi: git+https://github.com/google-deepmind/mujoco_warp#d9bcc326544b845111eed21079bfa8f8738e2518
+      - pypi: git+https://github.com/google-deepmind/mujoco_warp#875c4caf06d71b12b2036c327e7a07ce08a78b9a
       - pypi: https://files.pythonhosted.org/packages/ac/d5/6743b409421ced20ad5af1b3a7b4c4e568689ffaca86db431692fca409a6/onnx-1.20.1-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/53/d1/bd9a5007448b4599a80143b0b5ccc78e9c46176e5e1bee81f6d3da68d217/onnx_ir-0.1.14-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f6/ec/1656ea93be1e50baf429c20603dce249fa3571f3a180407cee79b1afa013/onnxscript-0.5.7-py3-none-any.whl
@@ -771,7 +772,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/67/86/eef272685bc6c15a8f79178aa8c6e07d956f0f91d97fab5a4d8af707b21b/tyro-1.0.5-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/39/08/aaaad47bc4e9dc8c725e68f9d04865dbcb2052843ff09c97b08904852d84/urllib3-2.6.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/a6/f1/464c761dbe24f58d6fc354bf51729342981fb7a621e170e0d3512fadbec8/vhacdx-0.0.10-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/83/6e/137abad4a09314654da21eb11b187b98c5b2b2da792d375af38c9b608698/viser-1.0.24-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/91/f7/762a2d5fab509d0c632b271e21e634462397cc02cca649771c3e9d2e0bcc/viser-1.0.26-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/70/c8/1b758bd903afee000f023cd03f335ff328a21b3914f9f9deda49b1e57723/wandb-0.24.2-py3-none-manylinux_2_28_x86_64.whl
       - pypi: https://pypi.nvidia.com/warp-lang/warp_lang-1.12.0-py3-none-manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/af/b5/123f13c975e9f27ab9c0770f514345bd406d0e8d3b7a0723af9d43f710af/wcwidth-0.2.14-py2.py3-none-any.whl
@@ -1165,7 +1166,7 @@ packages:
 - pypi: ./
   name: colosseum
   version: 0.1.0
-  sha256: 4e5aeee161f2307cff5e12fd69372f8984e3617b382830f7b17b4f414089395d
+  sha256: ca38732159ae22c13e2aa95bf49020b1ed414d6a6c7156fc25bf2421f2074825
   requires_dist:
   - ty>=0.0.1a34,<0.0.1a35
   - pydantic>=2.12.5,<3
@@ -3394,7 +3395,7 @@ packages:
   license_family: MIT
   size: 11676
   timestamp: 1734157119152
-- pypi: git+https://github.com/neverorfrog/mjlab.git?branch=iros#f41b494af6d93fe01f6b94c37d855a3be3a818cb
+- pypi: git+https://github.com/neverorfrog/mjlab.git?branch=cat#5919ed4dc60fd8fdc81266d1ab2c9724b58bd2c1
   name: mjlab
   version: 1.2.0
   requires_dist:
@@ -3405,10 +3406,11 @@ packages:
   - torchrunx>=0.3.4
   - warp-lang>=1.12.0 ; sys_platform != 'darwin'
   - warp-lang>=1.12.0 ; sys_platform == 'darwin'
-  - mujoco-warp @ git+https://github.com/google-deepmind/mujoco_warp@d9bcc326544b845111eed21079bfa8f8738e2518
+  - mujoco-warp @ git+https://github.com/google-deepmind/mujoco_warp@875c4caf06d71b12b2036c327e7a07ce08a78b9a
   - mujoco>=3.6.0
   - trimesh>=4.8.3
-  - viser>=1.0.24
+  - viser>=1.0.26
+  - mjviser>=0.0.8
   - mediapy>=1.2.6
   - imageio-ffmpeg
   - tensordict
@@ -3420,6 +3422,19 @@ packages:
   - torch>=2.7.0 ; sys_platform == 'darwin' and extra == 'cu128'
   - torch>=2.7.0 ; sys_platform != 'darwin' and extra == 'cpu'
   - torch>=2.7.0 ; sys_platform == 'darwin' and extra == 'cpu'
+  requires_python: '>=3.10,<3.14'
+- pypi: https://files.pythonhosted.org/packages/3b/34/cba1de59a799100c084f7614b93ae7921ba14db609e04c274f90e21c405e/mjviser-0.0.9-py3-none-any.whl
+  name: mjviser
+  version: 0.0.9
+  sha256: 19a1a27f17ddf10bde513a8d77222b4c1d02c8cacf61e3e581a877d6361a1049
+  requires_dist:
+  - mujoco>=3.6.0
+  - numpy
+  - trimesh>=4.8.3
+  - viser>=1.0.26
+  - pillow
+  - pytest ; extra == 'dev'
+  - ruff ; extra == 'dev'
   requires_python: '>=3.10,<3.14'
 - conda: https://conda.anaconda.org/conda-forge/noarch/mkdocs-1.6.1-pyhd8ed1ab_1.conda
   sha256: 902d2e251f9a7ffa7d86a3e62be5b2395e28614bd4dbe5f50acf921fd64a8c35
@@ -3616,13 +3631,13 @@ packages:
   - usd-core ; extra == 'usd'
   - pillow ; extra == 'usd'
   requires_python: '>=3.10'
-- pypi: git+https://github.com/google-deepmind/mujoco_warp#d9bcc326544b845111eed21079bfa8f8738e2518
+- pypi: git+https://github.com/google-deepmind/mujoco_warp#875c4caf06d71b12b2036c327e7a07ce08a78b9a
   name: mujoco-warp
   version: 3.6.0
   requires_dist:
   - absl-py
   - etils[epath]
-  - mujoco>=3.5.0
+  - mujoco>=3.6.0
   - numpy
   - warp-lang>=1.12
   - pre-commit ; extra == 'dev'
@@ -3631,7 +3646,7 @@ packages:
   - ruff ; extra == 'dev'
   - pygls>=1.0.0,<2.0.0 ; extra == 'dev'
   - lsprotocol>=2023.0.1,<2024.0.0 ; extra == 'dev'
-  - mujoco>=3.5.0.dev0 ; extra == 'dev'
+  - mujoco>=3.6.0.dev0 ; extra == 'dev'
   - warp-lang>=1.11.0.dev0 ; extra == 'dev'
   - jax ; extra == 'cpu'
   - jax[cuda12] ; extra == 'cuda'
@@ -5796,10 +5811,10 @@ packages:
   - numpy
   - pytest ; extra == 'test'
   requires_python: '>=3.7'
-- pypi: https://files.pythonhosted.org/packages/83/6e/137abad4a09314654da21eb11b187b98c5b2b2da792d375af38c9b608698/viser-1.0.24-py3-none-any.whl
+- pypi: https://files.pythonhosted.org/packages/91/f7/762a2d5fab509d0c632b271e21e634462397cc02cca649771c3e9d2e0bcc/viser-1.0.26-py3-none-any.whl
   name: viser
-  version: 1.0.24
-  sha256: df91331b6c20c8fb39367faaa8eb2707cb3a403cb8b6f18396683798aa68ccba
+  version: 1.0.26
+  sha256: 03b177b4ef584f58f7b74fdf44cccb165b8a220ffd90728ef5c1e3d1b1fcf258
   requires_dist:
   - imageio>=2.0.0,<3.0.0
   - msgspec>=0.18.6,<1.0.0
@@ -5809,16 +5824,19 @@ packages:
   - tqdm>=4.0.0,<5.0.0
   - trimesh>=3.21.7,<5.0.0
   - typing-extensions>=4.0.0
-  - websockets>=13.1,<16.0.0
+  - websockets>=13.1,<17.0.0
   - yourdfpy>=0.0.53,<1.0.0
   - zstandard>=0.20.0,<1.0.0
   - hypothesis[numpy] ; extra == 'dev'
   - nodeenv>=1.9.1,<2.0.0 ; extra == 'dev'
   - opencv-python>=4.0.0.21,<5.0.0 ; extra == 'dev'
+  - playwright>=1.40.0 ; extra == 'dev'
   - pre-commit==3.3.2 ; extra == 'dev'
   - psutil>=5.9.5,<8.0.0 ; extra == 'dev'
   - pyright>=1.1.308 ; extra == 'dev'
   - pytest ; extra == 'dev'
+  - pytest-playwright>=0.4.0 ; extra == 'dev'
+  - pytest-xdist>=3.0.0 ; extra == 'dev'
   - ruff>=0.9.3 ; extra == 'dev'
   - gdown>=4.6.6 ; extra == 'examples'
   - matplotlib>=3.7.1 ; extra == 'examples'

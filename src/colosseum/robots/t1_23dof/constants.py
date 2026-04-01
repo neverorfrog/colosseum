@@ -58,6 +58,31 @@ if _MJLAB_AVAILABLE:
     return spec
 
 
+# Head camera constants (pose relative to H2 body, matching real D455 mount)
+HEAD_CAMERA_NAME = "d455_color"
+HEAD_CAMERA_FOVY = 60.0  # degrees
+
+
+if _MJLAB_AVAILABLE:
+
+  def get_spec_with_head_camera() -> mujoco.MjSpec:
+    """T1 spec with a forward-facing camera on the H2 head body.
+
+    The camera pose matches the D455 mount used in rgb_test.py.
+    No pixel resolution is set — the camera is used for analytical
+    FOV rewards via cam_xpos / cam_xmat only.
+    """
+    spec = get_spec()
+    h2 = spec.body("H2")
+    h2.add_camera(
+      name=HEAD_CAMERA_NAME,
+      pos=(0.074, 0.0, 0.11),
+      quat=(0.5, 0.5, -0.5, -0.5),
+      fovy=HEAD_CAMERA_FOVY,
+    )
+    return spec
+
+
 ##
 # Actuator config.
 ##
@@ -154,8 +179,12 @@ HOME_QPOS: dict[str, float] = {
 
 if _MJLAB_AVAILABLE:
 
-  def get_robot_cfg(foot_self_collision: bool = False) -> EntityCfg:
+  def get_robot_cfg(
+    foot_self_collision: bool = False,
+    with_head_camera: bool = False,
+  ) -> EntityCfg:
     collision = FEET_SELF_COLLISION if foot_self_collision else FEET_ONLY_COLLISION
+    spec_fn = get_spec_with_head_camera if with_head_camera else get_spec
     return EntityCfg(
       init_state=EntityCfg.InitialStateCfg(
         pos=(0, 0, 0.665),
@@ -163,7 +192,7 @@ if _MJLAB_AVAILABLE:
         joint_vel={".*": 0.0},
       ),
       collisions=(collision,),
-      spec_fn=get_spec,
+      spec_fn=spec_fn,
       articulation=ARTICULATION,
     )
 

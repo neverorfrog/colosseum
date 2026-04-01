@@ -7,7 +7,6 @@ from mjlab.envs.mdp.observations import (
   projected_gravity,
 )
 from mjlab.managers.observation_manager import ObservationGroupCfg, ObservationTermCfg
-from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.tasks.velocity.mdp.observations import (
   foot_air_time,
   foot_contact,
@@ -17,7 +16,6 @@ from mjlab.tasks.velocity.mdp.observations import (
 from mjlab.utils.noise import UniformNoiseCfg as Unoise
 
 from colosseum.assets.ball.ball_spec import BALL_FRICTION, BALL_MASS
-from colosseum.robots.t1_23dof.constants import FOOT_SITE_NAMES
 from colosseum.tasks.dribbling.mdp.observations import (
   ball_friction,
   ball_mass,
@@ -85,7 +83,7 @@ critic_terms = {
   ),
   "foot_height": ObservationTermCfg(
     func=foot_height,
-    params={"asset_cfg": SceneEntityCfg("robot", site_names=FOOT_SITE_NAMES)},
+    params={"sensor_name": "foot_height_scan"},
   ),
   "foot_air_time": ObservationTermCfg(
     func=foot_air_time,

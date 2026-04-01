@@ -13,13 +13,14 @@ from mjlab.tasks.velocity.mdp import (
   feet_clearance,
   feet_slip,
   feet_swing_height,
-  flat_orientation,
   self_collision_cost,
   soft_landing,
   track_angular_velocity,
   track_linear_velocity,
   variable_posture,
 )
+
+from colosseum.mdp.rewards import flat_orientation
 
 from colosseum.robots.t1_23dof.constants import BASE_BODY_NAME, FOOT_SITE_NAMES
 from colosseum.robots.t1_23dof.sensors import SELF_COLLISION_SENSOR
@@ -84,6 +85,7 @@ rewards = {
     weight=-2.0,
     params={
       "target_height": 0.1,
+      "height_sensor_name": "foot_height_scan",
       "command_name": "twist",
       "command_threshold": 0.05,
       "asset_cfg": SceneEntityCfg("robot", site_names=(FOOT_SITE_NAMES)),
@@ -94,10 +96,10 @@ rewards = {
     weight=-0.25,
     params={
       "sensor_name": "feet_ground_contact",
+      "height_sensor_name": "foot_height_scan",
       "target_height": 0.1,
       "command_name": "twist",
       "command_threshold": 0.05,
-      "asset_cfg": SceneEntityCfg("robot", site_names=(FOOT_SITE_NAMES)),
     },
   ),
   "foot_slip": RewardTermCfg(

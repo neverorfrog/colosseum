@@ -86,8 +86,8 @@ class BallVelocityCommand(CommandTerm):
     vel_3d = torch.cat([vel_2d, torch.zeros(1, device=vel_2d.device)])
 
     visualizer.add_arrow(
-      start=ball_pos,
-      end=ball_pos + vel_3d * 2.0,
+      start=ball_pos.cpu().numpy(),
+      end=(ball_pos + vel_3d * 2.0).cpu().numpy(),
       color=(0.2, 0.8, 0.2, 0.9),
       label=f"ball_cmd |v|={vel_2d.norm():.2f}",
     )

@@ -4,6 +4,8 @@ from mjlab.sensor import (
   GridPatternCfg,
   ObjRef,
   RayCastSensorCfg,
+  RingPatternCfg,
+  TerrainHeightSensorCfg,
 )
 
 from .constants import BASE_BODY_NAME, FOOT_GEOM_NAMES
@@ -120,6 +122,16 @@ FOOT_BALL_CONTACT_SENSOR = ContactSensorCfg(
   fields=("found", "force"),
   reduce="netforce",
   num_slots=1,
+)
+
+FOOT_HEIGHT_SCAN = TerrainHeightSensorCfg(
+  name="foot_height_scan",
+  frame=tuple(ObjRef(type="site", name=s, entity="robot") for s in ("left_foot", "right_foot")),
+  pattern=RingPatternCfg.single_ring(radius=0.03, num_samples=6),
+  ray_alignment="yaw",
+  max_distance=1.0,
+  exclude_parent_body=True,
+  include_geom_groups=(0,),  # Terrain only.
 )
 
 TERRAIN_SCAN = RayCastSensorCfg(
