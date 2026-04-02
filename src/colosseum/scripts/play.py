@@ -19,7 +19,7 @@ from typing import Literal
 import torch
 import tyro
 from loguru import logger
-from mjlab.envs import ManagerBasedRlEnvCfg
+from mjlab.envs import ManagerBasedRlEnv, ManagerBasedRlEnvCfg
 from mjlab.utils.torch import configure_torch_backends
 from mjlab.viewer import NativeMujocoViewer
 
@@ -29,7 +29,7 @@ import colosseum.tasks  # noqa: F401
 from colosseum.algorithm.base_algorithm import get_latest_checkpoint
 from colosseum.config.types.experiment import BaseExperimentConfig
 from colosseum.utils.torch import get_device
-from colosseum.utils.train.env import ViewerCompatibleEnv
+from colosseum.utils.train.env import make_env
 
 
 @dataclass(frozen=True)
@@ -60,11 +60,11 @@ def _resolve_checkpoint(checkpoint: str | None) -> Path | None:
     return None
 
 
-def _make_env(env_cfg: ManagerBasedRlEnvCfg, device: str, render_mode: str | None) -> ViewerCompatibleEnv:
-    return ViewerCompatibleEnv(cfg=env_cfg, device=device, render_mode=render_mode)
+def _make_env(env_cfg: ManagerBasedRlEnvCfg, device: str, render_mode: str | None) -> ManagerBasedRlEnv:
+    return make_env(env_cfg, device, render_mode)
 
 
-def create_agent(config: PlayConfig, env: ViewerCompatibleEnv, device: torch.device):
+def create_agent(config: PlayConfig, env: ManagerBasedRlEnv, device: torch.device):
     if config.agent == "zero":
         logger.info("Using zero-action agent")
         def zero_agent(obs_dict):

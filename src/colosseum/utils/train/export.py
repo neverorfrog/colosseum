@@ -16,7 +16,7 @@ from loguru import logger
 import colosseum.tasks  # noqa: F401
 from colosseum.config.types.experiment import BaseExperimentConfig
 from colosseum.utils.torch import get_device
-from colosseum.utils.train.env import ViewerCompatibleEnv
+from colosseum.utils.train.env import make_env
 
 
 def export_policy_to_onnx(
@@ -44,7 +44,7 @@ def export_policy_to_onnx(
   env_cfg = config.task.env
   # Single env is enough to get dimensions
   env_cfg = replace(env_cfg, scene=replace(env_cfg.scene, num_envs=1))
-  env = ViewerCompatibleEnv(cfg=env_cfg, device=str(device), render_mode=None)
+  env = make_env(env_cfg, str(device))
 
   algo_cfg = config.task.algo_cfg
   assert algo_cfg is not None, (

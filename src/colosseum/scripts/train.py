@@ -21,7 +21,7 @@ from pathlib import Path
 import tyro
 import wandb
 from loguru import logger
-from mjlab.envs import ManagerBasedRlEnvCfg
+from mjlab.envs import ManagerBasedRlEnv, ManagerBasedRlEnvCfg
 from mjlab.utils.torch import configure_torch_backends
 
 # Import tasks to populate registry
@@ -36,11 +36,11 @@ from colosseum.utils.logger import (
     teardown_wandb,
 )
 from colosseum.utils.torch import get_device, set_seed
-from colosseum.utils.train.env import ViewerCompatibleEnv
+from colosseum.utils.train.env import make_env
 
 
-def _make_env(env_cfg: ManagerBasedRlEnvCfg, device: str) -> ViewerCompatibleEnv:
-    return ViewerCompatibleEnv(cfg=env_cfg, device=device, render_mode=None)
+def _make_env(env_cfg: ManagerBasedRlEnvCfg, device: str) -> ManagerBasedRlEnv:
+    return make_env(env_cfg, device)
 
 
 def main() -> None:

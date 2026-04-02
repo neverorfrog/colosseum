@@ -6,13 +6,16 @@ a soccer ball.  The ball is a free-floating entity added to the scene and
 is respawned at a random position (1–3 m from the robot) on every episode.
 """
 
-from mjlab.envs import ManagerBasedRlEnvCfg
+from dataclasses import dataclass, field
+
 from mjlab.scene import SceneCfg
 from mjlab.sim import MujocoCfg, SimulationCfg
 from mjlab.terrains import TerrainEntityCfg
 from mjlab.viewer import ViewerConfig
 
 from colosseum.assets.ball.ball_spec import get_ball_cfg
+from colosseum.config.types.task import TaskConfig, register_task
+from colosseum.tasks.dribbling.env import DribblingEnvCfg
 from colosseum.robots.t1_23dof.constants import BASE_BODY_NAME, get_robot_cfg
 from colosseum.robots.t1_23dof.sensors import (
   FEET_GROUND_CONTACT_SENSOR,
@@ -24,6 +27,7 @@ from colosseum.robots.t1_23dof.sensors import (
   SELF_COLLISION_SENSOR,
 )
 
+from .algo_cfg import booster_t1_dribbling_ppo_cfg
 from .cact_cfg import actions, commands, curriculum, terminations
 from .event_cfg import events
 from .observation_cfg import observations
@@ -73,7 +77,7 @@ def sim_cfg() -> SimulationCfg:
   )
 
 
-def booster_t1_dribbling_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
+def booster_t1_dribbling_env_cfg(play: bool = False) -> DribblingEnvCfg:
   """Create Booster T1 dribbling task configuration.
 
   Starts from the flat velocity config and:
@@ -81,7 +85,7 @@ def booster_t1_dribbling_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
   - Replaces the random velocity command with BallApproachCommand.
   - Adds a reset event that respawns the ball at a random position each episode.
   """
-  cfg = ManagerBasedRlEnvCfg(
+  cfg = DribblingEnvCfg(
     scene=scene_cfg(play),
     observations=observations,
     actions=actions,
@@ -114,3 +118,22 @@ def booster_t1_dribbling_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
         cfg.scene.terrain.terrain_generator.border_width = 10.0
 
   return cfg
+
+
+@register_task("t1-dribbling")
+@dataclass(frozen=True)
+class T1DribblingTask(TaskConfig):
+  name: str = "t1-dribbling"
+  env: DribblingEnvCfg = field(default_factory=booster_t1_dribbling_env_cfg)
+
+  @property
+  def train_env_cfg(self):
+    return self.env
+
+  @property
+  def play_env_cfg(self):
+    return booster_t1_dribbling_env_cfg(play=True)
+
+  @property
+  def algo_cfg(self):
+    return booster_t1_dribbling_ppo_cfg()

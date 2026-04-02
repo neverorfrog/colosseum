@@ -1,3 +1,5 @@
+"""Observation configuration for T1 maze task."""
+
 from mjlab.envs.mdp.observations import (
   builtin_sensor,
   generated_commands,
@@ -7,15 +9,39 @@ from mjlab.envs.mdp.observations import (
   projected_gravity,
 )
 from mjlab.managers.observation_manager import ObservationGroupCfg, ObservationTermCfg
+from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.tasks.velocity.mdp.observations import (
   foot_air_time,
   foot_contact,
   foot_contact_forces,
-  foot_height,
 )
 from mjlab.utils.noise import UniformNoiseCfg as Unoise
 
+from colosseum.tasks.maze.mdp.observations import (
+  agent_pos_local,
+  agent_vel_body,
+  agent_z_vel,
+  goal_pos_local,
+)
+
+_ASSET_CFG = SceneEntityCfg("robot", site_names="root_site", joint_names=".*")
+
 actor_terms = {
+  "agent_pos_local": ObservationTermCfg(
+    func=agent_pos_local,
+    params={"asset_cfg": _ASSET_CFG},
+    noise=Unoise(n_min=-0.01, n_max=0.01),
+  ),
+  "goal_pos_local": ObservationTermCfg(func=goal_pos_local),
+  "base_lin_vel": ObservationTermCfg(
+    func=agent_vel_body,
+    params={"asset_cfg": SceneEntityCfg("robot")},
+    noise=Unoise(n_min=-0.1, n_max=0.1),
+  ),
+  "base_z_vel": ObservationTermCfg(
+    func=agent_z_vel,
+    params={"asset_cfg": _ASSET_CFG},
+  ),
   "base_ang_vel": ObservationTermCfg(
     func=builtin_sensor,
     params={"sensor_name": "robot/imu_ang_vel"},
@@ -36,31 +62,22 @@ actor_terms = {
   "actions": ObservationTermCfg(func=last_action),
   "command": ObservationTermCfg(
     func=generated_commands,
-    params={"command_name": "twist"},
+    params={"command_name": "velocity"},
   ),
 }
 
 critic_terms = {
   **actor_terms,
-  "base_lin_vel": ObservationTermCfg(
-    func=builtin_sensor,
-    params={"sensor_name": "robot/imu_lin_vel"},
-    noise=Unoise(n_min=-0.5, n_max=0.5),
-  ),
-  "foot_height": ObservationTermCfg(
-    func=foot_height,
-    params={"sensor_name": "foot_height_scan"},
-  ),
-  "foot_air_time": ObservationTermCfg(
-    func=foot_air_time,
-    params={"sensor_name": "feet_ground_contact"},
-  ),
   "foot_contact": ObservationTermCfg(
     func=foot_contact,
     params={"sensor_name": "feet_ground_contact"},
   ),
   "foot_contact_forces": ObservationTermCfg(
     func=foot_contact_forces,
+    params={"sensor_name": "feet_ground_contact"},
+  ),
+  "foot_air_time": ObservationTermCfg(
+    func=foot_air_time,
     params={"sensor_name": "feet_ground_contact"},
   ),
 }

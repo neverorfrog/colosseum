@@ -63,22 +63,6 @@ SELF_COLLISION_SENSOR = ContactSensorCfg(
   history_length=4,
 )
 
-# Hand contact sensor (for manipulation)
-# Tracks contact between hand sphere end-effectors and any objects
-HAND_CONTACT_SENSOR = ContactSensorCfg(
-  name="hand_contact",
-  primary=ContactMatch(
-    mode="body",
-    pattern=r"^(left_hand_sphere_link|right_hand_sphere_link)$",
-    entity="robot",
-  ),
-  secondary=None,  # Any contact
-  fields=("found", "force", "pos"),
-  reduce="maxforce",
-  num_slots=1,
-)
-
-
 FOOT_FOOT_CONTACT_SENSOR = ContactSensorCfg(
   name="foot_foot_contact",
   primary=ContactMatch(
@@ -126,12 +110,23 @@ FOOT_BALL_CONTACT_SENSOR = ContactSensorCfg(
 
 FOOT_HEIGHT_SCAN = TerrainHeightSensorCfg(
   name="foot_height_scan",
-  frame=tuple(ObjRef(type="site", name=s, entity="robot") for s in ("left_foot", "right_foot")),
+  frame=tuple(
+    ObjRef(type="site", name=s, entity="robot") for s in ("left_foot", "right_foot")
+  ),
   pattern=RingPatternCfg.single_ring(radius=0.03, num_samples=6),
   ray_alignment="yaw",
   max_distance=1.0,
   exclude_parent_body=True,
   include_geom_groups=(0,),  # Terrain only.
+)
+
+WALL_COLLISION_SENSOR = ContactSensorCfg(
+  name="wall_collision",
+  primary=ContactMatch(mode="subtree", pattern="Trunk", entity="robot"),
+  secondary=ContactMatch(mode="subtree", pattern="walls"),
+  fields=("found", "force"),
+  reduce="netforce",
+  num_slots=1,
 )
 
 TERRAIN_SCAN = RayCastSensorCfg(

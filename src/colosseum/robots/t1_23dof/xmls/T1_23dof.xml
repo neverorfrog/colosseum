@@ -106,6 +106,7 @@
       <freejoint name="floating_base_joint"/>
       <inertial pos="0.0551365 -1.42058e-06 0.105062" quat="0.99996 1.40561e-05 -0.00899532 -1.39249e-05" mass="11.7" diaginertia="0.0915404 0.0767787 0.0556055"/>
       <site name='imu'/>
+      <site name='root_site'/>
       <geom class="visual" material="light_gray" mesh="Trunk"/>
       <geom name="Trunk" class="collision" type="mesh" mesh="Trunk"/>
 
