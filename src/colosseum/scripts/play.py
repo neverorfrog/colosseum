@@ -144,8 +144,7 @@ def main() -> None:
     logger.info(f"Device: {device}")
 
     env_cfg = config.task.play_env_cfg or config.task.env
-    if config.num_envs != 1:
-        env_cfg = replace(env_cfg, scene=replace(env_cfg.scene, num_envs=config.num_envs))
+    env_cfg = replace(env_cfg, scene=replace(env_cfg.scene, num_envs=config.num_envs))
 
     render_mode = "rgb_array" if config.video else None
     env = _make_env(env_cfg=env_cfg, device=str(device), render_mode=render_mode)

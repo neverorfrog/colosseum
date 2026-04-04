@@ -49,7 +49,7 @@ def scene_cfg(play: bool = False) -> SceneCfg:
       HEAD_RGBD_SENSOR,
     ),
     entities={"ball": get_ball_cfg(), "robot": get_robot_cfg(foot_self_collision=True, with_head_camera=True)},
-    num_envs=1,
+    num_envs=32,
     extent=10.0,
   )
 
