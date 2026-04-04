@@ -135,38 +135,38 @@ class DribblingPPO(PPO):
         current_critic_obs = next_critic_obs
         current_dones = dones
 
-      # --- Online encoder training (after rollout, with gradients) ---
-      # Re-forward the current depth buffer through the encoder with
-      # gradients enabled, compute the auxiliary projection loss, and
-      # backprop through encoder + projection head.
-      if dribbling_env._depth_buffer is not None:
-        z_enc = dribbling_env.depth_encoder(dribbling_env._depth_buffer)
-        predicted_nxny = dribbling_env.projection_head(z_enc)
+    # --- Online encoder training (outside no_grad, with gradients) ---
+    # Re-forward the current depth buffer through the encoder with
+    # gradients enabled, compute the auxiliary projection loss, and
+    # backprop through encoder + projection head.
+    if dribbling_env._depth_buffer is not None:
+      z_enc = dribbling_env.depth_encoder(dribbling_env._depth_buffer)
+      predicted_nxny = dribbling_env.projection_head(z_enc)
 
-        nx, ny, in_front = _project_ball_to_camera(
-          dribbling_env, _CAMERA_NAME, _ASPECT_RATIO
-        )
-        gt_nxny = torch.stack(
-          [nx.clamp(-2.0, 2.0), ny.clamp(-2.0, 2.0)], dim=-1
-        )
+      nx, ny, in_front = _project_ball_to_camera(
+        dribbling_env, _CAMERA_NAME, _ASPECT_RATIO
+      )
+      gt_nxny = torch.stack(
+        [nx.clamp(-2.0, 2.0), ny.clamp(-2.0, 2.0)], dim=-1
+      ).detach()
 
-        visual_loss_raw = (predicted_nxny - gt_nxny).pow(2).mean(dim=-1)
-        visual_loss = (visual_loss_raw * in_front.float()).mean()
+      visual_loss_raw = (predicted_nxny - gt_nxny).pow(2).mean(dim=-1)
+      visual_loss = (visual_loss_raw * in_front.float()).mean()
 
-        self.encoder_optimizer.zero_grad()
-        (self.visual_loss_coef * visual_loss).backward()
-        torch.nn.utils.clip_grad_norm_(
-          dribbling_env.depth_encoder.parameters(),
-          max_norm=self.config.max_grad_norm,
-        )
-        torch.nn.utils.clip_grad_norm_(
-          dribbling_env.projection_head.parameters(),
-          max_norm=self.config.max_grad_norm,
-        )
-        self.encoder_optimizer.step()
+      self.encoder_optimizer.zero_grad()
+      (self.visual_loss_coef * visual_loss).backward()
+      torch.nn.utils.clip_grad_norm_(
+        dribbling_env.depth_encoder.parameters(),
+        max_norm=self.config.max_grad_norm,
+      )
+      torch.nn.utils.clip_grad_norm_(
+        dribbling_env.projection_head.parameters(),
+        max_norm=self.config.max_grad_norm,
+      )
+      self.encoder_optimizer.step()
 
-        visual_loss_sum += visual_loss.item()
-        visual_loss_count += 1
+      visual_loss_sum += visual_loss.item()
+      visual_loss_count += 1
 
     # Store visual loss for logging
     self._visual_loss = (
