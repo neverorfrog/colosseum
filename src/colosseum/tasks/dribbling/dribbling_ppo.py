@@ -5,9 +5,9 @@ projection loss: L_visual = MSE(proj_head(z_enc), gt_nxny) * in_front_mask.
 
 The encoder and projection head live on the environment (DribblingEnv).
 Their parameters are added to a separate optimizer with a lower learning rate.
-During rollout collection, z_enc and GT (nx, ny, in_front) are stored in the
-rollout buffer extras. During learning, the auxiliary loss is computed per
-mini-batch and backpropagated through the encoder.
+The encoder is trained online: at the end of each rollout collection, a fresh
+forward pass through encoder + projection head is computed with gradients,
+and the auxiliary loss is backpropagated immediately.
 """
 
 from __future__ import annotations
@@ -21,7 +21,6 @@ import torch.optim as optim
 from mjlab.envs import ManagerBasedRlEnv
 
 from colosseum.algorithm.ppo import PPO
-from colosseum.algorithm.rollout_buffer import RolloutBuffer
 from colosseum.config.types.algorithm import PpoConfig, register_algorithm
 from colosseum.tasks.dribbling.mdp.rewards import _project_ball_to_camera
 
@@ -58,25 +57,8 @@ class DribblingPPO(PPO):
       lr=self.config.learning_rate * self.encoder_lr_scale,
     )
 
-  def _build_rollout_buffer(self) -> None:
-    """Extend buffer with extras for z_enc and GT ball projection."""
-    assert isinstance(self.config, PpoConfig)
-
-    z_enc_dim = self.env.unwrapped.cfg.z_enc_dim
-
-    self.rollout_buffer = RolloutBuffer(
-      num_envs=self.env.num_envs,
-      num_steps=self.config.num_steps_per_env,
-      actor_obs_dim=self.actor_obs_dim,
-      critic_obs_dim=self.critic_obs_dim,
-      action_dim=self.action_dim,
-      device=self.device,
-      extras={
-        "z_enc": z_enc_dim,      # (N, z_enc_dim)
-        "gt_nxny": 2,            # (N, 2) — GT ball projection
-        "in_front": 1,           # (N, 1) — ball-in-front mask
-      },
-    )
+    # Visual loss from online encoder training (updated during collection)
+    self._visual_loss = 0.0
 
   def _collect_rollout(
     self,
@@ -89,6 +71,8 @@ class DribblingPPO(PPO):
 
     self.rollout_buffer.clear()
     dribbling_env = self.env.unwrapped
+    visual_loss_sum = 0.0
+    visual_loss_count = 0
 
     with torch.no_grad():
       for _step in range(self.config.num_steps_per_env):
@@ -135,12 +119,6 @@ class DribblingPPO(PPO):
           from colosseum.utils.logger import extract_episode_metrics
           self.latest_episode_metrics = extract_episode_metrics(infos["log"])
 
-        # Compute GT ball projection for auxiliary supervision
-        nx, ny, in_front = _project_ball_to_camera(
-          dribbling_env, _CAMERA_NAME, _ASPECT_RATIO
-        )
-        gt_nxny = torch.stack([nx, ny], dim=-1)  # (N, 2)
-
         self.rollout_buffer.add(
           actor_obs=current_actor_obs,
           critic_obs=current_critic_obs,
@@ -151,17 +129,51 @@ class DribblingPPO(PPO):
           log_probs=log_probs,
           action_means=action_means,
           action_stds=action_stds,
-          extras={
-            "z_enc": dribbling_env.z_enc,
-            "gt_nxny": gt_nxny,
-            "in_front": in_front.float().unsqueeze(-1),
-          },
         )
 
         current_actor_obs = next_actor_obs
         current_critic_obs = next_critic_obs
         current_dones = dones
 
+      # --- Online encoder training (after rollout, with gradients) ---
+      # Re-forward the current depth buffer through the encoder with
+      # gradients enabled, compute the auxiliary projection loss, and
+      # backprop through encoder + projection head.
+      if dribbling_env._depth_buffer is not None:
+        z_enc = dribbling_env.depth_encoder(dribbling_env._depth_buffer)
+        predicted_nxny = dribbling_env.projection_head(z_enc)
+
+        nx, ny, in_front = _project_ball_to_camera(
+          dribbling_env, _CAMERA_NAME, _ASPECT_RATIO
+        )
+        gt_nxny = torch.stack(
+          [nx.clamp(-2.0, 2.0), ny.clamp(-2.0, 2.0)], dim=-1
+        )
+
+        visual_loss_raw = (predicted_nxny - gt_nxny).pow(2).mean(dim=-1)
+        visual_loss = (visual_loss_raw * in_front.float()).mean()
+
+        self.encoder_optimizer.zero_grad()
+        (self.visual_loss_coef * visual_loss).backward()
+        torch.nn.utils.clip_grad_norm_(
+          dribbling_env.depth_encoder.parameters(),
+          max_norm=self.config.max_grad_norm,
+        )
+        torch.nn.utils.clip_grad_norm_(
+          dribbling_env.projection_head.parameters(),
+          max_norm=self.config.max_grad_norm,
+        )
+        self.encoder_optimizer.step()
+
+        visual_loss_sum += visual_loss.item()
+        visual_loss_count += 1
+
+    # Store visual loss for logging
+    self._visual_loss = (
+      visual_loss_sum / visual_loss_count if visual_loss_count > 0 else 0.0
+    )
+
+    with torch.no_grad():
       norm_last_critic = self.critic_obs_normalizer(current_critic_obs)
       last_values = self.value_net(norm_last_critic)
 
@@ -176,17 +188,14 @@ class DribblingPPO(PPO):
     return current_actor_obs, current_critic_obs, current_dones
 
   def _learning_step(self) -> dict[str, float]:
-    """PPO update with auxiliary depth encoder loss."""
+    """PPO update (encoder is trained online during rollout collection)."""
     assert isinstance(self.config, PpoConfig)
 
     total_surrogate_loss = 0.0
     total_value_loss = 0.0
     total_entropy = 0.0
     total_kl = 0.0
-    total_visual_loss = 0.0
     num_updates = 0
-
-    dribbling_env = self.env.unwrapped
 
     generator = self.rollout_buffer.mini_batch_generator(
       num_mini_batches=self.config.num_mini_batches,
@@ -204,11 +213,6 @@ class DribblingPPO(PPO):
       old_action_means = batch["old_action_means"]
       old_action_stds = batch["old_action_stds"]
       target_values = batch["values"]
-
-      # Extras for auxiliary loss
-      z_enc = batch["z_enc"]
-      gt_nxny = batch["gt_nxny"]
-      in_front = batch["in_front"]
 
       actor_obs = self.actor_obs_normalizer(actor_obs_raw)
       critic_obs = self.critic_obs_normalizer(critic_obs_raw)
@@ -282,27 +286,10 @@ class DribblingPPO(PPO):
       )
       self.optimizer.step()
 
-      # Auxiliary visual loss (separate backward on encoder only)
-      predicted_nxny = dribbling_env.projection_head(z_enc)
-      visual_loss_raw = (predicted_nxny - gt_nxny).pow(2).mean(dim=-1)  # (B,)
-      # Mask: only supervise when ball is in front of camera
-      visual_loss = (visual_loss_raw * in_front.squeeze(-1)).mean()
-
-      self.encoder_optimizer.zero_grad()
-      (self.visual_loss_coef * visual_loss).backward()
-      torch.nn.utils.clip_grad_norm_(
-        dribbling_env.depth_encoder.parameters(), max_norm=self.config.max_grad_norm
-      )
-      torch.nn.utils.clip_grad_norm_(
-        dribbling_env.projection_head.parameters(), max_norm=self.config.max_grad_norm
-      )
-      self.encoder_optimizer.step()
-
       total_surrogate_loss += surrogate_loss.item()
       total_value_loss += value_loss.item()
       total_entropy += entropy.mean().item()
       total_kl += kl_mean
-      total_visual_loss += visual_loss.item()
       num_updates += 1
 
     self.rollout_buffer.clear()
@@ -314,7 +301,7 @@ class DribblingPPO(PPO):
       "entropy": total_entropy / n,
       "kl": total_kl / n,
       "learning_rate": self.learning_rate,
-      "visual_loss": total_visual_loss / n,
+      "visual_loss": self._visual_loss,
     }
 
   def save(self, path: str | Path, **extra_state: Any) -> None:
