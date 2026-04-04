@@ -736,21 +736,23 @@ After encoders are trained, modify `_compose_actor_obs` to use:
 
 ---
 
-## Open Questions
+## Design Notes
 
-1. **obs_dim mismatch:** The actor network input dim changes from ~87D to
-   ~100D when adding encoder latents. This means Phase 1 checkpoints are not
-   directly loadable into a non-RMA PPO. The RmaPPO subclass must handle this.
+**Actor input dimension is constant across all phases.** Following TUM ADLR's
+approach: the actor always takes `[proprio, z_ball, z_phys]` = ~100D. In
+Phase 1, the latents come from privileged encoders; in Phase 2/3, from
+adaptation modules. The actor doesn't know which source produced them. This
+means RmaPPO is a separate architecture from the current PPO — you start
+fresh, not from a non-RMA checkpoint.
 
-2. **Observation normalization:** The privileged encoder outputs (z_ball,
-   z_phys) should probably NOT be normalized by the obs normalizer (they're
-   already learned representations). Need to handle this in the normalizer or
-   in `_compose_actor_obs`.
+**Observation normalization applies to proprio only.** The `EmpiricalNormalization`
+normalizer runs on the proprioceptive portion of the input. Encoder outputs
+(z_ball, z_phys) are already learned representations with controlled magnitude
+(LayerNorm on privileged encoder output). `_compose_actor_obs` concatenates
+`[normalizer(proprio), z_ball, z_phys]` — the latents bypass normalization.
+TUM ADLR sidesteps this entirely by not using obs normalization.
 
-3. **50-step obs history memory:** At 4096 envs × 50 steps × 75D float32 =
-   ~60MB. Manageable, but worth noting.
-
-4. **Depth rendering throughput:** mjlab uses MuJoCo Warp GPU ray-tracing
-   (batch rendering is native). No CPU bottleneck, but GPU compute for
-   4096 × 64×64 per step needs benchmarking. The mitigations above (env
-   subsampling, lower freq, lower res) are available if needed.
+**Depth rendering throughput:** mjlab uses MuJoCo Warp GPU ray-tracing
+(batch rendering is native). No CPU bottleneck, but GPU compute for
+4096 × 64×64 per step needs benchmarking. The mitigations in the "Depth
+Rendering Cost" section above are available if needed.
