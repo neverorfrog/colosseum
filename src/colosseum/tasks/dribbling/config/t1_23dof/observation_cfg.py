@@ -23,6 +23,7 @@ from colosseum.tasks.dribbling.mdp.observations import (
   ball_velocity,
   base_height,
   foot_ball_contact_force,
+  z_enc,
 )
 
 actor_terms = {
@@ -57,6 +58,8 @@ actor_terms = {
     func=ball_position,
     noise=Unoise(n_min=-0.01, n_max=0.01),
   ),
+  # Depth encoder latent
+  "z_enc": ObservationTermCfg(func=z_enc),
   # Privileged (teacher setting — no student/teacher split yet)
   "ball_vel_obs": ObservationTermCfg(func=ball_velocity),
   "base_height": ObservationTermCfg(func=base_height),

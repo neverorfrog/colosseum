@@ -13,6 +13,7 @@ from colosseum.tasks.dribbling.mdp.observations import (
   ball_velocity,
   base_height,
   foot_ball_contact_force,
+  z_enc,
 )
 from colosseum.tasks.dribbling.mdp.rewards import (
   ball_vel_angle,
@@ -37,6 +38,7 @@ __all__ = [
   "ball_friction",
   "base_height",
   "foot_ball_contact_force",
+  "z_enc",
   "ball_vel_tracking",
   "ball_vel_norm",
   "ball_vel_angle",

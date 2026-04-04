@@ -48,3 +48,8 @@ def foot_ball_contact_force(env: ManagerBasedRlEnv, sensor_name: str) -> torch.T
   assert sensor_data.force is not None
   force = sensor_data.force.flatten(start_dim=1)  # [B, N*3]
   return force.norm(dim=-1, keepdim=True)
+
+
+def z_enc(env: ManagerBasedRlEnv) -> torch.Tensor:
+  """Depth encoder latent — implicit ball position + occlusion state. Shape (N, z_enc_dim)."""
+  return env.z_enc
