@@ -21,7 +21,7 @@ import tyro
 from loguru import logger
 from mjlab.envs import ManagerBasedRlEnv, ManagerBasedRlEnvCfg
 from mjlab.utils.torch import configure_torch_backends
-from mjlab.viewer import NativeMujocoViewer
+from mjlab.viewer import NativeMujocoViewer, ViserPlayViewer
 
 # Import tasks to populate registry
 import colosseum.tasks  # noqa: F401
@@ -37,7 +37,7 @@ class PlayConfig(BaseExperimentConfig):
     """Play configuration."""
     agent: Literal["trained", "zero", "random"] = "trained"
     num_envs: int = 1
-    viewer: Literal["native", "auto"] = "auto"
+    viewer: Literal["native", "viser", "auto"] = "auto"
     video: bool = False
     video_length: int = 500
 
@@ -68,14 +68,20 @@ def create_agent(config: PlayConfig, env: ManagerBasedRlEnv, device: torch.devic
     if config.agent == "zero":
         logger.info("Using zero-action agent")
         def zero_agent(obs_dict):
-            obs = obs_dict.get("policy", obs_dict) if isinstance(obs_dict, dict) else obs_dict
+            if isinstance(obs_dict, dict):
+                obs = next(iter(obs_dict.values()))
+            else:
+                obs = obs_dict
             return torch.zeros((obs.shape[0], env.action_manager.total_action_dim), device=device)
         return zero_agent
 
     elif config.agent == "random":
         logger.info("Using random-action agent")
         def random_agent(obs_dict):
-            obs = obs_dict.get("policy", obs_dict) if isinstance(obs_dict, dict) else obs_dict
+            if isinstance(obs_dict, dict):
+                obs = next(iter(obs_dict.values()))
+            else:
+                obs = obs_dict
             return torch.randn((obs.shape[0], env.action_manager.total_action_dim), device=device)
         return random_agent
 
@@ -149,6 +155,10 @@ def main() -> None:
 
     if config.video:
         _record_video(config, env, agent)
+    elif config.viewer == "viser":
+        viewer = ViserPlayViewer(env, agent)
+        viewer.run()
+        env.close()
     else:
         viewer = NativeMujocoViewer(env, agent)
         viewer.run()
