@@ -116,20 +116,17 @@ def z_enc(env: ManagerBasedRlEnv) -> torch.Tensor:
 
 Then register `z_enc` in `observation_cfg.py` under `actor_terms`.
 
-## Step D — Auxiliary Supervision Loss
+## ~~Step D — Auxiliary Supervision Loss~~ (DONE)
 
-The paper trains with: `L_visual = MSE(proj_head(z_enc), gt_nxny) * in_front_mask`.
+Implemented as `DribblingPPO` in `src/colosseum/tasks/dribbling/dribbling_ppo.py`, subclassing the base PPO.
 
-- GT (nx, ny) already computable via `_project_ball_to_camera()` in `src/colosseum/tasks/dribbling/mdp/rewards.py:225`.
-- Wire `projection_head(z_enc)` against GT each step.
-- Warm-up schedule: `λ_v = 1.0` for first 50 iters, then PPO ramps up.
-- Encoder learning rate: `η_policy / 100` with separate gradient clipping.
-
-This requires extending the RL algorithm (PPO) config to include the auxiliary loss. Two options:
-1. **Custom PPO callback/hook** — add the aux loss inside the PPO update step.
-2. **Reward-based proxy** — add a reward term `exp(-MSE(predicted_nxny, gt_nxny))` (weaker but no algo changes needed).
-
-Option 1 is correct; option 2 is a quick sanity check.
+- **Rollout buffer extras**: stores `z_enc` (64D), `gt_nxny` (2D), `in_front` (1D) each step
+- **GT supervision**: uses `_project_ball_to_camera()` from `rewards.py` to get GT (nx, ny)
+- **Auxiliary loss**: `L_visual = MSE(proj_head(z_enc), gt_nxny) * in_front_mask`, masked to only supervise when ball is in front of camera
+- **Separate optimizer**: encoder + projection head trained with `lr = policy_lr * 0.01` (encoder_lr_scale)
+- **Separate backward**: PPO loss and visual loss have independent backward passes and gradient clipping
+- **Checkpoint support**: encoder, projection head, and encoder optimizer saved/loaded
+- **Config**: `target` points to `colosseum.tasks.dribbling.dribbling_ppo:DribblingPPO`
 
 ## Step E — Observation Vector Update
 
@@ -158,8 +155,9 @@ At deployment:
 | `robots/t1_23dof/constants.py` | **DONE** — Calibrated D455 intrinsics + `get_spec_with_head_camera()` |
 | `robots/t1_23dof/sensors.py` | **DONE** — `HEAD_RGBD_SENSOR` (1280x720, rgb+depth) |
 | `tasks/dribbling/config/t1_23dof/t1_dribbling_cfg.py` | **DONE** — `HEAD_RGBD_SENSOR` added to scene sensors |
-| `tasks/dribbling/mdp/depth_encoder.py` | **New** — `DepthEncoder` + `ProjectionHead` modules |
-| `tasks/dribbling/env.py` | Extend `DribblingEnv` with encoder, depth buffer, `z_enc` |
-| `tasks/dribbling/mdp/observations.py` | Add `z_enc()` observation function |
-| `tasks/dribbling/config/t1_23dof/observation_cfg.py` | Add `z_enc` term, reorganize privileged obs |
-| RL algo config | Add auxiliary projection loss to PPO |
+| `tasks/dribbling/mdp/depth_encoder.py` | **DONE** — `DepthEncoder` + `ProjectionHead` modules |
+| `tasks/dribbling/env.py` | **DONE** — `DribblingEnv` with encoder, depth buffer, `z_enc` (configurable resolution) |
+| `tasks/dribbling/mdp/observations.py` | **DONE** — `z_enc()` observation function |
+| `tasks/dribbling/config/t1_23dof/observation_cfg.py` | **DONE** — `z_enc` term added to actor obs |
+| `tasks/dribbling/dribbling_ppo.py` | **DONE** — `DribblingPPO` with auxiliary projection loss |
+| `tasks/dribbling/config/t1_23dof/algo_cfg.py` | **DONE** — target set to `DribblingPPO` |

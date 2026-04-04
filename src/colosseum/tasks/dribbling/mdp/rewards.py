@@ -243,13 +243,15 @@ def _project_ball_to_camera(
 
   cam_id = env.sim.mj_model.camera(camera_name).id
   cam_pos = env.sim.data.cam_xpos[:, cam_id, :]  # [N, 3]
+  # cam_xmat columns are camera-frame axes in world coordinates (R_world_from_cam).
+  # To transform world→camera we need R^T: p_cam = R^T @ p_rel.
   cam_mat = env.sim.data.cam_xmat[:, cam_id, :].reshape(-1, 3, 3)  # [N, 3, 3]
 
   ball_pos = env.scene["ball"].data.root_link_pos_w  # [N, 3]
   p_rel = ball_pos - cam_pos  # [N, 3]
 
-  # Rotate into camera frame: p_cam = cam_mat @ p_rel
-  p_cam = torch.bmm(cam_mat, p_rel.unsqueeze(-1)).squeeze(-1)  # [N, 3]
+  # Rotate into camera frame: p_cam = R^T @ p_rel
+  p_cam = torch.bmm(cam_mat.transpose(1, 2), p_rel.unsqueeze(-1)).squeeze(-1)  # [N, 3]
 
   # Depth along optical axis (positive means ball is in front)
   depth = (-p_cam[:, 2]).clamp_min(1e-6)  # [N]

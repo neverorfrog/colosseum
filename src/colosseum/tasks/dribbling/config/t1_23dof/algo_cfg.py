@@ -3,11 +3,14 @@
 from colosseum.config.types.algorithm import PpoConfig
 from colosseum.config.types.networks import PpoActorConfig, PpoCriticConfig
 
+# Ensure DribblingPPO is registered before config references it.
+import colosseum.tasks.dribbling.dribbling_ppo  # noqa: F401
+
 
 def booster_t1_dribbling_ppo_cfg() -> PpoConfig:
   return PpoConfig(
     name="PPO",
-    target="colosseum.algorithm.ppo:PPO",
+    target="colosseum.tasks.dribbling.dribbling_ppo:DribblingPPO",
     learning_steps=500_000_000,
     num_steps_per_env=24,
     gamma=0.99,

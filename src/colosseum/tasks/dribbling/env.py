@@ -15,12 +15,23 @@ class DribblingEnv(ViewerCompatibleEnv):
   """Dribbling environment with depth encoder producing z_enc."""
 
   def __init__(self, cfg: DribblingEnvCfg, **kwargs: Any) -> None:
-    super().__init__(cfg, **kwargs)
-
+    # Store config before super().__init__ because load_managers() probes
+    # observation functions (including z_enc) to determine tensor shapes.
     self._enc_h = cfg.depth_enc_height
     self._enc_w = cfg.depth_enc_width
     self._enc_seq_len = cfg.depth_enc_seq_len
     self._depth_clip = cfg.depth_clip
+    self._z_enc_dim = cfg.z_enc_dim
+
+    # Placeholder so the observation manager can query z_enc shape
+    # during _prepare_terms() inside super().__init__().
+    self.z_enc = torch.zeros(1, cfg.z_enc_dim)
+
+    super().__init__(cfg, **kwargs)
+
+    # Now that self.device and self.num_envs are available, create the
+    # real z_enc tensor on the correct device.
+    self.z_enc = torch.zeros(self.num_envs, cfg.z_enc_dim, device=self.device)
 
     self.depth_encoder = DepthEncoder(
       latent_dim=cfg.z_enc_dim,
@@ -29,9 +40,8 @@ class DribblingEnv(ViewerCompatibleEnv):
     ).to(self.device)
     self.projection_head = ProjectionHead(latent_dim=cfg.z_enc_dim).to(self.device)
 
-    # Runtime buffers — initialized on first _update_z_enc() call.
+    # Runtime buffer — initialized on first _update_z_enc() call.
     self._depth_buffer: torch.Tensor | None = None  # (N, T, 1, H, W)
-    self.z_enc: torch.Tensor | None = None  # (N, z_enc_dim)
 
   # ------------------------------------------------------------------
   # Depth buffer + encoder update
