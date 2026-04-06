@@ -73,7 +73,7 @@ rewards: dict[str, RewardTermCfg] = {
   ),
   "angular_momentum": RewardTermCfg(
     func=angular_momentum_penalty,
-    weight=-0.5,
+    weight=-0.02,
     params={"sensor_name": "robot/root_angmom"},
   ),
   "dof_pos_limits": RewardTermCfg(func=joint_pos_limits, weight=-1.0),

@@ -19,6 +19,7 @@ def reset_to_valid_maze_position(
   env: ManagerBasedRlEnv,
   env_ids: torch.Tensor | None,
   z_offset: float = 0.05,
+  yaw_range: tuple[float, float] = (-math.pi, math.pi),
   asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
 ) -> None:
   """Reset agent to a random valid maze position.
@@ -30,6 +31,7 @@ def reset_to_valid_maze_position(
       env: Environment instance
       env_ids: Environment indices to reset (None = all environments)
       z_offset: Height above ground to place the agent (meters)
+      yaw_range: Range (min, max) in radians for random yaw sampling
       asset_cfg: Scene entity configuration for the agent
   """
   if env_ids is None:
@@ -71,7 +73,7 @@ def reset_to_valid_maze_position(
 
     # Random yaw so the robot trains with all heading errors, matching the
     # diversity provided by UniformVelocityCommandCfg in the velocity task.
-    yaw = torch.rand(num_resets, device=env.device) * 2 * math.pi
+    yaw = torch.empty(num_resets, device=env.device).uniform_(*yaw_range)
     half_yaw = yaw / 2
     quat = torch.zeros(num_resets, 4, device=env.device)
     quat[:, 0] = torch.cos(half_yaw)  # w
