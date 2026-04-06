@@ -33,15 +33,6 @@ actor_terms = {
     noise=Unoise(n_min=-0.01, n_max=0.01),
   ),
   "goal_pos_local": ObservationTermCfg(func=goal_pos_local),
-  "base_lin_vel": ObservationTermCfg(
-    func=agent_vel_body,
-    params={"asset_cfg": SceneEntityCfg("robot")},
-    noise=Unoise(n_min=-0.1, n_max=0.1),
-  ),
-  "base_z_vel": ObservationTermCfg(
-    func=agent_z_vel,
-    params={"asset_cfg": _ASSET_CFG},
-  ),
   "base_ang_vel": ObservationTermCfg(
     func=builtin_sensor,
     params={"sensor_name": "robot/imu_ang_vel"},
@@ -68,6 +59,11 @@ actor_terms = {
 
 critic_terms = {
   **actor_terms,
+  "base_lin_vel": ObservationTermCfg(
+    func=builtin_sensor,
+    params={"sensor_name": "robot/imu_lin_vel"},
+    noise=Unoise(n_min=-0.5, n_max=0.5),
+  ),
   "foot_contact": ObservationTermCfg(
     func=foot_contact,
     params={"sensor_name": "feet_ground_contact"},

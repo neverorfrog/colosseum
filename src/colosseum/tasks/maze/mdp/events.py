@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
 import torch
@@ -67,7 +68,16 @@ def reset_to_valid_maze_position(
   if not asset.is_fixed_base:
     default_root_state = asset.data.default_root_state[env_ids].clone()
     default_root_state[:, 0:3] = world_positions
-    default_root_state[:, 3:7] = torch.tensor([1, 0, 0, 0], device=env.device)
+
+    # Random yaw so the robot trains with all heading errors, matching the
+    # diversity provided by UniformVelocityCommandCfg in the velocity task.
+    yaw = torch.rand(num_resets, device=env.device) * 2 * math.pi
+    half_yaw = yaw / 2
+    quat = torch.zeros(num_resets, 4, device=env.device)
+    quat[:, 0] = torch.cos(half_yaw)  # w
+    quat[:, 3] = torch.sin(half_yaw)  # z
+    default_root_state[:, 3:7] = quat
+
     default_root_state[:, 7:13] = 0.0
     asset.write_root_state_to_sim(default_root_state, env_ids=env_ids)
   else:
