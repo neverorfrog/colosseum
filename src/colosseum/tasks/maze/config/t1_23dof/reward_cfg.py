@@ -13,13 +13,13 @@ from mjlab.tasks.velocity.mdp import (
   feet_swing_height,
   self_collision_cost,
   soft_landing,
-  track_angular_velocity,
 )
 
 from colosseum.mdp.rewards import flat_orientation
 from colosseum.robots.t1_23dof.constants import BASE_BODY_NAME, FOOT_SITE_NAMES
 from colosseum.robots.t1_23dof.sensors import SELF_COLLISION_SENSOR
 from colosseum.tasks.maze.mdp.rewards import (
+  track_angular_velocity,
   track_velocity_direction,
   wall_collisions,
 )
