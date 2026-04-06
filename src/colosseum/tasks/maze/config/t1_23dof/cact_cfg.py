@@ -13,13 +13,14 @@ from colosseum.robots.t1_23dof.constants import ACTION_SCALE
 from colosseum.tasks.maze.mdp.abstraction_velocity_command import AbstractionVelocityCommandCfg
 from colosseum.tasks.maze.mdp.goal_command import MazeGoalCommandCfg
 from colosseum.tasks.maze.mdp.terminations import arrived_at_goal, collided_with_wall
-from colosseum.tasks.maze.mdp.curriculums import wall_collision_termination_curriculum
+from colosseum.tasks.maze.mdp.curriculums import base_velocity_curriculum, wall_collision_termination_curriculum
 from mjlab.managers.curriculum_manager import CurriculumTermCfg
 
 commands: dict[str, CommandTermCfg] = {
   "goal": MazeGoalCommandCfg(static_goals=True),
   "velocity": AbstractionVelocityCommandCfg(
     body_forward_axis=(1.0, 0.0, 0.0),
+    angular_velocity_gain=0.5,
   ),
 }
 
@@ -33,6 +34,17 @@ actions: dict[str, ActionTermCfg] = {
 }
 
 curriculum: dict[str, CurriculumTermCfg] = {
+  "command_vel": CurriculumTermCfg(
+    func=base_velocity_curriculum,
+    params={
+      "command_name": "velocity",
+      "velocity_stages": [
+        {"step": 0,          "base_velocity": 0.5},
+        {"step": 5000 * 24,  "base_velocity": 0.8},
+        {"step": 10000 * 24, "base_velocity": 1.0},
+      ],
+    },
+  ),
   # "wall_termination": CurriculumTermCfg(
   #   func=wall_collision_termination_curriculum,
   #   params={

@@ -13,14 +13,15 @@ from mjlab.tasks.velocity.mdp import (
   feet_swing_height,
   self_collision_cost,
   soft_landing,
+  track_angular_velocity,
+  track_linear_velocity,
+  variable_posture,
 )
 
 from colosseum.mdp.rewards import flat_orientation
 from colosseum.robots.t1_23dof.constants import BASE_BODY_NAME, FOOT_SITE_NAMES
 from colosseum.robots.t1_23dof.sensors import SELF_COLLISION_SENSOR
 from colosseum.tasks.maze.mdp.rewards import (
-  track_angular_velocity,
-  track_velocity_direction,
   wall_collisions,
 )
 
@@ -39,22 +40,32 @@ rewards: dict[str, RewardTermCfg] = {
   # ------------------------------------------------------------------ #
   # Task rewards                                                         #
   # ------------------------------------------------------------------ #
-  "track_velocity_direction": RewardTermCfg(
-    func=track_velocity_direction,
+  "track_linear_velocity": RewardTermCfg(
+    func=track_linear_velocity,
     weight=2.0,
-    params={
-      "command_name": "velocity",
-      "use_body_frame": True,
-    },
+    params={"command_name": "velocity", "std": math.sqrt(0.25)},
   ),
   "track_angular_velocity": RewardTermCfg(
     func=track_angular_velocity,
     weight=1.0,
-    params={"command_name": "velocity"},
+    params={"command_name": "velocity", "std": math.sqrt(0.25)},
   ),
   # ------------------------------------------------------------------ #
   # Regularization                                                       #
   # ------------------------------------------------------------------ #
+  "pose": RewardTermCfg(
+    func=variable_posture,
+    weight=1.0,
+    params={
+      "asset_cfg": SceneEntityCfg("robot", joint_names=(".*",)),
+      "command_name": "velocity",
+      "std_standing": {},
+      "std_walking": {},
+      "std_running": {},
+      "walking_threshold": 0.05,
+      "running_threshold": 1.5,
+    },
+  ),
   "body_ang_vel": RewardTermCfg(
     func=body_angular_velocity_penalty,
     weight=-0.05,
@@ -118,4 +129,32 @@ rewards: dict[str, RewardTermCfg] = {
     weight=-1.0,
     params={"sensor_name": SELF_COLLISION_SENSOR.name, "force_threshold": 10.0},
   ),
+}
+
+rewards["pose"].params["std_standing"] = {".*": 0.05}
+rewards["pose"].params["std_walking"] = {
+  r"(?i).*hip_pitch.*": 0.3,
+  r"(?i).*hip_roll.*": 0.15,
+  r"(?i).*hip_yaw.*": 0.15,
+  r"(?i).*knee.*": 0.35,
+  r"(?i).*ankle_pitch.*": 0.25,
+  r"(?i).*ankle_roll.*": 0.1,
+  r"Waist": 0.1,
+  r"(?i).*shoulder_pitch.*": 0.15,
+  r"(?i).*shoulder_roll.*": 0.15,
+  r"(?i).*elbow.*": 0.15,
+  r"(?i).*head.*": 0.2,
+}
+rewards["pose"].params["std_running"] = {
+  r"(?i).*hip_pitch.*": 0.5,
+  r"(?i).*hip_roll.*": 0.2,
+  r"(?i).*hip_yaw.*": 0.2,
+  r"(?i).*knee.*": 0.6,
+  r"(?i).*ankle_pitch.*": 0.35,
+  r"(?i).*ankle_roll.*": 0.15,
+  r"Waist": 0.2,
+  r"(?i).*shoulder_pitch.*": 0.5,
+  r"(?i).*shoulder_roll.*": 0.2,
+  r"(?i).*elbow.*": 0.35,
+  r"(?i).*head.*": 0.3,
 }

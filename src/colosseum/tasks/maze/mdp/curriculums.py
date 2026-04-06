@@ -1,6 +1,29 @@
 import torch
 from mjlab.envs import ManagerBasedRlEnv
 
+from colosseum.tasks.maze.mdp.abstraction_velocity_command import AbstractionVelocityCommandCfg
+
+
+def base_velocity_curriculum(
+  env: ManagerBasedRlEnv,
+  env_ids: torch.Tensor,
+  command_name: str,
+  velocity_stages: list[dict],
+) -> dict[str, torch.Tensor]:
+  """Ramp up AbstractionVelocityCommand base_velocity over training stages.
+
+  Each stage is a dict with keys ``step`` (global step threshold) and
+  ``base_velocity`` (target speed in m/s). Stages are applied in order —
+  the last stage whose ``step`` has been reached wins.
+  """
+  del env_ids
+  command_term = env.command_manager.get_term(command_name)
+  cfg: AbstractionVelocityCommandCfg = command_term.cfg
+  for stage in velocity_stages:
+    if env.common_step_counter >= stage["step"]:
+      cfg.base_velocity = stage["base_velocity"]
+  return {"base_velocity": torch.tensor(cfg.base_velocity)}
+
 
 def wall_collision_termination_curriculum(
   env: ManagerBasedRlEnv,
