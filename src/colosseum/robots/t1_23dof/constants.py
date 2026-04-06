@@ -8,7 +8,6 @@ import mujoco
 
 try:  # pragma: no cover - train-only dependency
   from mjlab.entity import EntityArticulationInfoCfg, EntityCfg
-  from mjlab.utils.os import update_assets
 
   _MJLAB_AVAILABLE = True
 except ImportError:
@@ -38,14 +37,6 @@ from colosseum.utils import src_dir
 XML = src_dir() / "robots" / "t1_23dof" / "xmls" / "T1_23dof.xml"
 
 assert XML.exists(), f"XML not found: {XML}"
-
-
-if _MJLAB_AVAILABLE:
-
-  def get_assets(meshdir: str) -> dict[str, bytes]:
-    assets: dict[str, bytes] = {}
-    update_assets(assets, XML.parent / "assets", meshdir)
-    return assets
 
 
 if _MJLAB_AVAILABLE:

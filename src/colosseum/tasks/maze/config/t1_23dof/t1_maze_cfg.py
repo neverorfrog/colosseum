@@ -64,7 +64,7 @@ def scene_cfg(maze: Maze, num_envs: int) -> SceneCfg:
 
 
 def abstractions_cfg(
-  maze: Maze, resolution_factor: int = 2
+  maze: Maze, resolution_factor: int = 1
 ) -> dict[str, AbstractionTermCfg]:
   grid_frame = maze.build_upsampled_grid_frame(resolution_factor)
   obstacle_mask = maze.build_obstacle_mask(resolution_factor)
@@ -80,7 +80,7 @@ def abstractions_cfg(
 def t1_maze_env_cfg(
   scenario: str = "umaze",
   num_envs: int = 64,
-  resolution_factor: int = 2,
+  resolution_factor: int = 1,
   play: bool = False,
 ) -> AbstractionBasedEnvCfg:
   """Create Booster T1 maze navigation task configuration.

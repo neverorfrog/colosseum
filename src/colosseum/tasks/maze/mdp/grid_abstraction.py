@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Optional
 
 import numpy as np
 import torch
 from loguru import logger
+from mjlab.managers.scene_entity_config import SceneEntityCfg
 
 from colosseum.managers.abstraction_manager import (
   AbstractionSettings,
@@ -14,9 +14,10 @@ from colosseum.managers.abstraction_manager import (
   AbstractionTermCfg,
 )
 from colosseum.tasks.maze.mdp.grid_frame import GridFrame
+from colosseum.tasks.maze.mdp.observations import agent_pos_local
 
 if TYPE_CHECKING:
-  from matplotlib.figure import Figure
+  from mjlab.viewer.debug_visualizer import DebugVisualizer
 
   from colosseum.envs.abstraction_based_env import AbstractionBasedEnv
 
@@ -52,6 +53,7 @@ class GridAbstractionTermCfg(AbstractionTermCfg):
   grid_frame: GridFrame
   obstacle_mask: Optional[torch.Tensor] = None
   direction_method: Literal["harmonic", "gradient"] = "gradient"
+  debug_vis: bool = True
 
   def build(self, env: AbstractionBasedEnv) -> GridAbstraction:
     return GridAbstraction(cfg=self, env=env)
@@ -84,7 +86,9 @@ class GridAbstraction(AbstractionTerm):
       cfg.obstacle_mask.to(device=self.device, dtype=torch.bool)
       if cfg.obstacle_mask is not None
       else torch.zeros(
-        (cfg.grid_frame.num_rows, cfg.grid_frame.num_cols), dtype=torch.bool, device=self.device
+        (cfg.grid_frame.num_rows, cfg.grid_frame.num_cols),
+        dtype=torch.bool,
+        device=self.device,
       )
     )
 
@@ -122,6 +126,7 @@ class GridAbstraction(AbstractionTerm):
       self._build_abstraction()
 
   def _build_abstraction(self) -> None:
+    assert self.settings is not None
     if self.settings.goal.shape[0] != self.num_envs:
       raise ValueError(
         f"Goal shape mismatch: expected [{self.num_envs}, 2], got {self.settings.goal.shape}"
@@ -135,17 +140,21 @@ class GridAbstraction(AbstractionTerm):
   # ── Core Computation ────────────────────────────────────────────────────────
 
   def _compute_costs_parallel(self) -> torch.Tensor:
+    assert self.settings is not None
     rows = self.grid_frame.num_rows
     cols = self.grid_frame.num_cols
 
     cost_map = torch.full(
-      (self.num_envs, rows, cols), self.FREE_COST, dtype=torch.float32, device=self.device
+      (self.num_envs, rows, cols),
+      self.FREE_COST,
+      dtype=torch.float32,
+      device=self.device,
     )
     cost_map[:, self.obstacle_mask] = self.OBSTACLE_COST
 
     goal_indices = self._local_to_grid(self.settings.goal)
     for env_idx in range(self.num_envs):
-      i, j = goal_indices[env_idx, 0].item(), goal_indices[env_idx, 1].item()
+      i, j = int(goal_indices[env_idx, 0].item()), int(goal_indices[env_idx, 1].item())
       if 0 <= i < rows and 0 <= j < cols:
         cost_map[env_idx, i, j] = self.GOAL_COST
 
@@ -161,7 +170,9 @@ class GridAbstraction(AbstractionTerm):
       cost_map,
     )
 
-    visited = torch.zeros((self.num_envs, rows, cols), dtype=torch.bool, device=self.device)
+    visited = torch.zeros(
+      (self.num_envs, rows, cols), dtype=torch.bool, device=self.device
+    )
     is_obstacle = cost_map == self.OBSTACLE_COST
     env_range = torch.arange(self.num_envs, device=self.device)
 
@@ -186,7 +197,7 @@ class GridAbstraction(AbstractionTerm):
         for env_idx in range(self.num_envs):
           if not in_bounds[env_idx] or torch.isinf(current_costs[env_idx]):
             continue
-          ni_val, nj_val = ni[env_idx].item(), nj[env_idx].item()
+          ni_val, nj_val = int(ni[env_idx].item()), int(nj[env_idx].item())
           if is_obstacle[env_idx, ni_val, nj_val] or visited[env_idx, ni_val, nj_val]:
             continue
           new_cost = current_costs[env_idx] + move_cost
@@ -208,7 +219,12 @@ class GridAbstraction(AbstractionTerm):
       cost_map, (1, 1, 1, 1), mode="constant", value=float(self.OBSTACLE_COST)
     )
     neighbor_costs = torch.stack(
-      [padded[:, :-2, 1:-1], padded[:, 2:, 1:-1], padded[:, 1:-1, :-2], padded[:, 1:-1, 2:]],
+      [
+        padded[:, :-2, 1:-1],
+        padded[:, 2:, 1:-1],
+        padded[:, 1:-1, :-2],
+        padded[:, 1:-1, 2:],
+      ],
       dim=1,
     )
     best_dir_idx = torch.argmin(neighbor_costs, dim=1)
@@ -237,10 +253,13 @@ class GridAbstraction(AbstractionTerm):
     return direction_map
 
   def _solve_harmonic_potential(self) -> torch.Tensor:
+    assert self.settings is not None
     rows, cols = self.grid_frame.num_rows, self.grid_frame.num_cols
     goal_indices = self._local_to_grid(self.settings.goal)
 
-    goal_mask = torch.zeros((self.num_envs, rows, cols), dtype=torch.bool, device=self.device)
+    goal_mask = torch.zeros(
+      (self.num_envs, rows, cols), dtype=torch.bool, device=self.device
+    )
     for env_idx in range(self.num_envs):
       gi = int(goal_indices[env_idx, 0].item())
       gj = int(goal_indices[env_idx, 1].item())
@@ -267,12 +286,10 @@ class GridAbstraction(AbstractionTerm):
       phi = torch.where(updatable, neighbor_avg, phi)
       diff = torch.abs(phi - phi_old).max().item()
       if diff < tol:
-        logger.info(f"Harmonic potential converged in {iteration + 1} iterations (diff={diff:.2e})")
+        logger.info(
+          f"Harmonic potential converged in {iteration + 1} iterations (diff={diff:.2e})"
+        )
         break
-    else:
-      logger.warning(
-        f"Harmonic potential did not converge in {max_iter} iterations (diff={diff:.2e})"
-      )
 
     return phi
 
@@ -306,6 +323,7 @@ class GridAbstraction(AbstractionTerm):
     """
     if self.direction_map is None:
       self._ensure_built()
+    assert self.direction_map is not None
     env_range = torch.arange(self.num_envs, device=self.device)
     indices = self._local_to_grid(positions)
     dirs_grid = self.direction_map[env_range, indices[:, 0], indices[:, 1]]
@@ -322,9 +340,12 @@ class GridAbstraction(AbstractionTerm):
     """
     if self.direction_map is None:
       self._ensure_built()
+    assert self.direction_map is not None
     env_range = torch.arange(self.num_envs, device=self.device)
     current_indices = self._local_to_grid(positions)
-    directions_grid = self.direction_map[env_range, current_indices[:, 0], current_indices[:, 1]]
+    directions_grid = self.direction_map[
+      env_range, current_indices[:, 0], current_indices[:, 1]
+    ]
     next_indices = current_indices + torch.round(directions_grid).long()
     next_indices[:, 0] = next_indices[:, 0].clamp(0, self.grid_frame.num_rows - 1)
     next_indices[:, 1] = next_indices[:, 1].clamp(0, self.grid_frame.num_cols - 1)
@@ -347,48 +368,105 @@ class GridAbstraction(AbstractionTerm):
 
   # ── Visualization ───────────────────────────────────────────────────────────
 
-  def visualize_2d(
-    self,
-    env_idx: int = 0,
-    save_path: str | Path | None = None,
-    show: bool = True,
-    figsize: tuple[int, int] = (10, 5),
-  ) -> Figure:
-    """Visualize cost map and direction field."""
-    import matplotlib.pyplot as plt
+  def _debug_vis_impl(self, visualizer: DebugVisualizer) -> None:
+    if self.cost_map is None or self.direction_map is None:
+      return
 
-    if self.cost_map is None:
-      self._ensure_built()
+    env_idx = 0
+    cell_size = self.grid_frame.cell_size
+    rows = self.grid_frame.num_rows
+    cols = self.grid_frame.num_cols
 
-    fig, axes = plt.subplots(1, 2, figsize=figsize)
+    # Normalize cost → value: lower cost = closer to goal = green
+    cost = self.cost_map[env_idx]
+    free_mask = cost < self.OBSTACLE_COST / 2
+    max_cost = cost[free_mask].max().item() if free_mask.any() else 1.0
 
-    cost = self.cost_map[env_idx].cpu().numpy()
-    display_cost = np.where(cost >= self.OBSTACLE_COST / 2, np.nan, cost)
+    # Robot position and next-best-cell for highlights
+    robot_pos_local = None
+    next_best_cells = None
+    try:
+      local_pos = agent_pos_local(
+        self._env, SceneEntityCfg("robot", site_names=("root_site",))
+      )
+      robot_pos_local = local_pos
+      next_best_cells = self.get_next_best_cell_indices(local_pos)
+    except Exception:
+      pass
 
-    axes[0].imshow(display_cost, cmap="viridis_r", origin="upper")
-    axes[0].set_title("Cost Map")
-    plt.colorbar(axes[0].images[0], ax=axes[0])
-
-    axes[1].imshow(display_cost, cmap="viridis_r", origin="upper", alpha=0.4)
-    axes[1].set_title("Direction Field")
-
-    rows, cols = self.grid_frame.num_rows, self.grid_frame.num_cols
     step = max(1, int(np.sqrt(rows * cols / 100)))
+
+    goal_cell_idx = None
+    if self.settings is not None:
+      goal_cell_idx = self._local_to_grid(self.settings.goal[env_idx : env_idx + 1])[0]
+
     for i in range(0, rows, step):
       for j in range(0, cols, step):
-        if self.obstacle_mask[i, j]:
+        is_goal_cell = (
+          goal_cell_idx is not None
+          and i == goal_cell_idx[0].item()
+          and j == goal_cell_idx[1].item()
+        )
+        if is_goal_cell:
           continue
-        di = self.direction_map[env_idx, i, j, 0].item()
-        dj = self.direction_map[env_idx, i, j, 1].item()
-        if abs(di) + abs(dj) > 0.1:
-          axes[1].annotate(
-            "", xy=(j + dj * 0.4, i + di * 0.4), xytext=(j, i),
-            arrowprops=dict(arrowstyle="->", color="black", lw=0.5),
-          )
 
-    plt.tight_layout()
-    if save_path is not None:
-      plt.savefig(save_path, dpi=150, bbox_inches="tight")
-    if show:
-      plt.show()
-    return fig
+        indices = torch.tensor([[i, j]], device=self.device, dtype=torch.long)
+        pos = self._grid_to_local(indices, center=True)[0].cpu().numpy()
+        center = np.array([pos[0], pos[1], 0.01])
+        normal = np.array([0.0, 0.0, 1.0])
+
+        cost_val = self.cost_map[env_idx, i, j].item()
+        is_obstacle = cost_val >= self.OBSTACLE_COST / 2
+
+        if is_obstacle:
+          visualizer.add_rectangle(
+            center=center,
+            width=cell_size * 0.9,
+            height=cell_size * 0.9,
+            normal=normal,
+            color=(0.3, 0.3, 0.3, 0.8),
+          )
+          direction_grid = self.direction_map[env_idx, i, j]
+          dx = direction_grid[1].item()
+          dy = -direction_grid[0].item()
+          if abs(dx) + abs(dy) > 1e-3:
+            visualizer.add_arrow(
+              start=np.array([pos[0], pos[1], 0.05]),
+              end=np.array(
+                [pos[0] + dx * cell_size * 0.4, pos[1] + dy * cell_size * 0.4, 0.05]
+              ),
+              color=(1.0, 0.0, 1.0, 1.0),
+            )
+        else:
+          value = (
+            float(np.clip(1.0 - cost_val / max_cost, 0.0, 1.0)) if max_cost > 0 else 0.0
+          )
+          visualizer.add_rectangle(
+            center=center,
+            width=cell_size * 0.9,
+            height=cell_size * 0.9,
+            normal=normal,
+            color=(1.0 - value, value, 0.0, 0.6),
+          )
+          direction_grid = self.direction_map[env_idx, i, j]
+          dx = direction_grid[1].item()
+          dy = -direction_grid[0].item()
+          if abs(dx) + abs(dy) > 1e-3:
+            visualizer.add_arrow(
+              start=np.array([pos[0], pos[1], 0.05]),
+              end=np.array(
+                [pos[0] + dx * cell_size * 0.5, pos[1] + dy * cell_size * 0.5, 0.05]
+              ),
+              width=0.1,
+              color=(0.0, 0.5, 1.0, 0.9),
+            )
+
+    # Goal as blue cylinder
+    if self.settings is not None:
+      goal_pos = self.settings.goal[env_idx].cpu().numpy()
+      visualizer.add_cylinder(
+        start=np.array([goal_pos[0], goal_pos[1], 0.04]),
+        end=np.array([goal_pos[0], goal_pos[1], 0.06]),
+        radius=cell_size * 0.5,
+        color=(0.0, 0.3, 1.0, 0.9),
+      )

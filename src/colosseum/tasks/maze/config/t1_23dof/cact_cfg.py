@@ -18,7 +18,9 @@ from mjlab.managers.curriculum_manager import CurriculumTermCfg
 
 commands: dict[str, CommandTermCfg] = {
   "goal": MazeGoalCommandCfg(static_goals=True),
-  "velocity": AbstractionVelocityCommandCfg(),
+  "velocity": AbstractionVelocityCommandCfg(
+    body_forward_axis=(1.0, 0.0, 0.0),
+  ),
 }
 
 actions: dict[str, ActionTermCfg] = {
