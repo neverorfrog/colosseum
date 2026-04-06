@@ -78,7 +78,7 @@ rewards: dict[str, RewardTermCfg] = {
     params={
       "target_height": 0.1,
       "height_sensor_name": "foot_height_scan",
-      "command_name": "twist",
+      "command_name": "velocity",
       "command_threshold": 0.05,
       "asset_cfg": SceneEntityCfg("robot", site_names=(FOOT_SITE_NAMES)),
     },
@@ -90,7 +90,7 @@ rewards: dict[str, RewardTermCfg] = {
       "sensor_name": "feet_ground_contact",
       "height_sensor_name": "foot_height_scan",
       "target_height": 0.1,
-      "command_name": "twist",
+      "command_name": "velocity",
       "command_threshold": 0.05,
     },
   ),
@@ -99,7 +99,7 @@ rewards: dict[str, RewardTermCfg] = {
     weight=-0.1,
     params={
       "sensor_name": "feet_ground_contact",
-      "command_name": "twist",
+      "command_name": "velocity",
       "command_threshold": 0.05,
       "asset_cfg": SceneEntityCfg("robot", site_names=(FOOT_SITE_NAMES)),
     },
@@ -109,7 +109,7 @@ rewards: dict[str, RewardTermCfg] = {
     weight=-1e-5,
     params={
       "sensor_name": "feet_ground_contact",
-      "command_name": "twist",
+      "command_name": "velocity",
       "command_threshold": 0.05,
     },
   ),
