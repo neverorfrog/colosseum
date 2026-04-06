@@ -14,6 +14,8 @@ from colosseum.robots.t1_23dof.sensors import (
   FEET_GROUND_CONTACT_SENSOR,
   SELF_COLLISION_SENSOR,
   WALL_COLLISION_SENSOR,
+  FOOT_HEIGHT_SCAN,
+  NONFOOT_GROUND_CONTACT_SENSOR
 )
 from colosseum.tasks.maze.maps import MAPS
 from colosseum.tasks.maze.maze import Maze, MazeCfg
@@ -58,7 +60,7 @@ def scene_cfg(maze: Maze, num_envs: int) -> SceneCfg:
     terrain=MazeTerrainEntityCfg(
       maze_cfg=maze.cfg,
     ),
-    sensors=(FEET_GROUND_CONTACT_SENSOR, WALL_COLLISION_SENSOR, SELF_COLLISION_SENSOR),
+    sensors=(FEET_GROUND_CONTACT_SENSOR, FOOT_HEIGHT_SCAN, WALL_COLLISION_SENSOR, NONFOOT_GROUND_CONTACT_SENSOR, SELF_COLLISION_SENSOR),
     extent=2.0,
   )
 

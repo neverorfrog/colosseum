@@ -106,21 +106,3 @@ def track_angular_velocity(
   asset: Entity = env.scene[asset_cfg.name]
   actual_ang_vel = asset.data.root_link_ang_vel_w[:, 2]
   return torch.exp(-torch.square(commanded_ang_vel - actual_ang_vel))
-
-
-def distance_to_next_cell_shaping(
-  env: AbstractionBasedEnv,
-  abstraction_name: str = "grid",
-  asset_cfg: SceneEntityCfg = SceneEntityCfg("robot", site_names=("root_site",)),
-) -> torch.Tensor:
-  """Dense shaping reward: exp(-distance_to_next_best_cell).
-
-  Higher reward when closer to the next best cell along the direction field.
-  """
-  abstraction = env.abstraction_manager.get_term(abstraction_name)
-  if abstraction is None:
-    logger.warning(f"Abstraction '{abstraction_name}' not found. Returning zero reward.")
-    return torch.zeros(env.num_envs, device=env.device)
-  assert isinstance(abstraction, GridAbstraction)
-  agent_position = agent_pos_local(env, asset_cfg)
-  return torch.exp(-abstraction.distance_to_next_best_cell(agent_position))

@@ -8,22 +8,20 @@ from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.tasks.velocity.mdp import (
   angular_momentum_penalty,
   body_angular_velocity_penalty,
+  feet_clearance,
+  feet_slip,
   feet_swing_height,
   self_collision_cost,
   soft_landing,
+  track_angular_velocity,
 )
 
 from colosseum.mdp.rewards import flat_orientation
 from colosseum.robots.t1_23dof.constants import BASE_BODY_NAME, FOOT_SITE_NAMES
 from colosseum.robots.t1_23dof.sensors import SELF_COLLISION_SENSOR
 from colosseum.tasks.maze.mdp.rewards import (
-  contact_force_penalty,
-  distance_to_next_cell_shaping,
-  goal_reward,
-  track_angular_velocity,
   track_velocity_direction,
   wall_collisions,
-  z_velocity,
 )
 
 rewards: dict[str, RewardTermCfg] = {
@@ -32,20 +30,15 @@ rewards: dict[str, RewardTermCfg] = {
   # ------------------------------------------------------------------ #
   "upright": RewardTermCfg(
     func=flat_orientation,
-    weight=1.0,
+    weight=0.7,
     params={
-      "std": math.sqrt(0.2),
+      "std": math.sqrt(0.5),
       "asset_cfg": SceneEntityCfg("robot", body_names=(BASE_BODY_NAME,)),
     },
   ),
   # ------------------------------------------------------------------ #
   # Task rewards                                                         #
   # ------------------------------------------------------------------ #
-  "goal": RewardTermCfg(
-    func=goal_reward,
-    weight=10.0,
-    params={"threshold": 1.5},
-  ),
   "track_velocity_direction": RewardTermCfg(
     func=track_velocity_direction,
     weight=2.0,
@@ -56,13 +49,8 @@ rewards: dict[str, RewardTermCfg] = {
   ),
   "track_angular_velocity": RewardTermCfg(
     func=track_angular_velocity,
-    weight=0.5,
+    weight=1.0,
     params={"command_name": "velocity"},
-  ),
-  "distance_shaping": RewardTermCfg(
-    func=distance_to_next_cell_shaping,
-    weight=0.5,
-    params={"abstraction_name": "grid"},
   ),
   # ------------------------------------------------------------------ #
   # Regularization                                                       #
@@ -81,17 +69,53 @@ rewards: dict[str, RewardTermCfg] = {
   "action_rate_l2": RewardTermCfg(func=action_rate_l2, weight=-0.05),
   "wall_collisions": RewardTermCfg(
     func=wall_collisions,
-    weight=-2.0,
+    weight=-10.0,
     params={"sensor_name": "wall_collision"},
+  ),
+  "foot_clearance": RewardTermCfg(
+    func=feet_clearance,
+    weight=-2.0,
+    params={
+      "target_height": 0.1,
+      "height_sensor_name": "foot_height_scan",
+      "command_name": "twist",
+      "command_threshold": 0.05,
+      "asset_cfg": SceneEntityCfg("robot", site_names=(FOOT_SITE_NAMES)),
+    },
+  ),
+  "foot_swing_height": RewardTermCfg(
+    func=feet_swing_height,
+    weight=-0.25,
+    params={
+      "sensor_name": "feet_ground_contact",
+      "height_sensor_name": "foot_height_scan",
+      "target_height": 0.1,
+      "command_name": "twist",
+      "command_threshold": 0.05,
+    },
+  ),
+  "foot_slip": RewardTermCfg(
+    func=feet_slip,
+    weight=-0.1,
+    params={
+      "sensor_name": "feet_ground_contact",
+      "command_name": "twist",
+      "command_threshold": 0.05,
+      "asset_cfg": SceneEntityCfg("robot", site_names=(FOOT_SITE_NAMES)),
+    },
+  ),
+  "soft_landing": RewardTermCfg(
+    func=soft_landing,
+    weight=-1e-5,
+    params={
+      "sensor_name": "feet_ground_contact",
+      "command_name": "twist",
+      "command_threshold": 0.05,
+    },
   ),
   "self_collisions": RewardTermCfg(
     func=self_collision_cost,
     weight=-1.0,
     params={"sensor_name": SELF_COLLISION_SENSOR.name, "force_threshold": 10.0},
-  ),
-  "z_velocity": RewardTermCfg(
-    func=z_velocity,
-    weight=-0.5,
-    params={"asset_cfg": SceneEntityCfg("robot", site_names=("root_site",))},
   ),
 }
