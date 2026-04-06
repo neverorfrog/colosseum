@@ -87,6 +87,8 @@ class AbstractionVelocityCommand(CommandTerm):
       [direction_unit, torch.zeros(self.env.num_envs, 1, device=self.env.device)], dim=-1
     )  # [num_envs, 3]
     dir_body_2d = quat_apply(quat_conj, dir_world_3d)[:, :2]  # [num_envs, 2]
+    # Re-normalize: xy projection of a 3D rotation loses unit length when body pitches
+    dir_body_2d = dir_body_2d / dir_body_2d.norm(dim=-1, keepdim=True).clamp(min=1e-6)
 
     fwd_2d = torch.tensor(
       self.cfg.body_forward_axis[:2], device=self.env.device, dtype=torch.float32
