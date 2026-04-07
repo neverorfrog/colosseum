@@ -61,7 +61,12 @@ def main() -> None:
   ckpt = ckpt.resolve()
   stem = ckpt.stem
   step = stem.split("_")[-1] if "_" in stem else stem
-  base_name = f"{config.task.name}_{config.algo.name.lower()}"
+  algo_cfg = config.task.algo_cfg
+  assert algo_cfg is not None, (
+    f"Task '{config.task.name}' has no algo_cfg. "
+    "Implement the algo_cfg property in the task's __init__.py."
+  )
+  base_name = f"{config.task.name}_{algo_cfg.name.lower()}"
   filename = f"{base_name}_{step}.onnx"
   output_path = models_dir / filename
 

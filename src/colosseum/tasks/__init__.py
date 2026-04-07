@@ -1,13 +1,15 @@
 """Colosseum tasks package with auto-discovery of task configurations."""
 
-# Import training tasks to populate the colosseum task registry.
-# Guarded because the deploy environment does not have mjlab.
-try:
-  import colosseum.tasks.dribbling  # noqa: F401
-  import colosseum.tasks.velocity  # noqa: F401
+import importlib
+import pkgutil
 
-  from mjlab.utils.lab_api.tasks.importer import import_packages
-  _BLACKLIST_PKGS = ["utils", ".mdp"]
-  import_packages(__name__, _BLACKLIST_PKGS)
-except ImportError:
-  pass
+_BLACKLIST = {"utils", "mdp"}
+
+for _info in pkgutil.iter_modules(__path__, __name__ + "."):
+  _short = _info.name.rsplit(".", 1)[-1]
+  if _short in _BLACKLIST:
+    continue
+  try:
+    importlib.import_module(_info.name)
+  except ImportError:
+    pass

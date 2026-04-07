@@ -1,16 +1,11 @@
-"""Environment utilities for training and evaluation."""
+"""Environment factory for training and evaluation."""
 
-import torch
-from mjlab.envs import ManagerBasedRlEnv
+from mjlab.envs import ManagerBasedRlEnv, ManagerBasedRlEnvCfg
+
+from colosseum.envs.viewer_compatible_env import ViewerCompatibleEnv
 
 
-class ViewerCompatibleEnv(ManagerBasedRlEnv):
-  """Adds get_observations() for mjlab viewer compatibility.
-
-  The mjlab viewer expects environments to have a get_observations() method,
-  but ManagerBasedRlEnv doesn't provide it.
-  """
-
-  def get_observations(self) -> dict[str, torch.Tensor | dict[str, torch.Tensor]]:
-    """Get current observations without stepping the environment."""
-    return self.observation_manager.compute()
+def make_env(env_cfg: ManagerBasedRlEnvCfg, device: str, render_mode: str | None = None) -> ManagerBasedRlEnv:
+  """Create an environment from cfg, using cfg.class_type if set, else ViewerCompatibleEnv."""
+  env_class = getattr(env_cfg, "class_type", None) or ViewerCompatibleEnv
+  return env_class(cfg=env_cfg, device=device, render_mode=render_mode)

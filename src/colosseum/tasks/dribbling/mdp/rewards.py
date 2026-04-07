@@ -1,0 +1,341 @@
+"""Ball dribbling/kicking reward functions.
+
+Primary task reference: Ji et al., "DribbleBot" (ICRA 2023).
+Ball velocity rewards split into three terms (TABLE III):
+  - ball_vel_tracking: full vector error exp(-δ|v^b - v^cmd|²)
+  - ball_vel_norm:     speed matching  exp(-δ(|v^cmd| - |v^b|)²)
+  - ball_vel_angle:    direction match 1 - (ψ_b - ψ_cmd)²/π²
+"""
+
+from __future__ import annotations
+
+import math
+from typing import TYPE_CHECKING
+
+import torch
+from mjlab.entity import Entity
+from mjlab.managers.scene_entity_config import SceneEntityCfg
+from mjlab.sensor import ContactSensor
+from mjlab.utils.lab_api.math import quat_apply
+
+if TYPE_CHECKING:
+  from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv
+
+
+# ------------------------------------------------------------------
+# Primary task rewards (DribbleBot TABLE III)
+# ------------------------------------------------------------------
+
+
+def ball_vel_tracking(
+  env: ManagerBasedRlEnv,
+  command_name: str,
+  sharpness: float = 1.0,
+) -> torch.Tensor:
+  """Full XY velocity vector tracking: exp(-sharpness * |v^b - v^cmd|²).
+
+  Low weight (0.5) — hardest to achieve, but penalises both speed and
+  direction error simultaneously.
+  """
+  ball_vel = env.scene["ball"].data.root_link_lin_vel_w[:, :2]
+  target_vel = env.command_manager.get_command(command_name)[:, :2]  # type: ignore
+  error_sq = ((ball_vel - target_vel) ** 2).sum(dim=-1)
+  return torch.exp(-sharpness * error_sq)
+
+
+def ball_vel_norm(
+  env: ManagerBasedRlEnv,
+  command_name: str,
+  sharpness: float = 1.0,
+) -> torch.Tensor:
+  """Speed matching: exp(-sharpness * (|v^cmd| - |v^b|)²).
+
+  Rewards matching commanded speed regardless of direction.
+  Prevents exploitation of direction-only rewards by kicking too hard.
+  """
+  ball_vel = env.scene["ball"].data.root_link_lin_vel_w[:, :2]
+  target_vel = env.command_manager.get_command(command_name)[:, :2]  # type: ignore
+  speed_err = (target_vel.norm(dim=-1) - ball_vel.norm(dim=-1)) ** 2
+  return torch.exp(-sharpness * speed_err)
+
+
+def ball_vel_angle(
+  env: ManagerBasedRlEnv,
+  command_name: str,
+) -> torch.Tensor:
+  """Direction match: 1 - (ψ_b - ψ_cmd)²/π².
+
+  Ranges from 1.0 (perfect alignment) to 0.0 (opposite direction).
+  Gives partial credit for near-correct directions.
+  """
+  ball_vel = env.scene["ball"].data.root_link_lin_vel_w[:, :2]
+  target_vel = env.command_manager.get_command(command_name)[:, :2]  # type: ignore
+  psi_b = torch.atan2(ball_vel[:, 1], ball_vel[:, 0])
+  psi_cmd = torch.atan2(target_vel[:, 1], target_vel[:, 0])
+  angle_err = (psi_b - psi_cmd + math.pi) % (2 * math.pi) - math.pi
+  return 1.0 - (angle_err**2) / (math.pi**2)
+
+
+# ------------------------------------------------------------------
+# Phase-schedule feet rewards (DribbleBot TABLE III)
+# ------------------------------------------------------------------
+
+
+def swing_phase_schedule(
+  env: ManagerBasedRlEnv,
+  phase_command_name: str,
+  sensor_name: str,
+  sharpness: float = 0.1,
+) -> torch.Tensor:
+  """During swing phase, penalize foot-ground contact force.
+
+  reward = sum_feet( [1 - κ] * exp(-sharpness * |f_foot|²) )
+  κ = (1 + cos(φ)) / 2  →  0 in full swing, 1 in full stance.
+  """
+  phase = env.command_manager.get_command(
+    phase_command_name
+  )  # (N, 4): [cL, cR, sL, sR]
+  kappa = (1.0 + phase[:, :2]) / 2.0  # (N, 2)
+  contact_sensor: ContactSensor = env.scene[sensor_name]
+  assert contact_sensor.data.force is not None
+  force_sq = (contact_sensor.data.force**2).sum(dim=-1)  # (N, 2)
+  return ((1.0 - kappa) * torch.exp(-sharpness * force_sq)).sum(dim=-1)
+
+
+def stance_phase_schedule(
+  env: ManagerBasedRlEnv,
+  phase_command_name: str,
+  asset_cfg: SceneEntityCfg,
+  sharpness: float = 0.1,
+) -> torch.Tensor:
+  """During stance phase, penalize foot XY sliding velocity.
+
+  reward = sum_feet( κ * exp(-sharpness * |v_foot_xy|²) )
+  """
+  phase = env.command_manager.get_command(phase_command_name)  # (N, 4)
+  kappa = (1.0 + phase[:, :2]) / 2.0  # (N, 2)
+  asset: Entity = env.scene[asset_cfg.name]
+  foot_vel_xy = asset.data.site_lin_vel_w[:, asset_cfg.site_ids, :2]  # (N, 2, 2)
+  vel_sq = (foot_vel_xy**2).sum(dim=-1)  # (N, 2)
+  return (kappa * torch.exp(-sharpness * vel_sq)).sum(dim=-1)
+
+
+# ------------------------------------------------------------------
+# Pose deviation
+# ------------------------------------------------------------------
+
+
+def pose_deviation(
+  env: ManagerBasedRlEnv,
+  asset_cfg: SceneEntityCfg,
+  std: float,
+) -> torch.Tensor:
+  """Penalize joint deviation from default pose: exp(-mean(error²/std²)).
+
+  Matches variable_posture's formula with a single scalar std.
+  Register separate terms for arms and legs with different std and weight.
+  Smaller std = tighter constraint.
+  """
+  asset: Entity = env.scene[asset_cfg.name]
+  q = asset.data.joint_pos[:, asset_cfg.joint_ids]
+  q_default = asset.data.default_joint_pos[:, asset_cfg.joint_ids]
+  return torch.exp(-torch.mean(torch.square(q - q_default) / (std**2), dim=1))
+
+
+# ------------------------------------------------------------------
+# Feet distance penalty
+# ------------------------------------------------------------------
+
+
+def feet_distance_penalty(
+  env: ManagerBasedRlEnv,
+  asset_cfg: SceneEntityCfg,
+  min_dist: float = 0.2,
+) -> torch.Tensor:
+  """Penalize when feet are closer than min_dist (XY plane).
+
+  penalty = clip(min_dist - ||p_left_xy - p_right_xy||, 0, min_dist)
+
+  Gives a continuous repulsive gradient before feet actually collide.
+  """
+  asset: Entity = env.scene[asset_cfg.name]
+  foot_pos_w = asset.data.site_pos_w[:, asset_cfg.site_ids, :3]  # (N, 2, 3)
+  base_pos_w = asset.data.root_link_pos_w[:, :3].unsqueeze(1)    # (N, 1, 3)
+  quat_w = asset.data.root_link_quat_w                           # (N, 4)
+  quat_conj = torch.cat([quat_w[:, :1], -quat_w[:, 1:]], dim=-1)
+
+  # Transform each foot into body frame
+  left_b = quat_apply(quat_conj, foot_pos_w[:, 0] - base_pos_w[:, 0])   # (N, 3)
+  right_b = quat_apply(quat_conj, foot_pos_w[:, 1] - base_pos_w[:, 0])  # (N, 3)
+  dist = (left_b[:, 1] - right_b[:, 1]).abs()  # (N,) — Y axis only
+  return (min_dist - dist).clamp(min=0.0, max=min_dist)
+
+
+# ------------------------------------------------------------------
+# Robot–ball spatial relationship
+# ------------------------------------------------------------------
+
+
+def robot_ball_distance(
+  env: ManagerBasedRlEnv,
+  sharpness: float = 2.0,
+) -> torch.Tensor:
+  """exp(-sharpness * ||robot_xy - ball_xy||²). Dense within ~0.7m."""
+  robot_pos = env.scene["robot"].data.root_link_pos_w[:, :2]
+  ball_pos = env.scene["ball"].data.root_link_pos_w[:, :2]
+  dist_sq = ((ball_pos - robot_pos) ** 2).sum(dim=-1)
+  return torch.exp(-sharpness * dist_sq)
+
+
+def robot_ball_yaw(
+  env: ManagerBasedRlEnv,
+  command_name: str,
+  min_speed: float = 0.05,
+) -> torch.Tensor:
+  """Ball ahead of robot along command direction AND robot body faces that direction.
+
+  e1 = 1 - dot(d_robot→ball, d̂_cmd)   (ball not ahead)
+  e2 = 1 - dot(d_robot→ball, body_fwd) (robot not facing cmd)
+  reward = exp(-2 * (e1 + e2))
+  """
+  robot = env.scene["robot"]
+  ball_pos = env.scene["ball"].data.root_link_pos_w[:, :2]
+  robot_pos = robot.data.root_link_pos_w[:, :2]
+
+  target_vel = env.command_manager.get_command(command_name)[:, :2]  # type: ignore
+  unit_cmd = target_vel / target_vel.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+
+  d_robot_ball = ball_pos - robot_pos
+  d_robot_ball = d_robot_ball / d_robot_ball.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+
+  e1 = 1.0 - (d_robot_ball * unit_cmd).sum(dim=-1)
+
+  q = robot.data.root_link_quat_w
+  yaw = torch.atan2(
+    2.0 * (q[:, 0] * q[:, 3] + q[:, 1] * q[:, 2]),
+    1.0 - 2.0 * (q[:, 2] ** 2 + q[:, 3] ** 2),
+  )
+  body_fwd = torch.stack([torch.cos(yaw), torch.sin(yaw)], dim=-1)
+  e2 = 1.0 - (d_robot_ball * body_fwd).sum(dim=-1)
+
+  reward = torch.exp(-2.0 * (e1 + e2))
+  return reward * (target_vel.norm(dim=-1) > min_speed).float()
+
+
+def _project_ball_to_camera(
+  env: ManagerBasedRlEnv,
+  camera_name: str,
+  aspect_ratio: float,
+  head_camera_fovy: float = 60.0,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+  """Project ball world position into normalised camera image coordinates.
+
+  Returns:
+    nx:       [num_envs] horizontal coord, -1 = left edge, +1 = right edge
+    ny:       [num_envs] vertical coord,   -1 = bottom edge, +1 = top edge
+    in_front: [num_envs] bool mask — True when ball is in front of camera
+
+  MuJoCo camera frame convention: x = right, y = up, z = backward.
+  The optical axis is -z, so depth = -p_cam.z (positive in front).
+  cam_xmat rows are the camera's local axes expressed in world frame,
+  so   p_cam = cam_mat @ (p_ball - cam_pos)   transforms world → camera.
+  """
+
+  cam_id = env.sim.mj_model.camera(camera_name).id
+  cam_pos = env.sim.data.cam_xpos[:, cam_id, :]  # [N, 3]
+  cam_mat = env.sim.data.cam_xmat[:, cam_id, :].reshape(-1, 3, 3)  # [N, 3, 3]
+
+  ball_pos = env.scene["ball"].data.root_link_pos_w  # [N, 3]
+  p_rel = ball_pos - cam_pos  # [N, 3]
+
+  # Rotate into camera frame: p_cam = cam_mat @ p_rel
+  p_cam = torch.bmm(cam_mat, p_rel.unsqueeze(-1)).squeeze(-1)  # [N, 3]
+
+  # Depth along optical axis (positive means ball is in front)
+  depth = (-p_cam[:, 2]).clamp_min(1e-6)  # [N]
+  in_front = p_cam[:, 2] < 0  # [N] bool
+
+  # Perspective-divide to get tangent of the off-axis angles
+  tx = p_cam[:, 0] / depth  # tan(horizontal angle), right = positive
+  ty = p_cam[:, 1] / depth  # tan(vertical angle),   up    = positive
+
+  # Normalize by FOV half-extents so ±1 = edge of frame
+  tan_half_v = math.tan(math.radians(head_camera_fovy / 2))
+  tan_half_h = tan_half_v * aspect_ratio
+
+  nx = tx / tan_half_h
+  ny = ty / tan_half_v
+
+  return nx, ny, in_front
+
+
+def ball_projection(
+  env: ManagerBasedRlEnv,
+  camera_name: str = "robot/d455_color",
+  aspect_ratio: float = 4.0 / 3.0,
+) -> torch.Tensor:
+  """Normalised ball position in camera image frame — observation term.
+
+  Returns a [num_envs, 2] tensor of (nx, ny) ∈ [-1, 1]² that can be added
+  directly to the policy observation.  At deployment these values are
+  obtained from YOLO bounding-box centre coordinates via:
+      nx = (u / W - 0.5) / 0.5,   ny = (0.5 - v / H) / 0.5
+
+  When the ball is behind the camera both values are clamped to ±2 so the
+  policy can distinguish "ball behind me" from "ball at the edge of frame".
+  """
+  nx, ny, in_front = _project_ball_to_camera(env, camera_name, aspect_ratio)
+  # Out-of-front values are clamped rather than zeroed so the policy keeps
+  # a gradient signal even when the ball is barely behind the camera plane.
+  nx = torch.where(in_front, nx, nx.clamp(-2.0, 2.0))
+  ny = torch.where(in_front, ny, ny.clamp(-2.0, 2.0))
+  return torch.stack([nx, ny], dim=-1)  # [num_envs, 2]
+
+
+def head_ball_tracking(
+  env: ManagerBasedRlEnv,
+  camera_name: str = "robot/d455_color",
+) -> torch.Tensor:
+  """Cosine similarity between camera optical axis and camera→ball direction.
+
+  reward = (1 + dot(cam_fwd, unit_to_ball)) / 2
+    1.0 when perfectly aligned, 0.5 when perpendicular, 0.0 when opposite.
+
+  Unlike ball_in_camera_fov (which zeros when ball is behind), this term has
+  nonzero gradient everywhere — so the policy always has a signal to rotate
+  the head toward the ball even when ball is fully outside the FOV.
+  """
+  cam_id = env.sim.mj_model.camera(camera_name).id
+  cam_pos = env.sim.data.cam_xpos[:, cam_id, :]  # [N, 3]
+  cam_mat = env.sim.data.cam_xmat[:, cam_id, :].reshape(-1, 3, 3)  # [N, 3, 3]
+
+  ball_pos = env.scene["ball"].data.root_link_pos_w  # [N, 3]
+  to_ball = ball_pos - cam_pos
+  to_ball = to_ball / to_ball.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+
+  # cam_mat row 2 is the camera's z-axis in world frame; optical axis = -z
+  cam_fwd = -cam_mat[:, 2, :]  # [N, 3]
+  cos_sim = (cam_fwd * to_ball).sum(dim=-1).clamp(-1.0, 1.0)
+  return (1.0 + cos_sim) / 2.0
+
+
+def robot_ball_approach_vel(
+  env: ManagerBasedRlEnv,
+  command_name: str,
+) -> torch.Tensor:
+  """Robot base moving toward ball fast enough (penalizes only speed deficit).
+
+  deficit = max(0, cmd_speed - proj(robot_vel, d_robot→ball))
+  reward  = exp(-deficit²)
+  """
+  robot = env.scene["robot"]
+  ball_pos = env.scene["ball"].data.root_link_pos_w[:, :2]
+  robot_pos = robot.data.root_link_pos_w[:, :2]
+
+  d_robot_ball = ball_pos - robot_pos
+  d_robot_ball = d_robot_ball / d_robot_ball.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+
+  approach_vel = (robot.data.root_link_lin_vel_w[:, :2] * d_robot_ball).sum(dim=-1)
+  cmd_speed = env.command_manager.get_command(command_name)[:, :2].norm(dim=-1)  # type: ignore
+  deficit = (cmd_speed - approach_vel).clamp(min=0.0)
+  return torch.exp(-(deficit**2))

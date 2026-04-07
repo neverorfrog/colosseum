@@ -6,6 +6,10 @@ Tasks register themselves via @register_task decorator in their own __init__.py 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+  from colosseum.config.types.algorithm import AlgorithmConfig
 
 # Live registry: populated by @register_task decorators at import time
 _TASK_REGISTRY: dict[str, "TaskConfig"] = {}
@@ -36,8 +40,17 @@ class TaskConfig:
         return self.train_env_cfg
 
     @property
+    def algo_cfg(self) -> "AlgorithmConfig | None":
+        """Return the preferred algorithm configuration for this task.
+
+        Returns None if the task has no preferred algorithm, in which case the
+        global default from config/values/algorithm.py is used.
+        """
+        return None
+
+    @property
     def rl_cfg(self):
-        """Return the RSL-RL runner configuration."""
+        """Return the RSL-RL runner configuration (used by train_rsl_rl.py)."""
         raise NotImplementedError(
             f"Task '{self.name}' must implement rl_cfg property."
         )

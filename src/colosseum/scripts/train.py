@@ -6,10 +6,10 @@ This is independent of mjlab's RSL-RL runner.
 
 Usage:
     pixi run -e train train
-    pixi run -e train train task:t1-velocity-flat algo:ppo logger:wandb
-    pixi run -e train train task:t1-velocity-flat --task.env.scene.num-envs 2048
-    pixi run -e train train --seed 0 --algo.learning-steps 10000000
-    pixi run -e train train --checkpoint ./logs/run/checkpoints/latest.pt
+    pixi run -e train train task:t1-velocity logger:wandb
+    pixi run -e train train task:t1-velocity --task.env.scene.num-envs 2048
+    pixi run -e train train task:t1-velocity --task.algo-cfg.learning-steps 10000000
+    pixi run -e train train --seed 0 --checkpoint ./logs/run/checkpoints/latest.pt
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from pathlib import Path
 import tyro
 import wandb
 from loguru import logger
-from mjlab.envs import ManagerBasedRlEnvCfg
+from mjlab.envs import ManagerBasedRlEnv, ManagerBasedRlEnvCfg
 from mjlab.utils.torch import configure_torch_backends
 
 # Import tasks to populate registry
@@ -36,24 +36,31 @@ from colosseum.utils.logger import (
     teardown_wandb,
 )
 from colosseum.utils.torch import get_device, set_seed
-from colosseum.utils.train.env import ViewerCompatibleEnv
+from colosseum.utils.train.env import make_env
 
 
-def _make_env(env_cfg: ManagerBasedRlEnvCfg, device: str) -> ViewerCompatibleEnv:
-    return ViewerCompatibleEnv(cfg=env_cfg, device=device, render_mode=None)
+def _make_env(env_cfg: ManagerBasedRlEnvCfg, device: str) -> ManagerBasedRlEnv:
+    return make_env(env_cfg, device)
 
 
 def main() -> None:
-    """Main PPO training entry point."""
+    """Main training entry point."""
     config = tyro.cli(
         TrainConfig,
         config=(tyro.conf.CascadeSubcommandArgs,),
     )
+
+    algo_cfg = config.task.algo_cfg
+    assert algo_cfg is not None, (
+        f"Task '{config.task.name}' has no algo_cfg. "
+        "Implement the algo_cfg property in the task's __init__.py."
+    )
+
     env_cfg = config.task.env
 
     run_name = generate_run_name(
         task_name=config.task.name,
-        algo_name=config.algo.name,
+        algo_name=algo_cfg.name,
         seed=config.seed,
     )
 
@@ -74,7 +81,7 @@ def main() -> None:
 
         logger.info("=" * 80)
         logger.info(f"Task: {config.task.name}")
-        logger.info(f"Algorithm: {config.algo.name}")
+        logger.info(f"Algorithm: {algo_cfg.name}")
         logger.info(f"Seed: {config.seed}")
         logger.info(f"Num envs: {env_cfg.scene.num_envs}")
         logger.info(f"Run directory: {run_dir}")
@@ -99,12 +106,12 @@ def main() -> None:
     env = _make_env(env_cfg=env_cfg, device=str(device))
 
     import importlib
-    module_path, class_name = config.algo.target.rsplit(":", 1)
+    module_path, class_name = algo_cfg.target.rsplit(":", 1)
     module = importlib.import_module(module_path)
     algo_class = getattr(module, class_name)
 
     algo = algo_class(
-        config=config.algo,
+        config=algo_cfg,
         env=env,
         device=device,
         log_fn=log_fn,

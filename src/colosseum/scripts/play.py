@@ -19,7 +19,7 @@ from typing import Literal
 import torch
 import tyro
 from loguru import logger
-from mjlab.envs import ManagerBasedRlEnvCfg
+from mjlab.envs import ManagerBasedRlEnv, ManagerBasedRlEnvCfg
 from mjlab.utils.torch import configure_torch_backends
 from mjlab.viewer import NativeMujocoViewer
 
@@ -29,7 +29,7 @@ import colosseum.tasks  # noqa: F401
 from colosseum.algorithm.base_algorithm import get_latest_checkpoint
 from colosseum.config.types.experiment import BaseExperimentConfig
 from colosseum.utils.torch import get_device
-from colosseum.utils.train.env import ViewerCompatibleEnv
+from colosseum.utils.train.env import make_env
 
 
 @dataclass(frozen=True)
@@ -60,11 +60,11 @@ def _resolve_checkpoint(checkpoint: str | None) -> Path | None:
     return None
 
 
-def _make_env(env_cfg: ManagerBasedRlEnvCfg, device: str, render_mode: str | None) -> ViewerCompatibleEnv:
-    return ViewerCompatibleEnv(cfg=env_cfg, device=device, render_mode=render_mode)
+def _make_env(env_cfg: ManagerBasedRlEnvCfg, device: str, render_mode: str | None) -> ManagerBasedRlEnv:
+    return make_env(env_cfg, device, render_mode)
 
 
-def create_agent(config: PlayConfig, env: ViewerCompatibleEnv, device: torch.device):
+def create_agent(config: PlayConfig, env: ManagerBasedRlEnv, device: torch.device):
     if config.agent == "zero":
         logger.info("Using zero-action agent")
         def zero_agent(obs_dict):
@@ -86,8 +86,14 @@ def create_agent(config: PlayConfig, env: ViewerCompatibleEnv, device: torch.dev
             sys.exit(1)
         logger.info(f"Loading checkpoint: {checkpoint_path}")
 
+        algo_cfg = config.task.algo_cfg
+        assert algo_cfg is not None, (
+            f"Task '{config.task.name}' has no algo_cfg. "
+            "Implement the algo_cfg property in the task's __init__.py."
+        )
+
         import importlib
-        module_path, class_name = config.algo.target.rsplit(":", 1)
+        module_path, class_name = algo_cfg.target.rsplit(":", 1)
         module = importlib.import_module(module_path)
         algo_class = getattr(module, class_name)
 
@@ -97,7 +103,7 @@ def create_agent(config: PlayConfig, env: ViewerCompatibleEnv, device: torch.dev
         dim_env = _make_env(dim_env_cfg, str(device), render_mode=None)
 
         algo = algo_class(
-            config=config.algo,
+            config=algo_cfg,
             env=dim_env,
             device=device,
             log_fn=lambda _m, _s: None,
@@ -155,7 +161,9 @@ def _record_video(config: PlayConfig, env, agent) -> None:
 
     video_dir = Path("./videos")
     video_dir.mkdir(parents=True, exist_ok=True)
-    video_path = video_dir / f"{config.task.name}-{config.algo.name}.mp4"
+    algo_cfg = config.task.algo_cfg
+    algo_name = algo_cfg.name if algo_cfg is not None else "unknown"
+    video_path = video_dir / f"{config.task.name}-{algo_name}.mp4"
     logger.info(f"Recording {config.video_length} steps to {video_path}")
 
     obs, _ = env.reset()

@@ -14,15 +14,19 @@ This executable plugs into the existing **Circus + SimBridge + booster-motion** 
 
 ## Prerequisites
 
-The following must already be running before launching the policy node:
+The following must be running in the same Docker container before the policy node starts:
 
 ```
-1. Circus        — MuJoCo physics simulator (TCP server on port 5555)
-2. SimBridge     — TCP↔DDS bridge
-3. booster-motion — low-level PD controller (publishes rt/low_state, subscribes rt/joint_ctrl)
+1. booster-motion — low-level PD controller (publishes rt/low_state, subscribes rt/joint_ctrl)
+2. SimBridge     — TCP↔DDS bridge (connects booster-motion to Circus)
 ```
 
-These three components are already integrated and data flows between them.
+And on the host:
+```
+3. Circus        — MuJoCo physics simulator (TCP server on port 5555)
+```
+
+Per the launch architecture (`docs/LAUNCH_ARCHITECTURE.md`), `main.cpp` is responsible for launching the entire stack. It generates `path_constants.yaml` and starts Circus, which in turn spawns the Docker container running booster-motion + simbridge + the policy node via supervisord. The policy node therefore does **not** launch these components manually — it simply waits for `rt/low_state` to arrive before starting the control loop.
 
 ## Architecture
 
@@ -302,18 +306,41 @@ int main(int argc, char** argv) {
 
 ### Build System
 
-**pixi.toml** (pixi-managed C++ project):
+**pixi.toml** (pixi workspace with cmake build backend):
 ```toml
-[project]
-name = "sim2sim"
-version = "0.1.0"
-platforms = ["linux-64"]
+[workspace]
+platforms = ["linux-64", "linux-aarch64"]
+channels = [
+    "https://prefix.dev/pixi-build-backends",
+    "https://prefix.dev/conda-forge",
+    "https://prefix.dev/spqr",
+]
+preview = ["pixi-build"]
 
 [dependencies]
+sim2sim = { path = "." }
+# Runtime tools available in the pixi env:
+circus                    = "*"   # from spqr channel
+simbridge                 = "*"   # from spqr channel
+booster_robotics_sdk_ros2 = "*"   # from spqr channel (ships booster-motion binary)
+
+[package]
+name = "sim2sim"
+version = "0.1.0"
+
+[package.build.backend]
+name = "pixi-build-cmake"
+version = "*"
+
+[package.host-dependencies]
 booster_robotics_sdk = "==1.5.0"
-eigen = "*"
-cmake = ">=3.20"
-# onnxruntime — TBD (conda-forge onnxruntime-cpp or manual download)
+onnxruntime-cpp      = "*"        # from conda-forge
+eigen                = "*"
+
+[package.run-dependencies]
+booster_robotics_sdk = "==1.5.0"
+onnxruntime-cpp      = "*"
+eigen                = "*"
 ```
 
 **CMakeLists.txt:**
@@ -345,10 +372,7 @@ target_link_libraries(sim2sim PRIVATE
 
 ### 1. ONNX Runtime C++ Integration
 
-How to get ONNX Runtime for C++. Options to evaluate:
-- `conda-forge::onnxruntime-cpp` via pixi
-- Manual download of ONNX Runtime release binaries
-- TensorRT conversion (available in spqrbooster2026 already) as alternative
+**Resolved:** `onnxruntime-cpp` is available on conda-forge and added to `pixi.toml` as a host and run dependency. Update `CMakeLists.txt` to uncomment `find_package(onnxruntime REQUIRED)` and link against `onnxruntime::onnxruntime`.
 
 ### 2. Base Linear Velocity
 
@@ -362,21 +386,35 @@ This must match exactly what the policy saw during training.
 
 ### 3. Joint Order Verification
 
-The joint order in `rt/low_state.motor_state_serial` must match the order used during training. The T1 23-DOF joint order appears to be identical between hardware and simulation (no remapping needed), but this must be verified by comparing:
-- Circus joint names (from `ROBOT_JOINTS_NAMES_MAP`)
-- booster-motion's motor_state_serial ordering
-- Training environment's joint ordering (`sim_joint_names` in deploy config)
+**Resolved:** No remapping needed. Confirmed from booster-motion's Lua config (`common_module_options_t1_rl_isaac.lua`): `joint_map_output` has identity mapping `{0,1,2,...,22}` with all `pos_factor` and `torq_factor` set to 1.0. The order in `motor_state_serial` matches the Circus joint order (`ROBOT_JOINTS_NAMES_MAP` in `bridge_node.cpp`) which matches the training environment's joint ordering.
 
 ### 4. Projected Gravity Computation
 
-Must implement the exact same quaternion math as training:
-```
-1. Convert RPY (roll, pitch, yaw) → quaternion (w, x, y, z)
-2. Rotate gravity vector [0, 0, -1] by inverse quaternion
-3. Result = projected gravity in body frame
+**Resolved:** Exact C++ implementation verified against the training code (`colosseum/mdp/observations.py` → `quat_apply_inverse`):
+
+```cpp
+// Step 1: RPY (ZYX convention) → quaternion (w, x, y, z)
+inline void rpy_to_quat(const float rpy[3], float q[4]) {
+    float cr = cosf(rpy[0]*0.5f), sr = sinf(rpy[0]*0.5f);
+    float cp = cosf(rpy[1]*0.5f), sp = sinf(rpy[1]*0.5f);
+    float cy = cosf(rpy[2]*0.5f), sy = sinf(rpy[2]*0.5f);
+    q[0] = cr*cp*cy + sr*sp*sy;  // w
+    q[1] = sr*cp*cy - cr*sp*sy;  // x
+    q[2] = cr*sp*cy + sr*cp*sy;  // y
+    q[3] = cr*cp*sy - sr*sp*cy;  // z
+}
+
+// Step 2: quat_apply_inverse(q, [0,0,-1])
+// Analytical simplification of: t = xyz×vec*2, result = vec - w*t + xyz×t
+inline void compute_projected_gravity(const float q[4], float pg[3]) {
+    float w = q[0], x = q[1], y = q[2], z = q[3];
+    pg[0] =  2.0f * (w*y - x*z);
+    pg[1] = -2.0f * (w*x + y*z);
+    pg[2] = -(1.0f - 2.0f*(x*x + y*y));
+}
 ```
 
-Verify the quaternion convention (scalar-first vs scalar-last) matches between the Booster SDK and the training code.
+Quaternion convention is scalar-first `(w, x, y, z)` in both training and this implementation. Sanity check: identity quaternion `[1,0,0,0]` → `pg = [0, 0, -1]` ✓
 
 ### 5. Kp/Kd Values in LowCmd
 

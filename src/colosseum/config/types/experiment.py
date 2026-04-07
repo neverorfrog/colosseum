@@ -9,10 +9,8 @@ from pydantic import ConfigDict
 from pydantic.dataclasses import dataclass
 from typing_extensions import Annotated
 
-import colosseum.config.values.algorithm
 import colosseum.config.values.logger
 import colosseum.config.values.task
-from colosseum.config.types.algorithm import AlgorithmConfig
 from colosseum.config.types.logger import LoggerConfig
 from colosseum.config.types.task import TaskConfig, get_task_class
 
@@ -32,15 +30,6 @@ class BaseExperimentConfig:
             )
         ),
     ] = dataclasses.field(default_factory=lambda: list(colosseum.config.values.task.DEFAULTS.values())[0])
-
-    algo: Annotated[
-        AlgorithmConfig,
-        tyro.conf.arg(
-            constructor=tyro.extras.subcommand_type_from_defaults(
-                colosseum.config.values.algorithm.DEFAULTS
-            )
-        ),
-    ] = dataclasses.field(default_factory=lambda: colosseum.config.values.algorithm.PPO_DEFAULT)
 
 
 @dataclass(frozen=True, config=ConfigDict(arbitrary_types_allowed=True))
@@ -116,13 +105,6 @@ class TrainConfig(BaseExperimentConfig):
             task_name = task_data["name"]
             TaskClass = get_task_class(task_name)
             data["task"] = TaskClass.reconstruct_from_dict(task_data)
-
-        if "algo" in data:
-            from colosseum.config.types.algorithm import get_algorithm_config_class
-            algo_data = data["algo"]
-            algo_name = algo_data["name"]
-            AlgoConfigClass = get_algorithm_config_class(algo_name)
-            data["algo"] = AlgoConfigClass.reconstruct_from_dict(algo_data)
 
         if "logger" in data:
             data["logger"] = LoggerConfig(**data["logger"])
