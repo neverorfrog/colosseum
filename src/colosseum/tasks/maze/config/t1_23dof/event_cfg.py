@@ -15,7 +15,7 @@ events = {
     params={
       "asset_cfg": SceneEntityCfg("robot"),
       "z_offset": 0.665,  # T1 root (freejoint) height when feet are on ground
-      "yaw_range": (-3.14, 3.14),
+      "yaw_range": (0.0, 0.0),
     },
   ),
   "reset_robot_joints": EventTermCfg(

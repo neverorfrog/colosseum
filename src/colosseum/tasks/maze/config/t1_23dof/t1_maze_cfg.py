@@ -12,10 +12,10 @@ from colosseum.managers.abstraction_manager import AbstractionTermCfg
 from colosseum.robots.t1_23dof.constants import BASE_BODY_NAME, get_robot_cfg
 from colosseum.robots.t1_23dof.sensors import (
   FEET_GROUND_CONTACT_SENSOR,
+  FOOT_HEIGHT_SCAN,
+  NONFOOT_GROUND_CONTACT_SENSOR,
   SELF_COLLISION_SENSOR,
   WALL_COLLISION_SENSOR,
-  FOOT_HEIGHT_SCAN,
-  NONFOOT_GROUND_CONTACT_SENSOR
 )
 from colosseum.tasks.maze.maps import MAPS
 from colosseum.tasks.maze.maze import Maze, MazeCfg
@@ -47,8 +47,8 @@ def viewer_cfg() -> ViewerConfig:
     entity_name="robot",
     body_name=BASE_BODY_NAME,
     distance=20.0,
-    elevation=-10.0,
-    azimuth=90.0,
+    elevation=-50.0,
+    azimuth=50.0,
   )
 
 
@@ -60,7 +60,13 @@ def scene_cfg(maze: Maze, num_envs: int) -> SceneCfg:
     terrain=MazeTerrainEntityCfg(
       maze_cfg=maze.cfg,
     ),
-    sensors=(FEET_GROUND_CONTACT_SENSOR, FOOT_HEIGHT_SCAN, WALL_COLLISION_SENSOR, NONFOOT_GROUND_CONTACT_SENSOR, SELF_COLLISION_SENSOR),
+    sensors=(
+      FEET_GROUND_CONTACT_SENSOR,
+      FOOT_HEIGHT_SCAN,
+      WALL_COLLISION_SENSOR,
+      NONFOOT_GROUND_CONTACT_SENSOR,
+      SELF_COLLISION_SENSOR,
+    ),
     extent=2.0,
   )
 
@@ -93,7 +99,11 @@ def t1_maze_env_cfg(
       resolution_factor: Upsampling factor for the grid abstraction.
       play: If True, configures for single-env visualization.
   """
-  maze = Maze(MazeCfg(maze_map=MAPS[scenario], cell_size=5.0, wall_height=2.0, wall_size_factor=1.0))
+  maze = Maze(
+    MazeCfg(
+      maze_map=MAPS[scenario], cell_size=5.0, wall_height=2.0, wall_size_factor=1.0
+    )
+  )
 
   cfg = AbstractionBasedEnvCfg(
     scene=scene_cfg(maze, num_envs=1 if play else num_envs),
@@ -113,7 +123,10 @@ def t1_maze_env_cfg(
   )
 
   if play:
+    cfg.episode_length_s = int(1e9)
     cfg.observations["actor"].enable_corruption = False
+    cfg.events.pop("push_robot", None)
+    cfg.curriculum = {}
 
   return cfg
 

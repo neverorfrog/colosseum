@@ -84,7 +84,8 @@ class AbstractionVelocityCommand(CommandTerm):
     root_quat_w = self.env.scene["robot"].data.root_link_quat_w  # [num_envs, 4]
     quat_conj = torch.cat([root_quat_w[:, :1], -root_quat_w[:, 1:]], dim=-1)
     dir_world_3d = torch.cat(
-      [direction_unit, torch.zeros(self.env.num_envs, 1, device=self.env.device)], dim=-1
+      [direction_unit, torch.zeros(self.env.num_envs, 1, device=self.env.device)],
+      dim=-1,
     )  # [num_envs, 3]
     dir_body_2d = quat_apply(quat_conj, dir_world_3d)[:, :2]  # [num_envs, 2]
     # Re-normalize: xy projection of a 3D rotation loses unit length when body pitches
@@ -121,7 +122,9 @@ class AbstractionVelocityCommand(CommandTerm):
     pos_2d = agent_pos_local(
       self.env, SceneEntityCfg("robot", site_names=("root_site",))
     )[batch]
-    pos_3d = torch.cat([pos_2d, torch.tensor([0.3], device=pos_2d.device)]).cpu().numpy()
+    pos_3d = (
+      torch.cat([pos_2d, torch.tensor([0.3], device=pos_2d.device)]).cpu().numpy()
+    )
 
     vel_2d = self.velocity_command[batch, :2]
     vel_body_3d = torch.cat([vel_2d, torch.zeros(1, device=vel_2d.device)])
@@ -143,7 +146,11 @@ class AbstractionVelocityCommand(CommandTerm):
     actual_vel_2d = agent_vel(
       self.env, SceneEntityCfg("robot", site_names=("root_site",))
     )[batch]
-    actual_vel_3d = torch.cat([actual_vel_2d, torch.zeros(1, device=actual_vel_2d.device)]).cpu().numpy()
+    actual_vel_3d = (
+      torch.cat([actual_vel_2d, torch.zeros(1, device=actual_vel_2d.device)])
+      .cpu()
+      .numpy()
+    )
     visualizer.add_arrow(
       start=pos_3d,
       end=pos_3d + actual_vel_3d * 0.8,

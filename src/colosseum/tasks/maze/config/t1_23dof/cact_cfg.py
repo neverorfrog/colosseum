@@ -21,6 +21,7 @@ commands: dict[str, CommandTermCfg] = {
   "velocity": AbstractionVelocityCommandCfg(
     body_forward_axis=(1.0, 0.0, 0.0),
     angular_velocity_gain=0.5,
+    ema_smoothing=0.1,
   ),
 }
 
@@ -68,11 +69,11 @@ terminations: dict[str, TerminationTermCfg] = {
       "threshold": 4,
     },
   ),
-  "wall_collision": TerminationTermCfg(
-    func=collided_with_wall,
-    params={
-      "sensor_name": "wall_collision",
-      "force_threshold": 100.0,
-    },
-  ),
+  # "wall_collision": TerminationTermCfg(
+  #   func=collided_with_wall,
+  #   params={
+  #     "sensor_name": "wall_collision",
+  #     "force_threshold": 100.0,
+  #   },
+  # ),
 }
