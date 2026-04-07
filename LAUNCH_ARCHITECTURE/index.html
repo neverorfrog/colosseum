@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://mydomain.org/mysite/SIM2SIM_INTEGRATION_PLAN/">
+        <link rel="canonical" href="https://mydomain.org/mysite/LAUNCH_ARCHITECTURE/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Sim2Sim Integration Plan: RL Policy in Circus - Colosseum</title>
+        <title>Launch Architecture: Application-Owned Stacks - Colosseum</title>
       
     
     
@@ -76,7 +76,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#sim2sim-integration-plan-rl-policy-in-circus" class="md-skip">
+        <a href="#launch-architecture-application-owned-stacks" class="md-skip">
           Skip to content
         </a>
       
@@ -111,7 +111,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Sim2Sim Integration Plan: RL Policy in Circus
+              Launch Architecture: Application-Owned Stacks
             
           </span>
         </div>
@@ -770,10 +770,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#goal" class="md-nav__link">
+  <a href="#background-how-circus-launches-robots" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Goal
+        Background: How Circus Launches Robots
       
     </span>
   </a>
@@ -781,10 +781,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#prerequisites" class="md-nav__link">
+  <a href="#current-architecture-problems" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Prerequisites
+        Current Architecture (Problems)
       
     </span>
   </a>
@@ -792,22 +792,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#architecture" class="md-nav__link">
+  <a href="#proposed-architecture" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Architecture
+        Proposed Architecture
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Architecture">
+    <nav class="md-nav" aria-label="Proposed Architecture">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#location" class="md-nav__link">
+  <a href="#dependency-model" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Location
+        Dependency Model
       
     </span>
   </a>
@@ -815,22 +815,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#component-design" class="md-nav__link">
+  <a href="#launch-flow" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Component Design
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Component Design">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#robotdata-state-container" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        RobotData (State Container)
+        Launch Flow
       
     </span>
   </a>
@@ -838,10 +826,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#robotportal-communication" class="md-nav__link">
+  <a href="#path_constantsyaml-auto-generated-simplified" class="md-nav__link">
     <span class="md-ellipsis">
       
-        RobotPortal (Communication)
+        path_constants.yaml (Auto-Generated, Simplified)
       
     </span>
   </a>
@@ -849,48 +837,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#policy-onnx-inference" class="md-nav__link">
+  <a href="#framework_configyaml-single-volume-mount" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Policy (ONNX Inference)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#config-robot-constants" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Config (Robot Constants)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#main-loop" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Main Loop
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#build-system" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Build System
+        framework_config.yaml (Single Volume Mount)
       
     </span>
   </a>
@@ -903,22 +853,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#open-items" class="md-nav__link">
+  <a href="#per-application-config-structure" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Open Items
+        Per-Application Config Structure
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Open Items">
+    <nav class="md-nav" aria-label="Per-Application Config Structure">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#1-onnx-runtime-c-integration" class="md-nav__link">
+  <a href="#sim2sim-rl-policy-testing" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. ONNX Runtime C++ Integration
+        sim2sim (RL policy testing)
       
     </span>
   </a>
@@ -926,54 +876,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#2-base-linear-velocity" class="md-nav__link">
+  <a href="#maximus-behavior-framework-testing" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Base Linear Velocity
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#3-joint-order-verification" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3. Joint Order Verification
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#4-projected-gravity-computation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        4. Projected Gravity Computation
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#5-kpkd-values-in-lowcmd" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        5. Kp/Kd Values in LowCmd
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#6-mode-transition-sequence" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        6. Mode Transition Sequence
+        maximus (behavior framework testing)
       
     </span>
   </a>
@@ -986,10 +892,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#cleanup-remove-python-booster-backend" class="md-nav__link">
+  <a href="#docker-image-strategy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Cleanup: Remove Python Booster Backend
+        Docker Image Strategy
       
     </span>
   </a>
@@ -997,33 +903,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#phase-2-integration-into-spqrbooster2026" class="md-nav__link">
+  <a href="#implementation-steps" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Phase 2: Integration into spqrbooster2026
+        Implementation Steps
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#testing-plan" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Testing Plan
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Testing Plan">
+    <nav class="md-nav" aria-label="Implementation Steps">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#step-1-verify-dds-connectivity" class="md-nav__link">
+  <a href="#step-1-circus-accepts-external-config-paths-via-cli" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 1: Verify DDS connectivity
+        Step 1 — Circus accepts external config paths via CLI
       
     </span>
   </a>
@@ -1031,10 +926,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#step-2-publish-static-pose" class="md-nav__link">
+  <a href="#step-2-application-generates-path_constantsyaml-at-startup" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 2: Publish static pose
+        Step 2 — Application generates path_constants.yaml at startup
       
     </span>
   </a>
@@ -1042,10 +937,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#step-3-run-policy-with-zero-velocity" class="md-nav__link">
+  <a href="#step-3-application-launches-circus-as-subprocess" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 3: Run policy with zero velocity
+        Step 3 — Application launches circus as subprocess
       
     </span>
   </a>
@@ -1053,10 +948,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#step-4-joystick-control" class="md-nav__link">
+  <a href="#step-4-package-conda-packages-for-the-spqr-channel" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 4: Joystick control
+        Step 4 — Package conda packages for the spqr channel
       
     </span>
   </a>
@@ -1064,10 +959,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#step-5-validate-against-python-sim2sim" class="md-nav__link">
+  <a href="#step-5-move-configs-into-application-repos" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 5: Validate against Python sim2sim
+        Step 5 — Move configs into application repos
       
     </span>
   </a>
@@ -1076,6 +971,28 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-circus-loses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What Circus Loses
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#migration-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migration Checklist
+      
+    </span>
+  </a>
   
 </li>
       
@@ -1096,7 +1013,7 @@
 
 
   
-    <a href="https://github.com/neverorfrog/colosseum.git/edit/master/docs/SIM2SIM_INTEGRATION_PLAN.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/neverorfrog/colosseum.git/edit/master/docs/LAUNCH_ARCHITECTURE.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75z"/></svg>
     </a>
@@ -1104,440 +1021,319 @@
   
 
 
-<h1 id="sim2sim-integration-plan-rl-policy-in-circus">Sim2Sim Integration Plan: RL Policy in Circus</h1>
-<p>This document describes the plan for integrating a trained RL policy into the Circus simulation pipeline, and later into the real robot via spqrbooster2026.</p>
-<h2 id="goal">Goal</h2>
-<p>Build a standalone C++ executable that:
-1. Reads sensor data from <code>rt/low_state</code> (published by booster-motion)
-2. Reads joystick input from <code>rt/remote_controller_state</code>
-3. Runs ONNX policy inference at 50Hz
-4. Publishes joint position targets to <code>rt/joint_ctrl</code> (consumed by booster-motion)</p>
-<p>This executable plugs into the existing <strong>Circus + SimBridge + booster-motion</strong> stack. The same code (or a module version of it) will later run on the real robot.</p>
-<h2 id="prerequisites">Prerequisites</h2>
-<p>The following must be running in the same Docker container before the policy node starts:</p>
-<pre><code>1. booster-motion — low-level PD controller (publishes rt/low_state, subscribes rt/joint_ctrl)
-2. SimBridge     — TCP↔DDS bridge (connects booster-motion to Circus)
+<h1 id="launch-architecture-application-owned-stacks">Launch Architecture: Application-Owned Stacks</h1>
+<h2 id="background-how-circus-launches-robots">Background: How Circus Launches Robots</h2>
+<p>Circus is a MuJoCo physics simulator that manages one Docker container per robot. This is not optional — Docker is intrinsic to how Circus works. The container runs <code>supervisord</code>, which starts booster-motion, simbridge, and the application binary. All three processes share the container's network namespace, which is required because DDS (FastDDS) communicates over loopback (<code>127.0.0.1</code>).</p>
+<pre><code>Host
+├── circus (Qt GUI, MuJoCo physics)          ← TCP server on port 5555
+└── Docker container (per robot)
+      └── supervisord
+            ├── booster-motion               ← reads DDS, computes PD torques
+            ├── simbridge_node               ← bridges TCP↔DDS
+            └── &lt;app binary&gt;                 ← policy node / behavior framework
 </code></pre>
-<p>And on the host:</p>
-<pre><code>3. Circus        — MuJoCo physics simulator (TCP server on port 5555)
+<p>The container connects back to circus via <code>SERVER_IP=172.17.0.1</code> (Docker bridge gateway).</p>
+<hr />
+<h2 id="current-architecture-problems">Current Architecture (Problems)</h2>
+<p>Circus is currently the <strong>entry point</strong> and <strong>orchestrator</strong>:</p>
+<ol>
+<li>Circus reads <code>resources/config/path_constants.yaml</code> — absolute paths to all sibling repos, <strong>maintained manually</strong></li>
+<li>Circus reads <code>resources/config/framework_config.yaml</code> — Docker image + volume binds, using <code>&lt;repo&gt;</code> placeholders substituted from path_constants</li>
+<li>Circus reads <code>resources/scenes/*.yaml</code> — which robots to spawn</li>
+<li>Circus creates one Docker container per robot, volume-mounting:</li>
+<li><code>&lt;simbridge&gt;/tools/booster_motion</code> → <code>/app/booster_motion</code></li>
+<li><code>&lt;simbridge&gt;/.pixi/envs/default</code> → <code>/app/bridge</code></li>
+<li><code>&lt;maximus&gt;/.pixi/envs/default</code> → <code>/app/maximus</code></li>
+<li>Container's <code>entrypoint.sh</code> + <code>booster.conf</code> are baked into the Docker image</li>
+</ol>
+<p><strong>Problems:</strong>
+- Adding a new application requires modifying Circus's resources
+- <code>path_constants.yaml</code> is manually maintained and machine-specific
+- <code>booster.conf</code> and <code>entrypoint.sh</code> live in Circus, but their content depends entirely on which application is running
+- Volume mounts span multiple repos (simbridge, maximus, colosseum) — fragile, hard to track
+- The scene (robot count, positions) is in Circus, but it is scenario-specific to the application</p>
+<hr />
+<h2 id="proposed-architecture">Proposed Architecture</h2>
+<p><strong>Each application owns its full launch stack.</strong> The application's <code>main</code> binary is the entry point. Circus becomes a reusable simulator with no knowledge of who is using it.</p>
+<h3 id="dependency-model">Dependency Model</h3>
+<p>Each application declares its full stack as <strong>pixi/conda dependencies</strong>:</p>
+<pre><code class="language-toml"># sim2sim/pixi.toml
+[dependencies]
+circus                  = &quot;*&quot;   # from spqr channel
+simbridge               = &quot;*&quot;   # from spqr channel
+booster_robotics_sdk    = &quot;==1.5.0&quot;   # from spqr channel
+booster_robotics_sdk_ros2 = &quot;*&quot; # from spqr channel (provides booster-motion binary)
+sim2sim                 = { path = &quot;.&quot; }
 </code></pre>
-<p>Per the launch architecture (<code>docs/LAUNCH_ARCHITECTURE.md</code>), <code>main.cpp</code> is responsible for launching the entire stack. It generates <code>path_constants.yaml</code> and starts Circus, which in turn spawns the Docker container running booster-motion + simbridge + the policy node via supervisord. The policy node therefore does <strong>not</strong> launch these components manually — it simply waits for <code>rt/low_state</code> to arrive before starting the control loop.</p>
-<h2 id="architecture">Architecture</h2>
-<h3 id="location">Location</h3>
-<pre><code>src/sim2sim/                    # Standalone C++ project (NOT in src/colosseum/)
-├── CMakeLists.txt
-├── pixi.toml                   # pixi-managed C++ dependencies
-├── include/
-│   ├── robot_portal.hpp        # DDS communication (subscribe + publish)
-│   ├── policy.hpp              # ONNX model loading and inference
-│   ├── robot_data.hpp          # Sensor state container
-│   └── config.hpp              # Robot constants (joints, gains, defaults)
+<p>After <code>pixi install</code>, every binary lives under one root:</p>
+<pre><code>sim2sim/.pixi/envs/default/
+  bin/
+    circus               ← Qt simulator
+    simbridge_node       ← DDS bridge
+    booster-motion       ← PD controller
+    main                 ← policy node (sim2sim)
+  lib/
+    ...                  ← all shared libraries, rpaths resolved by conda
+  share/
+    sim2sim/configs/     ← installed application configs
+</code></pre>
+<p>This replaces the current fragmented volume model (four separate repo mounts) with <strong>a single pixi environment</strong>.</p>
+<h3 id="launch-flow">Launch Flow</h3>
+<pre><code>User
+ └─► pixi run launch
+       ├─ 1. Writes /tmp/path_constants_&lt;pid&gt;.yaml  (just sim2sim_env path)
+       ├─ 2. Launches circus:
+       │       circus --scene configs/scenes/training_1v1.yaml
+       │              --simulation-config configs/simulation/training.yaml
+       │              --framework-config configs/framework_config.yaml
+       │              --path-constants /tmp/path_constants_&lt;pid&gt;.yaml
+       └─ Circus reads configs, spawns Docker container per robot:
+               └─► supervisord (from app's booster.conf)
+                     ├─► booster-motion   /app/env/bin/booster-motion
+                     ├─► simbridge_node   /app/env/bin/simbridge_node
+                     └─► sim2sim main     /app/env/bin/main
+</code></pre>
+<h3 id="path_constantsyaml-auto-generated-simplified">path_constants.yaml (Auto-Generated, Simplified)</h3>
+<p>Instead of mapping every sibling repo, the application generates a single-entry file:</p>
+<pre><code class="language-yaml"># /tmp/path_constants_&lt;pid&gt;.yaml  — written at runtime, never committed
+sim2sim_env: /home/user/code/spqr/colosseum/src/sim2sim/.pixi/envs/default
+</code></pre>
+<p>Circus substitutes <code>&lt;sim2sim_env&gt;</code> in <code>framework_config.yaml</code> at runtime.</p>
+<h3 id="framework_configyaml-single-volume-mount">framework_config.yaml (Single Volume Mount)</h3>
+<pre><code class="language-yaml"># sim2sim/configs/framework_config.yaml
+image: spqr:booster
+volumes:
+  - &quot;&lt;sim2sim_env&gt;:/app/env&quot;
+  - &quot;/dev/shm/circus_ipc:/dev/shm/circus_ipc&quot;
+</code></pre>
+<p>One mount replaces the current four. All binaries and libraries are accessible at <code>/app/env/</code>.</p>
+<hr />
+<h2 id="per-application-config-structure">Per-Application Config Structure</h2>
+<h3 id="sim2sim-rl-policy-testing">sim2sim (RL policy testing)</h3>
+<pre><code>colosseum/src/sim2sim/
+├── pixi.toml                          # declares circus, simbridge, booster_robotics_sdk,
+│                                      # booster_robotics_sdk_ros2, sim2sim as dependencies
+├── configs/
+│   ├── framework_config.yaml          # image + single &lt;sim2sim_env&gt; volume
+│   ├── booster.conf                   # supervisord: booster-motion, simbridge, sim2sim main
+│   ├── entrypoint.sh                  # sets FASTRTPS_DEFAULT_PROFILES_FILE; starts supervisord
+│   ├── scenes/
+│   │   └── training_1v1.yaml          # 1 robot, RL spawn position
+│   ├── simulation/
+│   │   └── training.yaml              # no game phases, unlimited time
+│   └── booster_motion/
+│       ├── config_t1_rl.lua           # entry: loads graph + options below
+│       ├── common_graph_define_t1_rl.lua
+│       └── common_module_options_t1_rl.lua
 └── src/
-    ├── main.cpp                # Entry point and control loop
-    ├── robot_portal.cpp
-    ├── policy.cpp
-    └── config.cpp
+    └── main.cpp                       # generates path_constants, launches circus, then runs policy loop
 </code></pre>
-<p>The executable accesses ONNX models from the repository root: <code>../../models/</code> (e.g., <code>t1-velocity-flat_ppo_latest.onnx</code>).</p>
-<h3 id="component-design">Component Design</h3>
-<h4 id="robotdata-state-container">RobotData (State Container)</h4>
-<p>Holds the latest sensor state, populated by DDS callbacks.</p>
-<pre><code class="language-cpp">struct RobotData {
-    // From LowState.imu_state
-    float rpy[3];            // roll, pitch, yaw (rad)
-    float gyro[3];           // angular velocity in body frame (rad/s)
-    float acc[3];            // linear acceleration (m/s^2)
+<p><strong><code>booster.conf</code> for sim2sim:</strong></p>
+<pre><code class="language-ini">[program:booster-motion]
+directory=/app/env
+command=/app/env/bin/booster-motion -mode sim -config /app/env/share/sim2sim/configs/booster_motion/config_t1_rl.lua
+priority=1
+autostart=true
 
-    // From LowState.motor_state_serial
-    float joint_pos[23];     // joint positions (rad)
-    float joint_vel[23];     // joint velocities (rad/s)
-    float feedback_torque[23]; // estimated torques (Nm)
+[program:delayed-starter]
+command=/app/delayed_start.sh
+priority=2
+autostart=true
+autorestart=false
 
-    // Derived
-    float projected_gravity[3]; // gravity vector in body frame
-    float root_quat[4];        // quaternion from RPY (w,x,y,z)
-};
+[program:simbridge]
+command=/app/env/bin/simbridge_node
+autostart=false
+autorestart=true
+
+[program:sim2sim]
+command=/app/env/bin/main
+environment=FASTRTPS_DEFAULT_PROFILES_FILE=&quot;/app/env/share/booster_motion/fastdds_profile.xml&quot;
+autostart=false
+autorestart=true
 </code></pre>
-<h4 id="robotportal-communication">RobotPortal (Communication)</h4>
-<p>Handles all DDS communication using the Booster SDK's ChannelPublisher/ChannelSubscriber.</p>
-<pre><code class="language-cpp">class RobotPortal {
-public:
-    RobotPortal();
-    ~RobotPortal();
-
-    void init();
-    void shutdown();
-
-    // Read latest state (populated by callback)
-    const RobotData&amp; get_state() const;
-
-    // Read joystick (populated by callback)
-    float get_vx_cmd() const;   // [-1, 1]
-    float get_vy_cmd() const;
-    float get_vyaw_cmd() const;
-
-    // Publish joint position targets
-    void publish_command(const float* joint_targets,   // [23] rad
-                         const float* kp,              // [23]
-                         const float* kd);             // [23]
-
-    // Mode management
-    void change_mode(RobotMode mode);
-
-private:
-    // DDS channels
-    ChannelSubscriber&lt;LowState&gt; low_state_sub_;        // rt/low_state
-    ChannelSubscriber&lt;RemoteControllerState&gt; rc_sub_;   // rt/remote_controller_state
-    ChannelPublisher&lt;LowCmd&gt; joint_ctrl_pub_;           // rt/joint_ctrl
-    B1LocoClient loco_client_;
-
-    // State (updated by callbacks, read by main loop)
-    RobotData state_;
-    std::mutex state_mutex_;
-
-    // Joystick (updated by callback)
-    float vx_raw_, vy_raw_, vyaw_raw_;
-    std::mutex rc_mutex_;
-
-    void on_low_state(const LowState&amp; msg);
-    void on_remote_controller(const RemoteControllerState&amp; msg);
-};
+<p><strong><code>entrypoint.sh</code> for sim2sim:</strong></p>
+<pre><code class="language-bash">#!/bin/bash
+export FASTRTPS_DEFAULT_PROFILES_FILE=/app/env/share/booster_motion/fastdds_profile.xml
+/usr/bin/supervisord -n -c /app/env/share/sim2sim/configs/booster.conf
 </code></pre>
-<p><strong>DDS topics used:</strong></p>
+<p><strong><code>training_1v1.yaml</code> scene:</strong></p>
+<pre><code class="language-yaml">simulation_config: training
+teams:
+  red:
+    - type: Booster-T1
+      number: 1
+      position: [0.0, 0.0, 0.68]
+      orientation: [0.0, 0.0, 0.0]
+</code></pre>
+<p><strong><code>training.yaml</code> simulation config:</strong></p>
+<pre><code class="language-yaml">simulation:
+  max_simulation_time: -1
+game:
+  field: fieldAdultSize
+  game_duration: -1
+  automatic_restart: true
+</code></pre>
+<hr />
+<h3 id="maximus-behavior-framework-testing">maximus (behavior framework testing)</h3>
+<pre><code>spqrbooster2026/
+├── pixi.toml                          # declares circus, simbridge, booster_robotics_sdk,
+│                                      # booster_robotics_sdk_ros2, maximus as dependencies
+├── configs/
+│   ├── framework_config.yaml          # image + &lt;maximus_env&gt; volume + TensorRT volume
+│   ├── booster.conf                   # supervisord: booster-motion, simbridge, maximus
+│   ├── entrypoint.sh                  # sets FASTRTPS, SPQR_CONFIG_ROOT, SPQR_BEHAVIOR_TREE_PATH
+│   ├── scenes/
+│   │   ├── 1v1.yaml
+│   │   └── 5v5.yaml
+│   ├── simulation/
+│   │   └── default.yaml               # full game settings
+│   └── booster_motion/
+│       └── config_isaac.lua           # standard behavior graph
+└── src/app/
+    └── main.cpp                       # generates path_constants, launches circus
+</code></pre>
+<p><strong><code>framework_config.yaml</code> for maximus:</strong></p>
+<pre><code class="language-yaml">image: spqr:booster
+volumes:
+  - &quot;&lt;maximus_env&gt;:/app/env&quot;
+  - &quot;&lt;maximus_env&gt;/tools/vision/tensorrt:/app/tensorrt&quot;
+  - &quot;/dev/shm/circus_ipc:/dev/shm/circus_ipc&quot;
+</code></pre>
+<hr />
+<h2 id="docker-image-strategy">Docker Image Strategy</h2>
+<p>The <code>spqr:booster</code> base image becomes <strong>minimal</strong>: only ROS2 Humble, system libraries, and <code>supervisord</code>. It no longer contains booster SDK builds (those come from the pixi env volume mount).</p>
+<pre><code class="language-dockerfile">FROM ros:humble
+RUN apt-get update &amp;&amp; apt-get install -y supervisor libpulse0 ... &amp;&amp; rm -rf /var/lib/apt/lists/*
+# No booster SDK builds — everything comes from the volume-mounted pixi env
+COPY delayed_start.sh /app/delayed_start.sh
+</code></pre>
+<p>The <code>entrypoint.sh</code> and <code>booster.conf</code> are no longer baked into the image — they are owned by the application and referenced from the mounted volume or passed via a separate bind.</p>
+<hr />
+<h2 id="implementation-steps">Implementation Steps</h2>
+<h3 id="step-1-circus-accepts-external-config-paths-via-cli">Step 1 — Circus accepts external config paths via CLI</h3>
+<pre><code class="language-bash">circus \
+  --scene /path/to/app/configs/scenes/training_1v1.yaml \
+  --simulation-config /path/to/app/configs/simulation/training.yaml \
+  --framework-config /path/to/app/configs/framework_config.yaml \
+  --path-constants /tmp/path_constants_&lt;pid&gt;.yaml
+</code></pre>
+<p>Changes in Circus C++:
+- <code>Constants.h</code>: replace hardcoded resource paths with runtime values from CLI
+- <code>SceneParser</code>: accept scene file path as constructor argument
+- <code>RobotManager::startContainers()</code>: accept framework config and path constants paths</p>
+<h3 id="step-2-application-generates-path_constantsyaml-at-startup">Step 2 — Application generates path_constants.yaml at startup</h3>
+<pre><code class="language-cpp">// In sim2sim main.cpp
+std::filesystem::path env_prefix = get_conda_prefix();  // or derive from argv[0]
+
+YAML::Node paths;
+paths[&quot;sim2sim_env&quot;] = env_prefix.string();
+
+std::string out = &quot;/tmp/path_constants_&quot; + std::to_string(getpid()) + &quot;.yaml&quot;;
+write_yaml(paths, out);
+</code></pre>
+<h3 id="step-3-application-launches-circus-as-subprocess">Step 3 — Application launches circus as subprocess</h3>
+<pre><code class="language-cpp">std::string cmd = env_prefix / &quot;bin/circus&quot;;
+cmd += &quot; --scene &quot; + config_dir + &quot;/scenes/training_1v1.yaml&quot;;
+cmd += &quot; --framework-config &quot; + config_dir + &quot;/framework_config.yaml&quot;;
+cmd += &quot; --path-constants &quot; + path_constants_file;
+std::system(cmd.c_str());  // or fork/exec with proper signal handling
+</code></pre>
+<h3 id="step-4-package-conda-packages-for-the-spqr-channel">Step 4 — Package conda packages for the spqr channel</h3>
 <table>
 <thead>
 <tr>
-<th>Direction</th>
-<th>Topic</th>
-<th>Type</th>
-<th>Purpose</th>
+<th>Package</th>
+<th>Content</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Subscribe</td>
-<td><code>rt/low_state</code></td>
-<td><code>LowState</code></td>
-<td>Sensor feedback (IMU + joints)</td>
+<td><code>circus</code></td>
+<td>circus binary + MuJoCo assets + field configs</td>
 </tr>
 <tr>
-<td>Subscribe</td>
-<td><code>rt/remote_controller_state</code></td>
-<td><code>RemoteControllerState</code></td>
-<td>Joystick input</td>
+<td><code>simbridge</code></td>
+<td><code>simbridge_node</code> binary + booster_interface ROS2 msgs</td>
 </tr>
 <tr>
-<td>Publish</td>
-<td><code>rt/joint_ctrl</code></td>
-<td><code>LowCmd</code></td>
-<td>Joint position targets (q, kp, kd)</td>
+<td><code>booster_robotics_sdk</code></td>
+<td>C++ headers + static lib (already exists on spqr channel)</td>
+</tr>
+<tr>
+<td><code>booster_robotics_sdk_ros2</code></td>
+<td><code>booster-motion</code> binary + Lua configs + FastDDS profile</td>
 </tr>
 </tbody>
 </table>
-<h4 id="policy-onnx-inference">Policy (ONNX Inference)</h4>
-<p>Loads the ONNX model and runs inference.</p>
-<pre><code class="language-cpp">class Policy {
-public:
-    Policy(const std::string&amp; onnx_path, const Config&amp; config);
-    ~Policy();
-
-    // Reset policy state (call before starting control loop)
-    void reset();
-
-    // Run one inference step, returns joint position targets [23]
-    void inference(const RobotData&amp; state,
-                   float vx_cmd, float vy_cmd, float vyaw_cmd,
-                   float* joint_targets_out);  // [23] output
-
-private:
-    // ONNX Runtime session (details TBD)
-    // ...
-
-    // Config
-    const Config&amp; config_;
-
-    // State
-    float last_action_[23];       // stored normalized action from previous step
-    float observation_[82];       // reusable observation buffer
-
-    // Build observation vector in the exact training order
-    void build_observation(const RobotData&amp; state,
-                           float vx_cmd, float vy_cmd, float vyaw_cmd);
-
-    // Convert normalized action → joint position targets
-    void action_to_targets(const float* action, float* targets);
-};
-</code></pre>
-<p><strong>Observation construction</strong> (must match training exactly):</p>
-<pre><code class="language-cpp">void Policy::build_observation(const RobotData&amp; state,
-                                float vx_cmd, float vy_cmd, float vyaw_cmd) {
-    int idx = 0;
-
-    // base_lin_vel (3) — from IMU or derived
-    // NOTE: rt/low_state may not provide linear velocity directly.
-    // Options: use zeros, derive from odometry, or use accelerometer integration.
-    // This must match what the training environment provides.
-    observation_[idx++] = ???;  // vx body frame
-    observation_[idx++] = ???;  // vy body frame
-    observation_[idx++] = ???;  // vz body frame
-
-    // base_ang_vel (3) — from gyroscope
-    observation_[idx++] = state.gyro[0];
-    observation_[idx++] = state.gyro[1];
-    observation_[idx++] = state.gyro[2];
-
-    // projected_gravity (3) — computed from RPY → quaternion → rotate [0,0,-1]
-    observation_[idx++] = state.projected_gravity[0];
-    observation_[idx++] = state.projected_gravity[1];
-    observation_[idx++] = state.projected_gravity[2];
-
-    // joint_pos_rel (23) — joint positions minus default pose
-    for (int i = 0; i &lt; 23; i++) {
-        observation_[idx++] = state.joint_pos[i] - config_.default_joint_pos[i];
-    }
-
-    // joint_vel (23) — joint velocities
-    for (int i = 0; i &lt; 23; i++) {
-        observation_[idx++] = state.joint_vel[i];
-    }
-
-    // last_action (23) — previous normalized action
-    for (int i = 0; i &lt; 23; i++) {
-        observation_[idx++] = last_action_[i];
-    }
-
-    // velocity_commands (3) — scaled by max velocities
-    observation_[idx++] = vx_cmd;
-    observation_[idx++] = vy_cmd;
-    observation_[idx++] = vyaw_cmd;
-}
-</code></pre>
-<p><strong>Action conversion:</strong></p>
-<pre><code class="language-cpp">void Policy::action_to_targets(const float* action, float* targets) {
-    for (int i = 0; i &lt; 23; i++) {
-        last_action_[i] = action[i];  // store for next observation
-        targets[i] = action[i] * config_.action_scale + config_.default_joint_pos[i];
-    }
-}
-</code></pre>
-<h4 id="config-robot-constants">Config (Robot Constants)</h4>
-<pre><code class="language-cpp">struct Config {
-    // Joint configuration
-    static constexpr int NUM_JOINTS = 23;
-    float default_joint_pos[NUM_JOINTS];  // standing pose (rad)
-    float joint_stiffness[NUM_JOINTS];    // kp values for LowCmd
-    float joint_damping[NUM_JOINTS];      // kd values for LowCmd
-    float action_scale;                   // 0.25
-
-    // Velocity command limits
-    float vx_max;     // max forward velocity (m/s)
-    float vy_max;     // max lateral velocity (m/s)
-    float vyaw_max;   // max yaw rate (rad/s)
-
-    // Policy
-    float policy_dt;  // 0.02s (50Hz)
-};
-</code></pre>
-<p>Values must be extracted from the training configuration (<code>src/colosseum/tasks/velocity/config/t1_23dof/env_cfgs.py</code> and <code>src/colosseum/robots/t1_23dof/deploy.py</code>).</p>
-<h4 id="main-loop">Main Loop</h4>
-<pre><code class="language-cpp">int main(int argc, char** argv) {
-    // Parse args (model path, config)
-    std::string model_path = &quot;../../models/t1-velocity-flat_ppo_latest.onnx&quot;;
-
-    Config config = load_t1_velocity_config();
-    RobotPortal portal;
-    Policy policy(model_path, config);
-
-    portal.init();
-
-    // Wait for first low_state message
-    wait_for_state(portal);
-
-    // Switch to custom mode (allows direct joint control)
-    portal.change_mode(RobotMode::kCustom);
-
-    // Initialize policy
-    policy.reset();
-
-    // Control loop at 50Hz
-    float joint_targets[23];
-    auto next_tick = std::chrono::steady_clock::now();
-
-    while (running) {
-        // Wait for next policy tick
-        next_tick += std::chrono::microseconds(
-            static_cast&lt;int&gt;(config.policy_dt * 1e6));
-        std::this_thread::sleep_until(next_tick);
-
-        // Read latest state
-        const RobotData&amp; state = portal.get_state();
-
-        // Read joystick commands (scaled to [-max, +max])
-        float vx = portal.get_vx_cmd() * config.vx_max;
-        float vy = portal.get_vy_cmd() * config.vy_max;
-        float vyaw = portal.get_vyaw_cmd() * config.vyaw_max;
-
-        // Run policy inference
-        policy.inference(state, vx, vy, vyaw, joint_targets);
-
-        // Publish to booster-motion
-        portal.publish_command(joint_targets,
-                               config.joint_stiffness,
-                               config.joint_damping);
-    }
-
-    portal.shutdown();
-    return 0;
-}
-</code></pre>
-<h3 id="build-system">Build System</h3>
-<p><strong>pixi.toml</strong> (pixi workspace with cmake build backend):</p>
-<pre><code class="language-toml">[workspace]
-platforms = [&quot;linux-64&quot;, &quot;linux-aarch64&quot;]
-channels = [
-    &quot;https://prefix.dev/pixi-build-backends&quot;,
-    &quot;https://prefix.dev/conda-forge&quot;,
-    &quot;https://prefix.dev/spqr&quot;,
-]
-preview = [&quot;pixi-build&quot;]
-
-[dependencies]
-sim2sim = { path = &quot;.&quot; }
-# Runtime tools available in the pixi env:
-circus                    = &quot;*&quot;   # from spqr channel
-simbridge                 = &quot;*&quot;   # from spqr channel
-booster_robotics_sdk_ros2 = &quot;*&quot;   # from spqr channel (ships booster-motion binary)
-
-[package]
-name = &quot;sim2sim&quot;
-version = &quot;0.1.0&quot;
-
-[package.build.backend]
-name = &quot;pixi-build-cmake&quot;
-version = &quot;*&quot;
-
-[package.host-dependencies]
-booster_robotics_sdk = &quot;==1.5.0&quot;
-onnxruntime-cpp      = &quot;*&quot;        # from conda-forge
-eigen                = &quot;*&quot;
-
-[package.run-dependencies]
-booster_robotics_sdk = &quot;==1.5.0&quot;
-onnxruntime-cpp      = &quot;*&quot;
-eigen                = &quot;*&quot;
-</code></pre>
-<p><strong>CMakeLists.txt:</strong></p>
-<pre><code class="language-cmake">cmake_minimum_required(VERSION 3.20)
-project(sim2sim LANGUAGES CXX)
-set(CMAKE_CXX_STANDARD 20)
-
-find_package(booster_robotics_sdk REQUIRED)
-find_package(Eigen3 REQUIRED)
-# find_package(onnxruntime REQUIRED)  # TBD
-
-add_executable(sim2sim
-    src/main.cpp
-    src/robot_portal.cpp
-    src/policy.cpp
-    src/config.cpp
-)
-
-target_include_directories(sim2sim PRIVATE include)
-target_link_libraries(sim2sim PRIVATE
-    booster::booster_robotics_sdk
-    Eigen3::Eigen
-    # onnxruntime  # TBD
-)
-</code></pre>
-<h2 id="open-items">Open Items</h2>
-<h3 id="1-onnx-runtime-c-integration">1. ONNX Runtime C++ Integration</h3>
-<p><strong>Resolved:</strong> <code>onnxruntime-cpp</code> is available on conda-forge and added to <code>pixi.toml</code> as a host and run dependency. Update <code>CMakeLists.txt</code> to uncomment <code>find_package(onnxruntime REQUIRED)</code> and link against <code>onnxruntime::onnxruntime</code>.</p>
-<h3 id="2-base-linear-velocity">2. Base Linear Velocity</h3>
-<p>The observation includes <code>base_lin_vel</code> (3D linear velocity in body frame). On the real robot and in simulation via booster-motion, <code>rt/low_state</code> provides IMU data (RPY, gyro, acc) but <strong>may not directly provide linear velocity</strong>. Options:
-- Check if the training observation actually uses linear velocity or if it's zeroed
-- Derive from odometry (<code>rt/odometer_state</code>)
-- Integrate accelerometer data
-- Match whatever the MuJoCo sim-to-sim backend does (which reads <code>qvel[:3]</code>)</p>
-<p>This must match exactly what the policy saw during training.</p>
-<h3 id="3-joint-order-verification">3. Joint Order Verification</h3>
-<p><strong>Resolved:</strong> No remapping needed. Confirmed from booster-motion's Lua config (<code>common_module_options_t1_rl_isaac.lua</code>): <code>joint_map_output</code> has identity mapping <code>{0,1,2,...,22}</code> with all <code>pos_factor</code> and <code>torq_factor</code> set to 1.0. The order in <code>motor_state_serial</code> matches the Circus joint order (<code>ROBOT_JOINTS_NAMES_MAP</code> in <code>bridge_node.cpp</code>) which matches the training environment's joint ordering.</p>
-<h3 id="4-projected-gravity-computation">4. Projected Gravity Computation</h3>
-<p><strong>Resolved:</strong> Exact C++ implementation verified against the training code (<code>colosseum/mdp/observations.py</code> → <code>quat_apply_inverse</code>):</p>
-<pre><code class="language-cpp">// Step 1: RPY (ZYX convention) → quaternion (w, x, y, z)
-inline void rpy_to_quat(const float rpy[3], float q[4]) {
-    float cr = cosf(rpy[0]*0.5f), sr = sinf(rpy[0]*0.5f);
-    float cp = cosf(rpy[1]*0.5f), sp = sinf(rpy[1]*0.5f);
-    float cy = cosf(rpy[2]*0.5f), sy = sinf(rpy[2]*0.5f);
-    q[0] = cr*cp*cy + sr*sp*sy;  // w
-    q[1] = sr*cp*cy - cr*sp*sy;  // x
-    q[2] = cr*sp*cy + sr*cp*sy;  // y
-    q[3] = cr*cp*sy - sr*sp*cy;  // z
-}
-
-// Step 2: quat_apply_inverse(q, [0,0,-1])
-// Analytical simplification of: t = xyz×vec*2, result = vec - w*t + xyz×t
-inline void compute_projected_gravity(const float q[4], float pg[3]) {
-    float w = q[0], x = q[1], y = q[2], z = q[3];
-    pg[0] =  2.0f * (w*y - x*z);
-    pg[1] = -2.0f * (w*x + y*z);
-    pg[2] = -(1.0f - 2.0f*(x*x + y*y));
-}
-</code></pre>
-<p>Quaternion convention is scalar-first <code>(w, x, y, z)</code> in both training and this implementation. Sanity check: identity quaternion <code>[1,0,0,0]</code> → <code>pg = [0, 0, -1]</code> ✓</p>
-<h3 id="5-kpkd-values-in-lowcmd">5. Kp/Kd Values in LowCmd</h3>
-<p>The policy publishes kp/kd values per joint in the LowCmd. These tell booster-motion what PD gains to use. Two options:
-- Use the <strong>training kp/kd</strong> values (from colosseum's robot config)
-- Use <strong>booster-motion's default kp/kd</strong> (from Lua config)</p>
-<p>These may differ. Using training kp/kd is more correct since the policy was trained with those dynamics. Set <code>weight=1.0</code> in the MotorCmd to override booster-motion's defaults.</p>
-<h3 id="6-mode-transition-sequence">6. Mode Transition Sequence</h3>
-<p>Before sending joint targets, the robot must be in <code>kCustom</code> mode:
-1. Wait for booster-motion to publish first <code>rt/low_state</code>
-2. Call <code>B1LocoClient::ChangeMode(RobotMode::kCustom)</code>
-3. Optionally send a "prepare pose" (move joints to default position slowly)
-4. Then start the policy loop</p>
-<p>The prepare pose transition avoids sudden jumps when the policy starts.</p>
-<h2 id="cleanup-remove-python-booster-backend">Cleanup: Remove Python Booster Backend</h2>
-<p>Once the C++ sim2sim executable is working, <code>src/colosseum/deploy/backends/booster.py</code> becomes redundant and can be removed. This simplifies the Python deploy pipeline:</p>
+<h3 id="step-5-move-configs-into-application-repos">Step 5 — Move configs into application repos</h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>From</th>
+<th>To</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>framework_config.yaml</code></td>
+<td><code>circus/resources/config/</code></td>
+<td><code>sim2sim/configs/</code> and <code>maximus/configs/</code></td>
+</tr>
+<tr>
+<td><code>booster.conf</code></td>
+<td><code>circus/dockerfiles/</code></td>
+<td><code>sim2sim/configs/</code> and <code>maximus/configs/</code></td>
+</tr>
+<tr>
+<td><code>entrypoint.sh</code></td>
+<td><code>circus/dockerfiles/</code></td>
+<td><code>sim2sim/configs/</code> and <code>maximus/configs/</code></td>
+</tr>
+<tr>
+<td><code>scenes/*.yaml</code></td>
+<td><code>circus/resources/scenes/</code></td>
+<td><code>sim2sim/configs/scenes/</code> and <code>maximus/configs/scenes/</code></td>
+</tr>
+<tr>
+<td><code>simulation_configs/</code></td>
+<td><code>circus/resources/config/</code></td>
+<td><code>sim2sim/configs/simulation/</code> and <code>maximus/configs/simulation/</code></td>
+</tr>
+<tr>
+<td>RL Lua configs</td>
+<td><code>simbridge/tools/booster_motion/configs/</code></td>
+<td><code>sim2sim/configs/booster_motion/</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="what-circus-loses">What Circus Loses</h2>
+<p>After this change, <code>circus/resources/</code> contains only:
+- <code>config/fields/*.yaml</code> — standard RoboCup field geometries (fixed by league rules)
+- <code>robots/*/</code> — MuJoCo robot XML assets</p>
+<p>Everything else moves to the application repos. Circus becomes a reusable simulator binary.</p>
+<hr />
+<h2 id="migration-checklist">Migration Checklist</h2>
 <ul>
-<li><strong>Keep</strong>: <code>backends/mujoco.py</code> — lightweight sim-to-sim for fast local iteration (self-contained, no external dependencies)</li>
-<li><strong>Remove</strong>: <code>backends/booster.py</code> — 573 lines of multi-process ROS2 code, shared memory buffers, signal handlers, etc.</li>
+<li>[ ] Add CLI args to Circus: <code>--scene</code>, <code>--simulation-config</code>, <code>--framework-config</code>, <code>--path-constants</code></li>
+<li>[ ] Package <code>circus</code> as conda package (spqr channel)</li>
+<li>[ ] Package <code>simbridge</code> as conda package (spqr channel)</li>
+<li>[ ] Package <code>booster_robotics_sdk_ros2</code> as conda package (spqr channel, ships <code>booster-motion</code>)</li>
+<li>[ ] Add <code>circus</code>, <code>simbridge</code>, <code>booster_robotics_sdk_ros2</code> to sim2sim <code>pixi.toml</code></li>
+<li>[ ] Add <code>circus</code>, <code>simbridge</code>, <code>booster_robotics_sdk_ros2</code> to maximus <code>pixi.toml</code></li>
+<li>[ ] Create <code>sim2sim/configs/</code> with <code>framework_config.yaml</code>, <code>booster.conf</code>, <code>entrypoint.sh</code></li>
+<li>[ ] Create <code>sim2sim/configs/scenes/training_1v1.yaml</code></li>
+<li>[ ] Create <code>sim2sim/configs/simulation/training.yaml</code></li>
+<li>[ ] Move RL Lua configs to <code>sim2sim/configs/booster_motion/</code></li>
+<li>[ ] Add path_constants generation + circus launch to <code>sim2sim/src/main.cpp</code></li>
+<li>[ ] Create <code>maximus/configs/</code> with equivalent files</li>
+<li>[ ] Slim down <code>spqr:booster</code> Dockerfile (remove SDK builds, keep only system deps + supervisord)</li>
+<li>[ ] Remove <code>framework_config.yaml</code>, <code>booster.conf</code>, <code>entrypoint.sh</code> from Circus repo</li>
+<li>[ ] Remove <code>scenes/</code> and <code>simulation_configs/</code> from Circus repo</li>
+<li>[ ] Keep <code>path_constants.yaml</code> in Circus only as a fallback default (for standalone use)</li>
 </ul>
-<p>The Python deploy code stays focused on what it does best (quick MuJoCo testing), while the C++ sim2sim handles the realistic booster-motion pipeline that maps directly to real hardware.</p>
-<h2 id="phase-2-integration-into-spqrbooster2026">Phase 2: Integration into spqrbooster2026</h2>
-<p>After the standalone sim2sim executable works, the same logic can be ported into spqrbooster2026 as a Module:</p>
-<pre><code class="language-cpp">class RLPolicyModule : public Module {
-    Input&lt;ImuState&gt; imuState;          // From Bridge
-    Input&lt;JointState&gt; jointState;      // From Bridge (new output needed)
-    Input&lt;Joystick&gt; joystick;          // From Bridge
-    Output&lt;RCJointTargets&gt; targets;    // New type → BoosterController
-
-    // Holds ONNX model, observation buffer, last_action
-    Policy policy_;
-
-    void update() override {
-        // Build observation from inputs
-        // Run inference
-        // Write to output
-    }
-};
-</code></pre>
-<p>This would replace the current <code>RCVelocity</code>-based flow (which uses booster-motion's built-in gait) with direct joint-level control from the RL policy.</p>
-<p><strong>Changes needed in spqrbooster2026:</strong>
-- Bridge: Add <code>Output&lt;JointState&gt;</code> that exposes raw joint positions/velocities from <code>rt/low_state</code>
-- BoosterController: Add handler for <code>Input&lt;RCJointTargets&gt;</code> that publishes LowCmd via BoosterRobotPortal
-- BoosterRobotPortal: Already has <code>setArmStiffness()</code> pattern for direct joint control — extend to all joints
-- New: <code>RLPolicyModule</code> with ONNX inference</p>
-<h2 id="testing-plan">Testing Plan</h2>
-<h3 id="step-1-verify-dds-connectivity">Step 1: Verify DDS connectivity</h3>
-<p>Build a minimal program that subscribes to <code>rt/low_state</code> and prints IMU + joint data. Confirm data flows from Circus → SimBridge → booster-motion → our subscriber.</p>
-<h3 id="step-2-publish-static-pose">Step 2: Publish static pose</h3>
-<p>Publish a LowCmd with the default standing pose (all joints at default_joint_pos). Confirm the robot holds the pose in Circus.</p>
-<h3 id="step-3-run-policy-with-zero-velocity">Step 3: Run policy with zero velocity</h3>
-<p>Run the full policy with <code>vx=vy=vyaw=0</code>. The robot should stand still (or exhibit minor balance corrections).</p>
-<h3 id="step-4-joystick-control">Step 4: Joystick control</h3>
-<p>Enable joystick input. Walk the robot around the Circus scene using the gamepad.</p>
-<h3 id="step-5-validate-against-python-sim2sim">Step 5: Validate against Python sim2sim</h3>
-<p>Compare joint targets output from the C++ policy node with the Python MuJoCo sim-to-sim backend to verify numerical equivalence.</p>
 
 
 

@@ -2,58 +2,70 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://mydomain.org/mysite/</loc>
-         <lastmod>2026-03-16</lastmod>
+         <lastmod>2026-04-07</lastmod>
+    </url>
+    <url>
+         <loc>https://mydomain.org/mysite/CIRCUS_NO_BOOSTER/</loc>
+         <lastmod>2026-04-07</lastmod>
+    </url>
+    <url>
+         <loc>https://mydomain.org/mysite/LAUNCH_ARCHITECTURE/</loc>
+         <lastmod>2026-04-07</lastmod>
+    </url>
+    <url>
+         <loc>https://mydomain.org/mysite/SIM2SIM_CPP_PLAN/</loc>
+         <lastmod>2026-04-07</lastmod>
     </url>
     <url>
          <loc>https://mydomain.org/mysite/SIM2SIM_INTEGRATION_PLAN/</loc>
-         <lastmod>2026-03-16</lastmod>
+         <lastmod>2026-04-07</lastmod>
     </url>
     <url>
          <loc>https://mydomain.org/mysite/SYSTEM_ARCHITECTURE/</loc>
-         <lastmod>2026-03-16</lastmod>
+         <lastmod>2026-04-07</lastmod>
     </url>
     <url>
          <loc>https://mydomain.org/mysite/colosseum/cartpole/</loc>
-         <lastmod>2026-03-16</lastmod>
+         <lastmod>2026-04-07</lastmod>
     </url>
     <url>
          <loc>https://mydomain.org/mysite/colosseum/getting_started/</loc>
-         <lastmod>2026-03-16</lastmod>
+         <lastmod>2026-04-07</lastmod>
     </url>
     <url>
          <loc>https://mydomain.org/mysite/colosseum/setup/</loc>
-         <lastmod>2026-03-16</lastmod>
+         <lastmod>2026-04-07</lastmod>
     </url>
     <url>
          <loc>https://mydomain.org/mysite/deploy/</loc>
-         <lastmod>2026-03-16</lastmod>
+         <lastmod>2026-04-07</lastmod>
     </url>
     <url>
          <loc>https://mydomain.org/mysite/deploy/ARCHITECTURE/</loc>
-         <lastmod>2026-03-16</lastmod>
+         <lastmod>2026-04-07</lastmod>
     </url>
     <url>
          <loc>https://mydomain.org/mysite/deploy/GUIDE/</loc>
-         <lastmod>2026-03-16</lastmod>
+         <lastmod>2026-04-07</lastmod>
     </url>
     <url>
          <loc>https://mydomain.org/mysite/deploy/OBSERVATIONS/</loc>
-         <lastmod>2026-03-16</lastmod>
+         <lastmod>2026-04-07</lastmod>
     </url>
     <url>
          <loc>https://mydomain.org/mysite/mjlab/overview/</loc>
-         <lastmod>2026-03-16</lastmod>
+         <lastmod>2026-04-07</lastmod>
     </url>
     <url>
          <loc>https://mydomain.org/mysite/mjlab/scene_layer/</loc>
-         <lastmod>2026-03-16</lastmod>
+         <lastmod>2026-04-07</lastmod>
     </url>
     <url>
          <loc>https://mydomain.org/mysite/mjlab/simulation_layer/</loc>
-         <lastmod>2026-03-16</lastmod>
+         <lastmod>2026-04-07</lastmod>
     </url>
     <url>
          <loc>https://mydomain.org/mysite/mjlab/task_layer/</loc>
-         <lastmod>2026-03-16</lastmod>
+         <lastmod>2026-04-07</lastmod>
     </url>
 </urlset>

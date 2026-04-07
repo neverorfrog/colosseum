@@ -19,7 +19,7 @@
       
       
       <link rel="icon" href="../assets/logo.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
       
@@ -975,10 +975,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#message-definitions-in-simbridge" class="md-nav__link">
+  <a href="#booster_interface-message-package-in-simbridge" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Message Definitions (in simbridge)
+        booster_interface Message Package (in simbridge)
       
     </span>
   </a>
@@ -1007,6 +1007,17 @@
     <span class="md-ellipsis">
       
         What It Does
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#internal-module-graph-lua" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Internal Module Graph (Lua)
       
     </span>
   </a>
@@ -1693,9 +1704,11 @@
 <hr />
 <h2 id="simbridge-simulation-bridge">SimBridge (Simulation Bridge)</h2>
 <p><strong>Repository:</strong> <code>external/simbridge/</code></p>
-<p>SimBridge is a ROS2/DDS node that bridges Circus (TCP) with the DDS middleware used by booster-motion and the robot framework.</p>
+<p>SimBridge is a ROS2 node that bridges Circus (TCP) with the ROS2 DDS topics consumed by booster-motion.</p>
 <h3 id="architecture_1">Architecture</h3>
-<p>SimBridge is a standalone ROS2 node running in a Docker container alongside booster-motion. It translates between Circus's TCP/msgpack protocol and DDS topics.</p>
+<p>SimBridge is a standalone ROS2 node running in a Docker container alongside booster-motion. It translates between Circus's TCP/msgpack protocol and ROS2 standard message types.</p>
+<p><strong>Key design choice:</strong> SimBridge has <strong>no dependency on the Booster SDK</strong>. It uses only standard <code>sensor_msgs</code> types (<code>JointState</code>, <code>Imu</code>) on the DDS side. The conversion from these standard types into the Booster SDK's <code>LowState</code> format (with IMU state and per-joint serial motor states) is done entirely inside booster-motion's <code>simulator_out</code> (<code>RsSdkOutput</code>) module. Similarly, booster-motion's <code>simulator_in</code> (<code>RsSdkInput</code>) module converts computed torques back into <code>sensor_msgs/JointState</code> on <code>/booster/ros2_k2_joint_cmd</code> for SimBridge to forward to Circus.</p>
+<p>This means <strong>the policy node never interacts with SimBridge at all</strong> — it only communicates with booster-motion via <code>rt/low_state</code> and <code>rt/joint_ctrl</code>.</p>
 <h3 id="configuration">Configuration</h3>
 <p>Environment variables:</p>
 <pre><code class="language-bash">ROBOT_NAME=team1_Booster-T1_0   # Robot identifier in Circus
@@ -1823,7 +1836,9 @@ JOYSTICK_DEVICE=/dev/input/js0   # Optional gamepad device
 </tr>
 </tbody>
 </table>
-<h3 id="message-definitions-in-simbridge">Message Definitions (in simbridge)</h3>
+<h3 id="booster_interface-message-package-in-simbridge">booster_interface Message Package (in simbridge)</h3>
+<p>The <code>booster_interface</code> ROS2 message package lives in <code>src/msgs/booster_interface/msg/</code>. It is compiled as part of the Docker environment and provides the <strong>shared type definitions</strong> for the Booster SDK DDS topics (<code>rt/low_state</code>, <code>rt/joint_ctrl</code>, etc.).</p>
+<p><strong>Important:</strong> SimBridge's own <code>bridge_node.cpp</code> does NOT publish or subscribe to <code>LowState</code>/<code>LowCmd</code> topics. These type definitions are used by <strong>booster-motion</strong> (running in the same Docker container) via its internal SDK.</p>
 <p><strong>LowState.msg:</strong></p>
 <pre><code>ImuState imu_state
 MotorState[] motor_state_parallel
@@ -1863,12 +1878,29 @@ float32[3] acc    # linear acceleration
 <p>Booster-motion is Booster Robotics' proprietary motion control engine. It is a <strong>closed-source binary</strong> that runs on both the real robot and in simulation. It is the critical middleman between high-level policy commands and low-level motor torques.</p>
 <h3 id="what-it-does">What It Does</h3>
 <ol>
-<li><strong>Reads sensor data</strong> from the simulator (via SimBridge DDS topics) or real hardware</li>
-<li><strong>Publishes <code>rt/low_state</code></strong> — reformatted sensor feedback for any subscriber</li>
-<li><strong>Subscribes to <code>rt/joint_ctrl</code></strong> — receives LowCmd messages with position targets (q, kp, kd)</li>
+<li><strong>Reads sensor data</strong> via module <code>simulator_out</code> (<code>RsSdkOutput</code>) — subscribes to <code>/booster/ros2_k2_joint_states</code> and <code>/booster/ros2_k2_imu</code> (published by SimBridge) and converts them to internal format</li>
+<li><strong>Publishes <code>rt/low_state</code></strong> — reformatted sensor feedback (Booster SDK <code>LowState</code> type) for any subscriber (policy node, spqrbooster2026 Bridge)</li>
+<li><strong>Subscribes to <code>rt/joint_ctrl</code></strong> — receives <code>LowCmd</code> messages with position targets (q, kp, kd) from the policy node</li>
+<li><strong>Runs state estimation</strong> (EKF) and <strong>parallel mechanism conversion</strong> (ankle joints use a parallel linkage; booster-motion converts serial virtual joint positions ↔ parallel motor positions internally)</li>
 <li><strong>Computes PD torques</strong>: <code>τ = kp * (q_target - q_measured) + kd * (dq_target - dq_measured) + τ_feedforward</code></li>
-<li><strong>Publishes torque commands</strong> (<code>ros2_k2_joint_cmd</code>) back to SimBridge, which forwards to Circus</li>
+<li><strong>Publishes torque commands</strong> via module <code>simulator_in</code> (<code>RsSdkInput</code>) → <code>/booster/ros2_k2_joint_cmd</code> (<code>sensor_msgs/JointState</code>, effort field = torques) → SimBridge → Circus</li>
 </ol>
+<h3 id="internal-module-graph-lua">Internal Module Graph (Lua)</h3>
+<p>Booster-motion uses a Lua-configured dataflow graph. Key modules for the RL policy use-case:</p>
+<pre><code>simulator_out (RsSdkOutput)     ← reads /booster/ros2_k2_joint_states + /booster/ros2_k2_imu
+    ↓ joint_states, imu
+joint_map_output / parallel_mech_output   ← parallel mechanism FK (serial→parallel)
+    ↓ joint_states_mapped
+[EKF state estimation, planners, rl_locomotion modules, ...]
+    ↓ motor_pvt_commands
+intercept_motor_cmd (PvtCmdIntercept)     ← merges planner + user commands
+    ↓ motor_pvt_intercepted
+joint_map_input / parallel_mech_input     ← parallel mechanism IK (serial→parallel)
+    ↓ motor_pvt_commands_mapped
+simulator_in (RsSdkInput)       → publishes /booster/ros2_k2_joint_cmd (torques)
+</code></pre>
+<p>When the policy publishes <code>rt/joint_ctrl</code> (LowCmd), booster-motion's internal PD controller uses those q/kp/kd values to compute <code>motor_pvt_commands</code> which feed into this graph.</p>
+<p><strong>Note:</strong> The <code>rl_locomotion</code> module (<code>librl_locomotion.so</code>) is Booster's <strong>own built-in RL controller</strong> — not our external policy. Our policy replaces it by publishing position targets directly on <code>rt/joint_ctrl</code>.</p>
 <h3 id="execution">Execution</h3>
 <pre><code class="language-bash"># Launch script: booster-simulate-run.sh
 export LD_LIBRARY_PATH=$(pwd)/lib:$(pwd)/lib-usr-local:$(pwd)/lib-x86_64-linux-gnu:$LD_LIBRARY_PATH
@@ -1909,9 +1941,9 @@ sudo LD_LIBRARY_PATH=$LD_LIBRARY_PATH ./booster-motion -mode sim -config ./confi
 <td>Joystick passthrough</td>
 </tr>
 <tr>
-<td><code>ros2_k2_joint_cmd</code></td>
-<td><code>JointState</code></td>
-<td>Computed torques (→ SimBridge → Circus)</td>
+<td><code>/booster/ros2_k2_joint_cmd</code></td>
+<td><code>sensor_msgs/JointState</code> (effort = torques)</td>
+<td>Computed torques → SimBridge → Circus (sim only)</td>
 </tr>
 </tbody>
 </table>
@@ -1927,13 +1959,18 @@ sudo LD_LIBRARY_PATH=$LD_LIBRARY_PATH ./booster-motion -mode sim -config ./confi
 <tbody>
 <tr>
 <td><code>rt/joint_ctrl</code></td>
-<td><code>LowCmd</code></td>
+<td><code>LowCmd</code> (booster_interface)</td>
 <td>Position targets with PD gains from policy</td>
 </tr>
 <tr>
-<td>Simulator sensor topics</td>
-<td>Various</td>
-<td>Sensor data from SimBridge</td>
+<td><code>/booster/ros2_k2_joint_states</code></td>
+<td><code>sensor_msgs/JointState</code></td>
+<td>Joint positions/velocities from SimBridge (sim only)</td>
+</tr>
+<tr>
+<td><code>/booster/ros2_k2_imu</code></td>
+<td><code>sensor_msgs/Imu</code></td>
+<td>IMU data from SimBridge (sim only)</td>
 </tr>
 </tbody>
 </table>
@@ -2229,6 +2266,7 @@ target_link_libraries(target booster::booster_robotics_sdk)
 <th>Publisher</th>
 <th>Subscriber(s)</th>
 <th>Message Type</th>
+<th>Layer</th>
 </tr>
 </thead>
 <tbody>
@@ -2236,52 +2274,64 @@ target_link_libraries(target booster::booster_robotics_sdk)
 <td><code>rt/low_state</code></td>
 <td>booster-motion</td>
 <td>Policy node, Bridge</td>
-<td><code>LowState</code></td>
+<td><code>booster_interface/LowState</code></td>
+<td>Booster SDK DDS</td>
 </tr>
 <tr>
 <td><code>rt/joint_ctrl</code></td>
 <td>Policy node</td>
 <td>booster-motion</td>
-<td><code>LowCmd</code></td>
+<td><code>booster_interface/LowCmd</code></td>
+<td>Booster SDK DDS</td>
 </tr>
 <tr>
 <td><code>rt/odometer_state</code></td>
 <td>booster-motion</td>
 <td>Bridge</td>
-<td><code>Odometer</code></td>
+<td><code>booster_interface/Odometer</code></td>
+<td>Booster SDK DDS</td>
 </tr>
 <tr>
 <td><code>rt/fall_down</code></td>
 <td>booster-motion</td>
 <td>Bridge</td>
-<td><code>FallDownState</code></td>
+<td><code>booster_interface/FallDownState</code></td>
+<td>Booster SDK DDS</td>
 </tr>
 <tr>
 <td><code>rt/remote_controller_state</code></td>
 <td>booster-motion</td>
 <td>Bridge, Policy</td>
-<td><code>RemoteControllerState</code></td>
+<td><code>booster_interface/RemoteControllerState</code></td>
+<td>Booster SDK DDS</td>
 </tr>
 <tr>
-<td><code>ros2_k2_joint_cmd</code></td>
+<td><code>/booster/ros2_k2_joint_cmd</code></td>
 <td>booster-motion</td>
-<td>SimBridge (sim only)</td>
-<td><code>JointState</code></td>
+<td>SimBridge</td>
+<td><code>sensor_msgs/JointState</code> (effort=torques)</td>
+<td>ROS2 standard (sim only)</td>
 </tr>
 <tr>
-<td><code>ros2_k2_joint_states</code></td>
-<td>SimBridge (sim only)</td>
+<td><code>/booster/ros2_k2_joint_states</code></td>
+<td>SimBridge</td>
 <td>booster-motion</td>
-<td><code>JointState</code></td>
+<td><code>sensor_msgs/JointState</code></td>
+<td>ROS2 standard (sim only)</td>
 </tr>
 <tr>
-<td><code>ros2_k2_imu</code></td>
-<td>SimBridge (sim only)</td>
+<td><code>/booster/ros2_k2_imu</code></td>
+<td>SimBridge</td>
 <td>booster-motion</td>
-<td><code>Imu</code></td>
+<td><code>sensor_msgs/Imu</code></td>
+<td>ROS2 standard (sim only)</td>
 </tr>
 </tbody>
 </table>
+<p><strong>Two distinct type layers exist in simulation:</strong>
+- <strong>Booster SDK DDS</strong> (<code>rt/*</code> topics): used between the policy node and booster-motion — these use <code>booster_interface</code> types
+- <strong>ROS2 standard</strong> (<code>/booster/ros2_k2_*</code> topics): used between booster-motion and SimBridge — these use <code>sensor_msgs</code> types</p>
+<p>The policy node only ever touches the first layer. SimBridge only touches the second. Booster-motion bridges both layers internally.</p>
 <h3 id="lowstate-message-structure">LowState Message Structure</h3>
 <pre><code>LowState:
   imu_state:
