@@ -72,7 +72,9 @@ def scene_cfg(maze: Maze, num_envs: int) -> SceneCfg:
 
 
 def abstractions_cfg(
-  maze: Maze, resolution_factor: int = 1
+  maze: Maze,
+  resolution_factor: int = 3,
+  wall_center_weight: float = 2.0,
 ) -> dict[str, AbstractionTermCfg]:
   grid_frame = maze.build_upsampled_grid_frame(resolution_factor)
   obstacle_mask = maze.build_obstacle_mask(resolution_factor)
@@ -81,6 +83,7 @@ def abstractions_cfg(
       grid_frame=grid_frame,
       obstacle_mask=obstacle_mask,
       direction_method="gradient",
+      wall_center_weight=wall_center_weight,
     ),
   }
 
@@ -88,7 +91,8 @@ def abstractions_cfg(
 def t1_maze_env_cfg(
   scenario: str = "umaze",
   num_envs: int = 64,
-  resolution_factor: int = 1,
+  resolution_factor: int = 3,
+  wall_center_weight: float = 2.0,
   play: bool = False,
 ) -> AbstractionBasedEnvCfg:
   """Create Booster T1 maze navigation task configuration.
@@ -116,7 +120,7 @@ def t1_maze_env_cfg(
     terminations=terminations,
     events=events,
     curriculum={} if play else curriculum,
-    abstractions=abstractions_cfg(maze, resolution_factor),
+    abstractions=abstractions_cfg(maze, resolution_factor, wall_center_weight),
     metrics={},
     decimation=4,
     episode_length_s=90.0,

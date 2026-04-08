@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, Optional
 
@@ -53,6 +54,7 @@ class GridAbstractionTermCfg(AbstractionTermCfg):
   grid_frame: GridFrame
   obstacle_mask: Optional[torch.Tensor] = None
   direction_method: Literal["harmonic", "gradient"] = "gradient"
+  wall_center_weight: float = 2.0
   debug_vis: bool = True
 
   def build(self, env: AbstractionBasedEnv) -> GridAbstraction:
@@ -104,6 +106,8 @@ class GridAbstraction(AbstractionTerm):
     self.movement_costs = torch.tensor(
       [self.CARDINAL_COST] * 4, device=self.device, dtype=torch.float32
     )
+
+    self.wall_distance_map = self._compute_wall_distance_map()
 
   # ── Lifecycle ───────────────────────────────────────────────────────────────
 
@@ -160,6 +164,36 @@ class GridAbstraction(AbstractionTerm):
 
     return self._dijkstra_parallel(cost_map)
 
+  def _compute_wall_distance_map(self) -> torch.Tensor:
+    """Multi-source BFS from all wall cells to compute nearest-wall distance.
+
+    Runs on CPU once at build time (obstacle mask is env-independent).
+
+    Returns:
+        [rows, cols] float tensor on self.device.
+        Obstacle cells have distance 0; free cells have hop-count to nearest wall.
+    """
+    rows, cols = self.grid_frame.num_rows, self.grid_frame.num_cols
+    dist = torch.full((rows, cols), float("inf"))
+    obstacle_cpu = self.obstacle_mask.cpu()
+    dist[obstacle_cpu] = 0.0
+
+    queue: deque[tuple[int, int]] = deque()
+    for idx in obstacle_cpu.nonzero():
+      queue.append((idx[0].item(), idx[1].item()))
+
+    offsets = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+    while queue:
+      ci, cj = queue.popleft()
+      cd = dist[ci, cj].item()
+      for di, dj in offsets:
+        ni, nj = ci + di, cj + dj
+        if 0 <= ni < rows and 0 <= nj < cols and torch.isinf(dist[ni, nj]):
+          dist[ni, nj] = cd + 1
+          queue.append((ni, nj))
+
+    return dist.to(device=self.device)
+
   def _dijkstra_parallel(self, cost_map: torch.Tensor) -> torch.Tensor:
     rows = self.grid_frame.num_rows
     cols = self.grid_frame.num_cols
@@ -189,7 +223,7 @@ class GridAbstraction(AbstractionTerm):
       visited[env_range, current_i, current_j] = True
 
       for dir_idx, (di, dj) in enumerate(self.neighbor_offsets):
-        move_cost = self.movement_costs[dir_idx].item()
+        base_cost = self.movement_costs[dir_idx].item()
         ni = current_i + di
         nj = current_j + dj
         in_bounds = (ni >= 0) & (ni < rows) & (nj >= 0) & (nj < cols)
@@ -200,6 +234,9 @@ class GridAbstraction(AbstractionTerm):
           ni_val, nj_val = int(ni[env_idx].item()), int(nj[env_idx].item())
           if is_obstacle[env_idx, ni_val, nj_val] or visited[env_idx, ni_val, nj_val]:
             continue
+          wall_dist = self.wall_distance_map[ni_val, nj_val].item()
+          wall_penalty = self.cfg.wall_center_weight / (wall_dist + 1.0)
+          move_cost = base_cost + wall_penalty
           new_cost = current_costs[env_idx] + move_cost
           if new_cost < cost_map[env_idx, ni_val, nj_val]:
             cost_map[env_idx, ni_val, nj_val] = new_cost
