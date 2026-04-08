@@ -1,80 +1,99 @@
 """Empirical normalization for observations (from rsl-rl)."""
 
+from abc import abstractmethod
+
 import torch
 import torch.nn as nn
 
 
-class EmpiricalNormalization(nn.Module):
-    """Normalize mean and variance of values based on empirical values.
+class ObsNormalizer(nn.Module):
+  """Base class for observation normalizers."""
 
-    Adapted from RSL-RL's EmpiricalNormalization for use with SAC.
+  @abstractmethod
+  def update(self, x: torch.Tensor) -> None: ...
+
+
+class IdentityNormalizer(ObsNormalizer):
+  """Pass-through normalizer (no-op)."""
+
+  def forward(self, x: torch.Tensor) -> torch.Tensor:
+    return x
+
+  def update(self, x: torch.Tensor) -> None:
+    pass
+
+
+class EmpiricalNormalization(ObsNormalizer):
+  """Normalize mean and variance of values based on empirical values.
+
+  Adapted from RSL-RL's EmpiricalNormalization for use with SAC.
+  """
+
+  def __init__(self, shape, eps=1e-2, until=None, device=None):
+    """Initialize EmpiricalNormalization module.
+
+    Args:
+        shape (int or tuple of int): Shape of input values except batch axis.
+        eps (float): Small value for stability.
+        until (int or None): If this arg is specified, the module learns input values until the sum of batch sizes
+            exceeds it.
+        device (str or torch.device, optional): Device to place buffers on. If None, uses CPU.
+
+    Note: The normalization parameters are computed over the whole batch, not for each environment separately.
     """
+    super().__init__()
+    self.eps: float = eps
+    self.until: int | None = until
 
-    def __init__(self, shape, eps=1e-2, until=None, device=None):
-        """Initialize EmpiricalNormalization module.
+    # Create buffers on specified device
+    if device is None:
+      device = torch.device("cpu")
+    elif isinstance(device, str):
+      device = torch.device(device)
 
-        Args:
-            shape (int or tuple of int): Shape of input values except batch axis.
-            eps (float): Small value for stability.
-            until (int or None): If this arg is specified, the module learns input values until the sum of batch sizes
-                exceeds it.
-            device (str or torch.device, optional): Device to place buffers on. If None, uses CPU.
+    self._mean: torch.Tensor
+    self._var: torch.Tensor
+    self._std: torch.Tensor
+    self.count: torch.Tensor
+    self.register_buffer("_mean", torch.zeros(shape, device=device).unsqueeze(0))
+    self.register_buffer("_var", torch.ones(shape, device=device).unsqueeze(0))
+    self.register_buffer("_std", torch.ones(shape, device=device).unsqueeze(0))
+    self.register_buffer("count", torch.tensor(0, dtype=torch.long, device=device))
 
-        Note: The normalization parameters are computed over the whole batch, not for each environment separately.
-        """
-        super().__init__()
-        self.eps: float = eps
-        self.until: int | None = until
+  @property
+  def mean(self):
+    return self._mean.squeeze(0).clone()
 
-        # Create buffers on specified device
-        if device is None:
-            device = torch.device("cpu")
-        elif isinstance(device, str):
-            device = torch.device(device)
+  @property
+  def std(self):
+    return self._std.squeeze(0).clone()
 
-        self._mean: torch.Tensor
-        self._var: torch.Tensor
-        self._std: torch.Tensor
-        self.count: torch.Tensor
-        self.register_buffer("_mean", torch.zeros(shape, device=device).unsqueeze(0))
-        self.register_buffer("_var", torch.ones(shape, device=device).unsqueeze(0))
-        self.register_buffer("_std", torch.ones(shape, device=device).unsqueeze(0))
-        self.register_buffer("count", torch.tensor(0, dtype=torch.long, device=device))
+  def forward(self, x):
+    """Normalize mean and variance of values based on empirical values."""
 
-    @property
-    def mean(self):
-        return self._mean.squeeze(0).clone()
+    return (x - self._mean) / (self._std + self.eps)
 
-    @property
-    def std(self):
-        return self._std.squeeze(0).clone()
+  @torch.jit.unused
+  def update(self, x: torch.Tensor) -> None:
+    """Learn input values without computing the output values of them"""
 
-    def forward(self, x):
-        """Normalize mean and variance of values based on empirical values."""
+    if not self.training:
+      return
+    if self.until is not None and self.count >= self.until:
+      return
 
-        return (x - self._mean) / (self._std + self.eps)
+    count_x = x.shape[0]
+    self.count += count_x
+    rate = count_x / self.count
+    var_x = torch.var(x, dim=0, unbiased=False, keepdim=True)
+    mean_x = torch.mean(x, dim=0, keepdim=True)
+    delta_mean = mean_x - self._mean
+    self._mean += rate * delta_mean
+    self._var += rate * (var_x - self._var + delta_mean * (mean_x - self._mean))
+    self._std = torch.sqrt(self._var)
 
-    @torch.jit.unused
-    def update(self, x):
-        """Learn input values without computing the output values of them"""
+  @torch.jit.unused
+  def inverse(self, y):
+    """De-normalize values based on empirical values."""
 
-        if not self.training:
-            return
-        if self.until is not None and self.count >= self.until:
-            return
-
-        count_x = x.shape[0]
-        self.count += count_x
-        rate = count_x / self.count
-        var_x = torch.var(x, dim=0, unbiased=False, keepdim=True)
-        mean_x = torch.mean(x, dim=0, keepdim=True)
-        delta_mean = mean_x - self._mean
-        self._mean += rate * delta_mean
-        self._var += rate * (var_x - self._var + delta_mean * (mean_x - self._mean))
-        self._std = torch.sqrt(self._var)
-
-    @torch.jit.unused
-    def inverse(self, y):
-        """De-normalize values based on empirical values."""
-
-        return y * (self._std + self.eps) + self._mean
+    return y * (self._std + self.eps) + self._mean

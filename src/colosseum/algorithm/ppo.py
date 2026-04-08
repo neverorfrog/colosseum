@@ -27,6 +27,7 @@ from loguru import logger
 from mjlab.envs import ManagerBasedRlEnv
 
 from colosseum.algorithm.base_algorithm import BaseAlgorithm
+from colosseum.algorithm.normalization import EmpiricalNormalization, IdentityNormalizer
 from colosseum.algorithm.ppo_networks import PpoActor, PpoValueNet
 from colosseum.algorithm.rollout_buffer import RolloutBuffer
 from colosseum.config.types.algorithm import PpoConfig, register_algorithm
@@ -93,7 +94,7 @@ class PPO(BaseAlgorithm):
     self.critic_obs_dim = self.obs_dim["critic"]
     self.action_dim = int(np.prod(self.env.single_action_space.shape))
 
-    self.actor = PpoActor(
+    self.actor: PpoActor = PpoActor(
       self.actor_obs_dim,
       self.action_dim,
       self.config.actor,
@@ -126,19 +127,9 @@ class PPO(BaseAlgorithm):
     )
 
   def _build_normalizer(self) -> None:
-    from colosseum.algorithm.normalization import EmpiricalNormalization
-
     assert isinstance(self.config, PpoConfig)
 
     if not self.config.obs_normalization:
-
-      class IdentityNormalizer(torch.nn.Module):
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-          return x
-
-        def update(self, _x: torch.Tensor) -> None:
-          pass
-
       self.actor_obs_normalizer = IdentityNormalizer()
       self.critic_obs_normalizer = IdentityNormalizer()
     else:
@@ -168,7 +159,6 @@ class PPO(BaseAlgorithm):
     total_timesteps = self.config.learning_steps
     steps_per_iter = self.config.num_steps_per_env * self.env.num_envs
     num_iterations = total_timesteps // steps_per_iter
-    start_iteration = self.global_step // steps_per_iter
 
     # Convert log_interval from env steps → PPO iterations (same unit as SAC's step counter)
     # This makes the W&B x-axis (global_step = total env transitions) consistent with SAC.
@@ -195,7 +185,7 @@ class PPO(BaseAlgorithm):
     # and crashing the adaptive learning rate.
     if self.config.obs_normalization:
       prewarm_actor_obs = self._prewarm_actor_obs(current_actor_obs)
-      self.actor_obs_normalizer.update(prewarm_actor_obs)
+      self.actor_obs_normalizer.update(prewarm_actor_obs) 
       self.critic_obs_normalizer.update(current_critic_obs)
 
     # Randomize initial episode lengths (RSL-RL pattern) so environments
