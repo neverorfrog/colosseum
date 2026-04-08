@@ -1,5 +1,13 @@
 """Debug visualization helpers for the dribbling task."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+  from mjlab.envs import ManagerBasedRlEnv
+
+
 def draw_camera_ball_overlay(env, vis) -> None:
   """Draw head camera frame and arrow to ball in the mjlab viewer.
 
@@ -25,3 +33,17 @@ def draw_camera_ball_overlay(env, vis) -> None:
 
   vis.add_frame(position=cam_pos, rotation_matrix=optical_mat, scale=0.1, axis_radius=0.005, alpha=0.5)
   vis.add_arrow(start=cam_pos, end=ball_pos, color=(1.0, 0.85, 0.0, 0.8), width=0.01)
+
+
+class DribblingViz:
+  """Viz callback: draws head camera frame + arrow to ball.
+
+  Registered via RmaBasedEnvCfg.viz_callbacks so DribblingEnv is not needed.
+  factory(env) → DribblingViz instance with debug_vis(vis).
+  """
+
+  def __init__(self, env: ManagerBasedRlEnv) -> None:
+    self._env = env
+
+  def debug_vis(self, vis) -> None:
+    draw_camera_ball_overlay(self._env, vis)

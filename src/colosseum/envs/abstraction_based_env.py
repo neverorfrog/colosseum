@@ -19,14 +19,14 @@ from colosseum.managers.abstraction_manager import (
 class AbstractionBasedEnvCfg(ManagerBasedRlEnvCfg):
   """Configuration for AbstractionBasedEnv."""
 
-  class_type: ClassVar[type] = None  # set after class definition
+  class_type: ClassVar[type[AbstractionBasedEnv]]  # set after class definition
   abstractions: dict[str, AbstractionTermCfg]
 
 
 class AbstractionBasedEnv(ManagerBasedRlEnv):
   """An environment that uses abstraction-based guidance."""
 
-  cfg: AbstractionBasedEnvCfg
+  cfg: AbstractionBasedEnvCfg  # type: ignore[override]
 
   def get_observations(self) -> dict:
     return self.observation_manager.compute()

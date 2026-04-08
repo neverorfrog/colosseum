@@ -37,6 +37,7 @@ class RolloutBuffer:
         action_dim: int,
         device: torch.device,
         extras: dict[str, int] | None = None,
+        privileged_obs_dims: dict[str, int] | None = None,
     ) -> None:
         self.num_envs = num_envs
         self.num_steps = num_steps
@@ -67,6 +68,16 @@ class RolloutBuffer:
                     num_steps, num_envs, dim, device=device
                 )
 
+        # Privileged obs storage (RMA): each group stored separately so
+        # encoders can re-run with gradients during learning.
+        # Maps group_name → [T, N, group_dim] tensor.
+        self._privileged_obs: dict[str, torch.Tensor] = {}
+        if privileged_obs_dims:
+            for group_name, dim in privileged_obs_dims.items():
+                self._privileged_obs[group_name] = torch.zeros(
+                    num_steps, num_envs, dim, device=device
+                )
+
     def add(
         self,
         actor_obs: torch.Tensor,
@@ -79,6 +90,7 @@ class RolloutBuffer:
         action_means: torch.Tensor,
         action_stds: torch.Tensor,
         extras: dict[str, torch.Tensor] | None = None,
+        privileged_obs: dict[str, torch.Tensor] | None = None,
     ) -> None:
         """Store one step of transition data.
 
@@ -87,6 +99,9 @@ class RolloutBuffer:
         Args:
             extras: Optional dict of extra tensors to store (e.g., GT directions).
                     Keys must match names registered in __init__ extras parameter.
+            privileged_obs: Optional dict of privileged obs tensors (RMA).
+                    Keys must match groups registered in __init__ privileged_obs_dims.
+                    Stored raw so encoders can re-run with gradients at learning time.
         """
         self.actor_obs[self.step].copy_(actor_obs)
         self.critic_obs[self.step].copy_(critic_obs)
@@ -104,6 +119,11 @@ class RolloutBuffer:
         if extras:
             for name, data in extras.items():
                 self._extras[name][self.step].copy_(data)
+
+        # Store privileged obs groups separately (RMA)
+        if privileged_obs:
+            for group_name, data in privileged_obs.items():
+                self._privileged_obs[group_name][self.step].copy_(data)
 
         self.step += 1
 
@@ -185,6 +205,11 @@ class RolloutBuffer:
             name: tensor.flatten(0, 1) for name, tensor in self._extras.items()
         }
 
+        # Flatten privileged obs groups (RMA)
+        flat_privileged_obs = {
+            group: tensor.flatten(0, 1) for group, tensor in self._privileged_obs.items()
+        }
+
         # Single permutation reused across epochs (RSL-RL pattern)
         indices = torch.randperm(
             num_mini_batches * mini_batch_size, device=self.device
@@ -217,6 +242,14 @@ class RolloutBuffer:
                 # Include extras in batch (shuffled with same indices)
                 for name, flat_tensor in flat_extras.items():
                     batch[name] = flat_tensor[batch_idx]
+
+                # Include privileged obs groups (RMA) — re-encoded with
+                # gradients during learning, never pre-composed with actor obs
+                if flat_privileged_obs:
+                    batch["privileged_obs"] = {
+                        group: flat_tensor[batch_idx]
+                        for group, flat_tensor in flat_privileged_obs.items()
+                    }
 
                 yield batch
 

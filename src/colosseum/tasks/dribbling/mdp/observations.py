@@ -20,6 +20,15 @@ def ball_velocity(env: ManagerBasedRlEnv) -> torch.Tensor:
   return env.scene["ball"].data.root_link_lin_vel_w[:, :3]
 
 
+def ball_velocity_xy(env: ManagerBasedRlEnv) -> torch.Tensor:
+  """Ball linear velocity XY in world frame. Shape (N, 2).
+
+  Used as encoder input (privileged_ball group). XY only matches the plan's
+  4D encoder input: ball_pos_xy(2) + ball_vel_xy(2).
+  """
+  return env.scene["ball"].data.root_link_lin_vel_w[:, :2]
+
+
 def base_height(env: ManagerBasedRlEnv) -> torch.Tensor:
   """Robot base height above ground. Shape (N, 1)."""
   return env.scene["robot"].data.root_link_pos_w[:, 2:3]
@@ -48,8 +57,3 @@ def foot_ball_contact_force(env: ManagerBasedRlEnv, sensor_name: str) -> torch.T
   assert sensor_data.force is not None
   force = sensor_data.force.flatten(start_dim=1)  # [B, N*3]
   return force.norm(dim=-1, keepdim=True)
-
-
-def z_enc(env: ManagerBasedRlEnv) -> torch.Tensor:
-  """Depth encoder latent — implicit ball position + occlusion state. Shape (N, z_enc_dim)."""
-  return env.z_enc
