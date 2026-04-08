@@ -106,3 +106,28 @@ def track_angular_velocity(
   asset: Entity = env.scene[asset_cfg.name]
   actual_ang_vel = asset.data.root_link_ang_vel_w[:, 2]
   return torch.exp(-torch.square(commanded_ang_vel - actual_ang_vel))
+
+
+def heading_alignment(
+  env: ManagerBasedRlEnv,
+  command_name: str,
+) -> torch.Tensor:
+  """Reward for heading alignment with commanded direction.
+
+  The commanded velocity in body frame encodes heading error:
+    vx_cmd / |v_cmd| = cos(heading_error)
+
+  Returns cos(heading_error) in [-1, 1]:
+    +1 when robot faces the commanded direction (aligned)
+     0 when 90° off
+    -1 when backwards
+
+  This directly breaks the sideways-walking local optimum where the body-frame
+  command adapts to the robot's orientation, making sideways motion appear
+  indistinguishable from forward motion to other reward terms.
+  """
+  command = env.command_manager.get_command(command_name)
+  assert command is not None, f"Command '{command_name}' not found."
+  vel_2d = command[:, :2]  # (vx_cmd, vy_cmd) in body frame
+  vel_norm = vel_2d.norm(dim=-1).clamp(min=1e-6)
+  return vel_2d[:, 0] / vel_norm  # cos(heading_error)
