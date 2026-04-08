@@ -1,4 +1,5 @@
 from mjlab.sensor import (
+  CameraSensorCfg,
   ContactMatch,
   ContactSensorCfg,
   GridPatternCfg,
@@ -8,7 +9,13 @@ from mjlab.sensor import (
   TerrainHeightSensorCfg,
 )
 
-from .constants import BASE_BODY_NAME, FOOT_GEOM_NAMES
+from .constants import (
+  BASE_BODY_NAME,
+  FOOT_GEOM_NAMES,
+  HEAD_CAMERA_HEIGHT,
+  HEAD_CAMERA_NAME,
+  HEAD_CAMERA_WIDTH,
+)
 
 ##
 # Contact Sensor Configurations (for observation/reward)
@@ -138,4 +145,20 @@ TERRAIN_SCAN = RayCastSensorCfg(
   exclude_parent_body=True,
   debug_vis=True,
   viz=RayCastSensorCfg.VizCfg(show_normals=True),
+)
+
+##
+# Camera Sensor Configurations
+##
+
+# Head-mounted RGB-D camera wrapping the calibrated D455 defined in
+# get_spec_with_head_camera(). Parameters match mjlab's booster_t1_rgbd_camera demo.
+HEAD_RGBD_SENSOR = CameraSensorCfg(
+  name="head_rgbd",
+  camera_name=f"robot/{HEAD_CAMERA_NAME}",
+  width=HEAD_CAMERA_WIDTH,
+  height=HEAD_CAMERA_HEIGHT,
+  data_types=("rgb", "depth"),
+  use_textures=True,
+  use_shadows=False,
 )

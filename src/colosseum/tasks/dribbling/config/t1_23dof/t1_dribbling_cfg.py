@@ -1,10 +1,4 @@
-"""Booster T1 dribbling environment configurations.
-
-The dribbling task builds on the flat velocity task but replaces random
-velocity commands with a BallApproachCommand that points the robot toward
-a soccer ball.  The ball is a free-floating entity added to the scene and
-is respawned at a random position (1–3 m from the robot) on every episode.
-"""
+"""Booster T1 dribbling environment configurations."""
 
 from dataclasses import dataclass, field
 
@@ -15,7 +9,7 @@ from mjlab.viewer import ViewerConfig
 
 from colosseum.assets.ball.ball_spec import get_ball_cfg
 from colosseum.config.types.task import TaskConfig, register_task
-from colosseum.tasks.dribbling.env import DribblingEnvCfg
+from colosseum.envs.rma_based_env import RmaBasedEnvCfg
 from colosseum.robots.t1_23dof.constants import BASE_BODY_NAME, get_robot_cfg
 from colosseum.robots.t1_23dof.sensors import (
   FEET_GROUND_CONTACT_SENSOR,
@@ -26,6 +20,8 @@ from colosseum.robots.t1_23dof.sensors import (
   NONFOOT_GROUND_CONTACT_SENSOR,
   SELF_COLLISION_SENSOR,
 )
+from colosseum.tasks.dribbling.mdp.rma_terms import PrivilegedRmaTermCfg
+from colosseum.tasks.dribbling.viz import DribblingViz
 
 from .algo_cfg import booster_t1_dribbling_ppo_cfg
 from .cact_cfg import actions, commands, curriculum, terminations
@@ -46,7 +42,10 @@ def scene_cfg(play: bool = False) -> SceneCfg:
       NONFOOT_GROUND_CONTACT_SENSOR,
       SELF_COLLISION_SENSOR,
     ),
-    entities={"ball": get_ball_cfg(), "robot": get_robot_cfg(foot_self_collision=True, with_head_camera=True)},
+    entities={
+      "ball": get_ball_cfg(),
+      "robot": get_robot_cfg(foot_self_collision=True, with_head_camera=True),
+    },
     num_envs=1,
     extent=10.0,
   )
@@ -77,15 +76,8 @@ def sim_cfg() -> SimulationCfg:
   )
 
 
-def booster_t1_dribbling_env_cfg(play: bool = False) -> DribblingEnvCfg:
-  """Create Booster T1 dribbling task configuration.
-
-  Starts from the flat velocity config and:
-  - Adds a soccer ball as a free-floating scene entity.
-  - Replaces the random velocity command with BallApproachCommand.
-  - Adds a reset event that respawns the ball at a random position each episode.
-  """
-  cfg = DribblingEnvCfg(
+def booster_t1_dribbling_env_cfg(play: bool = False) -> RmaBasedEnvCfg:
+  cfg = RmaBasedEnvCfg(
     scene=scene_cfg(play),
     observations=observations,
     actions=actions,
@@ -99,6 +91,13 @@ def booster_t1_dribbling_env_cfg(play: bool = False) -> DribblingEnvCfg:
     sim=sim_cfg(),
     decimation=4,
     episode_length_s=20.0,
+    encoders={
+      "ball": PrivilegedRmaTermCfg(
+        obs_group="privileged_ball",
+        latent_dim=8,
+      ),
+    },
+    # viz_callbacks=[("camera_ball", DribblingViz)],
   )
 
   if cfg.scene.terrain is not None and cfg.scene.terrain.terrain_generator is not None:
@@ -124,7 +123,7 @@ def booster_t1_dribbling_env_cfg(play: bool = False) -> DribblingEnvCfg:
 @dataclass(frozen=True)
 class T1DribblingTask(TaskConfig):
   name: str = "t1-dribbling"
-  env: DribblingEnvCfg = field(default_factory=booster_t1_dribbling_env_cfg)
+  env: RmaBasedEnvCfg = field(default_factory=booster_t1_dribbling_env_cfg)
 
   @property
   def train_env_cfg(self):

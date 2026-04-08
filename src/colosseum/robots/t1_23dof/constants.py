@@ -51,25 +51,70 @@ if _MJLAB_AVAILABLE:
 
 # Head camera constants (pose relative to H2 body, matching real D455 mount)
 HEAD_CAMERA_NAME = "d455_color"
-HEAD_CAMERA_FOVY = 60.0  # degrees
+HEAD_CAMERA_WIDTH = 1280
+HEAD_CAMERA_HEIGHT = 720
+
+# RealSense D455 calibrated intrinsics.
+import numpy as np
+
+HEAD_CAMERA_K = np.array(
+  [
+    [646.0612, 0.0, 644.3064],
+    [0.0, 645.1986, 357.1254],
+    [0.0, 0.0, 1.0],
+  ],
+  dtype=np.float64,
+)
+
+HEAD_CAMERA_FOVY = float(
+  np.degrees(2.0 * np.arctan(HEAD_CAMERA_HEIGHT / (2.0 * HEAD_CAMERA_K[1, 1])))
+)
+
+
+def _set_mujoco_camera_intrinsics(
+  cam: mujoco.MjsCamera,
+  width: int,
+  height: int,
+  fx: float,
+  fy: float,
+  cx: float,
+  cy: float,
+) -> None:
+  """Set calibrated intrinsics on a MuJoCo spec camera."""
+  cam.resolution[:] = (width, height)
+  if hasattr(cam, "focalpixel") and hasattr(cam, "principalpixel"):
+    setattr(cam, "focalpixel", np.array([fx, fy], dtype=np.float64))
+    setattr(cam, "principalpixel", np.array([cx, cy], dtype=np.float64))
+  else:
+    cam.fovy = float(np.degrees(2.0 * np.arctan(height / (2.0 * fy))))
 
 
 if _MJLAB_AVAILABLE:
 
   def get_spec_with_head_camera() -> mujoco.MjSpec:
-    """T1 spec with a forward-facing camera on the H2 head body.
+    """T1 spec with a calibrated D455 RGB-D camera on the H2 head body.
 
-    The camera pose matches the D455 mount used in rgb_test.py.
-    No pixel resolution is set — the camera is used for analytical
-    FOV rewards via cam_xpos / cam_xmat only.
+    Camera pose, resolution, and intrinsics match the real D455 mount
+    as defined in mjlab's booster_t1_rgbd_camera.py demo.
     """
     spec = get_spec()
     h2 = spec.body("H2")
-    h2.add_camera(
+    cam = h2.add_camera(
       name=HEAD_CAMERA_NAME,
       pos=(0.074, 0.0, 0.11),
       quat=(0.5, 0.5, -0.5, -0.5),
       fovy=HEAD_CAMERA_FOVY,
+      resolution=[HEAD_CAMERA_WIDTH, HEAD_CAMERA_HEIGHT],
+      proj=mujoco.mjtProjection.mjPROJ_PERSPECTIVE,
+    )
+    _set_mujoco_camera_intrinsics(
+      cam=cam,
+      width=HEAD_CAMERA_WIDTH,
+      height=HEAD_CAMERA_HEIGHT,
+      fx=float(HEAD_CAMERA_K[0, 0]),
+      fy=float(HEAD_CAMERA_K[1, 1]),
+      cx=float(HEAD_CAMERA_K[0, 2]),
+      cy=float(HEAD_CAMERA_K[1, 2]),
     )
     return spec
 

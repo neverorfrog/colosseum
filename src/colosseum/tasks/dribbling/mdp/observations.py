@@ -20,6 +20,15 @@ def ball_velocity(env: ManagerBasedRlEnv) -> torch.Tensor:
   return env.scene["ball"].data.root_link_lin_vel_w[:, :3]
 
 
+def ball_velocity_xy(env: ManagerBasedRlEnv) -> torch.Tensor:
+  """Ball linear velocity XY in world frame. Shape (N, 2).
+
+  Used as encoder input (privileged_ball group). XY only matches the plan's
+  4D encoder input: ball_pos_xy(2) + ball_vel_xy(2).
+  """
+  return env.scene["ball"].data.root_link_lin_vel_w[:, :2]
+
+
 def base_height(env: ManagerBasedRlEnv) -> torch.Tensor:
   """Robot base height above ground. Shape (N, 1)."""
   return env.scene["robot"].data.root_link_pos_w[:, 2:3]

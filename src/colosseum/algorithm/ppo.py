@@ -27,11 +27,13 @@ from loguru import logger
 from mjlab.envs import ManagerBasedRlEnv
 
 from colosseum.algorithm.base_algorithm import BaseAlgorithm
+from colosseum.algorithm.normalization import EmpiricalNormalization, IdentityNormalizer
 from colosseum.algorithm.ppo_networks import PpoActor, PpoValueNet
 from colosseum.algorithm.rollout_buffer import RolloutBuffer
 from colosseum.config.types.algorithm import PpoConfig, register_algorithm
 from colosseum.utils.logger import extract_episode_metrics
 from colosseum.utils.torch import get_obs_dims
+from colosseum.algorithm.base_algorithm import ObsType
 
 
 @register_algorithm("ppo", config_class=PpoConfig)
@@ -93,7 +95,7 @@ class PPO(BaseAlgorithm):
     self.critic_obs_dim = self.obs_dim["critic"]
     self.action_dim = int(np.prod(self.env.single_action_space.shape))
 
-    self.actor = PpoActor(
+    self.actor: PpoActor = PpoActor(
       self.actor_obs_dim,
       self.action_dim,
       self.config.actor,
@@ -126,19 +128,9 @@ class PPO(BaseAlgorithm):
     )
 
   def _build_normalizer(self) -> None:
-    from colosseum.algorithm.normalization import EmpiricalNormalization
-
     assert isinstance(self.config, PpoConfig)
 
     if not self.config.obs_normalization:
-
-      class IdentityNormalizer(torch.nn.Module):
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-          return x
-
-        def update(self, _x: torch.Tensor) -> None:
-          pass
-
       self.actor_obs_normalizer = IdentityNormalizer()
       self.critic_obs_normalizer = IdentityNormalizer()
     else:
@@ -168,7 +160,6 @@ class PPO(BaseAlgorithm):
     total_timesteps = self.config.learning_steps
     steps_per_iter = self.config.num_steps_per_env * self.env.num_envs
     num_iterations = total_timesteps // steps_per_iter
-    start_iteration = self.global_step // steps_per_iter
 
     # Convert log_interval from env steps → PPO iterations (same unit as SAC's step counter)
     # This makes the W&B x-axis (global_step = total env transitions) consistent with SAC.
@@ -195,7 +186,7 @@ class PPO(BaseAlgorithm):
     # and crashing the adaptive learning rate.
     if self.config.obs_normalization:
       prewarm_actor_obs = self._prewarm_actor_obs(current_actor_obs)
-      self.actor_obs_normalizer.update(prewarm_actor_obs)
+      self.actor_obs_normalizer.update(prewarm_actor_obs) 
       self.critic_obs_normalizer.update(current_critic_obs)
 
     # Randomize initial episode lengths (RSL-RL pattern) so environments
@@ -212,8 +203,8 @@ class PPO(BaseAlgorithm):
       # ============================================
       start_collect = time.perf_counter()
 
-      current_actor_obs, current_critic_obs, current_dones = self._collect_rollout(
-        current_actor_obs, current_critic_obs, current_dones
+      current_actor_obs, current_critic_obs, current_dones, obs_dict = self._collect_rollout(
+        current_actor_obs, current_critic_obs, current_dones, obs_dict
       )
 
       collection_time = time.perf_counter() - start_collect
@@ -266,7 +257,8 @@ class PPO(BaseAlgorithm):
     current_actor_obs: torch.Tensor,
     current_critic_obs: torch.Tensor,
     current_dones: torch.Tensor,
-  ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    obs_dict: ObsType,
+  ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, ObsType]:
     """Collect num_steps_per_env steps and fill rollout buffer."""
     assert isinstance(self.config, PpoConfig)
 
@@ -274,9 +266,16 @@ class PPO(BaseAlgorithm):
 
     with torch.no_grad():
       for _step in range(self.config.num_steps_per_env):
-        # Normalize observations for forward pass (but store RAW in buffer)
-        norm_actor_obs = self.actor_obs_normalizer(current_actor_obs)
+        # Normalise raw proprio BEFORE composing — latents bypass normalisation
+        norm_actor_obs_base = self.actor_obs_normalizer(current_actor_obs)
         norm_critic_obs = self.critic_obs_normalizer(current_critic_obs)
+
+        # Compose actor input: cat([norm_proprio, encoder_latents]) in RmaPPO;
+        # identity (returns norm_actor_obs_base unchanged) in base PPO
+        current_privileged_obs = self.get_privileged_obs(obs_dict)
+        norm_actor_obs = self._compose_actor_input(
+          norm_actor_obs_base, current_privileged_obs
+        )
 
         # Get action, log_prob, value, distribution params (single forward pass)
         actions, log_probs, action_means, action_stds = self.actor.act_with_log_prob(
@@ -285,12 +284,12 @@ class PPO(BaseAlgorithm):
         values = self.value_net(norm_critic_obs)
 
         # Step environment (action clipping handled by vecenv_wrapper)
-        next_obs_dict, rewards, terminated, truncated, infos = self.env.step(actions)
+        obs_dict, rewards, terminated, truncated, infos = self.env.step(actions)
         dones = (terminated | truncated).float()
 
         # Extract next observations
-        next_actor_obs = self.get_actor_obs(next_obs_dict)
-        next_critic_obs = self.get_critic_obs(next_obs_dict)
+        next_actor_obs = self.get_actor_obs(obs_dict)
+        next_critic_obs = self.get_critic_obs(obs_dict)
 
         # Update normalizer AFTER env.step on new obs (RSL-RL pattern)
         if self.config.obs_normalization:
@@ -329,7 +328,8 @@ class PPO(BaseAlgorithm):
           self.latest_episode_metrics = extract_episode_metrics(infos["log"])
 
         # Store RAW observations in buffer (RSL-RL pattern)
-        # Normalization happens during learning, not storage
+        # Normalization happens during learning, not storage.
+        # privileged_obs stored separately so encoders can re-run with grads.
         self.rollout_buffer.add(
           actor_obs=current_actor_obs,
           critic_obs=current_critic_obs,
@@ -340,6 +340,7 @@ class PPO(BaseAlgorithm):
           log_probs=log_probs,
           action_means=action_means,
           action_stds=action_stds,
+          privileged_obs=current_privileged_obs if current_privileged_obs else None,
         )
 
         # Advance
@@ -360,7 +361,7 @@ class PPO(BaseAlgorithm):
       normalize_advantage=normalize_globally,
     )
 
-    return current_actor_obs, current_critic_obs, current_dones
+    return current_actor_obs, current_critic_obs, current_dones, obs_dict
 
   def _learning_step(self) -> dict[str, float]:
     """Run PPO update epochs over mini-batches. Returns averaged losses."""
@@ -390,9 +391,13 @@ class PPO(BaseAlgorithm):
       old_action_stds = batch["old_action_stds"]
       target_values = batch["values"]
 
-      # Normalize observations during learning (RSL-RL pattern)
-      actor_obs = self.actor_obs_normalizer(actor_obs_raw)
+      # Normalise raw proprio BEFORE composing — latents bypass normalisation
+      actor_obs_norm = self.actor_obs_normalizer(actor_obs_raw)
       critic_obs = self.critic_obs_normalizer(critic_obs_raw)
+
+      # Compose actor input
+      privileged_obs = batch.get("privileged_obs", {})
+      actor_obs = self._compose_actor_input(actor_obs_norm, privileged_obs)
 
       # Re-evaluate actions with current policy
       new_log_probs, entropy = self.actor.evaluate(actor_obs, actions)
