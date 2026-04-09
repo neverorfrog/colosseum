@@ -52,6 +52,7 @@ mjlab = {git = "https://github.com/neverorfrog/mjlab.git", branch = "main", edit
 train-rsl-rl = { cmd = "python -m colosseum.scripts.train_rsl_rl", description = "Train with RSL-RL (colosseum tasks)" }
 train-mjlab = { cmd = "python -m mjlab.scripts.train", description = "Train with RSL-RL (mjlab built-in tasks)" }
 train = { cmd = "python -m colosseum.scripts.train", description = "Train with custom PPO" }
+train-phase2 = { cmd = "python -m colosseum.scripts.train_phase2", description = "RMA Phase 2 adaptation encoder training" }
 play = { cmd = "python -m colosseum.scripts.play", description = "Evaluate trained policy in simulation" }
 export-onnx = { cmd = "python -m colosseum.scripts.export_onnx", description = "Export checkpoint to ONNX" }
 

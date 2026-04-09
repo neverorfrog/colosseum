@@ -103,30 +103,28 @@ def create_agent(config: PlayConfig, env: ManagerBasedRlEnv, device: torch.devic
         module = importlib.import_module(module_path)
         algo_class = getattr(module, class_name)
 
-        # Create minimal env just to get observation/action dimensions
-        env_cfg = config.task.env
-        dim_env_cfg = replace(env_cfg, scene=replace(env_cfg.scene, num_envs=1))
-        dim_env = _make_env(dim_env_cfg, str(device), render_mode=None)
-
         algo = algo_class(
             config=algo_cfg,
-            env=dim_env,
+            env=env,
             device=device,
             log_fn=lambda _m, _s: None,
             log_interval=-1,
         )
         state = algo.load(checkpoint_path)
         logger.info(f"Loaded from step {state.get('global_step', 0)}")
-        dim_env.close()
 
         algo.actor.eval()
         algo.actor_obs_normalizer.eval()
+        if hasattr(algo, "rma_manager"):
+            algo.rma_manager.eval()
 
         def trained_agent(obs_dict):
             with torch.no_grad():
                 actor_obs = algo.get_actor_obs(obs_dict)
                 normalized_obs = algo.actor_obs_normalizer(actor_obs)
-                return algo._eval_get_action(normalized_obs)
+                privileged_obs = algo.get_privileged_obs(obs_dict)
+                composed_obs = algo._compose_actor_input(normalized_obs, privileged_obs)
+                return algo._eval_get_action(composed_obs)
 
         return trained_agent
 
@@ -143,7 +141,7 @@ def main() -> None:
     device = get_device(cuda=config.use_cuda, device_id=0)
     logger.info(f"Device: {device}")
 
-    env_cfg = config.task.play_env_cfg or config.task.env
+    env_cfg = config.task.play_env_cfg or config.task.train_env_cfg
     env_cfg = replace(env_cfg, scene=replace(env_cfg.scene, num_envs=config.num_envs))
 
     render_mode = "rgb_array" if config.video else None

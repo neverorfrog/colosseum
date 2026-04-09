@@ -132,42 +132,6 @@ class BaseAlgorithm(ABC):
     assert isinstance(obs, torch.Tensor), "Expected tensor observations but got dict"
     return obs
 
-  def _compose_actor_input(
-    self,
-    actor_obs: torch.Tensor,
-    privileged_obs: dict[str, torch.Tensor],
-  ) -> torch.Tensor:
-    """Build the full actor input tensor from proprio + optional encoder latents.
-
-    Base implementation is the identity — returns actor_obs unchanged.
-    RmaPPO overrides this to concatenate encoder latents:
-      cat([actor_obs, rma_manager.encode(privileged_obs)], dim=-1)
-
-    Called during both rollout collection (no_grad) and learning (with grad).
-
-    Args:
-        actor_obs:      (N, actor_obs_dim) proprioceptive observations.
-        privileged_obs: Dict of GT privileged groups for encoders (may be empty).
-
-    Returns:
-        (N, actor_input_dim) tensor fed to the actor network.
-    """
-    return actor_obs
-
-  def get_privileged_obs(self, obs: ObsType) -> dict[str, torch.Tensor]:
-    """Extract privileged observation groups from obs dict (RMA).
-
-    Base implementation returns empty dict. Subclasses that use an RmaManager
-    override this to return the specific groups their encoders need.
-
-    Args:
-        obs: Either a dict with observation groups or a flat tensor.
-
-    Returns:
-        Dict mapping group name → tensor for each privileged group.
-    """
-    return {}
-
   def get_critic_obs(self, obs: ObsType) -> torch.Tensor:
     """Extract critic observations from obs dict (rsl_rl style).
 

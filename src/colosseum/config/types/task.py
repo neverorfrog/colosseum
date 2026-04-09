@@ -5,7 +5,7 @@ Tasks register themselves via @register_task decorator in their own __init__.py 
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:

@@ -266,16 +266,8 @@ class PPO(BaseAlgorithm):
 
     with torch.no_grad():
       for _step in range(self.config.num_steps_per_env):
-        # Normalise raw proprio BEFORE composing — latents bypass normalisation
-        norm_actor_obs_base = self.actor_obs_normalizer(current_actor_obs)
+        norm_actor_obs = self.actor_obs_normalizer(current_actor_obs)
         norm_critic_obs = self.critic_obs_normalizer(current_critic_obs)
-
-        # Compose actor input: cat([norm_proprio, encoder_latents]) in RmaPPO;
-        # identity (returns norm_actor_obs_base unchanged) in base PPO
-        current_privileged_obs = self.get_privileged_obs(obs_dict)
-        norm_actor_obs = self._compose_actor_input(
-          norm_actor_obs_base, current_privileged_obs
-        )
 
         # Get action, log_prob, value, distribution params (single forward pass)
         actions, log_probs, action_means, action_stds = self.actor.act_with_log_prob(
@@ -329,7 +321,6 @@ class PPO(BaseAlgorithm):
 
         # Store RAW observations in buffer (RSL-RL pattern)
         # Normalization happens during learning, not storage.
-        # privileged_obs stored separately so encoders can re-run with grads.
         self.rollout_buffer.add(
           actor_obs=current_actor_obs,
           critic_obs=current_critic_obs,
@@ -340,7 +331,6 @@ class PPO(BaseAlgorithm):
           log_probs=log_probs,
           action_means=action_means,
           action_stds=action_stds,
-          privileged_obs=current_privileged_obs if current_privileged_obs else None,
         )
 
         # Advance
@@ -391,11 +381,10 @@ class PPO(BaseAlgorithm):
       old_action_stds = batch["old_action_stds"]
       target_values = batch["values"]
 
-      # Normalise raw proprio BEFORE composing — latents bypass normalisation
       actor_obs_norm = self.actor_obs_normalizer(actor_obs_raw)
       critic_obs = self.critic_obs_normalizer(critic_obs_raw)
 
-      # Compose actor input
+      # Compose actor input (identity in PPO; RmaPPO overrides to append encoder latents)
       privileged_obs = batch.get("privileged_obs", {})
       actor_obs = self._compose_actor_input(actor_obs_norm, privileged_obs)
 
@@ -483,6 +472,14 @@ class PPO(BaseAlgorithm):
       "kl": total_kl / max(num_updates, 1),
       "learning_rate": self.learning_rate,
     }
+
+  def _compose_actor_input(
+    self,
+    actor_obs: torch.Tensor,
+    privileged_obs: dict[str, torch.Tensor],
+  ) -> torch.Tensor:
+    """Build the full actor input. Identity in PPO; RmaPPO overrides to append encoder latents."""
+    return actor_obs
 
   def _prewarm_actor_obs(self, actor_obs: torch.Tensor) -> torch.Tensor:
     """Transform actor obs for normalizer pre-warming. Override in subclasses."""

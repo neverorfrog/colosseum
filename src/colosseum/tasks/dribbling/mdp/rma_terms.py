@@ -1,7 +1,31 @@
-"""Concrete RMA encoder terms.
+"""Concrete RMA encoder terms for the dribbling task.
 
-PrivilegedRmaTerm  — GT obs group → MLP encoder → latent  (Phase 1)
-DepthRmaTerm       — depth sensor → rolling buffer → CNN+LSTM → latent  (Phase 2)
+BallRmaTerm pairs two encoders for the ball latent slot:
+  privileged_encoder  — GT ball obs (pos, vel) → MLP → latent  (Phase 1 target)
+  adaptation_encoder  — depth frames from head camera → CNN+LSTM → latent  (Phase 2)
+
+Both encoders share latent_dim so Phase 2 training can regress the adaptation
+encoder against the frozen privileged encoder output.
+
+Phase 1 (no camera required)
+-----------------------------
+BallRmaTermCfg(privileged_obs_group="privileged_ball", latent_dim=8)
+
+The depth encoder is instantiated but never called; update() is a no-op when
+the camera sensor is absent from the scene.
+
+Phase 2 (depth camera in scene)
+--------------------------------
+BallRmaTermCfg(
+    privileged_obs_group="privileged_ball",
+    adaptation_obs_group="depth_frames",
+    sensor_name="head_depth_camera",
+    latent_dim=8,
+)
+
+update() rolls the depth buffer each step. encode_adaptation() prefers frames
+stored in obs_dict (correct gradient flow from rollout buffer) over the
+internal buffer (used at collection time).
 """
 
 from __future__ import annotations
@@ -20,143 +44,138 @@ if TYPE_CHECKING:
   from mjlab.envs import ManagerBasedRlEnv
 
 
-# ---------------------------------------------------------------------------
-# Phase 1 — Privileged MLP encoder
-# ---------------------------------------------------------------------------
-
-
 @dataclass(kw_only=True)
-class PrivilegedRmaTermCfg(RmaTermCfg):
-  """Config for a GT obs → MLP encoder term."""
+class BallRmaTermCfg(RmaTermCfg):
+  """Config for the dribbling ball encoder term."""
 
-  def build(self, env: ManagerBasedRlEnv) -> PrivilegedRmaTerm:
-    return PrivilegedRmaTerm(cfg=self, env=env)
+  privileged_obs_group: str = "privileged_ball"
+  """Obs group fed to the privileged encoder. Must exist in the observation manager."""
+
+  adaptation_obs_group: str | None = None
+  """Key under which depth frames are passed to encode_adaptation() during Phase 2.
+  If None, encode_adaptation() returns zeros (Phase 1 — encoder unused)."""
+
+  # --- depth encoder architecture ---
+  lstm_hidden: int = 64
+  """LSTM hidden size inside the depth CNN+LSTM encoder."""
+
+  # --- depth preprocessing (update()) ---
+  sensor_name: str = "head_rgbd"
+  """Scene sensor name to read raw depth frames from. Phase 2 only."""
+
+  seq_len: int = 5
+  """Frames in the rolling temporal buffer."""
+
+  height: int = 72
+  """Target frame height after bilinear downsampling."""
+
+  width: int = 128
+  """Target frame width after bilinear downsampling."""
+
+  depth_clip: float = 6.0
+  """Max depth in metres; frames are clipped then normalised to [0, 1]."""
+
+  def build(self, env: ManagerBasedRlEnv) -> BallRmaTerm:
+    return BallRmaTerm(cfg=self, env=env)
 
 
-class PrivilegedRmaTerm(RmaTerm):
-  """Encodes a GT privileged obs group with a small MLP.
+class BallRmaTerm(RmaTerm):
+  """Privileged MLP + depth CNN+LSTM encoder pair for ball information."""
 
-  No internal buffer — encode() reads directly from the GT obs dict.
-  Trains jointly with the policy via the PPO loss.
-  """
-
-  def __init__(self, cfg: PrivilegedRmaTermCfg, env: ManagerBasedRlEnv) -> None:
+  def __init__(self, cfg: BallRmaTermCfg, env: ManagerBasedRlEnv) -> None:
     super().__init__(cfg, env)
-    group_dim = env.observation_manager.group_obs_dim[cfg.obs_group]
-    assert isinstance(group_dim, tuple) or isinstance(group_dim, int)
+
+    # Privileged encoder: infer input dim from the obs manager
+    group_dim = env.observation_manager.group_obs_dim[cfg.privileged_obs_group]
     input_dim = group_dim[0] if isinstance(group_dim, tuple) else int(group_dim)
-    self._encoder = PrivilegedEncoder(
+    self._priv_encoder = PrivilegedEncoder(
       input_dim=input_dim, latent_dim=cfg.latent_dim
     ).to(env.device)
 
-  @property
-  def needs_privileged_obs(self) -> bool:
-    return True
-
-  @property
-  def encoder(self) -> nn.Module:
-    return self._encoder
-
-  def encode(self, privileged_obs: dict[str, torch.Tensor]) -> torch.Tensor:
-    return self._encoder(privileged_obs[self.cfg.obs_group])
-
-
-# ---------------------------------------------------------------------------
-# Phase 2 — Depth camera encoder
-# ---------------------------------------------------------------------------
-
-
-@dataclass(kw_only=True)
-class DepthRmaTermCfg(RmaTermCfg):
-  """Config for a depth sensor → CNN+LSTM encoder term."""
-
-  sensor_name: str = "head_depth_camera"
-  """Scene sensor name to read depth frames from."""
-
-  seq_len: int = 5
-  """Number of frames in the rolling temporal buffer."""
-
-  height: int = 72
-  """Target frame height after downsampling."""
-
-  width: int = 128
-  """Target frame width after downsampling."""
-
-  depth_clip: float = 6.0
-  """Max depth in metres before normalising to [0, 1]."""
-
-  lstm_hidden: int = 64
-  """LSTM hidden size inside the depth encoder."""
-
-  def build(self, env: ManagerBasedRlEnv) -> DepthRmaTerm:
-    return DepthRmaTerm(cfg=self, env=env)
-
-
-class DepthRmaTerm(RmaTerm):
-  """Encodes depth frames from a head-mounted camera.
-
-  Maintains a rolling (N, seq_len, 1, H, W) buffer. update() is called
-  every env step to append the latest frame. reset() zeros the buffer for
-  terminated/truncated envs. encode() ignores the GT obs dict and runs the
-  CNN+LSTM on the internal buffer.
-  """
-
-  def __init__(self, cfg: DepthRmaTermCfg, env: ManagerBasedRlEnv) -> None:
-    super().__init__(cfg, env)
-    self._encoder = DepthEncoder(
-      latent_dim=cfg.latent_dim,
-      lstm_hidden=cfg.lstm_hidden,
+    # Adaptation encoder: same latent_dim so Phase 2 target matches exactly
+    self._depth_encoder = DepthEncoder(
+      latent_dim=cfg.latent_dim, lstm_hidden=cfg.lstm_hidden
     ).to(env.device)
+
     self._depth_buffer: torch.Tensor | None = None
 
-  @property
-  def needs_privileged_obs(self) -> bool:
-    return False  # uses internal rolling buffer
+  # ------------------------------------------------------------------
+  # Encoder properties
+  # ------------------------------------------------------------------
 
   @property
-  def encoder(self) -> nn.Module:
-    return self._encoder
+  def privileged_encoder(self) -> nn.Module:
+    return self._priv_encoder
+
+  @property
+  def adaptation_encoder(self) -> nn.Module:
+    return self._depth_encoder
+
+  # ------------------------------------------------------------------
+  # Encoding
+  # ------------------------------------------------------------------
+
+  def encode_privileged(self, obs_dict: dict[str, torch.Tensor]) -> torch.Tensor:
+    """GT ball obs → MLP → latent.  (N, latent_dim)"""
+    return self._priv_encoder(obs_dict[self.cfg.privileged_obs_group])
+
+  def encode_adaptation(self, obs_dict: dict[str, torch.Tensor]) -> torch.Tensor:
+    """Depth frames → CNN+LSTM → latent.  (N, latent_dim)
+
+    Reads frames from obs_dict keyed by adaptation_obs_group.
+    Phase 2 passes aligned snapshots from get_current_adaptation_obs().
+    Falls back to zeros on the very first step before the buffer is populated.
+    """
+    cfg: BallRmaTermCfg = self.cfg  # type: ignore[assignment]
+
+    if cfg.adaptation_obs_group is not None and cfg.adaptation_obs_group in obs_dict:
+      return self._depth_encoder(obs_dict[cfg.adaptation_obs_group])
+
+    return torch.zeros(self._env.num_envs, cfg.latent_dim, device=self._env.device)
 
   # ------------------------------------------------------------------
   # Lifecycle
   # ------------------------------------------------------------------
 
   def update(self) -> None:
-    """Read depth sensor, downsample, clip/normalise, roll buffer."""
-    cfg: DepthRmaTermCfg = self.cfg  # type: ignore[assignment]
-    sensor = self._env.scene[cfg.sensor_name]
-    depth = sensor.data.depth  # (N, H_raw, W_raw, 1)
+    """Read depth sensor, downsample, normalise, roll buffer.
 
-    depth = depth.permute(0, 3, 1, 2)  # → (N, 1, H_raw, W_raw)
+    No-op when the camera sensor is absent from the scene (Phase 1 training).
+    """
+    cfg: BallRmaTermCfg = self.cfg  # type: ignore[assignment]
+
+    try:
+      sensor = self._env.scene[cfg.sensor_name]
+    except KeyError:
+      return  # camera absent from scene (Phase 1 training)
+
+    depth = sensor.data.depth  # (N, H, W, 1)
+    depth = depth.permute(0, 3, 1, 2).float()            # (N, 1, H, W)
     depth = F.interpolate(
       depth,
       size=(cfg.height, cfg.width),
       mode="bilinear",
       align_corners=False,
     )
-    depth = depth.clamp(0, cfg.depth_clip) / cfg.depth_clip  # [0, 1]
+    depth = depth.clamp(0.0, cfg.depth_clip) / cfg.depth_clip  # [0, 1]
 
     if self._depth_buffer is None:
       self._depth_buffer = (
         depth.unsqueeze(1).expand(-1, cfg.seq_len, -1, -1, -1).clone()
-      )
+      )  # (N, seq_len, 1, H, W) — fill with first frame
     else:
       self._depth_buffer = torch.cat(
         [self._depth_buffer[:, 1:], depth.unsqueeze(1)], dim=1
-      )
+      )  # roll: drop oldest, append newest
 
   def reset(self, env_ids: torch.Tensor | slice | None) -> None:
-    if self._depth_buffer is not None:
+    """Zero depth buffer for reset environments."""
+    if self._depth_buffer is not None and env_ids is not None:
       self._depth_buffer[env_ids] = 0.0
 
-  # ------------------------------------------------------------------
-  # Encoding
-  # ------------------------------------------------------------------
-
-  def encode(self, privileged_obs: dict[str, torch.Tensor]) -> torch.Tensor:
-    """Encode the internal depth buffer. privileged_obs is ignored."""
-    if self._depth_buffer is None:
-      # Buffer not yet populated — return zeros (first step edge case)
-      cfg: DepthRmaTermCfg = self.cfg  # type: ignore[assignment]
-      return torch.zeros(self._env.num_envs, cfg.latent_dim, device=self._env.device)
-    return self._encoder(self._depth_buffer)
+  def get_current_adaptation_obs(self) -> dict[str, torch.Tensor]:
+    """Return current depth buffer keyed by adaptation_obs_group."""
+    cfg: BallRmaTermCfg = self.cfg  # type: ignore[assignment]
+    if cfg.adaptation_obs_group is None or self._depth_buffer is None:
+      return {}
+    return {cfg.adaptation_obs_group: self._depth_buffer}

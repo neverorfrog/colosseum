@@ -26,6 +26,11 @@ from colosseum.managers.rma_manager import RmaManager, RmaTermCfg
 class RmaBasedEnvCfg(ManagerBasedRlEnvCfg):
   class_type: ClassVar[type[RmaBasedEnv]]  # set after class definition
   encoders: dict[str, RmaTermCfg] = field(default_factory=dict)
+  use_depth_camera: bool = False
+  """Include depth camera sensor in the scene (Phase 2 only).
+
+  Keep False during Phase 1 to avoid the rendering overhead of unused cameras.
+  """
   # (name, factory) pairs: factory(env) → object with debug_vis(vis).
   # Registered into manager_visualizers by ViewerCompatibleEnv.
   viz_callbacks: Annotated[list[tuple[str, Callable]], tyro.conf.Suppress] = field(default_factory=list)
