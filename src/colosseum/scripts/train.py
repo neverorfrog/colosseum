@@ -56,7 +56,7 @@ def main() -> None:
         "Implement the algo_cfg property in the task's __init__.py."
     )
 
-    env_cfg = config.task.env
+    env_cfg = config.task.train_env_cfg
 
     run_name = generate_run_name(
         task_name=config.task.name,

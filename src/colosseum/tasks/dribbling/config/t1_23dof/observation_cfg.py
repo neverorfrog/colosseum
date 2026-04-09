@@ -21,9 +21,15 @@ from colosseum.tasks.dribbling.mdp.observations import (
   ball_mass,
   ball_position,
   ball_velocity,
+  ball_velocity_xy,
   base_height,
   foot_ball_contact_force,
 )
+
+# ---------------------------------------------------------------------------
+# Actor: proprioceptive only.
+# Encoder latents are concatenated by RmaPPO, not via the obs manager.
+# ---------------------------------------------------------------------------
 
 actor_terms = {
   "base_ang_vel": ObservationTermCfg(
@@ -52,13 +58,30 @@ actor_terms = {
     func=generated_commands,
     params={"command_name": "ball_vel"},
   ),
-  # Ball observations
-  "ball_pos": ObservationTermCfg(
-    func=ball_position,
-    noise=Unoise(n_min=-0.01, n_max=0.01),
+  "foot_ball_contact_force": ObservationTermCfg(
+    func=foot_ball_contact_force,
+    params={"sensor_name": "foot_ball_contact"},
   ),
-  # Privileged (teacher setting — no student/teacher split yet)
-  "ball_vel_obs": ObservationTermCfg(func=ball_velocity),
+}
+
+# ---------------------------------------------------------------------------
+# Privileged ball: encoder input, 4D = ball_pos_xy(2) + ball_vel_xy(2).
+# Also included wholesale in the critic so it sees the same values.
+# ---------------------------------------------------------------------------
+
+privileged_ball_terms = {
+  "ball_pos": ObservationTermCfg(func=ball_position),  # (N, 2)
+  "ball_vel_xy": ObservationTermCfg(func=ball_velocity_xy),  # (N, 2)
+}
+
+# ---------------------------------------------------------------------------
+# Critic: actor + privileged ball + remaining GT terms + foot extras.
+# Asymmetric actor-critic: critic sees everything, actor sees only proprio.
+# ---------------------------------------------------------------------------
+
+critic_terms = {
+  **actor_terms,
+  **privileged_ball_terms,
   "base_height": ObservationTermCfg(func=base_height),
   "ball_mass": ObservationTermCfg(
     func=ball_mass,
@@ -68,14 +91,6 @@ actor_terms = {
     func=ball_friction,
     params={"ball_friction": BALL_FRICTION},
   ),
-  "foot_ball_contact_force": ObservationTermCfg(
-    func=foot_ball_contact_force,
-    params={"sensor_name": "foot_ball_contact"},
-  ),
-}
-
-critic_terms = {
-  **actor_terms,
   "base_lin_vel": ObservationTermCfg(
     func=builtin_sensor,
     params={"sensor_name": "robot/imu_lin_vel"},
@@ -99,6 +114,10 @@ critic_terms = {
   ),
 }
 
+# ---------------------------------------------------------------------------
+# Observation groups
+# ---------------------------------------------------------------------------
+
 observations = {
   "actor": ObservationGroupCfg(
     terms=actor_terms,
@@ -107,6 +126,11 @@ observations = {
   ),
   "critic": ObservationGroupCfg(
     terms=critic_terms,
+    concatenate_terms=True,
+    enable_corruption=False,
+  ),
+  "privileged_ball": ObservationGroupCfg(
+    terms=privileged_ball_terms,
     concatenate_terms=True,
     enable_corruption=False,
   ),

@@ -108,19 +108,26 @@ def track_angular_velocity(
   return torch.exp(-torch.square(commanded_ang_vel - actual_ang_vel))
 
 
-def distance_to_next_cell_shaping(
-  env: AbstractionBasedEnv,
-  abstraction_name: str = "grid",
-  asset_cfg: SceneEntityCfg = SceneEntityCfg("robot", site_names=("root_site",)),
+def heading_alignment(
+  env: ManagerBasedRlEnv,
+  command_name: str,
 ) -> torch.Tensor:
-  """Dense shaping reward: exp(-distance_to_next_best_cell).
+  """Reward for heading alignment with commanded direction.
 
-  Higher reward when closer to the next best cell along the direction field.
+  The commanded velocity in body frame encodes heading error:
+    vx_cmd / |v_cmd| = cos(heading_error)
+
+  Returns cos(heading_error) in [-1, 1]:
+    +1 when robot faces the commanded direction (aligned)
+     0 when 90° off
+    -1 when backwards
+
+  This directly breaks the sideways-walking local optimum where the body-frame
+  command adapts to the robot's orientation, making sideways motion appear
+  indistinguishable from forward motion to other reward terms.
   """
-  abstraction = env.abstraction_manager.get_term(abstraction_name)
-  if abstraction is None:
-    logger.warning(f"Abstraction '{abstraction_name}' not found. Returning zero reward.")
-    return torch.zeros(env.num_envs, device=env.device)
-  assert isinstance(abstraction, GridAbstraction)
-  agent_position = agent_pos_local(env, asset_cfg)
-  return torch.exp(-abstraction.distance_to_next_best_cell(agent_position))
+  command = env.command_manager.get_command(command_name)
+  assert command is not None, f"Command '{command_name}' not found."
+  vel_2d = command[:, :2]  # (vx_cmd, vy_cmd) in body frame
+  vel_norm = vel_2d.norm(dim=-1).clamp(min=1e-6)
+  return vel_2d[:, 0] / vel_norm  # cos(heading_error)

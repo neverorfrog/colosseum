@@ -9,6 +9,7 @@ from colosseum.config.types.networks import (
     PpoCriticConfig,
 )
 
+
 if TYPE_CHECKING:
     from colosseum.algorithm.base_algorithm import BaseAlgorithm
 
@@ -174,3 +175,59 @@ class PpoConfig(AlgorithmConfig):
         if "critic" in data and isinstance(data["critic"], dict):
             data["critic"] = PpoCriticConfig(**data["critic"])
         return cls(**data)
+
+
+@dataclass(frozen=True)
+class DaggerPpoConfig(PpoConfig):
+    """PPO with DAgger-style teacher-student imitation loss.
+
+    Extends PpoConfig with a pre-trained teacher policy whose observation is a
+    contiguous suffix of the student's observation tensor:
+
+        student_obs[:, teacher_obs_start_idx:] == teacher_obs
+
+    The imitation loss λ·MSE(student_mean, teacher_action) is added to the
+    PPO objective and annealed linearly to zero over imitation_annealing_steps.
+    """
+
+    name: str = "DaggerPPO"
+    target: str = "colosseum.algorithm.dagger_ppo:DaggerPPO"
+
+    teacher_checkpoint: str = ""
+    """Path to the pre-trained teacher policy checkpoint (.pt)."""
+
+    teacher_obs_dim: int = 78
+    """Observation dimension expected by the teacher network."""
+
+    teacher_obs_start_idx: int = 7
+    """Index into student obs where the teacher obs slice starts."""
+
+    teacher_actor_hidden_layers: tuple[int, ...] = (512, 256, 128)
+    """Hidden layer sizes of the teacher actor (must match checkpoint)."""
+
+    teacher_actor_activation: str = "elu"
+    """Activation function of the teacher actor (must match checkpoint)."""
+
+    imitation_coef: float = 1.0
+    """Initial weight λ for the imitation loss term."""
+
+    imitation_annealing_steps: int = 10_000_000
+    """Global steps over which λ is linearly annealed from imitation_coef to 0."""
+
+
+@dataclass(frozen=True)
+class RmaPPOConfig(PpoConfig):
+    """PPO with RMA privileged + adaptation encoder pair.
+
+    Extends PpoConfig with the inference_phase flag, which controls which encoder
+    is used when the policy is run in play/eval mode (not during training).
+    """
+
+    name: str = "RmaPPO"
+    target: str = "colosseum.algorithm.rma_ppo:RmaPPO"
+
+    inference_phase: int = 1
+    """Encoder to use at inference time.
+    1 = privileged encoder (ground-truth obs, default).
+    2 = adaptation encoder (sensor obs, for testing Phase 2 quality).
+    """

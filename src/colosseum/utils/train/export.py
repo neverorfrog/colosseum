@@ -41,7 +41,7 @@ def export_policy_to_onnx(
     raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 
   device = get_device(cuda=False, device_id=0)
-  env_cfg = config.task.env
+  env_cfg = config.task.train_env_cfg
   # Single env is enough to get dimensions
   env_cfg = replace(env_cfg, scene=replace(env_cfg.scene, num_envs=1))
   env = make_env(env_cfg, str(device))
