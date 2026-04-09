@@ -122,7 +122,7 @@ def create_agent(config: PlayConfig, env: ManagerBasedRlEnv, device: torch.devic
             with torch.no_grad():
                 actor_obs = algo.get_actor_obs(obs_dict)
                 normalized_obs = algo.actor_obs_normalizer(actor_obs)
-                privileged_obs = algo.get_privileged_obs(obs_dict)
+                privileged_obs = algo.get_privileged_obs(obs_dict) if hasattr(algo, "get_privileged_obs") else {}
                 composed_obs = algo._compose_actor_input(normalized_obs, privileged_obs)
                 return algo._eval_get_action(composed_obs)
 
