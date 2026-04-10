@@ -138,15 +138,13 @@ def draw_camera_ball_overlay(env, vis: DebugVisualizer) -> None:
 
 
 def draw_depth_window(env, env_idx: int) -> None:
-  """Show the encoder's depth buffer in a cv2 filmstrip window.
+  """Show the encoder's current preprocessed depth frame in a cv2 window.
 
-  Displays all seq_len frames side-by-side with INFERNO colormap so it's
-  easy to see what the depth CNN+LSTM receives.  The window appears only
-  when the depth buffer is populated (Phase 2 with camera in scene) and
-  is a no-op otherwise.  Requires opencv-python.
+  The window appears only when current adaptation frames are available
+  (Phase 2 with camera in scene) and is a no-op otherwise.
   """
   ball_term = _get_ball_term(env)
-  if ball_term is None or ball_term._depth_buffer is None:
+  if ball_term is None or ball_term._current_frame is None:
     return
 
   try:
@@ -154,18 +152,15 @@ def draw_depth_window(env, env_idx: int) -> None:
   except ImportError:
     return
 
-  buf = ball_term._depth_buffer           # (N, seq_len, 1, H, W)
-  frames = buf[env_idx, :, 0].cpu().numpy()  # (seq_len, H, W)
+  frame = ball_term._current_frame[env_idx, 0].cpu().numpy()  # (H, W)
+  frame_max = frame.max()
+  if frame_max > 0:
+    frame = frame / frame_max
 
-  strip_max = frames.max()
-  if strip_max > 0:
-    frames = frames / strip_max
-
-  colored = [
-    cv2.applyColorMap((f * 255).clip(0, 255).astype("uint8"), cv2.COLORMAP_INFERNO)
-    for f in frames
-  ]
-  tile = cv2.hconcat(colored)
+  tile = cv2.applyColorMap(
+    (frame * 255).clip(0, 255).astype("uint8"),
+    cv2.COLORMAP_INFERNO,
+  )
 
   win = "Depth (encoder input)"
   cv2.namedWindow(win, cv2.WINDOW_NORMAL)
@@ -183,7 +178,7 @@ class DribblingViz:
     Yellow → no FOV tracking (Phase 1 or play without depth camera).
 
   Optional cv2 depth window (set show_depth=True to enable):
-    Filmstrip of seq_len preprocessed depth frames fed to the encoder.
+    Current preprocessed depth frame fed to the encoder.
 
   Registered via RmaBasedEnvCfg.viz_callbacks so DribblingEnv is not needed.
   factory(env) → DribblingViz instance with debug_vis(vis).

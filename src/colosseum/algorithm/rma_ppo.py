@@ -278,23 +278,30 @@ class RmaPPO(PPO):
     self,
     obs_dict: ObsType,
   ) -> tuple[ObsType, dict[str, float]]:
-    """Collect aligned (priv_obs, adapt_obs) pairs then run MSE regression.
+    """Collect aligned temporal sequences then run adaptation regression.
 
-    Collection and learning are coupled here so that each adapt_obs snapshot
-    is taken from the same physics state as its paired priv_obs — fixing the
-    temporal misalignment that broke the previous rollout-buffer approach.
+    Collection and learning are coupled here so each adaptation snapshot is
+    temporally aligned with its privileged target.
 
     Args:
       obs_dict: Current observation dict (maintained across iterations).
 
     Returns:
-      (updated obs_dict, metrics with "adapt/loss")
+      (updated obs_dict, adaptation metrics)
     """
     assert isinstance(self.config, PpoConfig)
 
     priv_obs_list: list[dict[str, torch.Tensor]] = []
-    adapt_obs_list: list[dict[str, torch.Tensor]] = []
-    adapt_mask_list: list[torch.Tensor | None] = []
+    frame_list: list[torch.Tensor] = []
+    reset_mask_list: list[torch.Tensor] = []
+    fov_mask_list: list[torch.Tensor] = []
+
+    if not self.rma_manager.adaptation_group_names:
+      raise RuntimeError("Phase 2 requires at least one adaptation observation group.")
+    frame_group = self.rma_manager.adaptation_group_names[0]
+
+    ball_term = self.rma_manager._terms.get("ball")
+    warmup_steps = getattr(getattr(ball_term, "cfg", None), "warmup_steps", 0)
 
     # --- Collection phase (all networks frozen) ---
     with torch.no_grad():
@@ -310,57 +317,78 @@ class RmaPPO(PPO):
 
         # Snapshot aligned pairs from this physics state
         priv_obs_list.append(self.get_privileged_obs(obs_dict))
-        adapt_obs_list.append(self.rma_manager.get_adaptation_obs())
-        adapt_mask_list.append(self.rma_manager.get_adaptation_mask())
+        adapt_obs = self.rma_manager.get_adaptation_obs()
+        if frame_group not in adapt_obs:
+          raise RuntimeError(
+            f"Missing adaptation obs group '{frame_group}' during Phase 2 collection."
+          )
+        frame_list.append(adapt_obs[frame_group])
+
+        reset_event = self.rma_manager.get_reset_event()
+        if reset_event is None:
+          reset_event = torch.zeros(self.env.num_envs, dtype=torch.bool, device=self.device)
+        reset_mask_list.append(reset_event)
+
+        fov_mask = self.rma_manager.get_adaptation_mask()
+        if fov_mask is None:
+          fov_mask = torch.ones(self.env.num_envs, dtype=torch.bool, device=self.device)
+        fov_mask_list.append(fov_mask)
 
     # --- Learning phase (only adaptation encoder params have grad) ---
-    T = len(priv_obs_list)
-    total_size = T * self.env.num_envs
-
-    # Stack list-of-dicts → dict of (T*N, ...) flat tensors
+    # Stack temporal tensors as (N, T, ...)
     stacked_priv: dict[str, torch.Tensor] = {
-      key: torch.stack([p[key] for p in priv_obs_list], dim=0).flatten(0, 1)
+      key: torch.stack([p[key] for p in priv_obs_list], dim=1)
       for key in priv_obs_list[0]
     }
-    stacked_adapt: dict[str, torch.Tensor] = {
-      key: torch.stack([a[key] for a in adapt_obs_list], dim=0).flatten(0, 1)
-      for key in adapt_obs_list[0]
-    }
+    frames = torch.stack(frame_list, dim=1)  # (N, T, 1, H, W)
+    reset_mask = torch.stack(reset_mask_list, dim=1)  # (N, T)
+    fov_mask = torch.stack(fov_mask_list, dim=1)  # (N, T)
 
-    # Stack per-step masks → (T*N,) bool, or None if no term defines a mask
-    stacked_mask: torch.Tensor | None = None
-    if any(m is not None for m in adapt_mask_list):
-      stacked_mask = torch.stack([
-        m if m is not None
-        else torch.ones(self.env.num_envs, dtype=torch.bool, device=self.device)
-        for m in adapt_mask_list
-      ]).flatten(0, 1)  # (T*N,)
-
-    valid_frac = stacked_mask.float().mean().item() if stacked_mask is not None else 1.0
-
-    mini_batch_size = total_size // self.config.num_mini_batches
-    total_loss = 0.0
-    num_updates = 0
-
-    for _ in range(self.config.num_learning_epochs):
-      indices = torch.randperm(total_size, device=self.device)
-      for i in range(self.config.num_mini_batches):
-        start = i * mini_batch_size
-        batch_idx = indices[start : start + mini_batch_size]
-        batch_mask = stacked_mask[batch_idx] if stacked_mask is not None else None
-
-        metrics = self.adaptation_learning_step(
-          privileged_obs={k: v[batch_idx] for k, v in stacked_priv.items()},
-          adaptation_obs={k: v[batch_idx] for k, v in stacked_adapt.items()},
-          mask=batch_mask,
+    # Build warm-up mask: false for first K steps after reset/FOV re-entry.
+    if warmup_steps > 0:
+      since_reset = torch.zeros(
+        self.env.num_envs,
+        dtype=torch.long,
+        device=self.device,
+      )
+      warm_mask_steps: list[torch.Tensor] = []
+      for t in range(reset_mask.shape[1]):
+        since_reset = torch.where(
+          reset_mask[:, t],
+          torch.zeros_like(since_reset),
+          since_reset + 1,
         )
-        total_loss += metrics["adapt/loss"]
-        num_updates += 1
+        warm_mask_steps.append(since_reset >= warmup_steps)
+      warm_mask = torch.stack(warm_mask_steps, dim=1)
+    else:
+      warm_mask = torch.ones_like(reset_mask)
 
-    return obs_dict, {
-      "adapt/loss": total_loss / max(num_updates, 1),
-      "adapt/valid_frac": valid_frac,
+    loss_mask = fov_mask & warm_mask
+    valid_frac = loss_mask.float().mean().item()
+
+    # Keep sequence order intact; no shuffling across time.
+    metrics_sum: dict[str, float] = defaultdict(float)
+    num_updates = 0
+    for _ in range(self.config.num_learning_epochs):
+      metrics = self.adaptation_learning_step(
+        privileged_obs=stacked_priv,
+        adaptation_obs={
+          frame_group: frames,
+          "reset_mask": reset_mask,
+          "loss_mask": loss_mask,
+        },
+        mask=loss_mask,
+      )
+      for key, value in metrics.items():
+        metrics_sum[key] += value
+      num_updates += 1
+
+    result = {
+      key: value / max(num_updates, 1)
+      for key, value in metrics_sum.items()
     }
+    result["adapt/valid_frac"] = valid_frac
+    return obs_dict, result
 
   # ------------------------------------------------------------------
   # Phase 2 — adaptation training setup
@@ -394,12 +422,10 @@ class RmaPPO(PPO):
     adaptation_obs: dict[str, torch.Tensor],
     mask: torch.Tensor | None = None,
   ) -> dict[str, float]:
-    """Phase 2 learning step: MSE regression of adaptation encoder.
+    """Phase 2 learning step for adaptation encoders.
 
-    Mirrors train2.py from TUM ADLR:
-      z_target = frozen privileged_encoder(privileged_obs).detach()
-      z_pred   = adaptation_encoder(adaptation_obs)
-      loss     = MSE(z_pred[mask], z_target[mask])   # mask=None → all samples
+    Manager returns a dictionary of named losses. This method sums them for
+    backward and returns both total and component metrics.
 
     Args:
       privileged_obs: Dict of GT privileged groups (for frozen target).
@@ -408,18 +434,26 @@ class RmaPPO(PPO):
                       snapshotted at collection time. None = all samples valid.
 
     Returns:
-      Metrics dict with "adapt/loss".
+      Metrics dict with total and component losses.
     """
-    loss = self.rma_manager.compute_adaptation_loss(privileged_obs, adaptation_obs, mask=mask)
+    loss_terms = self.rma_manager.compute_adaptation_loss(
+      privileged_obs,
+      adaptation_obs,
+      mask=mask,
+    )
+    total_loss = torch.stack(list(loss_terms.values())).sum()
 
     self._adaptation_optimizer.zero_grad()
-    loss.backward()
+    total_loss.backward()
     torch.nn.utils.clip_grad_norm_(
       self.rma_manager.adaptation_parameters(), max_norm=1.0
     )
     self._adaptation_optimizer.step()
 
-    return {"adapt/loss": loss.item()}
+    metrics = {"adapt/loss": total_loss.item()}
+    for key, value in loss_terms.items():
+      metrics[f"adapt/{key}"] = value.item()
+    return metrics
 
   # ------------------------------------------------------------------
   # RMA hooks
