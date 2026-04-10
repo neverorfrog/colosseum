@@ -31,8 +31,8 @@ from .reward_cfg import rewards
 
 def sim_cfg() -> SimulationCfg:
   return SimulationCfg(
-    nconmax=500,
-    njmax=1500,
+    nconmax=100,
+    njmax=300,
     mujoco=MujocoCfg(
       timestep=0.005,
       iterations=10,
