@@ -66,7 +66,7 @@ terminations: dict[str, TerminationTermCfg] = {
     func=arrived_at_goal,
     params={
       "asset_cfg": SceneEntityCfg("robot", site_names=("root_site",)),
-      "threshold": 4,
+      "threshold": 0.5,
     },
   ),
   # "wall_collision": TerminationTermCfg(

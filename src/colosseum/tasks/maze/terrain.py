@@ -77,8 +77,14 @@ class MazeTerrainEntity(TerrainEntity):
     walls_parent = self._spec.worldbody.add_body(name="walls", pos=(0, 0, 0))
     wall_blocks = self._find_wall_blocks()
 
+    half = (self.maze.cell_size / 2) * self.maze.wall_size_factor
     for env_idx in range(self.cfg.num_envs):
       env_origin = self.env_origins[env_idx]
+
+      env_walls_body = walls_parent.add_body(
+        name=f"{env_idx}_walls",
+        pos=(env_origin[0].item(), env_origin[1].item(), 0),
+      )
 
       for block_idx, (i_range, j_range) in enumerate(wall_blocks):
         i_start, i_end = i_range
@@ -88,19 +94,13 @@ class MazeTerrainEntity(TerrainEntity):
         end_x_l, _ = self.maze.grid_to_local(i_start, j_end)
         _, end_y_l = self.maze.grid_to_local(i_end, j_start)
 
-        center_x_w = (start_x_l + end_x_l) / 2 + env_origin[0].item()
-        center_y_w = (start_y_l + end_y_l) / 2 + env_origin[1].item()
+        center_x_l = (start_x_l + end_x_l) / 2
+        center_y_l = (start_y_l + end_y_l) / 2
 
-        wall_body = walls_parent.add_body(
-          name=f"{env_idx}_wall_block_{block_idx}",
-          pos=(center_x_w, center_y_w, 0),
-        )
-
-        half = (self.maze.cell_size / 2) * self.maze.wall_size_factor
-        wall_body.add_geom(
+        env_walls_body.add_geom(
           name=f"{env_idx}_wall_block_{block_idx}_geom",
           type=mujoco.mjtGeom.mjGEOM_BOX,
-          pos=(0, 0, self.maze.wall_height / 2),
+          pos=(center_x_l, center_y_l, self.maze.wall_height / 2),
           size=(
             half * (j_end - j_start + 1),
             half * (i_end - i_start + 1),

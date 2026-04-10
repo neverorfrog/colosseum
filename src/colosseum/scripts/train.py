@@ -15,6 +15,7 @@ Usage:
 from __future__ import annotations
 
 import sys
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
@@ -26,137 +27,138 @@ from mjlab.utils.torch import configure_torch_backends
 
 # Import tasks to populate registry
 import colosseum.tasks  # noqa: F401
-
 from colosseum.config.types.experiment import TrainConfig
 from colosseum.utils.logger import (
-    generate_run_name,
-    save_experiment_config,
-    setup_loguru,
-    setup_wandb,
-    teardown_wandb,
+  generate_run_name,
+  save_experiment_config,
+  setup_loguru,
+  setup_wandb,
+  teardown_wandb,
 )
 from colosseum.utils.torch import get_device, set_seed
 from colosseum.utils.train.env import make_env
 
 
 def _make_env(env_cfg: ManagerBasedRlEnvCfg, device: str) -> ManagerBasedRlEnv:
-    return make_env(env_cfg, device)
+  return make_env(env_cfg, device)
 
 
 def main() -> None:
-    """Main training entry point."""
-    config = tyro.cli(
-        TrainConfig,
-        config=(tyro.conf.CascadeSubcommandArgs,),
+  """Main training entry point."""
+  config = tyro.cli(
+    TrainConfig,
+    config=(tyro.conf.CascadeSubcommandArgs,),
+  )
+
+  algo_cfg = config.task.algo_cfg
+  assert algo_cfg is not None, (
+    f"Task '{config.task.name}' has no algo_cfg. "
+    "Implement the algo_cfg property in the task's __init__.py."
+  )
+
+  env_cfg = config.task.train_env_cfg
+
+  run_name = generate_run_name(
+    task_name=config.task.name,
+    algo_name=algo_cfg.name,
+    seed=config.seed,
+  )
+
+  if config.logger.group is None:
+    config = replace(config, logger=replace(config.logger, group=config.task.name))
+
+  try:
+    wandb_run, run_dir = setup_wandb(
+      config.logger, config.logger.log_dir, run_name, is_main_process=True
     )
 
-    algo_cfg = config.task.algo_cfg
-    assert algo_cfg is not None, (
-        f"Task '{config.task.name}' has no algo_cfg. "
-        "Implement the algo_cfg property in the task's __init__.py."
+    if run_dir is None:
+      run_dir = Path(config.logger.log_dir) / run_name
+      run_dir.mkdir(parents=True, exist_ok=True)
+
+    setup_loguru(
+      run_dir, is_main_process=True, console_level=config.logger.console_level
     )
 
-    env_cfg = config.task.train_env_cfg
+    logger.info("=" * 80)
+    logger.info(f"Task: {config.task.name}")
+    logger.info(f"Algorithm: {algo_cfg.name}")
+    logger.info(f"Seed: {config.seed}")
+    logger.info(f"Num envs: {env_cfg.scene.num_envs}")
+    logger.info(f"Run directory: {run_dir}")
+    logger.info("=" * 80)
 
-    run_name = generate_run_name(
-        task_name=config.task.name,
-        algo_name=algo_cfg.name,
-        seed=config.seed,
-    )
+    save_experiment_config(config, run_dir, wandb_run)
 
-    if config.logger.group is None:
-        from dataclasses import replace
-        config = replace(config, logger=replace(config.logger, group=config.task.name))
+    def log_fn(metrics: dict[str, float], step: int) -> None:
+      if wandb_run is not None:
+        wandb.log(metrics, step=step)
 
+  except Exception as e:
+    print(f"Failed to set up logging: {e}")
+    sys.exit(1)
+
+  set_seed(config.seed)
+  configure_torch_backends()
+  device = get_device(cuda=config.use_cuda, device_id=0)
+  logger.info(f"Using device: {device}")
+
+  assert env_cfg is not None, "Training env config must be provided in the task config."
+  env = _make_env(env_cfg=env_cfg, device=str(device))
+
+  import importlib
+
+  module_path, class_name = algo_cfg.target.rsplit(":", 1)
+  module = importlib.import_module(module_path)
+  algo_class = getattr(module, class_name)
+
+  algo = algo_class(
+    config=algo_cfg,
+    env=env,
+    device=device,
+    log_fn=log_fn,
+    log_interval=config.logger.log_interval,
+  )
+
+  algo.attach_metadata(
+    experiment_config=config.to_serializable_dict(),
+    wandb_run_id=wandb_run.id if wandb_run is not None else None,
+    timestamp=datetime.now().isoformat(),
+    seed=config.seed,
+    device=str(device),
+  )
+
+  if run_dir is not None and config.logger.save_interval > 0:
+    ckpt_dir = run_dir / "checkpoints"
+    algo.configure_checkpointing(ckpt_dir, config.logger.save_interval)
+
+  if config.checkpoint is not None:
+    checkpoint_path = Path(config.checkpoint)
+    if not checkpoint_path.exists():
+      logger.error(f"Checkpoint file does not exist: {checkpoint_path}")
+      sys.exit(1)
+    logger.info(f"Resuming from checkpoint: {checkpoint_path}")
+    state = algo.load(checkpoint_path)
+    logger.info(f"Resumed from step {state.get('global_step', 0)}")
+
+  logger.info("Starting training...")
+
+  try:
+    algo.train()
+  except KeyboardInterrupt:
+    logger.warning("Training interrupted by user (Ctrl+C)")
+    assert run_dir is not None
+    interrupt_path = run_dir / "checkpoints" / "interrupted.pt"
+    interrupt_path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        wandb_run, run_dir = setup_wandb(
-            config.logger, config.logger.log_dir, run_name, is_main_process=True
-        )
-
-        if run_dir is None:
-            run_dir = Path(config.logger.log_dir) / run_name
-            run_dir.mkdir(parents=True, exist_ok=True)
-
-        setup_loguru(run_dir, is_main_process=True, console_level=config.logger.console_level)
-
-        logger.info("=" * 80)
-        logger.info(f"Task: {config.task.name}")
-        logger.info(f"Algorithm: {algo_cfg.name}")
-        logger.info(f"Seed: {config.seed}")
-        logger.info(f"Num envs: {env_cfg.scene.num_envs}")
-        logger.info(f"Run directory: {run_dir}")
-        logger.info("=" * 80)
-
-        save_experiment_config(config, run_dir, wandb_run)
-
-        def log_fn(metrics: dict[str, float], step: int) -> None:
-            if wandb_run is not None:
-                wandb.log(metrics, step=step)
-
+      algo.save(interrupt_path, global_step=algo.global_step)
+      logger.success(f"Saved interrupted checkpoint: {interrupt_path}")
     except Exception as e:
-        print(f"Failed to set up logging: {e}")
-        sys.exit(1)
+      logger.error(f"Failed to save checkpoint: {e}")
 
-    set_seed(config.seed)
-    configure_torch_backends()
-    device = get_device(cuda=config.use_cuda, device_id=0)
-    logger.info(f"Using device: {device}")
-
-    assert env_cfg is not None, "Training env config must be provided in the task config."
-    env = _make_env(env_cfg=env_cfg, device=str(device))
-
-    import importlib
-    module_path, class_name = algo_cfg.target.rsplit(":", 1)
-    module = importlib.import_module(module_path)
-    algo_class = getattr(module, class_name)
-
-    algo = algo_class(
-        config=algo_cfg,
-        env=env,
-        device=device,
-        log_fn=log_fn,
-        log_interval=config.logger.log_interval,
-    )
-
-    algo.attach_metadata(
-        experiment_config=config.to_serializable_dict(),
-        wandb_run_id=wandb_run.id if wandb_run is not None else None,
-        timestamp=datetime.now().isoformat(),
-        seed=config.seed,
-        device=str(device),
-    )
-
-    if run_dir is not None and config.logger.save_interval > 0:
-        ckpt_dir = run_dir / "checkpoints"
-        algo.configure_checkpointing(ckpt_dir, config.logger.save_interval)
-
-    if config.checkpoint is not None:
-        checkpoint_path = Path(config.checkpoint)
-        if not checkpoint_path.exists():
-            logger.error(f"Checkpoint file does not exist: {checkpoint_path}")
-            sys.exit(1)
-        logger.info(f"Resuming from checkpoint: {checkpoint_path}")
-        state = algo.load(checkpoint_path)
-        logger.info(f"Resumed from step {state.get('global_step', 0)}")
-
-    logger.info("Starting training...")
-
-    try:
-        algo.train()
-    except KeyboardInterrupt:
-        logger.warning("Training interrupted by user (Ctrl+C)")
-        assert run_dir is not None
-        interrupt_path = run_dir / "checkpoints" / "interrupted.pt"
-        interrupt_path.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            algo.save(interrupt_path, global_step=algo.global_step)
-            logger.success(f"Saved interrupted checkpoint: {interrupt_path}")
-        except Exception as e:
-            logger.error(f"Failed to save checkpoint: {e}")
-
-    teardown_wandb()
-    logger.success("Training complete!")
+  teardown_wandb()
+  logger.success("Training complete!")
 
 
 if __name__ == "__main__":
-    main()
+  main()

@@ -82,7 +82,7 @@ def abstractions_cfg(
     "grid": GridAbstractionTermCfg(
       grid_frame=grid_frame,
       obstacle_mask=obstacle_mask,
-      direction_method="gradient",
+      direction_method="harmonic",
       wall_center_weight=wall_center_weight,
     ),
   }

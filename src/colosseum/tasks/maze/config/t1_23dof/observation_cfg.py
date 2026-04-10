@@ -19,8 +19,6 @@ from mjlab.utils.noise import UniformNoiseCfg as Unoise
 
 from colosseum.tasks.maze.mdp.observations import (
   agent_pos_local,
-  agent_vel_body,
-  agent_z_vel,
   goal_pos_local,
 )
 
