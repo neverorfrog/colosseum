@@ -40,13 +40,13 @@ clean slate rather than processing stale out-of-FOV frames.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from mjlab.utils.lab_api.math import quat_apply
 
 from colosseum.algorithm.encoders import DepthEncoder, PrivilegedEncoder
 from colosseum.managers.rma_manager import RmaTerm, RmaTermCfg
@@ -86,11 +86,18 @@ class BallRmaTermCfg(RmaTermCfg):
   depth_clip: float = 6.0
   """Max depth in metres; frames are clipped then normalised to [0, 1]."""
 
-  # --- FOV tracking ---
-  fov_half_angle_rad: float = 0.76
-  """Horizontal half-FOV in radians for the ball-in-FOV check (~43.5°, suitable
-  for a RealSense D455 with ~87° horizontal FOV). Increase to be more permissive,
-  decrease to require the ball to be more centred."""
+  # --- FOV tracking (camera-space projection) ---
+  camera_name: str = "robot/d455_color"
+  """MuJoCo camera name used for the ball-in-FOV projection check.
+  Must match the camera defined in the robot XML and used by head_ball_tracking."""
+
+  camera_fovy: float = 60.0
+  """Vertical field of view in degrees (MuJoCo fovy parameter).
+  RealSense D455 default in the T1 XML."""
+
+  camera_aspect_ratio: float = 4.0 / 3.0
+  """Width / height pixel ratio of the depth sensor output.
+  Used to derive the horizontal FOV from fovy."""
 
   def build(self, env: ManagerBasedRlEnv) -> BallRmaTerm:
     return BallRmaTerm(cfg=self, env=env)
@@ -201,23 +208,35 @@ class BallRmaTerm(RmaTerm):
     )
     depth = depth.clamp(0.0, cfg.depth_clip) / cfg.depth_clip  # [0, 1]
 
-    # --- Ball-in-FOV check from GT state ---
-    robot = self._env.scene["robot"]
-    ball = self._env.scene["ball"]
-    relative_w = ball.data.root_link_pos_w[:, :3] - robot.data.root_link_pos_w[:, :3]
-    quat_w = robot.data.root_link_quat_w
-    quat_conj = torch.cat([quat_w[:, :1], -quat_w[:, 1:]], dim=-1)
-    ball_pos_b = quat_apply(quat_conj, relative_w)  # (N, 3) in robot body frame
+    # --- Ball-in-FOV check using actual camera projection ---
+    # Uses cam_xmat (the real head/camera orientation including neck joints)
+    # so the check correctly accounts for head tracking and vertical FOV.
+    # Mirrors _project_ball_to_camera() in rewards.py.
+    cam_id = self._env.sim.mj_model.camera(cfg.camera_name).id
+    cam_pos = self._env.sim.data.cam_xpos[:, cam_id, :]         # (N, 3)
+    cam_mat = self._env.sim.data.cam_xmat[:, cam_id, :].reshape(-1, 3, 3)  # (N, 3, 3)
 
-    ball_x = ball_pos_b[:, 0]  # forward axis
-    ball_y = ball_pos_b[:, 1]  # lateral axis
-    ball_dist_xy = ball_pos_b[:, :2].norm(dim=-1)
-    angle_h = torch.atan2(ball_y.abs(), ball_x.clamp(min=1e-4))
+    ball_pos_w = self._env.scene["ball"].data.root_link_pos_w   # (N, 3)
+    p_rel = ball_pos_w - cam_pos                                # (N, 3)
+
+    # World → camera frame: p_cam = R^T @ p_rel
+    p_cam = torch.bmm(cam_mat.transpose(1, 2), p_rel.unsqueeze(-1)).squeeze(-1)  # (N, 3)
+
+    # MuJoCo camera convention: optical axis = -z, so ball_depth = -p_cam_z
+    in_front = p_cam[:, 2] < 0                                    # (N,) bool
+    ball_depth = (-p_cam[:, 2]).clamp_min(1e-6)                   # (N,)
+
+    # Perspective divide → normalised image coords (±1 = FOV edge)
+    tan_half_v = math.tan(math.radians(cfg.camera_fovy / 2))
+    tan_half_h = tan_half_v * cfg.camera_aspect_ratio
+    nx = p_cam[:, 0] / (ball_depth * tan_half_h)  # (N,)  right = +1 at edge
+    ny = p_cam[:, 1] / (ball_depth * tan_half_v)  # (N,)  up    = +1 at edge
 
     new_in_fov = (
-      (ball_x > 0.1)
-      & (angle_h < cfg.fov_half_angle_rad)
-      & (ball_dist_xy < cfg.depth_clip)
+      in_front
+      & (nx.abs() <= 1.0)
+      & (ny.abs() <= 1.0)
+      & (ball_depth < cfg.depth_clip)
     )
 
     N = self._env.num_envs
