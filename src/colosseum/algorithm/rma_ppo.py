@@ -308,16 +308,21 @@ class RmaPPO(PPO):
         obs_dict, _, _, _, _ = self.env.step(actions)
         # env.step() calls rma_manager.update() → depth buffers and FOV state are current
 
-        # Snapshot aligned pairs from this physics state
+        # Snapshot aligned pairs from this physics state.
+        # Adaptation obs (depth frames) are offloaded to CPU immediately to
+        # avoid accumulating several GiB on the GPU across num_steps_per_env.
         priv_obs_list.append(self.get_privileged_obs(obs_dict))
-        adapt_obs_list.append(self.rma_manager.get_adaptation_obs())
+        adapt_obs_list.append({k: v.cpu() for k, v in self.rma_manager.get_adaptation_obs().items()})
         adapt_mask_list.append(self.rma_manager.get_adaptation_mask())
 
     # --- Learning phase (only adaptation encoder params have grad) ---
     T = len(priv_obs_list)
     total_size = T * self.env.num_envs
 
-    # Stack list-of-dicts → dict of (T*N, ...) flat tensors
+    # Stack list-of-dicts → dict of (T*N, ...) flat tensors.
+    # Privileged obs are small — keep on GPU.
+    # Adaptation obs (depth frames) are stacked on CPU; mini-batches are moved
+    # to GPU on demand in the learning loop below.
     stacked_priv: dict[str, torch.Tensor] = {
       key: torch.stack([p[key] for p in priv_obs_list], dim=0).flatten(0, 1)
       for key in priv_obs_list[0]
@@ -325,7 +330,7 @@ class RmaPPO(PPO):
     stacked_adapt: dict[str, torch.Tensor] = {
       key: torch.stack([a[key] for a in adapt_obs_list], dim=0).flatten(0, 1)
       for key in adapt_obs_list[0]
-    }
+    }  # values are on CPU
 
     # Stack per-step masks → (T*N,) bool, or None if no term defines a mask
     stacked_mask: torch.Tensor | None = None
@@ -349,9 +354,10 @@ class RmaPPO(PPO):
         batch_idx = indices[start : start + mini_batch_size]
         batch_mask = stacked_mask[batch_idx] if stacked_mask is not None else None
 
+        cpu_batch_idx = batch_idx.cpu()
         metrics = self.adaptation_learning_step(
           privileged_obs={k: v[batch_idx] for k, v in stacked_priv.items()},
-          adaptation_obs={k: v[batch_idx] for k, v in stacked_adapt.items()},
+          adaptation_obs={k: v[cpu_batch_idx].to(self.device) for k, v in stacked_adapt.items()},
           mask=batch_mask,
         )
         total_loss += metrics["adapt/loss"]
