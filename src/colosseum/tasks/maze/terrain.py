@@ -109,6 +109,7 @@ class MazeTerrainEntity(TerrainEntity):
           rgba=(0.8, 0.8, 0.8, 1.0),
           conaffinity=1,
           contype=1,
+          group=1,
         )
 
   def _find_wall_blocks(self) -> list[tuple[tuple[int, int], tuple[int, int]]]:
