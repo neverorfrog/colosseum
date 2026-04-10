@@ -17,6 +17,7 @@ from colosseum.robots.t1_23dof.sensors import (
   FOOT_BALL_CONTACT_SENSOR,
   FOOT_FOOT_CONTACT_SENSOR,
   FOOT_HEIGHT_SCAN,
+  HEAD_DEPTH_SENSOR_TRAIN,
   HEAD_RGBD_SENSOR,
   NONFOOT_BALL_CONTACT_SENSOR,
   NONFOOT_GROUND_CONTACT_SENSOR,
@@ -43,7 +44,9 @@ def scene_cfg(play: bool = False, use_depth_camera: bool = False) -> SceneCfg:
     SELF_COLLISION_SENSOR,
   ]
   if use_depth_camera:
-    sensors.append(HEAD_RGBD_SENSOR)
+    # Play mode uses full-res RGBD for visualisation; training uses the
+    # low-res depth-only sensor to keep GPU memory manageable at scale.
+    sensors.append(HEAD_RGBD_SENSOR if play else HEAD_DEPTH_SENSOR_TRAIN)
   return SceneCfg(
     terrain=TerrainEntityCfg(),
     sensors=tuple(sensors),

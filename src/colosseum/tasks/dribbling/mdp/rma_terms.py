@@ -200,12 +200,13 @@ class BallRmaTerm(RmaTerm):
     # --- Depth frame preprocessing ---
     depth = sensor.data.depth  # (N, H, W, 1)
     depth = depth.permute(0, 3, 1, 2).float()  # (N, 1, H, W)
-    depth = F.interpolate(
-      depth,
-      size=(cfg.height, cfg.width),
-      mode="bilinear",
-      align_corners=False,
-    )
+    if depth.shape[-2:] != (cfg.height, cfg.width):
+      depth = F.interpolate(
+        depth,
+        size=(cfg.height, cfg.width),
+        mode="bilinear",
+        align_corners=False,
+      )
     depth = depth.clamp(0.0, cfg.depth_clip) / cfg.depth_clip  # [0, 1]
 
     # --- Ball-in-FOV check using actual camera projection ---

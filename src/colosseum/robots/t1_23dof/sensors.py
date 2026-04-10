@@ -162,3 +162,17 @@ HEAD_RGBD_SENSOR = CameraSensorCfg(
   use_textures=True,
   use_shadows=False,
 )
+
+# Low-resolution depth-only sensor for Phase 2 training.
+# Renders at the encoder's native input resolution (128x72) so no downsampling
+# is needed and GPU memory scales ~300x better than HEAD_RGBD_SENSOR.
+# Use this in training configs; HEAD_RGBD_SENSOR is for visualisation / play.
+HEAD_DEPTH_SENSOR_TRAIN = CameraSensorCfg(
+  name="head_rgbd",
+  camera_name=f"robot/{HEAD_CAMERA_NAME}",
+  width=128,
+  height=72,
+  data_types=("depth",),
+  use_textures=False,
+  use_shadows=False,
+)
