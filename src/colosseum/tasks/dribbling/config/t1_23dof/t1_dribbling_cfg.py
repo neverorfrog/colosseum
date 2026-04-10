@@ -51,7 +51,6 @@ def scene_cfg(play: bool = False, use_depth_camera: bool = False) -> SceneCfg:
       "robot": get_robot_cfg(foot_self_collision=True, with_head_camera=True),
     },
     num_envs=1,
-    extent=10.0,
   )
 
 

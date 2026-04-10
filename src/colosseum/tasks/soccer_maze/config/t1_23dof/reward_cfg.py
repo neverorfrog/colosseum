@@ -1,9 +1,8 @@
-import math  # noqa: F401
+"""Reward configuration for T1 soccer-maze task."""
 
-from mjlab.envs.mdp import (
-  action_rate_l2,
-  joint_pos_limits,
-)
+import math
+
+from mjlab.envs.mdp import action_rate_l2, joint_pos_limits
 from mjlab.managers import RewardTermCfg
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.tasks.velocity.mdp import (
@@ -15,10 +14,7 @@ from mjlab.tasks.velocity.mdp import (
 )
 
 from colosseum.mdp.rewards import flat_orientation
-from colosseum.robots.t1_23dof.constants import (
-  BASE_BODY_NAME,
-  FOOT_SITE_NAMES,
-)
+from colosseum.robots.t1_23dof.constants import BASE_BODY_NAME, FOOT_SITE_NAMES
 from colosseum.robots.t1_23dof.sensors import (
   FOOT_FOOT_CONTACT_SENSOR,
   NONFOOT_BALL_CONTACT_SENSOR,
@@ -29,7 +25,6 @@ from colosseum.tasks.dribbling.mdp.rewards import (
   ball_vel_norm,
   ball_vel_tracking,
   feet_distance_penalty,
-  head_ball_tracking,
   pose_deviation,
   robot_ball_approach_vel,
   robot_ball_distance,
@@ -37,18 +32,12 @@ from colosseum.tasks.dribbling.mdp.rewards import (
   stance_phase_schedule,
   swing_phase_schedule,
 )
+from colosseum.tasks.maze.mdp.rewards import wall_collisions
+from colosseum.tasks.soccer_maze.mdp.rewards import heading_alignment_world_cmd
 
 rewards = {
   # ------------------------------------------------------------------ #
-  # Head tracking reward                                                 #
-  # ------------------------------------------------------------------ #
-  "head_ball_tracking": RewardTermCfg(
-    func=head_ball_tracking,
-    weight=0.1,
-    params={"camera_name": "robot/d455_color"},
-  ),
-  # ------------------------------------------------------------------ #
-  # Task rewards                                                         #
+  # Task: ball velocity tracking                                         #
   # ------------------------------------------------------------------ #
   "ball_vel_tracking": RewardTermCfg(
     func=ball_vel_tracking,
@@ -65,6 +54,9 @@ rewards = {
     weight=4.0,
     params={"command_name": "ball_vel"},
   ),
+  # ------------------------------------------------------------------ #
+  # Task: robot–ball relationship                                        #
+  # ------------------------------------------------------------------ #
   "robot_ball_distance": RewardTermCfg(
     func=robot_ball_distance,
     weight=1.0,
@@ -79,6 +71,22 @@ rewards = {
     func=robot_ball_approach_vel,
     weight=0.5,
     params={"command_name": "ball_vel"},
+  ),
+  # ------------------------------------------------------------------ #
+  # Heading alignment: robot faces the ball's commanded direction        #
+  # ------------------------------------------------------------------ #
+  "heading_alignment": RewardTermCfg(
+    func=heading_alignment_world_cmd,
+    weight=1.5,
+    params={"command_name": "ball_vel"},
+  ),
+  # ------------------------------------------------------------------ #
+  # Maze: wall collision penalty                                         #
+  # ------------------------------------------------------------------ #
+  "wall_collisions": RewardTermCfg(
+    func=wall_collisions,
+    weight=-10.0,
+    params={"sensor_name": "wall_collision"},
   ),
   # ------------------------------------------------------------------ #
   # Locomotion regularization                                            #
@@ -174,10 +182,7 @@ rewards = {
     params={
       "asset_cfg": SceneEntityCfg(
         "robot",
-        joint_names=(
-          r"(?i).*shoulder.*",
-          r"(?i).*elbow.*",
-        ),
+        joint_names=(r"(?i).*shoulder.*", r"(?i).*elbow.*"),
       ),
       "std": 0.1,
     },
@@ -188,11 +193,7 @@ rewards = {
     params={
       "asset_cfg": SceneEntityCfg(
         "robot",
-        joint_names=(
-          r"(?i).*hip.*",
-          r"(?i).*knee.*",
-          r"(?i).*ankle.*",
-        ),
+        joint_names=(r"(?i).*hip.*", r"(?i).*knee.*", r"(?i).*ankle.*"),
       ),
       "std": 0.3,
     },

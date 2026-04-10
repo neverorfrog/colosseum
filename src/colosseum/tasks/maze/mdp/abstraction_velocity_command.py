@@ -62,9 +62,13 @@ class AbstractionVelocityCommand(CommandTerm):
   def _update_command(self) -> None:
     # 1. Query abstraction direction (world/local frame, unit vec)
     query_entity = self.cfg.query_entity
-    pos_local = agent_pos_local(
-      self.env, SceneEntityCfg(query_entity, site_names=("root_site",))
-    )  # [num_envs, 2]
+    if self.cfg.use_root_pos:
+      entity = self.env.scene[query_entity]
+      pos_local = entity.data.root_link_pos_w[:, :2] - self.env.scene.env_origins[:, :2]
+    else:
+      pos_local = agent_pos_local(
+        self.env, SceneEntityCfg(query_entity, site_names=("root_site",))
+      )  # [num_envs, 2]
 
     abstraction = self.env.abstraction_manager.get_term(self.cfg.abstraction_name)
     assert isinstance(abstraction, GridAbstraction)
@@ -190,6 +194,10 @@ class AbstractionVelocityCommandCfg(CommandTermCfg):
 
   # Entity whose position is queried for abstraction direction
   query_entity: str = "robot"
+
+  # If True, use root_link_pos_w instead of root_site position.
+  # Set this when the queried entity has no named "root_site" (e.g. a ball).
+  use_root_pos: bool = False
 
   # --- Heading-constrained mode only (omnidirectional=False) ---
   body_forward_axis: tuple[float, float, float] = (0.0, 1.0, 0.0)
