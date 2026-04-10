@@ -71,13 +71,13 @@ actor_terms = {
     func=foot_ball_contact_force,
     params={"sensor_name": "foot_ball_contact"},
   ),
+  # Privileged ball state
+  "ball_pos": ObservationTermCfg(func=ball_position),
+  "ball_vel_xy": ObservationTermCfg(func=ball_velocity_xy),
 }
 
 critic_terms = {
   **actor_terms,
-  # Privileged ball state
-  "ball_pos": ObservationTermCfg(func=ball_position),
-  "ball_vel_xy": ObservationTermCfg(func=ball_velocity_xy),
   # Additional privileged terms
   "base_height": ObservationTermCfg(func=base_height),
   "ball_mass": ObservationTermCfg(

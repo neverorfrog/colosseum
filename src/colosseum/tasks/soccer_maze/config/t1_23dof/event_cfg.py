@@ -1,16 +1,13 @@
 """Event configuration for T1 soccer-maze task."""
 
 from mjlab.envs.mdp.dr import body_com_offset, encoder_bias, geom_friction
-from mjlab.envs.mdp.events import (
-  push_by_setting_velocity,
-  reset_joints_by_offset,
-  reset_root_state_uniform,
-)
+from mjlab.envs.mdp.events import push_by_setting_velocity, reset_joints_by_offset
 from mjlab.managers.event_manager import EventTermCfg
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 
 from colosseum.robots.t1_23dof.constants import BASE_BODY_NAME, FOOT_GEOM_NAMES
-from colosseum.tasks.maze.mdp.events import reset_to_valid_maze_position, reset_wall_positions
+from colosseum.tasks.maze.mdp.events import reset_wall_positions
+from colosseum.tasks.soccer_maze.mdp.events import reset_robot_and_ball
 
 events = {
   # Mocap walls must be positioned at startup and after every reset.
@@ -22,29 +19,16 @@ events = {
     func=reset_wall_positions,
     mode="reset",
   ),
-  # Robot spawns in a valid maze cell.
-  "reset_agent_position": EventTermCfg(
-    func=reset_to_valid_maze_position,
+  # Robot and ball are reset together so the ball position is computed from
+  # the same sampled maze cell — no data-staleness between separate events.
+  "reset_robot_and_ball": EventTermCfg(
+    func=reset_robot_and_ball,
     mode="reset",
     params={
-      "asset_cfg": SceneEntityCfg("robot"),
-      "z_offset": 0.665,
+      "robot_z_offset": 0.665,
+      "ball_x_offset": 0.4,
+      "ball_z": 0.2,
       "yaw_range": (0.0, 0.0),
-    },
-  ),
-  # Ball spawns 0.4 m in front of the robot within the same start cell.
-  # The start cell is 5 m × 5 m so this offset never clips a wall.
-  "reset_ball": EventTermCfg(
-    func=reset_root_state_uniform,
-    mode="reset",
-    params={
-      "asset_cfg": SceneEntityCfg("ball"),
-      "pose_range": {
-        "x": (0.4, 0.4),
-        "y": (0.0, 0.0),
-        "z": (0.2, 0.2),
-      },
-      "velocity_range": {},
     },
   ),
   "reset_robot_joints": EventTermCfg(
