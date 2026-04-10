@@ -15,7 +15,6 @@ from mjlab.tasks.velocity.mdp import (
 )
 
 from colosseum.mdp.rewards import flat_orientation
-
 from colosseum.robots.t1_23dof.constants import (
   BASE_BODY_NAME,
   FOOT_SITE_NAMES,
@@ -45,7 +44,7 @@ rewards = {
   # ------------------------------------------------------------------ #
   "head_ball_tracking": RewardTermCfg(
     func=head_ball_tracking,
-    weight=0.1,
+    weight=0.5,
     params={"camera_name": "robot/d455_color"},
   ),
   # ------------------------------------------------------------------ #
