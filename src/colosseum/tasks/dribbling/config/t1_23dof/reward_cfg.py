@@ -29,7 +29,6 @@ from colosseum.tasks.dribbling.mdp.rewards import (
   ball_vel_norm,
   ball_vel_tracking,
   feet_distance_penalty,
-  head_ball_tracking,
   pose_deviation,
   robot_ball_approach_vel,
   robot_ball_distance,
@@ -39,14 +38,6 @@ from colosseum.tasks.dribbling.mdp.rewards import (
 )
 
 rewards = {
-  # ------------------------------------------------------------------ #
-  # Head tracking reward                                                 #
-  # ------------------------------------------------------------------ #
-  "head_ball_tracking": RewardTermCfg(
-    func=head_ball_tracking,
-    weight=2.0,
-    params={"camera_name": "robot/d455_color"},
-  ),
   # ------------------------------------------------------------------ #
   # Task rewards                                                         #
   # ------------------------------------------------------------------ #

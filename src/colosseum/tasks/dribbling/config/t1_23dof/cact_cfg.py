@@ -10,6 +10,7 @@ from mjlab.managers.termination_manager import TerminationTermCfg
 from colosseum.robots.t1_23dof.constants import ACTION_SCALE
 from colosseum.tasks.dribbling.mdp.ball_velocity_command import BallVelocityCommandCfg
 from colosseum.tasks.dribbling.mdp.gait_phase_command import GaitPhaseCommandCfg
+from colosseum.tasks.dribbling.mdp.head_ik_action import HeadIKActionCfg
 
 _ARM_JOINTS = {
   "Left_Shoulder_Pitch",
@@ -21,13 +22,11 @@ _ARM_JOINTS = {
   "Right_Elbow_Pitch",
   "Right_Elbow_Yaw",
 }
-# Head joints need larger scale so the policy can pitch down to look at the ball at foot level.
-# Head_pitch range is [-0.35, 1.22] rad; scale=1.2 covers the full downward range.
-# AAHead_yaw range is [-1.57, 1.57] rad; scale=1.0 covers ±57° lateral tracking.
-_HEAD_SCALE = {"AAHead_yaw": 1.0, "Head_pitch": 1.2}
-# Arms scale=0: with use_default_offset=True, target = HOME_QPOS + 0*action = HOME_QPOS always.
+_HEAD_JOINTS = {"AAHead_yaw", "Head_pitch"}
+# Arms and head scale=0: head targets are overridden by HeadIKActionCfg below.
 _DRIBBLING_ACTION_SCALE = {
-  k: (0.0 if k in _ARM_JOINTS else _HEAD_SCALE.get(k, v)) for k, v in ACTION_SCALE.items()
+  k: (0.0 if k in _ARM_JOINTS or k in _HEAD_JOINTS else v)
+  for k, v in ACTION_SCALE.items()
 }
 
 commands: Dict[str, CommandTermCfg] = {
@@ -48,7 +47,10 @@ actions: dict[str, ActionTermCfg] = {
     actuator_names=(".*",),
     scale=_DRIBBLING_ACTION_SCALE,
     use_default_offset=True,
-  )
+  ),
+  # IK head tracking: runs after joint_pos, overrides the frozen head targets
+  # with analytically computed yaw/pitch to keep the camera on the ball.
+  "head_ik": HeadIKActionCfg(),
 }
 
 curriculum = {}
