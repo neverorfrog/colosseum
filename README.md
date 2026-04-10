@@ -80,6 +80,73 @@ Notes:
 - On Ctrl+C, rank 0 writes `logs/<run>/checkpoints/interrupted.pt`.
 - When resuming (`--checkpoint ...`), all ranks load the same checkpoint path so training state stays synchronized.
 
+### Run training in background (survives terminal loss)
+
+Use `setsid` to detach the process group, then save both PID and PGID so you can stop it later.
+
+Single GPU:
+
+```bash
+RUN_ID=$(date +%Y%m%d_%H%M%S)
+RUN_DIR="$HOME/colosseum_bg/$RUN_ID"
+mkdir -p "$RUN_DIR"
+
+setsid bash -lc '
+    cd /home/phd_student/Spagnoli/colosseum
+    export CUDA_VISIBLE_DEVICES=0
+    exec pixi run -e train train task:t1-dribbling
+' > "$RUN_DIR/train.log" 2>&1 < /dev/null &
+
+LAUNCH_PID=$!
+PGID=$(ps -o pgid= "$LAUNCH_PID" | tr -d " ")
+echo "$LAUNCH_PID" > "$RUN_DIR/train.pid"
+echo "$PGID" > "$RUN_DIR/train.pgid"
+echo "PID=$LAUNCH_PID PGID=$PGID LOG=$RUN_DIR/train.log"
+```
+
+Multi GPU (2x 4090):
+
+```bash
+RUN_ID=$(date +%Y%m%d_%H%M%S)
+RUN_DIR="$HOME/colosseum_bg/$RUN_ID"
+mkdir -p "$RUN_DIR"
+
+setsid bash -lc '
+    cd /home/phd_student/Spagnoli/colosseum
+    export CUDA_VISIBLE_DEVICES=0,1
+    exec pixi run -e train torchrun \
+        --standalone --nproc_per_node=2 \
+        -m colosseum.scripts.train task:t1-dribbling
+' > "$RUN_DIR/train.log" 2>&1 < /dev/null &
+
+LAUNCH_PID=$!
+PGID=$(ps -o pgid= "$LAUNCH_PID" | tr -d " ")
+echo "$LAUNCH_PID" > "$RUN_DIR/train.pid"
+echo "$PGID" > "$RUN_DIR/train.pgid"
+echo "PID=$LAUNCH_PID PGID=$PGID LOG=$RUN_DIR/train.log"
+```
+
+Monitor:
+
+```bash
+ps -fp "$(cat "$RUN_DIR/train.pid")"
+tail -f "$RUN_DIR/train.log"
+```
+
+Stop cleanly (recommended):
+
+```bash
+kill -TERM -"$(cat "$RUN_DIR/train.pgid")"
+```
+
+Force stop if needed:
+
+```bash
+kill -KILL -"$(cat "$RUN_DIR/train.pgid")"
+```
+
+Why PGID: `torchrun` spawns child processes. Killing the process group stops the whole job, not just one process.
+
 
 ## Playing (Evaluation)
 
