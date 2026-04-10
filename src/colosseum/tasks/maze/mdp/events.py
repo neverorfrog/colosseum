@@ -15,6 +15,43 @@ if TYPE_CHECKING:
   from mjlab.envs import ManagerBasedRlEnv
 
 
+def reset_wall_positions(
+  env: ManagerBasedRlEnv,
+  env_ids: torch.Tensor | None,
+) -> None:
+  """Set mocap wall positions for the given environments.
+
+  Must be registered as both a startup event (to initialize all envs) and a
+  reset event (to restore positions after reset_data reverts mocap_pos to the
+  model defaults stored in body_pos).
+
+  Wall blocks are K mocap bodies. For each world, wall position k is:
+      mocap_pos[world, k] = env_origins[world] + wall_local_centers[k]
+
+  Args:
+      env: Environment instance.
+      env_ids: Indices of environments to update. None means all environments.
+  """
+  terrain = env.scene.terrain
+  if not isinstance(terrain, MazeTerrainEntity):
+    return
+
+  local_centers = terrain.wall_local_centers  # (K, 3)
+  if local_centers.shape[0] == 0:
+    return
+
+  if env_ids is None:
+    env_ids = torch.arange(env.num_envs, device=env.device, dtype=torch.long)
+
+  # Broadcast to (N_reset, K, 3)
+  wall_world_pos = (
+    terrain.env_origins[env_ids].unsqueeze(1) + local_centers.unsqueeze(0)
+  )
+
+  # mocap_pos: TorchArray of shape (num_envs, K, 3)
+  env.sim.data.mocap_pos[env_ids] = wall_world_pos
+
+
 def reset_to_valid_maze_position(
   env: ManagerBasedRlEnv,
   env_ids: torch.Tensor | None,

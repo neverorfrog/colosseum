@@ -129,8 +129,16 @@ FOOT_HEIGHT_SCAN = TerrainHeightSensorCfg(
 
 WALL_COLLISION_SENSOR = ContactSensorCfg(
   name="wall_collision",
-  primary=ContactMatch(mode="subtree", pattern="Trunk", entity="robot"),
-  secondary=ContactMatch(mode="subtree", pattern="walls"),
+  primary=ContactMatch(
+    mode="geom",
+    entity="robot",
+    pattern=r".+",
+    exclude=tuple(FOOT_GEOM_NAMES),
+  ),
+  # No secondary: fires for any contact with non-foot robot geoms.
+  # Wall geoms are the only non-terrain objects in the maze, so non-foot
+  # contact is effectively wall contact (ground contact only during falls,
+  # which already trigger height-based termination).
   fields=("found", "force"),
   reduce="netforce",
   num_slots=1,
