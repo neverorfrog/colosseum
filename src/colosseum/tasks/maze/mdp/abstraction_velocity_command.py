@@ -44,6 +44,7 @@ class AbstractionVelocityCommand(CommandTerm):
 
     self.velocity_command = torch.zeros((env.num_envs, 3), device=env.device)
     self._prev_direction = torch.zeros((env.num_envs, 2), device=env.device)
+    self._is_standing = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
 
     self.metrics["velocity_magnitude"] = torch.zeros(env.num_envs, device=env.device)
 
@@ -54,6 +55,9 @@ class AbstractionVelocityCommand(CommandTerm):
   def _resample_command(self, env_ids: torch.Tensor) -> None:
     self.velocity_command[env_ids] = 0.0
     self._prev_direction[env_ids] = 0.0
+    if self.cfg.rel_standing_envs > 0.0:
+      standing = torch.rand(len(env_ids), device=self.env.device) < self.cfg.rel_standing_envs
+      self._is_standing[env_ids] = standing
 
   def _update_command(self) -> None:
     # 1. Query abstraction direction (world/local frame, unit vec)
@@ -110,6 +114,9 @@ class AbstractionVelocityCommand(CommandTerm):
 
     self.velocity_command[:, :2] = dir_body_2d * linear_speed.unsqueeze(-1)
     self.velocity_command[:, 2] = ang_vel
+
+    if self.cfg.rel_standing_envs > 0.0:
+      self.velocity_command[self._is_standing] = 0.0
 
   def _update_metrics(self) -> None:
     self.metrics["velocity_magnitude"] = self.velocity_command[:, :2].norm(dim=-1)
@@ -170,6 +177,9 @@ class AbstractionVelocityCommandCfg(CommandTermCfg):
   abstraction_name: str = "grid"
 
   base_velocity: float = 1.0  # m/s
+
+  # Fraction of envs that receive a zero velocity command each episode (like rel_standing_envs)
+  rel_standing_envs: float = 0.0
 
   # EMA smoothing on the abstraction direction (alpha=1.0 → raw, alpha→0 → heavy)
   ema_smoothing: float = 0.3
