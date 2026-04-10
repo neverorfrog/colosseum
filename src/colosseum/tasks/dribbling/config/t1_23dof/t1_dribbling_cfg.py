@@ -1,6 +1,7 @@
 """Booster T1 dribbling environment configurations."""
 
 from dataclasses import dataclass, field, replace
+from functools import partial
 
 from mjlab.scene import SceneCfg
 from mjlab.sim import MujocoCfg, SimulationCfg
@@ -81,7 +82,7 @@ def sim_cfg() -> SimulationCfg:
 
 
 def booster_t1_dribbling_env_cfg(
-  play: bool = False, use_depth_camera: bool = False
+  play: bool = False, use_depth_camera: bool = False, show_depth: bool = False
 ) -> RmaBasedEnvCfg:
   cfg = RmaBasedEnvCfg(
     scene=scene_cfg(play, use_depth_camera=use_depth_camera),
@@ -105,7 +106,7 @@ def booster_t1_dribbling_env_cfg(
         latent_dim=8,
       ),
     },
-    viz_callbacks=[("camera_ball", DribblingViz)],
+    viz_callbacks=[("camera_ball", partial(DribblingViz, show_depth=show_depth))],
   )
 
   if cfg.scene.terrain is not None and cfg.scene.terrain.terrain_generator is not None:
@@ -133,6 +134,8 @@ class T1DribblingTask(TaskConfig):
   name: str = "t1-dribbling"
   env: RmaBasedEnvCfg = field(default_factory=booster_t1_dribbling_env_cfg)
   use_depth_camera: bool = False
+  show_depth: bool = False
+  """Show a cv2 filmstrip of the encoder's depth buffer during play (--show-depth)."""
 
   @property
   def train_env_cfg(self):
@@ -141,7 +144,9 @@ class T1DribblingTask(TaskConfig):
 
   @property
   def play_env_cfg(self):
-    return booster_t1_dribbling_env_cfg(play=True, use_depth_camera=True)
+    return booster_t1_dribbling_env_cfg(
+      play=True, use_depth_camera=True, show_depth=self.show_depth
+    )
 
   @property
   def algo_cfg(self):

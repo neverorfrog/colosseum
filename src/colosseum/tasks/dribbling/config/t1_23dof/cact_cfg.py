@@ -21,9 +21,13 @@ _ARM_JOINTS = {
   "Right_Elbow_Pitch",
   "Right_Elbow_Yaw",
 }
+# Head joints need larger scale so the policy can pitch down to look at the ball at foot level.
+# Head_pitch range is [-0.35, 1.22] rad; scale=1.2 covers the full downward range.
+# AAHead_yaw range is [-1.57, 1.57] rad; scale=1.0 covers ±57° lateral tracking.
+_HEAD_SCALE = {"AAHead_yaw": 1.0, "Head_pitch": 1.2}
 # Arms scale=0: with use_default_offset=True, target = HOME_QPOS + 0*action = HOME_QPOS always.
 _DRIBBLING_ACTION_SCALE = {
-  k: (0.0 if k in _ARM_JOINTS else v) for k, v in ACTION_SCALE.items()
+  k: (0.0 if k in _ARM_JOINTS else _HEAD_SCALE.get(k, v)) for k, v in ACTION_SCALE.items()
 }
 
 commands: Dict[str, CommandTermCfg] = {

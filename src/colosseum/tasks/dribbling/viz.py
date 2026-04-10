@@ -137,19 +137,63 @@ def draw_camera_ball_overlay(env, vis: DebugVisualizer) -> None:
   )
 
 
+def draw_depth_window(env, env_idx: int) -> None:
+  """Show the encoder's depth buffer in a cv2 filmstrip window.
+
+  Displays all seq_len frames side-by-side with INFERNO colormap so it's
+  easy to see what the depth CNN+LSTM receives.  The window appears only
+  when the depth buffer is populated (Phase 2 with camera in scene) and
+  is a no-op otherwise.  Requires opencv-python.
+  """
+  ball_term = _get_ball_term(env)
+  if ball_term is None or ball_term._depth_buffer is None:
+    return
+
+  try:
+    import cv2
+  except ImportError:
+    return
+
+  buf = ball_term._depth_buffer           # (N, seq_len, 1, H, W)
+  frames = buf[env_idx, :, 0].cpu().numpy()  # (seq_len, H, W)
+
+  strip_max = frames.max()
+  if strip_max > 0:
+    frames = frames / strip_max
+
+  colored = [
+    cv2.applyColorMap((f * 255).clip(0, 255).astype("uint8"), cv2.COLORMAP_INFERNO)
+    for f in frames
+  ]
+  tile = cv2.hconcat(colored)
+
+  win = "Depth (encoder input)"
+  cv2.namedWindow(win, cv2.WINDOW_NORMAL)
+  cv2.setWindowTitle(win, f"Depth — env {env_idx}")
+  cv2.imshow(win, tile)
+  cv2.waitKey(1)
+
+
 class DribblingViz:
   """Viz callback: draws head camera FOV frustum + line to ball.
 
-  Green  → depth encoder active (ball in FOV, buffer warm).
-  Red    → privileged fallback active (ball out of FOV or warming up).
-  Yellow → no FOV tracking (Phase 1 or play without depth camera).
+  3-D overlay (in MuJoCo viewer):
+    Green  → depth encoder active (ball in FOV, buffer warm).
+    Red    → privileged fallback active (ball out of FOV or warming up).
+    Yellow → no FOV tracking (Phase 1 or play without depth camera).
+
+  Optional cv2 depth window (set show_depth=True to enable):
+    Filmstrip of seq_len preprocessed depth frames fed to the encoder.
 
   Registered via RmaBasedEnvCfg.viz_callbacks so DribblingEnv is not needed.
   factory(env) → DribblingViz instance with debug_vis(vis).
   """
 
-  def __init__(self, env: ManagerBasedRlEnv) -> None:
+  def __init__(self, env: ManagerBasedRlEnv, *, show_depth: bool = False) -> None:
     self._env = env
+    self._show_depth = show_depth
 
   def debug_vis(self, vis) -> None:
     draw_camera_ball_overlay(self._env, vis)
+    if self._show_depth:
+      draw_depth_window(self._env, vis.env_idx)

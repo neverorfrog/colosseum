@@ -44,7 +44,7 @@ rewards = {
   # ------------------------------------------------------------------ #
   "head_ball_tracking": RewardTermCfg(
     func=head_ball_tracking,
-    weight=0.5,
+    weight=2.0,
     params={"camera_name": "robot/d455_color"},
   ),
   # ------------------------------------------------------------------ #

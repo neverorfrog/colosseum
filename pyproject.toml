@@ -12,7 +12,8 @@ dependencies = [
 	"tyro>=1.0.1,<2",
 	"pytest>=8.0.2,<10",
 	"wandb>=0.24.1,<0.25.0",
-	"ipykernel"
+	"ipykernel",
+	"opencv-python>=4.13.0.92,<5",
 ]
 
 [tool.pixi.workspace]
