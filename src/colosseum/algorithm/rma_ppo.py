@@ -445,14 +445,24 @@ class RmaPPO(PPO):
 
     self._adaptation_optimizer.zero_grad()
     total_loss.backward()
+    self._distributed_average_optimizer_grads(self._adaptation_optimizer)
     torch.nn.utils.clip_grad_norm_(
       self.rma_manager.adaptation_parameters(), max_norm=1.0
     )
     self._adaptation_optimizer.step()
 
-    metrics = {"adapt/loss": total_loss.item()}
+    metrics = {"adapt/loss": float(total_loss.item())}
     for key, value in loss_terms.items():
-      metrics[f"adapt/{key}"] = value.item()
+      metrics[f"adapt/{key}"] = float(value.item())
+
+    if self.is_distributed:
+      ordered_keys = sorted(metrics.keys())
+      reduced_values = self._distributed_sum_vector([metrics[k] for k in ordered_keys])
+      metrics = {
+        key: reduced_values[i] / self.world_size
+        for i, key in enumerate(ordered_keys)
+      }
+
     return metrics
 
   # ------------------------------------------------------------------
