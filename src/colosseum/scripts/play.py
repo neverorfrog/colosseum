@@ -65,6 +65,22 @@ def _make_env(env_cfg: ManagerBasedRlEnvCfg, device: str, render_mode: str | Non
     return make_env(env_cfg, device, render_mode)
 
 
+def _parse_single_cuda_device(cuda_arg: str) -> int:
+    parts = [p.strip() for p in str(cuda_arg).split(",") if p.strip()]
+    if len(parts) != 1:
+        raise ValueError(
+            f"play expects a single GPU id for --cuda, got '{cuda_arg}'. "
+            "Use one value, e.g. --cuda 0"
+        )
+    try:
+        device_id = int(parts[0])
+    except ValueError as exc:
+        raise ValueError(f"Invalid --cuda value '{cuda_arg}'. Use an integer like 0") from exc
+    if device_id < 0:
+        raise ValueError(f"--cuda must be >= 0, got {device_id}")
+    return device_id
+
+
 def create_agent(config: PlayConfig, env: ManagerBasedRlEnv, device: torch.device):
     if config.agent == "zero":
         logger.info("Using zero-action agent")
@@ -135,14 +151,12 @@ def create_agent(config: PlayConfig, env: ManagerBasedRlEnv, device: torch.devic
 def main() -> None:
     config = tyro.cli(PlayConfig, config=(tyro.conf.CascadeSubcommandArgs,))
 
-    if config.cuda < 0:
-        raise ValueError(f"--cuda must be >= 0, got {config.cuda}")
+    device_id = _parse_single_cuda_device(config.cuda)
 
     logger.remove()
     logger.add(sys.stderr, format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>", level="DEBUG")
 
     configure_torch_backends()
-    device_id = config.cuda
     if config.use_cuda:
         os.environ["MUJOCO_EGL_DEVICE_ID"] = str(device_id)
     device = get_device(cuda=config.use_cuda, device_id=device_id)

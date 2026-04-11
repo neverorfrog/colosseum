@@ -15,6 +15,7 @@ Usage:
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -80,6 +81,30 @@ def _teardown_distributed() -> None:
         dist.destroy_process_group()
 
 
+def _parse_cuda_devices(cuda_arg: str) -> list[int]:
+    """Parse --cuda argument as one or more comma-separated GPU ids."""
+    parts = [p.strip() for p in str(cuda_arg).split(",") if p.strip()]
+    if not parts:
+        raise ValueError("--cuda must contain at least one GPU id, e.g. --cuda 0")
+
+    devices: list[int] = []
+    for part in parts:
+        try:
+            dev = int(part)
+        except ValueError as exc:
+            raise ValueError(
+                f"Invalid --cuda value '{cuda_arg}'. Use integers like 0 or 0,1"
+            ) from exc
+        if dev < 0:
+            raise ValueError(f"--cuda ids must be >= 0, got {dev}")
+        devices.append(dev)
+
+    if len(set(devices)) != len(devices):
+        raise ValueError(f"Duplicate GPU ids in --cuda: {cuda_arg}")
+
+    return devices
+
+
 def main() -> None:
     """Main training entry point."""
     config = tyro.cli(
@@ -87,15 +112,35 @@ def main() -> None:
         config=(tyro.conf.CascadeSubcommandArgs,),
     )
 
-    if config.cuda < 0:
-        raise ValueError(f"--cuda must be >= 0, got {config.cuda}")
+    cuda_devices = _parse_cuda_devices(config.cuda)
 
-    # In single-process mode, hard-pin visibility to the requested physical GPU.
-    # This avoids auxiliary CUDA contexts on other devices (e.g. cuda:0) from
-    # third-party libraries while still letting users choose --cuda N.
+    # For non-distributed launches, support both:
+    # --cuda 1   -> single-GPU run pinned to GPU 1
+    # --cuda 0,1 -> auto-relaunch distributed run over GPUs 0 and 1
     pre_world_size = int(os.environ.get("WORLD_SIZE", "1"))
+    relaunched = os.environ.get("COLOSSEUM_TRAIN_RELAUNCHED") == "1"
     if config.use_cuda and pre_world_size <= 1:
-        os.environ["CUDA_VISIBLE_DEVICES"] = str(config.cuda)
+        if len(cuda_devices) == 1:
+            os.environ["CUDA_VISIBLE_DEVICES"] = str(cuda_devices[0])
+        elif not relaunched:
+            env = os.environ.copy()
+            env["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, cuda_devices))
+            env["COLOSSEUM_TRAIN_RELAUNCHED"] = "1"
+            cmd = [
+                sys.executable,
+                "-m",
+                "torch.distributed.run",
+                "--standalone",
+                f"--nproc_per_node={len(cuda_devices)}",
+                "-m",
+                "colosseum.scripts.train",
+                *sys.argv[1:],
+            ]
+            print(
+                f"[INFO] Relaunching with torchrun on GPUs {env['CUDA_VISIBLE_DEVICES']}",
+                flush=True,
+            )
+            raise SystemExit(subprocess.run(cmd, env=env).returncode)
 
     is_distributed = False
     world_size = 1
@@ -175,7 +220,7 @@ def main() -> None:
 
         if is_distributed and is_main_process:
             logger.warning(
-                "Ignoring --cuda in distributed mode; torchrun LOCAL_RANK determines device."
+                "Using distributed device assignment via LOCAL_RANK."
             )
 
         # Non-distributed mode has a single visible GPU after pinning above,

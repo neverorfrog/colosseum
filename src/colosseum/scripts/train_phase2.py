@@ -62,6 +62,22 @@ class Phase2Config(TrainConfig):
   Smaller default than Phase 1 since the adaptation encoder converges quickly."""
 
 
+def _parse_single_cuda_device(cuda_arg: str) -> int:
+  parts = [p.strip() for p in str(cuda_arg).split(",") if p.strip()]
+  if len(parts) != 1:
+    raise ValueError(
+      f"train-phase2 expects a single GPU id for --cuda, got '{cuda_arg}'. "
+      "Use one value, e.g. --cuda 0"
+    )
+  try:
+    device_id = int(parts[0])
+  except ValueError as exc:
+    raise ValueError(f"Invalid --cuda value '{cuda_arg}'. Use an integer like 0") from exc
+  if device_id < 0:
+    raise ValueError(f"--cuda must be >= 0, got {device_id}")
+  return device_id
+
+
 def main() -> None:
   """Phase 2 RMA adaptation encoder training entry point."""
   config: Phase2Config = tyro.cli(
@@ -131,9 +147,7 @@ def main() -> None:
 
   set_seed(config.seed)
   configure_torch_backends()
-  if config.cuda < 0:
-    raise ValueError(f"--cuda must be >= 0, got {config.cuda}")
-  device_id = config.cuda
+  device_id = _parse_single_cuda_device(config.cuda)
   if config.use_cuda:
     os.environ["MUJOCO_EGL_DEVICE_ID"] = str(device_id)
   device = get_device(cuda=config.use_cuda, device_id=device_id)
