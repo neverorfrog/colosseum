@@ -20,6 +20,7 @@ from colosseum.tasks.dribbling.mdp.observations import (
   ball_friction,
   ball_mass,
   ball_position,
+  ball_vel_command_body,
   ball_velocity,
   ball_velocity_xy,
   base_height,
@@ -55,7 +56,7 @@ actor_terms = {
     params={"command_name": "gait_phase"},
   ),
   "command": ObservationTermCfg(
-    func=generated_commands,
+    func=ball_vel_command_body,
     params={"command_name": "ball_vel"},
   ),
   "foot_ball_contact_force": ObservationTermCfg(
