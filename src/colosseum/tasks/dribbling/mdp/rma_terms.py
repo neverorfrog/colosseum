@@ -219,6 +219,50 @@ class BallRmaTerm(RmaTerm):
     return {cfg.adaptation_obs_group: self._current_frame}
 
   # ------------------------------------------------------------------
+  # Checkpointing (target normalization stats)
+  # ------------------------------------------------------------------
+
+  def extra_state_dict(self) -> dict:
+    return {
+      "target_mean": self._target_mean.cpu(),
+      "target_var": self._target_var.cpu(),
+    }
+
+  def load_extra_state_dict(self, state: dict) -> None:
+    if "target_mean" in state:
+      self._target_mean = state["target_mean"].to(self._env.device)
+    if "target_var" in state:
+      self._target_var = state["target_var"].to(self._env.device)
+
+  # ------------------------------------------------------------------
+  # Inference-time ball prediction (for verification / visualization)
+  # ------------------------------------------------------------------
+
+  def predict_ball_state(self) -> torch.Tensor | None:
+    """Run ball head on current depth frame to get [x, y, vx, vy] prediction.
+
+    Performs a fresh CNN+GRU forward pass on _current_frame using _gru_hidden
+    (without mutating it) so the prediction always reflects the latest frame.
+
+    If target normalization was used during training, the output is
+    denormalized back to physical units.
+
+    Returns:
+      (N, 4) tensor of [x, y, vx, vy] in the same frame as privileged_ball,
+      or None if Phase 1 (no adaptation obs group).
+    """
+    cfg: BallRmaTermCfg = self.cfg  # type: ignore[assignment]
+    if cfg.adaptation_obs_group is None:
+      return None
+    with torch.no_grad():
+      # Fresh forward pass (does not mutate _gru_hidden)
+      z_t, _ = self._depth_encoder(self._current_frame, self._gru_hidden)
+      pred = self._ball_head(z_t)  # (N, 4) — possibly normalized
+      if cfg.normalize_targets:
+        pred = pred * torch.sqrt(self._target_var + 1e-6) + self._target_mean
+      return pred
+
+  # ------------------------------------------------------------------
   # Custom adaptation loss
   # ------------------------------------------------------------------
 

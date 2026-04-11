@@ -201,6 +201,21 @@ class RmaTerm(ManagerTermBase):
     return None
 
   # ------------------------------------------------------------------
+  # Extra state (non-parameter state that must survive checkpointing)
+  # ------------------------------------------------------------------
+
+  def extra_state_dict(self) -> dict:
+    """Return non-parameter state to include in checkpoints.
+
+    Override in subclasses that maintain running statistics or other state
+    not captured by encoder state_dict() (e.g. target normalization stats).
+    """
+    return {}
+
+  def load_extra_state_dict(self, state: dict) -> None:
+    """Restore non-parameter state from a checkpoint."""
+
+  # ------------------------------------------------------------------
   # Lifecycle hooks
   # ------------------------------------------------------------------
 
@@ -502,6 +517,10 @@ class RmaManager(ManagerBase):
       result[name] = {"privileged": term.privileged_encoder.state_dict()}
       if term.adaptation_encoder is not None:
         result[name]["adaptation"] = term.adaptation_encoder.state_dict()
+      # Save per-term extra state (e.g. target normalization stats)
+      extra = term.extra_state_dict()
+      if extra:
+        result[name]["extra"] = extra
     return result
 
   def load_state_dict(self, state: dict[str, dict]) -> None:
@@ -517,3 +536,5 @@ class RmaManager(ManagerBase):
       term.privileged_encoder.load_state_dict(enc_states["privileged"])
       if "adaptation" in enc_states and term.adaptation_encoder is not None:
         term.adaptation_encoder.load_state_dict(enc_states["adaptation"])
+      if "extra" in enc_states:
+        term.load_extra_state_dict(enc_states["extra"])

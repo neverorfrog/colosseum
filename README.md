@@ -26,7 +26,7 @@ pixi run -e train train task:t1-dribbling logger:disabled
 --cuda <device_1>,<device_2> # e.g. --cuda 0,1
 
 # Override num_envs (more envs = faster training, more VRAM)
---task.env.scene.num.envs N
+--task.env.scene.num-envs <num_envs> # --task.env.scene.num-envs 1024
 
 # Override training steps
 --task.algo-cfg.learning-steps 100000000

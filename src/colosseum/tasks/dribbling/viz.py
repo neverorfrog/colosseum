@@ -126,8 +126,10 @@ def draw_camera_ball_overlay(env, vis: DebugVisualizer) -> None:
 
   # Line from camera to ball (full distance so relative depth is visible)
   vis.add_cylinder(start=cam_pos, end=ball_pos, radius=0.004, color=line_color)
-  # Small sphere at ball position for emphasis
-  vis.add_sphere(center=ball_pos, radius=0.03, color=(*line_color[:3], 0.6))
+  # GT marker raised above ball mesh so it's always visible
+  gt_marker_pos = ball_pos.copy()
+  gt_marker_pos[2] += 0.15  # above ball mesh (radius=0.11)
+  vis.add_sphere(center=gt_marker_pos, radius=0.03, color=(*line_color[:3], 0.6))
 
   # FOV frustum
   fovy = ball_term.cfg.camera_fovy if ball_term is not None else 60.0
@@ -135,6 +137,71 @@ def draw_camera_ball_overlay(env, vis: DebugVisualizer) -> None:
   _draw_fov_frustum(
     vis, cam_pos, cam_mat, frustum_color, fovy_deg=fovy, aspect=aspect, depth=2.0
   )
+
+
+def draw_ball_prediction_overlay(env, vis: DebugVisualizer) -> None:
+  """Draw predicted ball position (from depth encoder) as a blue sphere.
+
+  Compares the BallHead prediction against the GT ball position.
+  Only active when the depth encoder is running (Phase 2 with ball in FOV).
+
+  Blue sphere  = predicted ball position (from depth encoder + ball head)
+  Red sphere   = GT ball position (already drawn by draw_camera_ball_overlay)
+  Cyan line    = connects predicted to GT position (shows prediction error)
+  """
+  ball_term = _get_ball_term(env)
+  if ball_term is None:
+    return
+
+  pred = ball_term.predict_ball_state()
+  if pred is None:
+    return
+
+  env_idx = vis.env_idx
+  adapt_mask = ball_term.get_adaptation_mask()
+  if adapt_mask is None or not adapt_mask[env_idx].item():
+    return  # Only show when depth encoder is active
+
+  # pred is [x, y, vx, vy] in robot body frame (same as privileged_ball)
+  pred_xy = pred[env_idx, :2].cpu().numpy()  # (2,)
+
+  # Convert body-frame XY prediction back to world frame for visualization
+  import torch
+
+  robot = env.scene["robot"]
+  robot_pos_w = robot.data.root_link_pos_w[env_idx, :3].cpu().numpy()
+  robot_quat_w = robot.data.root_link_quat_w[env_idx, :].cpu()
+
+  # Rotate body-frame offset to world frame: q * [x, y, 0]
+  from mjlab.utils.lab_api.math import quat_apply
+
+  offset_b = torch.tensor([pred_xy[0], pred_xy[1], 0.0], dtype=torch.float32)
+  offset_w = quat_apply(robot_quat_w.unsqueeze(0), offset_b.unsqueeze(0)).squeeze(0).numpy()
+
+  pred_pos_w = robot_pos_w + offset_w
+  # Raise above ball mesh so both markers are visible
+  pred_pos_w[2] = 0.11 + 0.15  # ball radius + offset
+
+  # Blue sphere at predicted position
+  vis.add_sphere(
+    center=pred_pos_w,
+    radius=0.03,
+    color=(0.1, 0.3, 1.0, 0.7),
+  )
+
+  # Cyan line from prediction to GT marker (both raised)
+  try:
+    ball_pos_gt = env.scene["ball"].data.root_link_pos_w[env_idx, :3].cpu().numpy()
+    gt_marker_pos = ball_pos_gt.copy()
+    gt_marker_pos[2] += 0.15
+    vis.add_cylinder(
+      start=pred_pos_w,
+      end=gt_marker_pos,
+      radius=0.003,
+      color=(0.0, 0.9, 0.9, 0.6),
+    )
+  except (KeyError, Exception):
+    pass
 
 
 def draw_depth_window(env, env_idx: int) -> None:
@@ -170,12 +237,14 @@ def draw_depth_window(env, env_idx: int) -> None:
 
 
 class DribblingViz:
-  """Viz callback: draws head camera FOV frustum + line to ball.
+  """Viz callback: draws head camera FOV frustum + line to ball + ball prediction.
 
   3-D overlay (in MuJoCo viewer):
     Green  → depth encoder active (ball in FOV, buffer warm).
     Red    → privileged fallback active (ball out of FOV or warming up).
     Yellow → no FOV tracking (Phase 1 or play without depth camera).
+    Blue sphere → ball position predicted by depth encoder's ball head.
+    Cyan line   → connects predicted position to GT (shows prediction error).
 
   Optional cv2 depth window (set show_depth=True to enable):
     Current preprocessed depth frame fed to the encoder.
@@ -190,5 +259,41 @@ class DribblingViz:
 
   def debug_vis(self, vis) -> None:
     draw_camera_ball_overlay(self._env, vis)
+    draw_ball_prediction_overlay(self._env, vis)
+    self._print_ball_estimate(vis.env_idx)
     if self._show_depth:
       draw_depth_window(self._env, vis.env_idx)
+
+  def _print_ball_estimate(self, env_idx: int) -> None:
+    """Print estimated vs GT ball position and velocity to terminal."""
+    ball_term = _get_ball_term(self._env)
+    if ball_term is None:
+      return
+
+    pred = ball_term.predict_ball_state()
+    if pred is None:
+      return
+
+    adapt_mask = ball_term.get_adaptation_mask()
+    active = adapt_mask is not None and adapt_mask[env_idx].item()
+
+    p = pred[env_idx].cpu()
+    pred_x, pred_y, pred_vx, pred_vy = p[0].item(), p[1].item(), p[2].item(), p[3].item()
+
+    # GT from observation functions (same frame as prediction)
+    try:
+      gt_tensor = self._env.observation_manager.compute_group("privileged_ball")
+      gt = gt_tensor[env_idx].cpu()
+      gt_x, gt_y, gt_vx, gt_vy = gt[0].item(), gt[1].item(), gt[2].item(), gt[3].item()
+    except Exception:
+      gt_x = gt_y = gt_vx = gt_vy = float("nan")
+
+    status = "\033[92mDEPTH\033[0m" if active else "\033[91mGT-FB\033[0m"
+    print(
+      f"[{status}] "
+      f"pos: ({pred_x:+.3f}, {pred_y:+.3f}) vs GT ({gt_x:+.3f}, {gt_y:+.3f})  "
+      f"vel: ({pred_vx:+.3f}, {pred_vy:+.3f}) vs GT ({gt_vx:+.3f}, {gt_vy:+.3f})  "
+      f"err_pos: {((pred_x-gt_x)**2 + (pred_y-gt_y)**2)**0.5:.4f}  "
+      f"err_vel: {((pred_vx-gt_vx)**2 + (pred_vy-gt_vy)**2)**0.5:.4f}",
+      end="\r",
+    )
