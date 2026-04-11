@@ -23,11 +23,14 @@ from colosseum.tasks.dribbling.mdp.observations import (
   ball_friction,
   ball_mass,
   ball_position,
-  ball_velocity_xy,
   base_height,
   foot_ball_contact_force,
 )
 from colosseum.tasks.maze.mdp.observations import agent_pos_local, goal_pos_local
+from colosseum.tasks.soccer_maze.mdp.observations import (
+  ball_vel_command_body,
+  ball_vel_xy_body,
+)
 
 _ASSET_CFG = SceneEntityCfg("robot", site_names="root_site", joint_names=".*")
 
@@ -63,17 +66,21 @@ actor_terms = {
     func=generated_commands,
     params={"command_name": "gait_phase"},
   ),
+  # Command in body frame: consistent with ball_pos (also body frame).
+  # The world-frame command from AbstractionVelocityCommand cannot be interpreted
+  # without heading knowledge, which the actor lacks (projected_gravity gives
+  # roll/pitch but not yaw).
   "command": ObservationTermCfg(
-    func=generated_commands,
+    func=ball_vel_command_body,
     params={"command_name": "ball_vel"},
   ),
   "foot_ball_contact_force": ObservationTermCfg(
     func=foot_ball_contact_force,
     params={"sensor_name": "foot_ball_contact"},
   ),
-  # Privileged ball state
+  # Ball state in body frame: consistent with command above.
   "ball_pos": ObservationTermCfg(func=ball_position),
-  "ball_vel_xy": ObservationTermCfg(func=ball_velocity_xy),
+  "ball_vel_xy": ObservationTermCfg(func=ball_vel_xy_body),
 }
 
 critic_terms = {
