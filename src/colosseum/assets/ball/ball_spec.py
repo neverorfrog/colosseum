@@ -32,6 +32,7 @@ def get_ball_spec() -> mujoco.MjSpec:
   <worldbody>
     <body name="ball" pos="0 0 {BALL_RADIUS}">
       <freejoint/>
+      <site name='root_site'/>
       <inertial mass="{BALL_MASS}"
                 diaginertia="{inertia} {inertia} {inertia}"
                 pos="0 0 0"/>

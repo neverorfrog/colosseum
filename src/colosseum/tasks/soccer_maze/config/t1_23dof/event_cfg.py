@@ -40,50 +40,50 @@ events = {
       "asset_cfg": SceneEntityCfg("robot", joint_names=(".*",)),
     },
   ),
-  "push_robot": EventTermCfg(
-    func=push_by_setting_velocity,
-    mode="interval",
-    interval_range_s=(1.0, 3.0),
-    params={
-      "velocity_range": {
-        "x": (-0.5, 0.5),
-        "y": (-0.5, 0.5),
-        "z": (-0.4, 0.4),
-        "roll": (-0.52, 0.52),
-        "pitch": (-0.52, 0.52),
-        "yaw": (-0.78, 0.78),
-      },
-    },
-  ),
-  "foot_friction": EventTermCfg(
-    mode="startup",
-    func=geom_friction,
-    params={
-      "asset_cfg": SceneEntityCfg("robot", geom_names=FOOT_GEOM_NAMES),
-      "operation": "abs",
-      "ranges": (0.3, 1.2),
-      "shared_random": True,
-    },
-  ),
-  "encoder_bias": EventTermCfg(
-    mode="startup",
-    func=encoder_bias,
-    params={
-      "asset_cfg": SceneEntityCfg("robot"),
-      "bias_range": (-0.015, 0.015),
-    },
-  ),
-  "base_com": EventTermCfg(
-    mode="startup",
-    func=body_com_offset,
-    params={
-      "asset_cfg": SceneEntityCfg("robot", body_names=(BASE_BODY_NAME)),
-      "operation": "add",
-      "ranges": {
-        0: (-0.025, 0.025),
-        1: (-0.025, 0.025),
-        2: (-0.03, 0.03),
-      },
-    },
-  ),
+  # "push_robot": EventTermCfg(
+  #   func=push_by_setting_velocity,
+  #   mode="interval",
+  #   interval_range_s=(1.0, 3.0),
+  #   params={
+  #     "velocity_range": {
+  #       "x": (-0.5, 0.5),
+  #       "y": (-0.5, 0.5),
+  #       "z": (-0.4, 0.4),
+  #       "roll": (-0.52, 0.52),
+  #       "pitch": (-0.52, 0.52),
+  #       "yaw": (-0.78, 0.78),
+  #     },
+  #   },
+  # ),
+  # "foot_friction": EventTermCfg(
+  #   mode="startup",
+  #   func=geom_friction,
+  #   params={
+  #     "asset_cfg": SceneEntityCfg("robot", geom_names=FOOT_GEOM_NAMES),
+  #     "operation": "abs",
+  #     "ranges": (0.3, 1.2),
+  #     "shared_random": True,
+  #   },
+  # ),
+  # "encoder_bias": EventTermCfg(
+  #   mode="startup",
+  #   func=encoder_bias,
+  #   params={
+  #     "asset_cfg": SceneEntityCfg("robot"),
+  #     "bias_range": (-0.015, 0.015),
+  #   },
+  # ),
+  # "base_com": EventTermCfg(
+  #   mode="startup",
+  #   func=body_com_offset,
+  #   params={
+  #     "asset_cfg": SceneEntityCfg("robot", body_names=(BASE_BODY_NAME)),
+  #     "operation": "add",
+  #     "ranges": {
+  #       0: (-0.025, 0.025),
+  #       1: (-0.025, 0.025),
+  #       2: (-0.03, 0.03),
+  #     },
+  #   },
+  # ),
 }

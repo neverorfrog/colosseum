@@ -91,7 +91,7 @@ terminations: dict[str, TerminationTermCfg] = {
   "arrived_at_goal": TerminationTermCfg(
     func=arrived_at_goal,
     params={
-      "asset_cfg": SceneEntityCfg("robot", site_names=("root_site",)),
+      "asset_cfg": SceneEntityCfg("ball", site_names=("root_site",)),
       "threshold": 0.5,
     },
   ),
