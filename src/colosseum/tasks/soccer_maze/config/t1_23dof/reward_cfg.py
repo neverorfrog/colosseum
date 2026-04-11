@@ -83,11 +83,14 @@ rewards = {
   # ------------------------------------------------------------------ #
   # Maze: wall collision penalty                                         #
   # ------------------------------------------------------------------ #
-  "wall_collisions": RewardTermCfg(
-    func=wall_collisions,
-    weight=-10.0,
-    params={"sensor_name": "wall_collision"},
-  ),
+  # "wall_collisions": RewardTermCfg(
+  #   func=wall_collisions,
+  #   weight=-10.0,
+  #   params={
+  #     "sensor_name": "wall_collision",
+  #     "min_robot_height": 0.3,
+  #   },
+  # ),
   # ------------------------------------------------------------------ #
   # Locomotion regularization                                            #
   # ------------------------------------------------------------------ #

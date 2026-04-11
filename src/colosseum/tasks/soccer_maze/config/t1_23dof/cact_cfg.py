@@ -42,7 +42,7 @@ commands: Dict[str, CommandTermCfg] = {
   "ball_vel": AbstractionVelocityCommandCfg(
     query_entity="ball",
     omnidirectional=True,
-    use_root_pos=True,  # ball has no root_site
+    use_root_pos=False,  # ball has no root_site
     base_velocity=0.3,  # ramped up by curriculum
     ema_smoothing=0.2,
     abstraction_name="grid",
@@ -72,14 +72,14 @@ curriculum: dict[str, CurriculumTermCfg] = {
       ],
     },
   ),
-  "wall_termination": CurriculumTermCfg(
-    func=wall_collision_termination_curriculum,
-    params={
-      "end_step": 500_000_000,
-      "start_prob": 0.0,
-      "end_prob": 1.0,
-    },
-  ),
+  # "wall_termination": CurriculumTermCfg(
+  #   func=wall_collision_termination_curriculum,
+  #   params={
+  #     "end_step": 500_000_000,
+  #     "start_prob": 0.0,
+  #     "end_prob": 1.0,
+  #   },
+  # ),
 }
 
 terminations: dict[str, TerminationTermCfg] = {
@@ -95,11 +95,11 @@ terminations: dict[str, TerminationTermCfg] = {
       "threshold": 0.5,
     },
   ),
-  "wall_collision": TerminationTermCfg(
-    func=collided_with_wall,
-    params={
-      "sensor_name": "wall_collision",
-      "force_threshold": 100.0,
-    },
-  ),
+  # "wall_collision": TerminationTermCfg(
+  #   func=collided_with_wall,
+  #   params={
+  #     "sensor_name": "wall_collision",
+  #     "force_threshold": 100.0,
+  #   },
+  # ),
 }
