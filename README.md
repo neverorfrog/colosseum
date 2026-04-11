@@ -8,11 +8,11 @@ Learning playground for humanoid robots related to robot soccer
 All commands use the `train` pixi environment.
 
 ```bash
-# Train the dribbling task with default settings (phase 1)
+# Phase 1
 pixi run -e train train task:t1-dribbling
 
-# Use depth camera (phase 2)
-pixi run -e train train task:t1-dribbling --task.use-depth-camera
+# Phase 2
+pixi run -e train train-phase2 task:t1-dribbling --task.use-depth-camera
 
 # disable logging
 pixi run -e train train task:t1-dribbling logger:disabled
@@ -44,17 +44,17 @@ Training logs and checkpoints are saved under `./logs/`. Metrics are logged to W
 GIN has two RTX 4090 GPUs, each with 24 GB of VRAM.
 
 * Phase 1 multi-GPU training supports up to 20480 parallel environments (10240 per GPU) (about 40 GB of VRAM).
-* Phase 2 multi-GPU training supports up to 4096 parallel environments (2048 per GPU) (about 44 GB of VRAM).
+* Phase 2 multi-GPU training supports up to 2048 parallel environments (1024 per GPU) (about 44 GB of VRAM).
 
 ### Multi-GPU Training details
 
 Simplest way (recommended):
 ```bash
-pixi run -e train train task:t1-dribbling --cuda 0,1
+# Phase 1
+pixi run -e train train task:t1-dribbling --task.env.scene.num-envs 10240 --cuda 0,1
 
-# Phase 2 (adaptation) with the same simplified syntax
-pixi run -e train train-phase2 task:t1-dribbling --task.use-depth-camera \
-    --task.env.scene.num-envs 2048 --cuda 0,1 --checkpoint checkpoints/dribbling_phase_1.pt
+# Phase 2
+pixi run -e train train-phase2 task:t1-dribbling --task.use-depth-camera --task.env.scene.num-envs 1024 --cuda 0,1 --checkpoint checkpoints/dribbling_phase_1.pt
 ```
 
 Equivalent explicit `torchrun` command to launch one worker per GPU for the custom PPO trainer:
