@@ -2,7 +2,7 @@
 """Phase 2 RMA adaptation encoder training.
 
 Loads a Phase 1 RmaPPO checkpoint, freezes the actor/critic/privileged encoders,
-and trains the adaptation encoders (e.g. depth CNN+LSTM) via MSE regression
+and trains the adaptation encoders (e.g. depth CNN+GRU) via MSE regression
 against the frozen privileged encoder targets.
 
 Usage:

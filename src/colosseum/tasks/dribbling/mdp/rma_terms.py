@@ -95,6 +95,9 @@ class BallRmaTerm(RmaTerm):
     self._target_mean = torch.zeros(4, device=device)
     self._target_var = torch.ones(4, device=device)
 
+    # Cached prediction for visualization (updated each encode_adaptation call)
+    self._last_ball_pred: torch.Tensor | None = None
+
   # ------------------------------------------------------------------
   # Encoder properties
   # ------------------------------------------------------------------
@@ -127,6 +130,15 @@ class BallRmaTerm(RmaTerm):
 
     z_t, new_hidden = self._depth_encoder(frame, self._gru_hidden)
     self._gru_hidden = new_hidden
+
+    # Cache ball head prediction for visualization (no extra forward pass needed)
+    with torch.no_grad():
+      pred = self._ball_head(z_t)
+      if cfg.normalize_targets:
+        pred = pred * torch.sqrt(self._target_var + 1e-6) + self._target_mean
+      self._last_ball_pred = pred
+
+
     return z_t
 
   # ------------------------------------------------------------------
@@ -239,28 +251,16 @@ class BallRmaTerm(RmaTerm):
   # ------------------------------------------------------------------
 
   def predict_ball_state(self) -> torch.Tensor | None:
-    """Run ball head on current depth frame to get [x, y, vx, vy] prediction.
+    """Return the latest ball head prediction [x, y, vx, vy].
 
-    Performs a fresh CNN+GRU forward pass on _current_frame using _gru_hidden
-    (without mutating it) so the prediction always reflects the latest frame.
-
-    If target normalization was used during training, the output is
-    denormalized back to physical units.
+    Cached during encode_adaptation() — no extra forward pass. Returns None
+    if no adaptation encoder is active or encode_adaptation hasn't run yet.
 
     Returns:
       (N, 4) tensor of [x, y, vx, vy] in the same frame as privileged_ball,
-      or None if Phase 1 (no adaptation obs group).
+      or None.
     """
-    cfg: BallRmaTermCfg = self.cfg  # type: ignore[assignment]
-    if cfg.adaptation_obs_group is None:
-      return None
-    with torch.no_grad():
-      # Fresh forward pass (does not mutate _gru_hidden)
-      z_t, _ = self._depth_encoder(self._current_frame, self._gru_hidden)
-      pred = self._ball_head(z_t)  # (N, 4) — possibly normalized
-      if cfg.normalize_targets:
-        pred = pred * torch.sqrt(self._target_var + 1e-6) + self._target_mean
-      return pred
+    return self._last_ball_pred
 
   # ------------------------------------------------------------------
   # Custom adaptation loss

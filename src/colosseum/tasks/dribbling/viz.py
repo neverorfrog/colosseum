@@ -266,6 +266,8 @@ class DribblingViz:
 
   def _print_ball_estimate(self, env_idx: int) -> None:
     """Print estimated vs GT ball position and velocity to terminal."""
+    import sys
+
     ball_term = _get_ball_term(self._env)
     if ball_term is None:
       return
@@ -289,11 +291,12 @@ class DribblingViz:
       gt_x = gt_y = gt_vx = gt_vy = float("nan")
 
     status = "\033[92mDEPTH\033[0m" if active else "\033[91mGT-FB\033[0m"
-    print(
+    msg = (
       f"[{status}] "
       f"pos: ({pred_x:+.3f}, {pred_y:+.3f}) vs GT ({gt_x:+.3f}, {gt_y:+.3f})  "
       f"vel: ({pred_vx:+.3f}, {pred_vy:+.3f}) vs GT ({gt_vx:+.3f}, {gt_vy:+.3f})  "
       f"err_pos: {((pred_x-gt_x)**2 + (pred_y-gt_y)**2)**0.5:.4f}  "
-      f"err_vel: {((pred_vx-gt_vx)**2 + (pred_vy-gt_vy)**2)**0.5:.4f}",
-      end="\r",
+      f"err_vel: {((pred_vx-gt_vx)**2 + (pred_vy-gt_vy)**2)**0.5:.4f}"
     )
+    sys.stdout.write(f"\r{msg}")
+    sys.stdout.flush()

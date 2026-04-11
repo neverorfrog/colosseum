@@ -398,7 +398,8 @@ class RmaPPO(PPO):
     """Build a separate optimizer for adaptation encoders (call before Phase 2).
 
     Freezes actor, critic, and privileged encoders. Only adaptation encoder
-    parameters are left trainable.
+    parameters are left trainable. Puts adaptation encoders in train mode
+    (critical for BatchNorm running stats to update).
     """
     # Freeze everything trained in Phase 1
     for p in self.actor.parameters():
@@ -407,6 +408,14 @@ class RmaPPO(PPO):
       p.requires_grad_(False)
     for p in self.rma_manager.privileged_parameters():
       p.requires_grad_(False)
+
+    # Ensure adaptation encoders are in train mode so BatchNorm stats update.
+    # The privileged encoders stay frozen (eval mode via requires_grad=False,
+    # but we also explicitly set them to eval to freeze BN running stats).
+    for term in self.rma_manager._terms.values():
+      term.privileged_encoder.eval()
+      if term.adaptation_encoder is not None:
+        term.adaptation_encoder.train()
 
     adapt_params = list(self.rma_manager.adaptation_parameters())
     if not adapt_params:
@@ -512,6 +521,10 @@ class RmaPPO(PPO):
     """Save PPO checkpoint including encoder state dicts."""
     if "global_step" not in extra_state:
       raise ValueError("global_step must be provided in extra_state")
+
+    # Always embed the current training phase in metadata so that
+    # load() can set _inference_phase without manual patching.
+    self.attach_metadata(phase=self._phase)
 
     state_dict = {
       "actor_state_dict": self.actor.state_dict(),

@@ -23,13 +23,16 @@ pixi run -e train train task:t1-dribbling logger:disabled
 --cuda <device> # e.g. --cuda 0 to use GPU 0, --cuda 1 to use GPU 1
 
 # Multi-GPU
---cuda <device_1>,<device_2> # e.g. --cuda 0,1
+--cuda <device_1>,<device_2> # e.g. --cuda 0,1, default 0
 
 # Override num_envs (more envs = faster training, more VRAM)
---task.env.scene.num-envs <num_envs> # --task.env.scene.num-envs 1024
+--task.env.scene.num-envs <num_envs> # e.g. --task.env.scene.num-envs 1024, default 1
+
+# Ovveride save_interval for checkpoints
+--logger.save-interval <save_interval> # e.g. --logger.save-interval 1000000, default 1000000
 
 # Override training steps
---task.algo-cfg.learning-steps 100000000
+--task.algo-cfg.learning-steps <learning-steps> # e.g. --task.algo-cfg.learning-steps 100000000 default 500000000
 
 # Resume from a checkpoint
 --checkpoint ./logs/<run-dir>/checkpoints/latest.pt
