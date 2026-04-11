@@ -51,6 +51,10 @@ GIN has two RTX 4090 GPUs, each with 24 GB of VRAM.
 Simplest way (recommended):
 ```bash
 pixi run -e train train task:t1-dribbling --cuda 0,1
+
+# Phase 2 (adaptation) with the same simplified syntax
+pixi run -e train train-phase2 task:t1-dribbling --task.use-depth-camera \
+    --task.env.scene.num-envs 2048 --cuda 0,1 --checkpoint checkpoints/dribbling_phase_1.pt
 ```
 
 Equivalent explicit `torchrun` command to launch one worker per GPU for the custom PPO trainer:

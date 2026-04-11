@@ -522,10 +522,6 @@ class RmaPPO(PPO):
     if "global_step" not in extra_state:
       raise ValueError("global_step must be provided in extra_state")
 
-    # Always embed the current training phase in metadata so that
-    # load() can set _inference_phase without manual patching.
-    self.attach_metadata(phase=self._phase)
-
     state_dict = {
       "actor_state_dict": self.actor.state_dict(),
       "value_net_state_dict": self.value_net.state_dict(),
