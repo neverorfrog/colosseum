@@ -15,6 +15,7 @@ Usage:
 from __future__ import annotations
 
 import os
+import signal
 import subprocess
 import sys
 from datetime import datetime
@@ -140,7 +141,20 @@ def main() -> None:
                 f"[INFO] Relaunching with torchrun on GPUs {env['CUDA_VISIBLE_DEVICES']}",
                 flush=True,
             )
-            raise SystemExit(subprocess.run(cmd, env=env).returncode)
+            proc = subprocess.Popen(cmd, env=env, start_new_session=True)
+            try:
+                raise SystemExit(proc.wait())
+            except KeyboardInterrupt:
+                print("\n[INFO] Ctrl+C received, stopping torchrun workers...", flush=True)
+                try:
+                    os.killpg(proc.pid, signal.SIGTERM)
+                    proc.wait(timeout=10)
+                except Exception:
+                    try:
+                        os.killpg(proc.pid, signal.SIGKILL)
+                    except Exception:
+                        pass
+                raise SystemExit(130)
 
     is_distributed = False
     world_size = 1
