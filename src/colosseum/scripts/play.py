@@ -11,6 +11,7 @@ Usage:
 
 from __future__ import annotations
 
+import os
 import sys
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -134,11 +135,17 @@ def create_agent(config: PlayConfig, env: ManagerBasedRlEnv, device: torch.devic
 def main() -> None:
     config = tyro.cli(PlayConfig, config=(tyro.conf.CascadeSubcommandArgs,))
 
+    if config.cuda < 0:
+        raise ValueError(f"--cuda must be >= 0, got {config.cuda}")
+
     logger.remove()
     logger.add(sys.stderr, format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>", level="DEBUG")
 
     configure_torch_backends()
-    device = get_device(cuda=config.use_cuda, device_id=0)
+    device_id = config.cuda
+    if config.use_cuda:
+        os.environ["MUJOCO_EGL_DEVICE_ID"] = str(device_id)
+    device = get_device(cuda=config.use_cuda, device_id=device_id)
     logger.info(f"Device: {device}")
 
     env_cfg = config.task.play_env_cfg or config.task.train_env_cfg

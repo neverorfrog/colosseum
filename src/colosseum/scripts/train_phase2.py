@@ -18,6 +18,7 @@ Usage:
 
 from __future__ import annotations
 
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -130,7 +131,12 @@ def main() -> None:
 
   set_seed(config.seed)
   configure_torch_backends()
-  device = get_device(cuda=config.use_cuda, device_id=0)
+  if config.cuda < 0:
+    raise ValueError(f"--cuda must be >= 0, got {config.cuda}")
+  device_id = config.cuda
+  if config.use_cuda:
+    os.environ["MUJOCO_EGL_DEVICE_ID"] = str(device_id)
+  device = get_device(cuda=config.use_cuda, device_id=device_id)
   logger.info(f"Using device: {device}")
 
   env = make_env(env_cfg=env_cfg, device=str(device))

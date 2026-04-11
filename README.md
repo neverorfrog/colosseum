@@ -12,6 +12,12 @@ All commands use the `train` pixi environment.
 # Train the dribbling task with default settings (phase 1)
 pixi run -e train train task:t1-dribbling
 
+# Select a specific GPU on multi-GPU machines (single-GPU run)
+pixi run -e train train task:t1-dribbling --cuda 0
+pixi run -e train train task:t1-dribbling --cuda 1
+# In single-GPU mode, --cuda N pins CUDA_VISIBLE_DEVICES=N,
+# so only that physical GPU is visible to the process.
+
 # Use depth camera (phase 2)
 pixi run -e train train task:t1-dribbling --task.use-depth-camera
 
@@ -51,6 +57,7 @@ Notes:
 
 - `--nproc_per_node=2` should match the number of GPUs you want to use.
 - Each rank gets its own CUDA device automatically (`LOCAL_RANK` -> `cuda:LOCAL_RANK`).
+- `--cuda` is for single-GPU runs; in distributed mode it is ignored because `torchrun` assigns devices per rank.
 - Rank 0 writes the main run logs/checkpoints; rank 1 writes to `logs/<run>/rank_1/train.log`.
 - Quick check:
     - `logs/<run>/train.log` should show rank 0 using `cuda:0`.

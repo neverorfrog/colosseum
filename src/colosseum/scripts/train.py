@@ -87,6 +87,16 @@ def main() -> None:
         config=(tyro.conf.CascadeSubcommandArgs,),
     )
 
+    if config.cuda < 0:
+        raise ValueError(f"--cuda must be >= 0, got {config.cuda}")
+
+    # In single-process mode, hard-pin visibility to the requested physical GPU.
+    # This avoids auxiliary CUDA contexts on other devices (e.g. cuda:0) from
+    # third-party libraries while still letting users choose --cuda N.
+    pre_world_size = int(os.environ.get("WORLD_SIZE", "1"))
+    if config.use_cuda and pre_world_size <= 1:
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(config.cuda)
+
     is_distributed = False
     world_size = 1
     rank = 0
@@ -162,7 +172,19 @@ def main() -> None:
         rank_seed = config.seed + rank
         set_seed(rank_seed)
         configure_torch_backends()
+
+        if is_distributed and is_main_process:
+            logger.warning(
+                "Ignoring --cuda in distributed mode; torchrun LOCAL_RANK determines device."
+            )
+
+        # Non-distributed mode has a single visible GPU after pinning above,
+        # so always use logical cuda:0.
         device_id = local_rank if is_distributed else 0
+        if config.use_cuda and not is_distributed:
+            # Keep MuJoCo EGL device aligned with selected CUDA device.
+            os.environ["MUJOCO_EGL_DEVICE_ID"] = str(device_id)
+
         device = get_device(cuda=config.use_cuda, device_id=device_id)
         logger.info(f"Using device: {device}")
 
