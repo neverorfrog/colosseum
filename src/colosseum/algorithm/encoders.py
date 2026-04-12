@@ -43,34 +43,6 @@ class PrivilegedEncoder(nn.Module):
     return self.net(x)
 
 
-class DepthwiseSeparableConv(nn.Module):
-  """Depthwise-separable conv block with stride-2 downsampling.
-
-  Layout: depthwise 3x3 (groups=in_ch) -> pointwise 1x1 -> BN -> ReLU.
-  """
-
-  def __init__(self, in_ch: int, out_ch: int) -> None:
-    super().__init__()
-    self.depthwise = nn.Conv2d(
-      in_ch,
-      in_ch,
-      kernel_size=3,
-      stride=2,
-      padding=1,
-      groups=in_ch,
-      bias=False,
-    )
-    self.pointwise = nn.Conv2d(in_ch, out_ch, kernel_size=1, bias=False)
-    self.bn = nn.BatchNorm2d(out_ch)
-    self.act = nn.ReLU()
-
-  def forward(self, x: Tensor) -> Tensor:
-    x = self.depthwise(x)
-    x = self.pointwise(x)
-    x = self.bn(x)
-    return self.act(x)
-
-
 class DepthEncoder(nn.Module):
   """Shared depth encoder (CNN + GRU) producing a latent for policy input.
 
@@ -80,24 +52,43 @@ class DepthEncoder(nn.Module):
   Sequence training path:
     frames (B, T, 1, H, W), reset_mask (B, T) -> z_seq (B, T, latent_dim)
 
+  Uses standard Conv2d + GroupNorm (no BatchNorm running stats, which are
+  a known RL footgun — running stats drift during training and the frozen
+  privileged target has no such state to mirror).
+
   Args:
     latent_dim: Shared latent dimension exposed to the actor.
     gru_hidden: GRU hidden width.
   """
 
-  def __init__(self, latent_dim: int = 64, gru_hidden: int = 64) -> None:
+  def __init__(self, latent_dim: int = 64, gru_hidden: int = 256) -> None:
     super().__init__()
     self.latent_dim = latent_dim  # type: ignore[assignment]
     self.gru_hidden = gru_hidden
 
-    # Per-frame CNN: (1, H, W) -> latent_dim
+    # Per-frame CNN: (1, 108, 192) -> latent_dim
+    # Spatial downsampling through 4 stride-2 convs:
+    #   108 -> 54 -> 27 -> 14 -> 7
+    #   192 -> 96 -> 48 -> 24 -> 12
+    # Final map (128, 7, 12) = 10752 features, flattened (not pooled) so the
+    # linear head can use spatial position — essential for ball localization.
     self.cnn = nn.Sequential(
-      DepthwiseSeparableConv(1, 16),
-      DepthwiseSeparableConv(16, 32),
-      DepthwiseSeparableConv(32, 64),
-      DepthwiseSeparableConv(64, 64),
-      nn.AdaptiveAvgPool2d(1),
+      nn.Conv2d(1, 32, kernel_size=5, stride=2, padding=2),
+      nn.GroupNorm(8, 32),
+      nn.ReLU(),
+      nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
+      nn.GroupNorm(8, 64),
+      nn.ReLU(),
+      nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1),
+      nn.GroupNorm(8, 128),
+      nn.ReLU(),
+      nn.Conv2d(128, 128, kernel_size=3, stride=2, padding=1),
+      nn.GroupNorm(8, 128),
+      nn.ReLU(),
       nn.Flatten(),
+      nn.Linear(128 * 7 * 12, 256),
+      nn.ReLU(),
+      nn.Linear(256, latent_dim),
     )
 
     # Temporal aggregation over frame embeddings.

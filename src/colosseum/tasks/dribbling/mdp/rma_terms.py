@@ -37,18 +37,21 @@ class BallRmaTermCfg(RmaTermCfg):
 
   # Shared latent dimensions
   latent_dim: int = 64
-  gru_hidden: int = 64
+  gru_hidden: int = 256
 
   # Depth preprocessing
+  # 192x108 preserves the D455's 16:9 aspect ratio (1280x720 native) and
+  # gives the ball ~6 pixels at 2 m — enough for sub-pixel localization and
+  # frame-to-frame motion estimation. Smaller squares like 80x60 both stretch
+  # the image and subsample the ball below the 2-pixel threshold.
   sensor_name: str = "head_rgbd"
-  height: int = 60
-  width: int = 80
+  height: int = 108
+  width: int = 192
   depth_clip: float = 6.0
 
   # Training losses
   lambda_pos: float = 1.0
-  lambda_vel: float = 0.1
-  normalize_targets: bool = True
+  lambda_vel: float = 0.5
   tbptt_chunk_len: int = 16
   warmup_steps: int = 4
 
@@ -92,8 +95,12 @@ class BallRmaTerm(RmaTerm):
     self._reset_event = torch.zeros(N, device=device, dtype=torch.bool)
     self._reset_pending = torch.zeros(N, device=device, dtype=torch.bool)
 
-    self._target_mean = torch.zeros(4, device=device)
-    self._target_var = torch.ones(4, device=device)
+    # Fixed normalization constants (body-frame ball [x, y, vx, vy]).
+    # Chosen from domain knowledge of the dribbling task rather than EMA
+    # running stats: an EMA normalizer creates a feedback loop (stats drift
+    # with resets → target magnitude jumps → loss spikes → more drift).
+    self._target_mean = torch.tensor([0.5, 0.0, 0.0, 0.0], device=device)
+    self._target_std = torch.tensor([1.0, 0.5, 1.5, 1.5], device=device)
 
     # Cached prediction for visualization (updated each encode_adaptation call)
     self._last_ball_pred: torch.Tensor | None = None
@@ -134,8 +141,7 @@ class BallRmaTerm(RmaTerm):
     # Cache ball head prediction for visualization (no extra forward pass needed)
     with torch.no_grad():
       pred = self._ball_head(z_t)
-      if cfg.normalize_targets:
-        pred = pred * torch.sqrt(self._target_var + 1e-6) + self._target_mean
+      pred = pred * self._target_std + self._target_mean
       self._last_ball_pred = pred
 
 
@@ -235,16 +241,11 @@ class BallRmaTerm(RmaTerm):
   # ------------------------------------------------------------------
 
   def extra_state_dict(self) -> dict:
-    return {
-      "target_mean": self._target_mean.cpu(),
-      "target_var": self._target_var.cpu(),
-    }
+    return {}
 
   def load_extra_state_dict(self, state: dict) -> None:
-    if "target_mean" in state:
-      self._target_mean = state["target_mean"].to(self._env.device)
-    if "target_var" in state:
-      self._target_var = state["target_var"].to(self._env.device)
+    # Legacy checkpoints carry EMA target stats that are no longer used.
+    del state
 
   # ------------------------------------------------------------------
   # Inference-time ball prediction (for verification / visualization)
@@ -317,16 +318,7 @@ class BallRmaTerm(RmaTerm):
     )
     pred = self._ball_head(z_seq)  # (B, T, 4)
 
-    target = gt
-    if cfg.normalize_targets:
-      with torch.no_grad():
-        flat = gt.reshape(-1, 4)
-        batch_mean = flat.mean(dim=0)
-        batch_var = flat.var(dim=0, unbiased=False)
-        momentum = 0.01
-        self._target_mean = (1.0 - momentum) * self._target_mean + momentum * batch_mean
-        self._target_var = (1.0 - momentum) * self._target_var + momentum * batch_var
-      target = (gt - self._target_mean) / torch.sqrt(self._target_var + 1e-6)
+    target = (gt - self._target_mean) / self._target_std
 
     pos_err = (pred[:, :, :2] - target[:, :, :2]).pow(2).mean(dim=-1)
     vel_err = (pred[:, :, 2:] - target[:, :, 2:]).pow(2).mean(dim=-1)
