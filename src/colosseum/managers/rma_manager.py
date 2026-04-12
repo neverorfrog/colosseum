@@ -589,6 +589,15 @@ class RmaManager(ManagerBase):
         continue
       term.privileged_encoder.load_state_dict(enc_states["privileged"])
       if "adaptation" in enc_states and term.adaptation_encoder is not None:
-        term.adaptation_encoder.load_state_dict(enc_states["adaptation"])
+        missing, unexpected = term.adaptation_encoder.load_state_dict(
+          enc_states["adaptation"], strict=False
+        )
+        if missing or unexpected:
+          import logging
+          logging.getLogger(__name__).warning(
+            f"[rma] adaptation encoder '{name}' loaded non-strictly "
+            f"(missing={list(missing)}, unexpected={list(unexpected)}). "
+            "Freshly-initialized params will be trained from scratch."
+          )
       if "extra" in enc_states:
         term.load_extra_state_dict(enc_states["extra"])
