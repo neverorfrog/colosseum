@@ -104,6 +104,7 @@ class BallRmaTerm(RmaTerm):
 
     # Cached prediction for visualization (updated each encode_adaptation call)
     self._last_ball_pred: torch.Tensor | None = None
+    self._last_z_adapt: torch.Tensor | None = None
 
   # ------------------------------------------------------------------
   # Encoder properties
@@ -143,7 +144,8 @@ class BallRmaTerm(RmaTerm):
       pred = self._ball_head(z_t)
       pred = pred * self._target_std + self._target_mean
       self._last_ball_pred = pred
-
+      # Cache the adaptation latent for Check B diagnostics
+      self._last_z_adapt = z_t.detach()
 
     return z_t
 
@@ -323,14 +325,27 @@ class BallRmaTerm(RmaTerm):
     pos_err = (pred[:, :, :2] - target[:, :, :2]).pow(2).mean(dim=-1)
     vel_err = (pred[:, :, 2:] - target[:, :, 2:]).pow(2).mean(dim=-1)
 
+    # Direct latent supervision: regress z_adapt onto the frozen privileged
+    # latent. The ball_head bottleneck (64→32→4) has a huge left-nullspace,
+    # so pos/vel losses alone leave z_seq severely under-constrained — the
+    # actor then sees out-of-distribution latents at inference time. This
+    # is the core RMA loss and must dominate the task-head losses.
+    with torch.no_grad():
+      gt_flat = gt.reshape(-1, gt.shape[-1])
+      z_priv_seq = self._priv_encoder(gt_flat).reshape(B, T, -1)
+    latent_err = (z_seq - z_priv_seq).pow(2).mean(dim=-1)
+
     if loss_mask.any():
       pos_loss = pos_err[loss_mask].mean()
       vel_loss = vel_err[loss_mask].mean()
+      latent_loss = latent_err[loss_mask].mean()
     else:
       pos_loss = pos_err.sum() * 0.0
       vel_loss = vel_err.sum() * 0.0
+      latent_loss = latent_err.sum() * 0.0
 
     return {
+      "latent_mse": latent_loss,
       "ball_pos": cfg.lambda_pos * pos_loss,
       "ball_vel": cfg.lambda_vel * vel_loss,
     }

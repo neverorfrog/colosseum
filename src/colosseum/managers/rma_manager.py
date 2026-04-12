@@ -380,11 +380,65 @@ class RmaManager(ManagerBase):
     """
     z_adapt = self.encode(adapt_obs, phase=2)
     mask = self.get_adaptation_mask()
+
+    # --- DEBUG (Check B): compare adapt latent vs priv latent ---------
+    if priv_obs:
+      with torch.no_grad():
+        z_priv_debug = self.encode(priv_obs, phase=1)
+      self._check_b_debug(z_adapt, z_priv_debug, mask)
+    # -------------------------------------------------------------------
+
     if mask is None or not priv_obs:
       return z_adapt
     with torch.no_grad():
       z_priv = self.encode(priv_obs, phase=1)
     return torch.where(mask.unsqueeze(-1), z_adapt, z_priv)
+
+  _check_b_counter: int = 0
+
+  def _check_b_debug(
+    self,
+    z_adapt: torch.Tensor,
+    z_priv: torch.Tensor,
+    mask: torch.Tensor | None,
+  ) -> None:
+    """Print latent-space diagnostics. Throttled to every 10 calls."""
+    self._check_b_counter += 1
+    if self._check_b_counter % 10 != 1:
+      return
+
+    n_envs = z_adapt.shape[0]
+    if mask is None:
+      n_fov = n_envs
+      fov_idx = torch.ones(n_envs, dtype=torch.bool, device=z_adapt.device)
+    else:
+      fov_idx = mask
+      n_fov = int(mask.sum().item())
+
+    z_adapt_norm = z_adapt.norm(dim=-1).mean().item()
+    z_priv_norm = z_priv.norm(dim=-1).mean().item()
+    diff_all = (z_adapt - z_priv).norm(dim=-1).mean().item()
+    diff_fov = (
+      (z_adapt[fov_idx] - z_priv[fov_idx]).norm(dim=-1).mean().item()
+      if n_fov > 0 else float("nan")
+    )
+    z_adapt_std = z_adapt.std(dim=0).mean().item() if n_envs > 1 else float("nan")
+    z_priv_std = z_priv.std(dim=0).mean().item() if n_envs > 1 else float("nan")
+
+    # Per-element comparison of one env to show concrete values
+    sample_ad = z_adapt[0, :4].tolist()
+    sample_pr = z_priv[0, :4].tolist()
+    sample_ad_str = "[" + ", ".join(f"{v:+.2f}" for v in sample_ad) + "]"
+    sample_pr_str = "[" + ", ".join(f"{v:+.2f}" for v in sample_pr) + "]"
+
+    print(
+      f"[CHECK_B] fov={n_fov}/{n_envs} "
+      f"|z_ad|={z_adapt_norm:.3f} |z_pr|={z_priv_norm:.3f} "
+      f"|dz|all={diff_all:.3f} |dz|fov={diff_fov:.3f} "
+      f"sig(z_ad)={z_adapt_std:.3f} sig(z_pr)={z_priv_std:.3f} "
+      f"z_ad[0,:4]={sample_ad_str} z_pr[0,:4]={sample_pr_str}",
+      flush=True,
+    )
 
   # ------------------------------------------------------------------
   # Phase 2 loss

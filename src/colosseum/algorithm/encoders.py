@@ -97,6 +97,11 @@ class DepthEncoder(nn.Module):
     # Project recurrent state back to actor latent size.
     self.head = nn.Linear(gru_hidden, latent_dim)
 
+    # Match PrivilegedEncoder's LayerNorm output so z_adapt lives on the same
+    # manifold as z_priv. Without this, the encoder's output has unbounded
+    # magnitude and the frozen actor sees out-of-distribution latents.
+    self.output_norm = nn.LayerNorm(latent_dim)
+
   def forward(self, frame: Tensor, hidden: Tensor | None = None) -> tuple[Tensor, Tensor]:
     """Encode one frame and advance GRU state.
 
@@ -111,6 +116,7 @@ class DepthEncoder(nn.Module):
     emb = self.cnn(frame)  # (B, latent_dim)
     out, new_hidden = self.gru(emb.unsqueeze(1), hidden)
     z_t = self.head(out[:, 0, :])
+    z_t = self.output_norm(z_t)
     return z_t, new_hidden
 
   def encode_sequence(
