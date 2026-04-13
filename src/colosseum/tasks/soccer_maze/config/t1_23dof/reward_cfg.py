@@ -21,26 +21,27 @@ from colosseum.robots.t1_23dof.sensors import (
   SELF_COLLISION_SENSOR,
 )
 from colosseum.tasks.dribbling.mdp.rewards import (
-  ball_vel_angle,
   ball_vel_norm,
-  ball_vel_tracking,
   feet_distance_penalty,
   pose_deviation,
   robot_ball_approach_vel,
   robot_ball_distance,
-  robot_ball_yaw,
   stance_phase_schedule,
   swing_phase_schedule,
 )
 from colosseum.tasks.maze.mdp.rewards import wall_collisions
-from colosseum.tasks.soccer_maze.mdp.rewards import heading_alignment_world_cmd
+from colosseum.tasks.soccer_maze.mdp.rewards import (
+  ball_vel_angle_body,
+  ball_vel_tracking_body,
+  robot_ball_yaw_body,
+)
 
 rewards = {
   # ------------------------------------------------------------------ #
   # Task: ball velocity tracking                                         #
   # ------------------------------------------------------------------ #
   "ball_vel_tracking": RewardTermCfg(
-    func=ball_vel_tracking,
+    func=ball_vel_tracking_body,
     weight=2.0,
     params={"command_name": "ball_vel", "sharpness": 1.0},
   ),
@@ -50,7 +51,7 @@ rewards = {
     params={"command_name": "ball_vel", "sharpness": 1.0},
   ),
   "ball_vel_angle": RewardTermCfg(
-    func=ball_vel_angle,
+    func=ball_vel_angle_body,
     weight=4.0,
     params={"command_name": "ball_vel"},
   ),
@@ -59,25 +60,17 @@ rewards = {
   # ------------------------------------------------------------------ #
   "robot_ball_distance": RewardTermCfg(
     func=robot_ball_distance,
-    weight=1.0,
-    params={},
+    weight=0.3,
+    params={"sharpness": 0.5},
   ),
   "robot_ball_yaw": RewardTermCfg(
-    func=robot_ball_yaw,
-    weight=4.0,
+    func=robot_ball_yaw_body,
+    weight=1.0,
     params={"command_name": "ball_vel"},
   ),
   "robot_ball_approach_vel": RewardTermCfg(
     func=robot_ball_approach_vel,
     weight=0.5,
-    params={"command_name": "ball_vel"},
-  ),
-  # ------------------------------------------------------------------ #
-  # Heading alignment: robot faces the ball's commanded direction        #
-  # ------------------------------------------------------------------ #
-  "heading_alignment": RewardTermCfg(
-    func=heading_alignment_world_cmd,
-    weight=1.5,
     params={"command_name": "ball_vel"},
   ),
   # ------------------------------------------------------------------ #
@@ -92,7 +85,7 @@ rewards = {
   #   },
   # ),
   # ------------------------------------------------------------------ #
-  # Locomotion regularization                                            #
+  # Locomotion regularization                                          #
   # ------------------------------------------------------------------ #
   "upright": RewardTermCfg(
     func=flat_orientation,

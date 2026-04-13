@@ -33,8 +33,12 @@ _ARM_JOINTS = {
   "Right_Elbow_Pitch",
   "Right_Elbow_Yaw",
 }
+_HEAD_JOINTS = {"Head_pitch", "AAHead_yaw"}
 # Arms are held at home pose; only leg joints are trained.
-_ACTION_SCALE = {k: (0.0 if k in _ARM_JOINTS else v) for k, v in ACTION_SCALE.items()}
+_ACTION_SCALE = {
+  k: (0.0 if k in _ARM_JOINTS or k in _HEAD_JOINTS else v)
+  for k, v in ACTION_SCALE.items()
+}
 
 commands: Dict[str, CommandTermCfg] = {
   # Ball target velocity: world-frame direction from the maze abstraction
@@ -44,7 +48,7 @@ commands: Dict[str, CommandTermCfg] = {
     omnidirectional=True,
     use_root_pos=False,  # ball has no root_site
     base_velocity=0.3,  # ramped up by curriculum
-    ema_smoothing=0.2,
+    ema_smoothing=0.3,
     abstraction_name="grid",
   ),
   "goal": MazeGoalCommandCfg(static_goals=True),
@@ -67,8 +71,8 @@ curriculum: dict[str, CurriculumTermCfg] = {
       "command_name": "ball_vel",
       "velocity_stages": [
         {"step": 0, "base_velocity": 0.3},
-        {"step": 1000 * 24, "base_velocity": 0.6},
-        {"step": 5000 * 24, "base_velocity": 1.0},
+        {"step": 500 * 24, "base_velocity": 0.6},
+        {"step": 1000 * 24, "base_velocity": 1.0},
       ],
     },
   ),

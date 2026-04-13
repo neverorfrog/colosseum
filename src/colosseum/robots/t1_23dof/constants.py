@@ -254,12 +254,22 @@ FOOT_GEOM_NAMES = (
   "left_foot_sphere_3_link",
   "left_foot_sphere_4_link",
   "left_foot_sphere_5_link",
+  "left_foot_sphere_6_link",
+  "left_foot_sphere_7_link",
+  "left_foot_sphere_8_link",
+  "left_foot_sphere_9_link",
+  "left_foot_sphere_10_link",
   "right_foot_link",
   "right_foot_sphere_1_link",
   "right_foot_sphere_2_link",
   "right_foot_sphere_3_link",
   "right_foot_sphere_4_link",
   "right_foot_sphere_5_link",
+  "right_foot_sphere_6_link",
+  "right_foot_sphere_7_link",
+  "right_foot_sphere_8_link",
+  "right_foot_sphere_9_link",
+  "right_foot_sphere_10_link",
 )
 
 FOOT_SITE_NAMES = ("left_foot", "right_foot")

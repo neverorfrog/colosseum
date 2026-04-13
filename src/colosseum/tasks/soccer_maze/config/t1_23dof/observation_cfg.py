@@ -26,7 +26,7 @@ from colosseum.tasks.dribbling.mdp.observations import (
   base_height,
   foot_ball_contact_force,
 )
-from colosseum.tasks.maze.mdp.observations import agent_pos_local, goal_pos_local
+from colosseum.tasks.maze.mdp.observations import agent_pos_local, agent_to_goal_vector
 from colosseum.tasks.soccer_maze.mdp.observations import (
   ball_vel_command_body,
   ball_vel_xy_body,
@@ -41,7 +41,11 @@ actor_terms = {
     params={"asset_cfg": _ASSET_CFG},
     noise=Unoise(n_min=-0.01, n_max=0.01),
   ),
-  "goal_pos_local": ObservationTermCfg(func=goal_pos_local),
+  "agent_to_goal": ObservationTermCfg(
+    func=agent_to_goal_vector,
+    params={"asset_cfg": _ASSET_CFG},
+    noise=Unoise(n_min=-0.05, n_max=0.05),
+  ),
   # Proprioception
   "base_ang_vel": ObservationTermCfg(
     func=builtin_sensor,

@@ -48,7 +48,7 @@ def sim_cfg() -> SimulationCfg:
       timestep=0.005,
       iterations=10,
       ls_iterations=20,
-      ccd_iterations=50,  # needed for ball–wall and ball–foot contacts
+      ccd_iterations=50,
     ),
   )
 
