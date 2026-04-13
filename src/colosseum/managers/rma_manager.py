@@ -148,6 +148,20 @@ class RmaTerm(ManagerTermBase):
       yield from self.adaptation_encoder.parameters()
 
   # ------------------------------------------------------------------
+  # Adaptation mask
+  # ------------------------------------------------------------------
+
+  def get_adaptation_mask(self) -> torch.Tensor | None:
+    """Return (N,) bool mask of envs with a valid adaptation signal.
+
+    None means all envs are valid (default).  Override in subclasses where
+    the adaptation sensor is only available for a subset of environments
+    (e.g. ball within camera FOV) to let the manager apply a masked loss
+    and fall back to the privileged encoder during collection.
+    """
+    return None
+
+  # ------------------------------------------------------------------
   # Adaptation obs snapshot
   # ------------------------------------------------------------------
 
@@ -275,6 +289,54 @@ class RmaManager(ManagerBase):
       result.update(term.get_current_adaptation_obs())
     return result
 
+  def get_adaptation_mask(self) -> torch.Tensor | None:
+    """Combined adaptation mask across all terms (AND).
+
+    Returns None when no term defines a mask (all envs valid for all terms).
+    When multiple terms define masks the AND is taken: an env is valid only
+    when all terms have a valid signal.
+    """
+    masks = [
+      m for term in self._terms.values()
+      if (m := term.get_adaptation_mask()) is not None
+    ]
+    if not masks:
+      return None
+    result = masks[0]
+    for m in masks[1:]:
+      result = result & m
+    return result
+
+  def encode_phase2_with_fallback(
+    self,
+    priv_obs: dict[str, torch.Tensor],
+    adapt_obs: dict[str, torch.Tensor],
+  ) -> torch.Tensor:
+    """Phase 2 encoding with per-env fallback to the privileged encoder.
+
+    For envs where get_adaptation_mask() is True (valid sensor signal):
+      → adaptation encoders (depth CNN+LSTM, gradient-tracked).
+    For envs where get_adaptation_mask() is False (signal unavailable):
+      → privileged encoders detached (no gradient, policy stays well-conditioned).
+
+    If priv_obs is empty (real-hardware deployment, no GT available) the
+    fallback is skipped and the adaptation encoder output is returned as-is.
+
+    Args:
+      priv_obs:   GT privileged obs dict (for the frozen fallback path).
+      adapt_obs:  Sensor adaptation obs dict (depth frames, etc.).
+
+    Returns:
+      z: (N, total_latent_dim) blended latent tensor.
+    """
+    z_adapt = self.encode(adapt_obs, phase=2)
+    mask = self.get_adaptation_mask()
+    if mask is None or not priv_obs:
+      return z_adapt
+    with torch.no_grad():
+      z_priv = self.encode(priv_obs, phase=1)
+    return torch.where(mask.unsqueeze(-1), z_adapt, z_priv)
+
   # ------------------------------------------------------------------
   # Phase 2 loss
   # ------------------------------------------------------------------
@@ -283,22 +345,41 @@ class RmaManager(ManagerBase):
     self,
     privileged_obs: dict[str, torch.Tensor],
     adaptation_obs: dict[str, torch.Tensor],
+    mask: torch.Tensor | None = None,
   ) -> torch.Tensor:
     """MSE loss between frozen privileged targets and adaptation predictions.
 
     Args:
       privileged_obs:  Obs dict for privileged encoder (GT groups).
       adaptation_obs:  Obs dict for adaptation encoder (sensor groups).
+      mask:            Optional (B,) bool tensor (temporally-aligned, snapshotted
+                       at collection time).  When provided, loss is computed only
+                       on mask=True samples.  None = all samples are valid.
 
     Returns:
-      Scalar loss tensor (mean over all terms).
+      Scalar loss tensor (mean over all terms).  Returns a differentiable zero
+      when no valid samples exist so the optimizer step is a safe no-op.
     """
     losses = []
     for term in self._terms.values():
       with torch.no_grad():
         z_target = term.encode_privileged(privileged_obs)
       z_pred = term.encode_adaptation(adaptation_obs)
-      losses.append(F.mse_loss(z_pred, z_target))
+      if mask is not None:
+        if mask.any():
+          losses.append(F.mse_loss(z_pred[mask], z_target[mask]))
+      else:
+        losses.append(F.mse_loss(z_pred, z_target))
+
+    if not losses:
+      # No valid samples — return differentiable zero so backward() is safe
+      for term in self._terms.values():
+        if term.adaptation_encoder is not None:
+          p = next(iter(term.adaptation_encoder.parameters()), None)
+          if p is not None:
+            return p.sum() * 0.0
+      return torch.tensor(0.0, device=self._env.device)
+
     return torch.stack(losses).mean()
 
   # ------------------------------------------------------------------

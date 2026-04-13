@@ -294,6 +294,7 @@ class RmaPPO(PPO):
 
     priv_obs_list: list[dict[str, torch.Tensor]] = []
     adapt_obs_list: list[dict[str, torch.Tensor]] = []
+    adapt_mask_list: list[torch.Tensor | None] = []
 
     # --- Collection phase (all networks frozen) ---
     with torch.no_grad():
@@ -305,17 +306,23 @@ class RmaPPO(PPO):
         actions = self.actor.act_inference(actor_input)
 
         obs_dict, _, _, _, _ = self.env.step(actions)
-        # env.step() calls rma_manager.update() → depth buffers are current
+        # env.step() calls rma_manager.update() → depth buffers and FOV state are current
 
-        # Snapshot aligned pairs from this physics state
+        # Snapshot aligned pairs from this physics state.
+        # Adaptation obs (depth frames) are offloaded to CPU immediately to
+        # avoid accumulating several GiB on the GPU across num_steps_per_env.
         priv_obs_list.append(self.get_privileged_obs(obs_dict))
-        adapt_obs_list.append(self.rma_manager.get_adaptation_obs())
+        adapt_obs_list.append({k: v.cpu() for k, v in self.rma_manager.get_adaptation_obs().items()})
+        adapt_mask_list.append(self.rma_manager.get_adaptation_mask())
 
     # --- Learning phase (only adaptation encoder params have grad) ---
     T = len(priv_obs_list)
     total_size = T * self.env.num_envs
 
-    # Stack list-of-dicts → dict of (T*N, ...) flat tensors
+    # Stack list-of-dicts → dict of (T*N, ...) flat tensors.
+    # Privileged obs are small — keep on GPU.
+    # Adaptation obs (depth frames) are stacked on CPU; mini-batches are moved
+    # to GPU on demand in the learning loop below.
     stacked_priv: dict[str, torch.Tensor] = {
       key: torch.stack([p[key] for p in priv_obs_list], dim=0).flatten(0, 1)
       for key in priv_obs_list[0]
@@ -323,7 +330,18 @@ class RmaPPO(PPO):
     stacked_adapt: dict[str, torch.Tensor] = {
       key: torch.stack([a[key] for a in adapt_obs_list], dim=0).flatten(0, 1)
       for key in adapt_obs_list[0]
-    }
+    }  # values are on CPU
+
+    # Stack per-step masks → (T*N,) bool, or None if no term defines a mask
+    stacked_mask: torch.Tensor | None = None
+    if any(m is not None for m in adapt_mask_list):
+      stacked_mask = torch.stack([
+        m if m is not None
+        else torch.ones(self.env.num_envs, dtype=torch.bool, device=self.device)
+        for m in adapt_mask_list
+      ]).flatten(0, 1)  # (T*N,)
+
+    valid_frac = stacked_mask.float().mean().item() if stacked_mask is not None else 1.0
 
     mini_batch_size = total_size // self.config.num_mini_batches
     total_loss = 0.0
@@ -334,15 +352,21 @@ class RmaPPO(PPO):
       for i in range(self.config.num_mini_batches):
         start = i * mini_batch_size
         batch_idx = indices[start : start + mini_batch_size]
+        batch_mask = stacked_mask[batch_idx] if stacked_mask is not None else None
 
+        cpu_batch_idx = batch_idx.cpu()
         metrics = self.adaptation_learning_step(
           privileged_obs={k: v[batch_idx] for k, v in stacked_priv.items()},
-          adaptation_obs={k: v[batch_idx] for k, v in stacked_adapt.items()},
+          adaptation_obs={k: v[cpu_batch_idx].to(self.device) for k, v in stacked_adapt.items()},
+          mask=batch_mask,
         )
         total_loss += metrics["adapt/loss"]
         num_updates += 1
 
-    return obs_dict, {"adapt/loss": total_loss / max(num_updates, 1)}
+    return obs_dict, {
+      "adapt/loss": total_loss / max(num_updates, 1),
+      "adapt/valid_frac": valid_frac,
+    }
 
   # ------------------------------------------------------------------
   # Phase 2 — adaptation training setup
@@ -374,22 +398,25 @@ class RmaPPO(PPO):
     self,
     privileged_obs: dict[str, torch.Tensor],
     adaptation_obs: dict[str, torch.Tensor],
+    mask: torch.Tensor | None = None,
   ) -> dict[str, float]:
     """Phase 2 learning step: MSE regression of adaptation encoder.
 
     Mirrors train2.py from TUM ADLR:
       z_target = frozen privileged_encoder(privileged_obs).detach()
       z_pred   = adaptation_encoder(adaptation_obs)
-      loss     = MSE(z_pred, z_target)
+      loss     = MSE(z_pred[mask], z_target[mask])   # mask=None → all samples
 
     Args:
       privileged_obs: Dict of GT privileged groups (for frozen target).
       adaptation_obs: Dict of sensor groups (for trainable prediction).
+      mask:           Optional (B,) bool — temporally-aligned validity mask
+                      snapshotted at collection time. None = all samples valid.
 
     Returns:
       Metrics dict with "adapt/loss".
     """
-    loss = self.rma_manager.compute_adaptation_loss(privileged_obs, adaptation_obs)
+    loss = self.rma_manager.compute_adaptation_loss(privileged_obs, adaptation_obs, mask=mask)
 
     self._adaptation_optimizer.zero_grad()
     loss.backward()
@@ -434,7 +461,7 @@ class RmaPPO(PPO):
     """
     if self._inference_phase == 2 and not self.actor.training:
       adapt_obs = self.rma_manager.get_adaptation_obs()
-      z = self.rma_manager.encode(adapt_obs, phase=2)
+      z = self.rma_manager.encode_phase2_with_fallback(privileged_obs, adapt_obs)
     else:
       z = self.rma_manager.encode(privileged_obs)
     return torch.cat([actor_obs, z], dim=-1)

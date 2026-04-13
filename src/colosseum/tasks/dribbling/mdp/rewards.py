@@ -315,8 +315,9 @@ def head_ball_tracking(
   to_ball = ball_pos - cam_pos
   to_ball = to_ball / to_ball.norm(dim=-1, keepdim=True).clamp(min=1e-6)
 
-  # cam_mat row 2 is the camera's z-axis in world frame; optical axis = -z
-  cam_fwd = -cam_mat[:, 2, :]  # [N, 3]
+  # cam_xmat columns are camera axes in world frame (col 2 = z = backward).
+  # Optical axis forward = -z_column.
+  cam_fwd = -cam_mat[:, :, 2]  # [N, 3]
   cos_sim = (cam_fwd * to_ball).sum(dim=-1).clamp(-1.0, 1.0)
   return (1.0 + cos_sim) / 2.0
 

@@ -8,6 +8,7 @@ Three encoders:
 
 from __future__ import annotations
 
+import torch
 import torch.nn as nn
 from torch import Tensor
 
@@ -58,9 +59,13 @@ class DepthEncoder(nn.Module):
     lstm_hidden: LSTM hidden size (internal temporal representation width).
   """
 
-  def __init__(self, latent_dim: int = 8, lstm_hidden: int = 64) -> None:
+  def __init__(self, latent_dim: int = 8, lstm_hidden: int = 64, cnn_chunk: int = 256) -> None:
     super().__init__()
     self.latent_dim = latent_dim  # type: ignore
+    self.cnn_chunk = cnn_chunk
+    """Max frames processed by the CNN in a single call.
+    Prevents OOM when mini-batch × seq_len is large.  256 frames × 72×128 costs
+    ~130 MB for the first conv feature map — safe on an 11 GB card."""
 
     # Per-frame CNN: (1, H, W) → 128D
     self.cnn = nn.Sequential(
@@ -90,7 +95,14 @@ class DepthEncoder(nn.Module):
       z: (B, latent_dim) latent vector.
     """
     B, T, C, H, W = frames.shape
-    e = self.cnn(frames.reshape(B * T, C, H, W))  # (B*T, 128)
+    flat = frames.reshape(B * T, C, H, W)  # (B*T, 1, H, W)
+    if self.cnn_chunk > 0 and flat.shape[0] > self.cnn_chunk:
+      e = torch.cat(
+        [self.cnn(flat[i : i + self.cnn_chunk]) for i in range(0, flat.shape[0], self.cnn_chunk)],
+        dim=0,
+      )  # (B*T, 128)
+    else:
+      e = self.cnn(flat)  # (B*T, 128)
     e = e.reshape(B, T, -1)  # (B, T, 128)
     _, (h, _) = self.lstm(e)  # h: (1, B, lstm_hidden)
     return self.head(h.squeeze(0))  # (B, latent_dim)

@@ -1,6 +1,7 @@
 """Booster T1 dribbling environment configurations."""
 
 from dataclasses import dataclass, field, replace
+from functools import partial
 
 from mjlab.scene import SceneCfg
 from mjlab.sim import MujocoCfg, SimulationCfg
@@ -16,6 +17,7 @@ from colosseum.robots.t1_23dof.sensors import (
   FOOT_BALL_CONTACT_SENSOR,
   FOOT_FOOT_CONTACT_SENSOR,
   FOOT_HEIGHT_SCAN,
+  HEAD_DEPTH_SENSOR_TRAIN,
   HEAD_RGBD_SENSOR,
   NONFOOT_BALL_CONTACT_SENSOR,
   NONFOOT_GROUND_CONTACT_SENSOR,
@@ -42,7 +44,9 @@ def scene_cfg(play: bool = False, use_depth_camera: bool = False) -> SceneCfg:
     SELF_COLLISION_SENSOR,
   ]
   if use_depth_camera:
-    sensors.append(HEAD_RGBD_SENSOR)
+    # Play mode uses full-res RGBD for visualisation; training uses the
+    # low-res depth-only sensor to keep GPU memory manageable at scale.
+    sensors.append(HEAD_RGBD_SENSOR if play else HEAD_DEPTH_SENSOR_TRAIN)
   return SceneCfg(
     terrain=TerrainEntityCfg(),
     sensors=tuple(sensors),
@@ -80,7 +84,7 @@ def sim_cfg() -> SimulationCfg:
 
 
 def booster_t1_dribbling_env_cfg(
-  play: bool = False, use_depth_camera: bool = False
+  play: bool = False, use_depth_camera: bool = False, show_depth: bool = False
 ) -> RmaBasedEnvCfg:
   cfg = RmaBasedEnvCfg(
     scene=scene_cfg(play, use_depth_camera=use_depth_camera),
@@ -104,7 +108,7 @@ def booster_t1_dribbling_env_cfg(
         latent_dim=8,
       ),
     },
-    viz_callbacks=[("camera_ball", DribblingViz)],
+    viz_callbacks=[("camera_ball", partial(DribblingViz, show_depth=show_depth))],
   )
 
   if cfg.scene.terrain is not None and cfg.scene.terrain.terrain_generator is not None:
@@ -132,6 +136,8 @@ class T1DribblingTask(TaskConfig):
   name: str = "t1-dribbling"
   env: RmaBasedEnvCfg = field(default_factory=booster_t1_dribbling_env_cfg)
   use_depth_camera: bool = False
+  show_depth: bool = False
+  """Show a cv2 filmstrip of the encoder's depth buffer during play (--show-depth)."""
 
   @property
   def train_env_cfg(self):
@@ -140,7 +146,9 @@ class T1DribblingTask(TaskConfig):
 
   @property
   def play_env_cfg(self):
-    return booster_t1_dribbling_env_cfg(play=True, use_depth_camera=True)
+    return booster_t1_dribbling_env_cfg(
+      play=True, use_depth_camera=True, show_depth=self.show_depth
+    )
 
   @property
   def algo_cfg(self):
