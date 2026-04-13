@@ -405,7 +405,7 @@ class PPO(BaseAlgorithm):
           - 0.5,
           dim=-1,
         )
-        kl_mean = kl.mean().item()
+        kl_mean = self._distributed_mean_scalar(float(kl.mean().item()))
 
       # Adaptive KL LR scheduling (RSL-RL pattern: single LR)
       if self.config.schedule == "adaptive" and self.config.desired_kl is not None:
@@ -448,6 +448,7 @@ class PPO(BaseAlgorithm):
       # --- Gradient step (single optimizer, RSL-RL style) ---
       self.optimizer.zero_grad()
       loss.backward()
+      self._distributed_average_optimizer_grads(self.optimizer)
       torch.nn.utils.clip_grad_norm_(
         self.actor.parameters(), max_norm=self.config.max_grad_norm
       )
@@ -462,6 +463,19 @@ class PPO(BaseAlgorithm):
       total_entropy += entropy.mean().item()
       total_kl += kl_mean
       num_updates += 1
+
+    if self.is_distributed:
+      totals = self._distributed_sum_vector(
+        [
+          total_surrogate_loss,
+          total_value_loss,
+          total_entropy,
+          total_kl,
+          float(num_updates),
+        ]
+      )
+      total_surrogate_loss, total_value_loss, total_entropy, total_kl = totals[:4]
+      num_updates = int(totals[4])
 
     self.rollout_buffer.clear()
 

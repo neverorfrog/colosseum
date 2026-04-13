@@ -20,6 +20,7 @@ class BaseExperimentConfig:
     """Base configuration shared between training and playing."""
 
     use_cuda: bool = True
+    cuda: str = "0"
     checkpoint: str | None = None
 
     task: Annotated[

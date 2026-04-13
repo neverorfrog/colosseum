@@ -6,6 +6,7 @@ for RL algorithms.
 
 from __future__ import annotations
 
+import os
 import time
 from abc import ABC, abstractmethod
 from collections import deque
@@ -111,6 +112,17 @@ class BaseAlgorithm(ABC):
 
     # Global step counter (total env transitions across the full training run)
     self.global_step: int = 0
+
+    # Distributed training state (set by torchrun process env).
+    self.world_size = int(os.environ.get("WORLD_SIZE", "1"))
+    self.rank = int(os.environ.get("RANK", "0"))
+    self.local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+    self.is_distributed = (
+      self.world_size > 1
+      and torch.distributed.is_available()
+      and torch.distributed.is_initialized()
+    )
+    self.is_main_process = self.rank == 0
 
     # Setting the seed
     self._maybe_seed()
@@ -227,6 +239,10 @@ class BaseAlgorithm(ABC):
         use_rich: Whether to use Rich console output
         steps_per_log_step: Env steps per log step (1 for SAC, num_steps_per_env for PPO)
     """
+    # Only rank 0 emits logs/metrics in distributed mode.
+    if not self.is_main_process:
+      return
+
     # Average accumulated losses
     avg_losses: dict[str, float] = {
       k: float(np.mean(v)) for k, v in losses_buffer.items() if len(v) > 0
@@ -409,6 +425,9 @@ class BaseAlgorithm(ABC):
 
   def _maybe_evaluate(self, step: int) -> None:
     """Run evaluation if configured and due at this step."""
+    if not self.is_main_process:
+      return
+
     if self._eval_env is None or self._eval_interval <= 0:
       return
 
@@ -597,6 +616,49 @@ class BaseAlgorithm(ABC):
 
     torch.save(cpu_dict, path)
     logger.success(f"Checkpoint saved: {path}")
+
+  def _distributed_average_optimizer_grads(self, optimizer: torch.optim.Optimizer) -> None:
+    """Average gradients across all distributed workers.
+
+    This implements synchronous data-parallel optimization without wrapping the
+    model in DDP, which keeps custom actor methods and checkpoint format intact.
+    """
+    if not self.is_distributed:
+      return
+
+    seen: set[int] = set()
+    for group in optimizer.param_groups:
+      for param in group["params"]:
+        if param is None or param.grad is None:
+          continue
+        param_id = id(param)
+        if param_id in seen:
+          continue
+        seen.add(param_id)
+
+        torch.distributed.all_reduce(
+          param.grad.data, op=torch.distributed.ReduceOp.SUM
+        )
+        param.grad.data.div_(self.world_size)
+
+  def _distributed_mean_scalar(self, value: float) -> float:
+    """Compute cross-rank mean for a scalar float."""
+    if not self.is_distributed:
+      return value
+
+    tensor = torch.tensor(value, device=self.device, dtype=torch.float32)
+    torch.distributed.all_reduce(tensor, op=torch.distributed.ReduceOp.SUM)
+    tensor /= self.world_size
+    return float(tensor.item())
+
+  def _distributed_sum_vector(self, values: list[float]) -> list[float]:
+    """Compute cross-rank sum for a small float vector."""
+    if not self.is_distributed:
+      return values
+
+    tensor = torch.tensor(values, device=self.device, dtype=torch.float64)
+    torch.distributed.all_reduce(tensor, op=torch.distributed.ReduceOp.SUM)
+    return [float(v) for v in tensor.tolist()]
 
   def _load_checkpoint(
     self,

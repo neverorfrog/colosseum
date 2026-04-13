@@ -20,13 +20,29 @@ def ball_velocity(env: ManagerBasedRlEnv) -> torch.Tensor:
   return env.scene["ball"].data.root_link_lin_vel_w[:, :3]
 
 
-def ball_velocity_xy(env: ManagerBasedRlEnv) -> torch.Tensor:
-  """Ball linear velocity XY in world frame. Shape (N, 2).
+def ball_vel_command_body(env: ManagerBasedRlEnv, command_name: str) -> torch.Tensor:
+  """Desired ball velocity command rotated into robot body frame. Shape (N, 3).
 
-  Used as encoder input (privileged_ball group). XY only matches the plan's
-  4D encoder input: ball_pos_xy(2) + ball_vel_xy(2).
+  The command manager stores the target in world frame. This observation
+  rotates it into the robot's body frame so the actor sees a frame-consistent
+  view: body-frame command + body-frame ball state from the encoder.
+  Rewards remain world-frame internally and are unaffected.
   """
-  return env.scene["ball"].data.root_link_lin_vel_w[:, :2]
+  robot = env.scene["robot"]
+  cmd_w = env.command_manager.get_command(command_name)  # (N, 3) world
+  quat_w = robot.data.root_link_quat_w
+  quat_conj = torch.cat([quat_w[:, :1], -quat_w[:, 1:]], dim=-1)
+  return quat_apply(quat_conj, cmd_w)
+
+
+def ball_velocity_xy(env: ManagerBasedRlEnv) -> torch.Tensor:
+  """Ball linear velocity XY in robot body frame. Shape (N, 2)."""
+  robot = env.scene["robot"]
+  ball = env.scene["ball"]
+  vel_w = ball.data.root_link_lin_vel_w[:, :3]
+  quat_w = robot.data.root_link_quat_w
+  quat_conj = torch.cat([quat_w[:, :1], -quat_w[:, 1:]], dim=-1)
+  return quat_apply(quat_conj, vel_w)[:, :2]
 
 
 def base_height(env: ManagerBasedRlEnv) -> torch.Tensor:

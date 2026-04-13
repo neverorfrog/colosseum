@@ -1,9 +1,9 @@
 """Encoder networks for RMA-style privileged information encoding.
 
-Three encoders:
+Current architecture:
   PrivilegedEncoder  — small MLP, used in Phase 1 with GT inputs
-  DepthEncoder       — CNN + LSTM, used in Phase 2 with depth frames
-  ProjectionHead     — auxiliary head for (nx, ny) supervision (Phase 2 only)
+  DepthEncoder       — shared depth encoder (CNN + GRU), used in Phase 2
+  BallHead           — task head predicting [x, y, vx, vy] from DepthEncoder latent
 """
 
 from __future__ import annotations
@@ -44,92 +44,140 @@ class PrivilegedEncoder(nn.Module):
 
 
 class DepthEncoder(nn.Module):
-  """CNN + LSTM depth encoder producing a latent matching PrivilegedEncoder.
+  """Shared depth encoder (CNN + GRU) producing a latent for policy input.
 
-  Encodes a sequence of depth frames from a head-mounted camera into a compact
-  latent that can directly replace the PrivilegedEncoder output (same latent_dim).
+  Single-step inference path:
+    frame (B, 1, H, W), hidden (1, B, Hh) -> z_t (B, latent_dim), new_hidden
 
-  Input:  (B, T, 1, H, W) depth frames, clipped and normalized to [0, 1]
-  Output: (B, latent_dim)
+  Sequence training path:
+    frames (B, T, 1, H, W), reset_mask (B, T) -> z_seq (B, T, latent_dim)
 
-  The CNN uses AdaptiveAvgPool2d so any spatial resolution >= 16x16 works.
+  Uses standard Conv2d + GroupNorm (no BatchNorm running stats, which are
+  a known RL footgun — running stats drift during training and the frozen
+  privileged target has no such state to mirror).
 
   Args:
-    latent_dim:  Output latent dimension. Must match the PrivilegedEncoder it replaces.
-    lstm_hidden: LSTM hidden size (internal temporal representation width).
+    latent_dim: Shared latent dimension exposed to the actor.
+    gru_hidden: GRU hidden width.
   """
 
-  def __init__(self, latent_dim: int = 8, lstm_hidden: int = 64, cnn_chunk: int = 256) -> None:
+  def __init__(self, latent_dim: int = 64, gru_hidden: int = 256) -> None:
     super().__init__()
-    self.latent_dim = latent_dim  # type: ignore
-    self.cnn_chunk = cnn_chunk
-    """Max frames processed by the CNN in a single call.
-    Prevents OOM when mini-batch × seq_len is large.  256 frames × 72×128 costs
-    ~130 MB for the first conv feature map — safe on an 11 GB card."""
+    self.latent_dim = latent_dim  # type: ignore[assignment]
+    self.gru_hidden = gru_hidden
 
-    # Per-frame CNN: (1, H, W) → 128D
+    # Per-frame CNN: (1, 108, 192) -> latent_dim
+    # Spatial downsampling through 4 stride-2 convs:
+    #   108 -> 54 -> 27 -> 14 -> 7
+    #   192 -> 96 -> 48 -> 24 -> 12
+    # Final map (128, 7, 12) = 10752 features, flattened (not pooled) so the
+    # linear head can use spatial position — essential for ball localization.
     self.cnn = nn.Sequential(
-      nn.Conv2d(1, 32, 5, 2),
-      nn.BatchNorm2d(32),
+      nn.Conv2d(1, 32, kernel_size=5, stride=2, padding=2),
+      nn.GroupNorm(8, 32),
       nn.ReLU(),
-      nn.Conv2d(32, 64, 3, 2),
-      nn.BatchNorm2d(64),
+      nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
+      nn.GroupNorm(8, 64),
       nn.ReLU(),
-      nn.Conv2d(64, 128, 3, 2),
-      nn.BatchNorm2d(128),
+      nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1),
+      nn.GroupNorm(8, 128),
       nn.ReLU(),
-      nn.AdaptiveAvgPool2d(1),
-      nn.Flatten(),  # → (128,)
+      nn.Conv2d(128, 128, kernel_size=3, stride=2, padding=1),
+      nn.GroupNorm(8, 128),
+      nn.ReLU(),
+      nn.Flatten(),
+      nn.Linear(128 * 7 * 12, 256),
+      nn.ReLU(),
+      nn.Linear(256, latent_dim),
     )
 
-    # Temporal aggregation: sequence of 128D frame embeddings → lstm_hidden
-    self.lstm = nn.LSTM(128, lstm_hidden, batch_first=True)
+    # Temporal aggregation over frame embeddings.
+    self.gru = nn.GRU(latent_dim, gru_hidden, batch_first=True)
 
-    # Latent projection: lstm_hidden → latent_dim
-    self.head = nn.Linear(lstm_hidden, latent_dim)
+    # Project recurrent state back to actor latent size.
+    self.head = nn.Linear(gru_hidden, latent_dim)
 
-  def forward(self, frames: Tensor) -> Tensor:
-    """Args:
-      frames: (B, T, 1, H, W) depth frames, normalized to [0, 1].
+    # Match PrivilegedEncoder's LayerNorm output so z_adapt lives on the same
+    # manifold as z_priv. Without this, the encoder's output has unbounded
+    # magnitude and the frozen actor sees out-of-distribution latents.
+    self.output_norm = nn.LayerNorm(latent_dim)
+
+  def forward(self, frame: Tensor, hidden: Tensor | None = None) -> tuple[Tensor, Tensor]:
+    """Encode one frame and advance GRU state.
+
+    Args:
+      frame:  (B, 1, H, W) depth frame normalized to [0, 1].
+      hidden: Optional previous hidden state (1, B, gru_hidden).
+
     Returns:
-      z: (B, latent_dim) latent vector.
+      z_t:       (B, latent_dim)
+      new_hidden:(1, B, gru_hidden)
+    """
+    emb = self.cnn(frame)  # (B, latent_dim)
+    out, new_hidden = self.gru(emb.unsqueeze(1), hidden)
+    z_t = self.head(out[:, 0, :])
+    z_t = self.output_norm(z_t)
+    return z_t, new_hidden
+
+  def encode_sequence(
+    self,
+    frames: Tensor,
+    hidden: Tensor | None = None,
+    reset_mask: Tensor | None = None,
+    tbptt_chunk_len: int = 16,
+  ) -> tuple[Tensor, Tensor]:
+    """Encode a sequence with optional hidden resets and TBPTT chunking.
+
+    Args:
+      frames:          (B, T, 1, H, W)
+      hidden:          Optional initial hidden (1, B, gru_hidden).
+      reset_mask:      Optional bool tensor (B, T). Hidden is zeroed where True.
+      tbptt_chunk_len: Detach hidden every N steps to bound BPTT memory.
+
+    Returns:
+      z_seq:       (B, T, latent_dim)
+      final_hidden:(1, B, gru_hidden)
     """
     B, T, C, H, W = frames.shape
-    flat = frames.reshape(B * T, C, H, W)  # (B*T, 1, H, W)
-    if self.cnn_chunk > 0 and flat.shape[0] > self.cnn_chunk:
-      e = torch.cat(
-        [self.cnn(flat[i : i + self.cnn_chunk]) for i in range(0, flat.shape[0], self.cnn_chunk)],
-        dim=0,
-      )  # (B*T, 128)
-    else:
-      e = self.cnn(flat)  # (B*T, 128)
-    e = e.reshape(B, T, -1)  # (B, T, 128)
-    _, (h, _) = self.lstm(e)  # h: (1, B, lstm_hidden)
-    return self.head(h.squeeze(0))  # (B, latent_dim)
+    if hidden is None:
+      hidden = frames.new_zeros((1, B, self.gru_hidden))
+
+    z_list: list[Tensor] = []
+    for t in range(T):
+      if reset_mask is not None:
+        reset_t = reset_mask[:, t].to(dtype=torch.bool)
+        if reset_t.any():
+          hidden = hidden.clone()
+          hidden[:, reset_t, :] = 0.0
+
+      z_t, hidden = self.forward(frames[:, t], hidden)
+      z_list.append(z_t)
+
+      if tbptt_chunk_len > 0 and (t + 1) % tbptt_chunk_len == 0:
+        hidden = hidden.detach()
+
+    z_seq = torch.stack(z_list, dim=1)
+    return z_seq, hidden
 
 
-class ProjectionHead(nn.Module):
-  """Auxiliary head predicting GT (nx, ny) from encoder latent.
+class BallHead(nn.Module):
+  """Task head predicting [x, y, vx, vy] from shared latent."""
 
-  Used only during Phase 2 training for ball projection supervision.
-  Discarded at deployment.
-
-  Args:
-    latent_dim: Must match the DepthEncoder latent_dim it attaches to.
-  """
-
-  def __init__(self, latent_dim: int = 8) -> None:
+  def __init__(self, latent_dim: int = 64) -> None:
     super().__init__()
     self.net = nn.Sequential(
       nn.Linear(latent_dim, 32),
       nn.ReLU(),
-      nn.Linear(32, 2),
+      nn.Linear(32, 4),
     )
 
   def forward(self, z: Tensor) -> Tensor:
-    """Args:
-      z: (B, latent_dim) encoder output.
+    """Predict ball state from latent.
+
+    Args:
+      z: (..., latent_dim)
+
     Returns:
-      nxny: (B, 2) predicted (nx, ny) in [-1, 1]².
+      (..., 4) tensor ordered as [x, y, vx, vy]
     """
     return self.net(z)

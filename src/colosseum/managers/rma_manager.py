@@ -161,6 +161,13 @@ class RmaTerm(ManagerTermBase):
     """
     return None
 
+  def get_reset_event(self) -> torch.Tensor | None:
+    """Return (N,) bool mask for reset-like events in the current step.
+
+    Default is None (no per-step reset events provided by this term).
+    """
+    return None
+
   # ------------------------------------------------------------------
   # Adaptation obs snapshot
   # ------------------------------------------------------------------
@@ -178,6 +185,35 @@ class RmaTerm(ManagerTermBase):
       f"'{self.cfg.adaptation_obs_group}' but does not implement "
       "get_current_adaptation_obs()."
     )
+
+  def compute_loss(
+    self,
+    privileged_obs: dict[str, torch.Tensor],
+    adaptation_obs: dict[str, torch.Tensor],
+    mask: torch.Tensor | None = None,
+  ) -> dict[str, torch.Tensor] | None:
+    """Override for custom adaptation losses.
+
+    Return:
+      - dict of named scalar losses to be optimised/logged, or
+      - None to use manager default latent regression for this term.
+    """
+    return None
+
+  # ------------------------------------------------------------------
+  # Extra state (non-parameter state that must survive checkpointing)
+  # ------------------------------------------------------------------
+
+  def extra_state_dict(self) -> dict:
+    """Return non-parameter state to include in checkpoints.
+
+    Override in subclasses that maintain running statistics or other state
+    not captured by encoder state_dict() (e.g. target normalization stats).
+    """
+    return {}
+
+  def load_extra_state_dict(self, state: dict) -> None:
+    """Restore non-parameter state from a checkpoint."""
 
   # ------------------------------------------------------------------
   # Lifecycle hooks
@@ -307,6 +343,19 @@ class RmaManager(ManagerBase):
       result = result & m
     return result
 
+  def get_reset_event(self) -> torch.Tensor | None:
+    """Combined reset-like event mask across all terms (OR)."""
+    events = [
+      e for term in self._terms.values()
+      if (e := term.get_reset_event()) is not None
+    ]
+    if not events:
+      return None
+    result = events[0]
+    for e in events[1:]:
+      result = result | e
+    return result
+
   def encode_phase2_with_fallback(
     self,
     priv_obs: dict[str, torch.Tensor],
@@ -315,7 +364,7 @@ class RmaManager(ManagerBase):
     """Phase 2 encoding with per-env fallback to the privileged encoder.
 
     For envs where get_adaptation_mask() is True (valid sensor signal):
-      → adaptation encoders (depth CNN+LSTM, gradient-tracked).
+      → adaptation encoders (gradient-tracked).
     For envs where get_adaptation_mask() is False (signal unavailable):
       → privileged encoders detached (no gradient, policy stays well-conditioned).
 
@@ -331,11 +380,65 @@ class RmaManager(ManagerBase):
     """
     z_adapt = self.encode(adapt_obs, phase=2)
     mask = self.get_adaptation_mask()
+
+    # --- DEBUG (Check B): compare adapt latent vs priv latent ---------
+    if priv_obs:
+      with torch.no_grad():
+        z_priv_debug = self.encode(priv_obs, phase=1)
+      self._check_b_debug(z_adapt, z_priv_debug, mask)
+    # -------------------------------------------------------------------
+
     if mask is None or not priv_obs:
       return z_adapt
     with torch.no_grad():
       z_priv = self.encode(priv_obs, phase=1)
     return torch.where(mask.unsqueeze(-1), z_adapt, z_priv)
+
+  _check_b_counter: int = 0
+
+  def _check_b_debug(
+    self,
+    z_adapt: torch.Tensor,
+    z_priv: torch.Tensor,
+    mask: torch.Tensor | None,
+  ) -> None:
+    """Print latent-space diagnostics. Throttled to every 10 calls."""
+    self._check_b_counter += 1
+    if self._check_b_counter % 10 != 1:
+      return
+
+    n_envs = z_adapt.shape[0]
+    if mask is None:
+      n_fov = n_envs
+      fov_idx = torch.ones(n_envs, dtype=torch.bool, device=z_adapt.device)
+    else:
+      fov_idx = mask
+      n_fov = int(mask.sum().item())
+
+    z_adapt_norm = z_adapt.norm(dim=-1).mean().item()
+    z_priv_norm = z_priv.norm(dim=-1).mean().item()
+    diff_all = (z_adapt - z_priv).norm(dim=-1).mean().item()
+    diff_fov = (
+      (z_adapt[fov_idx] - z_priv[fov_idx]).norm(dim=-1).mean().item()
+      if n_fov > 0 else float("nan")
+    )
+    z_adapt_std = z_adapt.std(dim=0).mean().item() if n_envs > 1 else float("nan")
+    z_priv_std = z_priv.std(dim=0).mean().item() if n_envs > 1 else float("nan")
+
+    # Per-element comparison of one env to show concrete values
+    sample_ad = z_adapt[0, :4].tolist()
+    sample_pr = z_priv[0, :4].tolist()
+    sample_ad_str = "[" + ", ".join(f"{v:+.2f}" for v in sample_ad) + "]"
+    sample_pr_str = "[" + ", ".join(f"{v:+.2f}" for v in sample_pr) + "]"
+
+    print(
+      f"[CHECK_B] fov={n_fov}/{n_envs} "
+      f"|z_ad|={z_adapt_norm:.3f} |z_pr|={z_priv_norm:.3f} "
+      f"|dz|all={diff_all:.3f} |dz|fov={diff_fov:.3f} "
+      f"sig(z_ad)={z_adapt_std:.3f} sig(z_pr)={z_priv_std:.3f} "
+      f"z_ad[0,:4]={sample_ad_str} z_pr[0,:4]={sample_pr_str}",
+      flush=True,
+    )
 
   # ------------------------------------------------------------------
   # Phase 2 loss
@@ -346,41 +449,75 @@ class RmaManager(ManagerBase):
     privileged_obs: dict[str, torch.Tensor],
     adaptation_obs: dict[str, torch.Tensor],
     mask: torch.Tensor | None = None,
-  ) -> torch.Tensor:
-    """MSE loss between frozen privileged targets and adaptation predictions.
+  ) -> dict[str, torch.Tensor]:
+    """Compute adaptation losses for all terms.
+
+    For each term:
+      1) use term.compute_loss(...) when provided, else
+      2) fallback to latent MSE regression against frozen privileged encoder.
 
     Args:
       privileged_obs:  Obs dict for privileged encoder (GT groups).
       adaptation_obs:  Obs dict for adaptation encoder (sensor groups).
-      mask:            Optional (B,) bool tensor (temporally-aligned, snapshotted
+      mask:            Optional (...,) bool tensor (temporally-aligned, snapshotted
                        at collection time).  When provided, loss is computed only
                        on mask=True samples.  None = all samples are valid.
 
     Returns:
-      Scalar loss tensor (mean over all terms).  Returns a differentiable zero
-      when no valid samples exist so the optimizer step is a safe no-op.
+      Dict of named scalar loss tensors.
     """
-    losses = []
-    for term in self._terms.values():
+    def _masked_mse(
+      pred: torch.Tensor,
+      target: torch.Tensor,
+      valid_mask: torch.Tensor | None,
+    ) -> torch.Tensor:
+      if valid_mask is None:
+        return F.mse_loss(pred, target)
+
+      valid_mask = valid_mask.to(dtype=torch.bool)
+      diff = (pred - target).pow(2)
+
+      if valid_mask.dim() == diff.dim():
+        if valid_mask.any():
+          return diff[valid_mask].mean()
+        return diff.sum() * 0.0
+
+      while diff.dim() > valid_mask.dim():
+        diff = diff.mean(dim=-1)
+
+      if valid_mask.any():
+        return diff[valid_mask].mean()
+      return diff.sum() * 0.0
+
+    losses: dict[str, torch.Tensor] = {}
+
+    for term_name, term in self._terms.items():
+      custom = term.compute_loss(privileged_obs, adaptation_obs, mask=mask)
+      if custom is not None:
+        for key, value in custom.items():
+          if key in losses:
+            losses[f"{term_name}.{key}"] = value
+          else:
+            losses[key] = value
+        continue
+
       with torch.no_grad():
         z_target = term.encode_privileged(privileged_obs)
       z_pred = term.encode_adaptation(adaptation_obs)
-      if mask is not None:
-        if mask.any():
-          losses.append(F.mse_loss(z_pred[mask], z_target[mask]))
-      else:
-        losses.append(F.mse_loss(z_pred, z_target))
+      fallback_key = "latent_mse" if "latent_mse" not in losses else f"{term_name}.latent_mse"
+      losses[fallback_key] = _masked_mse(z_pred, z_target, mask)
 
-    if not losses:
-      # No valid samples — return differentiable zero so backward() is safe
-      for term in self._terms.values():
-        if term.adaptation_encoder is not None:
-          p = next(iter(term.adaptation_encoder.parameters()), None)
-          if p is not None:
-            return p.sum() * 0.0
-      return torch.tensor(0.0, device=self._env.device)
+    if losses:
+      return losses
 
-    return torch.stack(losses).mean()
+    # No adaptation terms available — return differentiable zero.
+    for term_name, term in self._terms.items():
+      if term.adaptation_encoder is None:
+        continue
+      p = next(iter(term.adaptation_encoder.parameters()), None)
+      if p is not None:
+        return {"latent_mse": p.sum() * 0.0}
+    return {"latent_mse": torch.tensor(0.0, device=self._env.device)}
 
   # ------------------------------------------------------------------
   # Parameter access
@@ -434,6 +571,10 @@ class RmaManager(ManagerBase):
       result[name] = {"privileged": term.privileged_encoder.state_dict()}
       if term.adaptation_encoder is not None:
         result[name]["adaptation"] = term.adaptation_encoder.state_dict()
+      # Save per-term extra state (e.g. target normalization stats)
+      extra = term.extra_state_dict()
+      if extra:
+        result[name]["extra"] = extra
     return result
 
   def load_state_dict(self, state: dict[str, dict]) -> None:
@@ -448,4 +589,15 @@ class RmaManager(ManagerBase):
         continue
       term.privileged_encoder.load_state_dict(enc_states["privileged"])
       if "adaptation" in enc_states and term.adaptation_encoder is not None:
-        term.adaptation_encoder.load_state_dict(enc_states["adaptation"])
+        missing, unexpected = term.adaptation_encoder.load_state_dict(
+          enc_states["adaptation"], strict=False
+        )
+        if missing or unexpected:
+          import logging
+          logging.getLogger(__name__).warning(
+            f"[rma] adaptation encoder '{name}' loaded non-strictly "
+            f"(missing={list(missing)}, unexpected={list(unexpected)}). "
+            "Freshly-initialized params will be trained from scratch."
+          )
+      if "extra" in enc_states:
+        term.load_extra_state_dict(enc_states["extra"])

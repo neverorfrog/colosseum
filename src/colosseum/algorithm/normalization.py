@@ -82,11 +82,30 @@ class EmpiricalNormalization(ObsNormalizer):
     if self.until is not None and self.count >= self.until:
       return
 
-    count_x = x.shape[0]
+    # Compute batch moments. In distributed mode we aggregate moments across
+    # workers so all ranks keep identical normalization statistics.
+    count_x = torch.tensor(x.shape[0], dtype=torch.long, device=x.device)
+    sum_x = torch.sum(x, dim=0, keepdim=True)
+    sum_x2 = torch.sum(x * x, dim=0, keepdim=True)
+
+    if (
+      torch.distributed.is_available()
+      and torch.distributed.is_initialized()
+      and torch.distributed.get_world_size() > 1
+    ):
+      torch.distributed.all_reduce(count_x, op=torch.distributed.ReduceOp.SUM)
+      torch.distributed.all_reduce(sum_x, op=torch.distributed.ReduceOp.SUM)
+      torch.distributed.all_reduce(sum_x2, op=torch.distributed.ReduceOp.SUM)
+
+    if count_x.item() <= 0:
+      return
+
+    count_x_float = count_x.to(dtype=x.dtype)
+    mean_x = sum_x / count_x_float
+    var_x = torch.clamp(sum_x2 / count_x_float - mean_x * mean_x, min=0.0)
+
     self.count += count_x
-    rate = count_x / self.count
-    var_x = torch.var(x, dim=0, unbiased=False, keepdim=True)
-    mean_x = torch.mean(x, dim=0, keepdim=True)
+    rate = count_x_float / self.count.to(dtype=x.dtype)
     delta_mean = mean_x - self._mean
     self._mean += rate * delta_mean
     self._var += rate * (var_x - self._var + delta_mean * (mean_x - self._mean))

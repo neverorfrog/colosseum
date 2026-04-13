@@ -105,7 +105,7 @@ def booster_t1_dribbling_env_cfg(
       "ball": BallRmaTermCfg(
         privileged_obs_group="privileged_ball",
         adaptation_obs_group="depth_frames" if use_depth_camera else None,
-        latent_dim=8,
+        latent_dim=64,
       ),
     },
     viz_callbacks=[("camera_ball", partial(DribblingViz, show_depth=show_depth))],

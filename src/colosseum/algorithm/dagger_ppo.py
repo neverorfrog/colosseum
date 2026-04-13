@@ -240,7 +240,7 @@ class DaggerPPO(PPO):
           - 0.5,
           dim=-1,
         )
-        kl_mean = kl.mean().item()
+        kl_mean = self._distributed_mean_scalar(float(kl.mean().item()))
 
       if config.schedule == "adaptive" and config.desired_kl is not None:
         if kl_mean > config.desired_kl * 2.0:
@@ -287,6 +287,7 @@ class DaggerPPO(PPO):
 
       self.optimizer.zero_grad()
       loss.backward()
+      self._distributed_average_optimizer_grads(self.optimizer)
       torch.nn.utils.clip_grad_norm_(
         self.actor.parameters(), max_norm=config.max_grad_norm
       )
@@ -301,6 +302,24 @@ class DaggerPPO(PPO):
       total_kl += kl_mean
       total_imitation_loss += imitation_loss.item()
       num_updates += 1
+
+    if self.is_distributed:
+      totals = self._distributed_sum_vector(
+        [
+          total_surrogate_loss,
+          total_value_loss,
+          total_entropy,
+          total_kl,
+          total_imitation_loss,
+          float(num_updates),
+        ]
+      )
+      total_surrogate_loss = totals[0]
+      total_value_loss = totals[1]
+      total_entropy = totals[2]
+      total_kl = totals[3]
+      total_imitation_loss = totals[4]
+      num_updates = int(totals[5])
 
     self.rollout_buffer.clear()
 
