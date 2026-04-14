@@ -59,10 +59,6 @@ actor_terms = {
     func=ball_vel_command_body,
     params={"command_name": "ball_vel"},
   ),
-  "foot_ball_contact_force": ObservationTermCfg(
-    func=foot_ball_contact_force,
-    params={"sensor_name": "foot_ball_contact"},
-  ),
 }
 
 # ---------------------------------------------------------------------------
@@ -87,6 +83,10 @@ critic_terms = {
   "ball_mass": ObservationTermCfg(
     func=ball_mass,
     params={"ball_mass": BALL_MASS},
+  ),
+  "foot_ball_contact_force": ObservationTermCfg(
+    func=foot_ball_contact_force,
+    params={"sensor_name": "foot_ball_contact"},
   ),
   "ball_friction": ObservationTermCfg(
     func=ball_friction,
