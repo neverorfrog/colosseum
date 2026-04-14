@@ -5,6 +5,13 @@ Ball velocity rewards split into three terms (TABLE III):
   - ball_vel_tracking: full vector error exp(-δ|v^b - v^cmd|²)
   - ball_vel_norm:     speed matching  exp(-δ(|v^cmd| - |v^b|)²)
   - ball_vel_angle:    direction match 1 - (ψ_b - ψ_cmd)²/π²
+
+Body-frame variants (``_body`` suffix) rotate both ball velocity and command
+into the robot body frame before comparison.  The tracking and angular rewards
+are rotation-invariant — numerically identical to world-frame — but computing
+them in body frame keeps the reward signal consistent with the actor's
+body-frame observations (command, ball position, ball velocity from encoder).
+``ball_vel_norm`` has no body-frame variant because it only compares magnitudes.
 """
 
 from __future__ import annotations
@@ -23,7 +30,90 @@ if TYPE_CHECKING:
 
 
 # ------------------------------------------------------------------
-# Primary task rewards (DribbleBot TABLE III)
+# Body-frame helpers (shared by tracking, angle, and yaw rewards)
+# ------------------------------------------------------------------
+
+
+def _ball_vel_body(env: ManagerBasedRlEnv) -> torch.Tensor:
+  """Ball XY velocity in robot body frame. Shape (N, 2)."""
+  ball_vel_w = env.scene["ball"].data.root_link_lin_vel_w[:, :3]
+  quat_w = env.scene["robot"].data.root_link_quat_w
+  quat_conj = torch.cat([quat_w[:, :1], -quat_w[:, 1:]], dim=-1)
+  return quat_apply(quat_conj, ball_vel_w)[:, :2]
+
+
+def _cmd_body(env: ManagerBasedRlEnv, command_name: str) -> torch.Tensor:
+  """Ball velocity command rotated into robot body frame. Shape (N, 2)."""
+  cmd_w = env.command_manager.get_command(command_name)[:, :2]
+  quat_w = env.scene["robot"].data.root_link_quat_w
+  quat_conj = torch.cat([quat_w[:, :1], -quat_w[:, 1:]], dim=-1)
+  cmd_3d = torch.cat([cmd_w, torch.zeros(env.num_envs, 1, device=env.device)], dim=-1)
+  return quat_apply(quat_conj, cmd_3d)[:, :2]
+
+
+# ------------------------------------------------------------------
+# Primary task rewards (DribbleBot TABLE III) — body-frame variants
+# ------------------------------------------------------------------
+
+
+def ball_vel_tracking_body(
+  env: ManagerBasedRlEnv,
+  command_name: str,
+  sharpness: float = 1.0,
+) -> torch.Tensor:
+  """exp(-sharpness * |v_ball_b - v_cmd_b|²). Body-frame variant."""
+  error_sq = ((_ball_vel_body(env) - _cmd_body(env, command_name)) ** 2).sum(dim=-1)
+  return torch.exp(-sharpness * error_sq)
+
+
+def ball_vel_angle_body(
+  env: ManagerBasedRlEnv,
+  command_name: str,
+) -> torch.Tensor:
+  """Direction match 1 - (ψ_ball - ψ_cmd)²/π². Body-frame variant."""
+  ball_vel_b = _ball_vel_body(env)
+  cmd_b = _cmd_body(env, command_name)
+  psi_ball = torch.atan2(ball_vel_b[:, 1], ball_vel_b[:, 0])
+  psi_cmd = torch.atan2(cmd_b[:, 1], cmd_b[:, 0])
+  angle_err = (psi_ball - psi_cmd + math.pi) % (2 * math.pi) - math.pi
+  return 1.0 - (angle_err**2) / (math.pi**2)
+
+
+def robot_ball_yaw_body(
+  env: ManagerBasedRlEnv,
+  command_name: str,
+  min_speed: float = 0.05,
+) -> torch.Tensor:
+  """Ball ahead of robot along command direction AND robot facing that way (body frame).
+
+  e1 = 1 - dot(d_robot→ball_b, cmd_dir_b)  (ball in command direction)
+  e2 = 1 - d_robot→ball_b[0] / |d|         (ball in front, X-forward)
+  reward = exp(-2 * (e1 + e2))
+  """
+  robot = env.scene["robot"]
+  ball_pos_w = env.scene["ball"].data.root_link_pos_w[:, :3]
+  robot_pos_w = robot.data.root_link_pos_w[:, :3]
+
+  relative_w = ball_pos_w - robot_pos_w
+  quat_w = robot.data.root_link_quat_w
+  quat_conj = torch.cat([quat_w[:, :1], -quat_w[:, 1:]], dim=-1)
+  d_ball_b = quat_apply(quat_conj, relative_w)[:, :2]
+  d_norm = d_ball_b.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+  d_ball_b_unit = d_ball_b / d_norm
+
+  cmd_b = _cmd_body(env, command_name)
+  unit_cmd = cmd_b / cmd_b.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+
+  e1 = 1.0 - (d_ball_b_unit * unit_cmd).sum(dim=-1)
+  e2 = 1.0 - d_ball_b_unit[:, 0]  # dot with [1, 0] (X-forward in body frame)
+
+  reward = torch.exp(-2.0 * (e1 + e2))
+  return reward * (cmd_b.norm(dim=-1) > min_speed).float()
+
+
+# ------------------------------------------------------------------
+# Primary task rewards (DribbleBot TABLE III) — world-frame originals
+# (kept for reference; use _body variants in configs)
 # ------------------------------------------------------------------
 
 
@@ -180,7 +270,12 @@ def robot_ball_distance(
   env: ManagerBasedRlEnv,
   sharpness: float = 2.0,
 ) -> torch.Tensor:
-  """exp(-sharpness * ||robot_xy - ball_xy||²). Dense within ~0.7m."""
+  """exp(-sharpness * ||robot_xy - ball_xy||²).
+
+  Low sharpness (0.5) → half-max at ~1.2m so the robot can play the ball
+  forward into free areas without being penalized.  High sharpness (2.0)
+  keeps the ball at feet (~0.6m half-max), suitable for tight dribbling.
+  """
   robot_pos = env.scene["robot"].data.root_link_pos_w[:, :2]
   ball_pos = env.scene["ball"].data.root_link_pos_w[:, :2]
   dist_sq = ((ball_pos - robot_pos) ** 2).sum(dim=-1)

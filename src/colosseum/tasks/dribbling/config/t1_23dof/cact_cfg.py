@@ -5,10 +5,15 @@ from mjlab.envs.mdp.actions import JointPositionActionCfg
 from mjlab.envs.mdp.terminations import bad_orientation, time_out
 from mjlab.managers import CommandTermCfg
 from mjlab.managers.action_manager import ActionTermCfg
+from mjlab.managers.curriculum_manager import CurriculumTermCfg
 from mjlab.managers.termination_manager import TerminationTermCfg
 
 from colosseum.robots.t1_23dof.constants import ACTION_SCALE
 from colosseum.tasks.dribbling.mdp.ball_velocity_command import BallVelocityCommandCfg
+from colosseum.tasks.dribbling.mdp.curriculum import (
+  push_ball_curriculum,
+  yaw_reset_curriculum,
+)
 from colosseum.tasks.dribbling.mdp.gait_phase_command import GaitPhaseCommandCfg
 from colosseum.tasks.dribbling.mdp.head_ik_action import HeadIKActionCfg
 
@@ -33,8 +38,8 @@ commands: Dict[str, CommandTermCfg] = {
   "ball_vel": BallVelocityCommandCfg(
     robot_entity="robot",
     ball_entity="ball",
-    speed_range=(0.3, 1.0),
-    heading_range=math.pi / 3,
+    speed_range=(0.3, 2.0),
+    heading_range=math.pi / 2,  # ±90° from forward
     resampling_time_range=(10.0, 20.0),
     debug_vis=True,
   ),
@@ -53,7 +58,32 @@ actions: dict[str, ActionTermCfg] = {
   "head_ik": HeadIKActionCfg(),
 }
 
-curriculum = {}
+curriculum = {
+  "yaw_reset": CurriculumTermCfg(
+    func=yaw_reset_curriculum,
+    params={
+      "event_name": "reset_base",
+      "stages": [
+        {"step": 0, "half_range": 0.0},  # always forward
+        {"step": 2000, "half_range": math.pi / 6},  # ±30°
+        {"step": 6000, "half_range": math.pi / 3},  # ±60°
+        {"step": 12000, "half_range": math.pi / 2},  # ±90°
+        {"step": 20000, "half_range": math.pi},  # ±180° (full)
+      ],
+    },
+  ),
+  "push_ball": CurriculumTermCfg(
+    func=push_ball_curriculum,
+    params={
+      "event_name": "push_ball",
+      "stages": [
+        {"step": 0, "max_speed": 0.3},
+        {"step": 5000, "max_speed": 0.6},
+        {"step": 12000, "max_speed": 1.0},
+      ],
+    },
+  ),
+}
 
 terminations = {
   "time_out": TerminationTermCfg(func=time_out, time_out=True),

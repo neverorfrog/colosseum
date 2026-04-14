@@ -32,7 +32,7 @@ events = {
         "x": (-0.0, 0.0),
         "y": (-0.0, 0.0),
         "z": (0.01, 0.05),
-        "yaw": (0, 0),
+        "yaw": (0.0, 0.0),  # widened by yaw_curriculum in cact_cfg.py
       },
       "velocity_range": {},
     },
@@ -44,6 +44,19 @@ events = {
       "position_range": (0.0, 0.0),
       "velocity_range": (0.0, 0.0),
       "asset_cfg": SceneEntityCfg("robot", joint_names=(".*",)),
+    },
+  ),
+  "push_ball": EventTermCfg(
+    func=push_by_setting_velocity,
+    mode="interval",
+    interval_range_s=(3.0, 8.0),
+    params={
+      "asset_cfg": SceneEntityCfg("ball"),
+      # Small bumps: starts at ~0.3 m/s max, widened by push_ball_curriculum.
+      "velocity_range": {
+        "x": (-0.3, 0.3),
+        "y": (-0.3, 0.3),
+      },
     },
   ),
   # "push_robot": EventTermCfg(

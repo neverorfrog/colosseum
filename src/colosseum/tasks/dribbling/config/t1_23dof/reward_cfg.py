@@ -25,14 +25,14 @@ from colosseum.robots.t1_23dof.sensors import (
   SELF_COLLISION_SENSOR,
 )
 from colosseum.tasks.dribbling.mdp.rewards import (
-  ball_vel_angle,
+  ball_vel_angle_body,
   ball_vel_norm,
-  ball_vel_tracking,
+  ball_vel_tracking_body,
   feet_distance_penalty,
   pose_deviation,
   robot_ball_approach_vel,
   robot_ball_distance,
-  robot_ball_yaw,
+  robot_ball_yaw_body,
   stance_phase_schedule,
   swing_phase_schedule,
 )
@@ -42,7 +42,7 @@ rewards = {
   # Task rewards                                                         #
   # ------------------------------------------------------------------ #
   "ball_vel_tracking": RewardTermCfg(
-    func=ball_vel_tracking,
+    func=ball_vel_tracking_body,
     weight=2.0,
     params={"command_name": "ball_vel", "sharpness": 1.0},
   ),
@@ -52,18 +52,18 @@ rewards = {
     params={"command_name": "ball_vel", "sharpness": 1.0},
   ),
   "ball_vel_angle": RewardTermCfg(
-    func=ball_vel_angle,
+    func=ball_vel_angle_body,
     weight=4.0,
     params={"command_name": "ball_vel"},
   ),
   "robot_ball_distance": RewardTermCfg(
     func=robot_ball_distance,
-    weight=1.0,
-    params={},
+    weight=0.1,
+    params={"sharpness": 0.1},  # half-max at ~1.2m; robot can play ball forward
   ),
   "robot_ball_yaw": RewardTermCfg(
-    func=robot_ball_yaw,
-    weight=4.0,
+    func=robot_ball_yaw_body,
+    weight=1.0,
     params={"command_name": "ball_vel"},
   ),
   "robot_ball_approach_vel": RewardTermCfg(
