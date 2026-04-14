@@ -9,6 +9,9 @@ The adaptation path uses:
   - BallHead producing [x, y, vx, vy] for supervised Phase 2 loss only
 
 The actor always consumes the shared latent, not BallHead predictions.
+
+ObstacleRmaTerm encodes ground-truth obstacle positions into a 32D latent.
+Phase 1 only (PrivilegedEncoder); visual adaptation is left for a future phase.
 """
 
 from __future__ import annotations
@@ -349,3 +352,103 @@ class BallRmaTerm(RmaTerm):
       "ball_pos": cfg.lambda_pos * pos_loss,
       "ball_vel": cfg.lambda_vel * vel_loss,
     }
+
+
+# ---------------------------------------------------------------------------
+# Obstacle encoder term (Phase 1 — privileged only)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(kw_only=True)
+class ObstacleRmaTermCfg(RmaTermCfg):
+  """Config for the obstacle encoder term.
+
+  Uses a small PrivilegedEncoder (MLP) to compress ground-truth obstacle
+  positions into a 32D latent.  The actor receives this latent alongside
+  the ball latent so it can modulate behaviour based on obstacle proximity.
+
+  Visual adaptation (Phase 2) is not implemented yet; when added it will
+  share the DepthEncoder backbone used by BallRmaTerm via a separate head.
+  """
+
+  privileged_obs_group: str = "privileged_obstacles"
+  adaptation_obs_group: str | None = None  # no visual adaptation in Phase 1
+
+  latent_dim: int = 32
+  # Number of obstacles; determines the input dimension (num_obstacles * 2 XY).
+  num_obstacles: int = 2
+
+  def build(self, env: ManagerBasedRlEnv) -> "ObstacleRmaTerm":
+    return ObstacleRmaTerm(cfg=self, env=env)
+
+
+class ObstacleRmaTerm(RmaTerm):
+  """Privileged MLP encoder for obstacle positions.
+
+  Input:  ``privileged_obstacles`` group  — (N, num_obstacles * 2) body-frame XY.
+  Output: 32D normalised latent vector.
+
+  When all obstacles are inactive (curriculum Phase 0) the encoder receives
+  zero-valued inputs (parked obstacles project to very large negative XY in
+  body frame, effectively out of distribution but harmless since the reward
+  terms are also zero in that phase).
+  """
+
+  def __init__(self, cfg: ObstacleRmaTermCfg, env: ManagerBasedRlEnv) -> None:
+    super().__init__(cfg, env)
+
+    input_dim = cfg.num_obstacles * 2
+    self._priv_encoder = PrivilegedEncoder(
+      input_dim=input_dim,
+      latent_dim=cfg.latent_dim,
+    ).to(env.device)
+
+  # ------------------------------------------------------------------
+  # Encoder properties
+  # ------------------------------------------------------------------
+
+  @property
+  def privileged_encoder(self) -> nn.Module:
+    return self._priv_encoder
+
+  @property
+  def adaptation_encoder(self) -> nn.Module | None:
+    return None
+
+  # ------------------------------------------------------------------
+  # Encoding
+  # ------------------------------------------------------------------
+
+  def encode_privileged(self, obs_dict: dict[str, torch.Tensor]) -> torch.Tensor:
+    return self._priv_encoder(obs_dict[self.cfg.privileged_obs_group])
+
+  def encode_adaptation(self, obs_dict: dict[str, torch.Tensor]) -> torch.Tensor:
+    # No visual adaptation in Phase 1 — return zeros.
+    cfg: ObstacleRmaTermCfg = self.cfg  # type: ignore[assignment]
+    return torch.zeros(self._env.num_envs, cfg.latent_dim, device=self._env.device)
+
+  # ------------------------------------------------------------------
+  # Lifecycle (no GRU state to manage)
+  # ------------------------------------------------------------------
+
+  def update(self) -> None:
+    pass
+
+  def reset(self, env_ids: torch.Tensor | slice | None) -> None:
+    pass
+
+  def get_current_adaptation_obs(self) -> dict[str, torch.Tensor]:
+    return {}
+
+  # ------------------------------------------------------------------
+  # No custom adaptation loss in Phase 1
+  # ------------------------------------------------------------------
+
+  def compute_loss(self, *args, **kwargs) -> dict[str, torch.Tensor] | None:
+    return None
+
+  def extra_state_dict(self) -> dict:
+    return {}
+
+  def load_extra_state_dict(self, state: dict) -> None:
+    del state

@@ -28,6 +28,7 @@ from mjlab.utils.lab_api.math import quat_apply
 if TYPE_CHECKING:
   from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv
 
+from colosseum.tasks.dribbling.mdp.obstacle_commands import ObstacleCommand
 
 # ------------------------------------------------------------------
 # Body-frame helpers (shared by tracking, angle, and yaw rewards)
@@ -250,12 +251,12 @@ def feet_distance_penalty(
   """
   asset: Entity = env.scene[asset_cfg.name]
   foot_pos_w = asset.data.site_pos_w[:, asset_cfg.site_ids, :3]  # (N, 2, 3)
-  base_pos_w = asset.data.root_link_pos_w[:, :3].unsqueeze(1)    # (N, 1, 3)
-  quat_w = asset.data.root_link_quat_w                           # (N, 4)
+  base_pos_w = asset.data.root_link_pos_w[:, :3].unsqueeze(1)  # (N, 1, 3)
+  quat_w = asset.data.root_link_quat_w  # (N, 4)
   quat_conj = torch.cat([quat_w[:, :1], -quat_w[:, 1:]], dim=-1)
 
   # Transform each foot into body frame
-  left_b = quat_apply(quat_conj, foot_pos_w[:, 0] - base_pos_w[:, 0])   # (N, 3)
+  left_b = quat_apply(quat_conj, foot_pos_w[:, 0] - base_pos_w[:, 0])  # (N, 3)
   right_b = quat_apply(quat_conj, foot_pos_w[:, 1] - base_pos_w[:, 0])  # (N, 3)
   dist = (left_b[:, 1] - right_b[:, 1]).abs()  # (N,) — Y axis only
   return (min_dist - dist).clamp(min=0.0, max=min_dist)
@@ -437,3 +438,113 @@ def robot_ball_approach_vel(
   cmd_speed = env.command_manager.get_command(command_name)[:, :2].norm(dim=-1)  # type: ignore
   deficit = (cmd_speed - approach_vel).clamp(min=0.0)
   return torch.exp(-(deficit**2))
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _get_min_robot_obstacle_dist(
+  env: ManagerBasedRlEnv,
+  command_name: str,
+) -> tuple[torch.Tensor, torch.Tensor]:
+  """Return (min_dist, nearest_obs_xy) for each env.
+
+  min_dist  : (N,)    minimum XY distance from robot to any active obstacle.
+  nearest   : (N, 2)  world-frame XY position of the nearest obstacle.
+  """
+  robot = env.scene["robot"]
+  term: ObstacleCommand = env.command_manager.get_term(command_name)
+  robot_xy = robot.data.root_link_pos_w[:, :2]  # (N, 2)
+  obs_xy = term.obstacle_positions_w  # (N, K, 2)
+
+  dist = (obs_xy - robot_xy.unsqueeze(1)).norm(dim=-1)  # (N, K)
+  min_dist, idx = dist.min(dim=-1)  # (N,)
+  nearest = obs_xy[torch.arange(env.num_envs, device=env.device), idx]  # (N, 2)
+  return min_dist, nearest
+
+
+# ---------------------------------------------------------------------------
+# Reward functions
+# ---------------------------------------------------------------------------
+
+
+def obstacle_avoidance(
+  env: ManagerBasedRlEnv,
+  command_name: str = "obstacle_pos",
+  safe_radius: float = 0.6,
+  sharpness: float = 5.0,
+) -> torch.Tensor:
+  """Penalty for being within *safe_radius* metres of any obstacle.
+
+  Uses an exponential kernel so the penalty is smooth and non-zero even
+  before physical contact:
+
+    penalty = exp(-sharpness * max(dist - safe_radius, 0))
+
+  Returns shape (N,), values in (0, 1].  Zero when no obstacles are active.
+  """
+  term: ObstacleCommand = env.command_manager.get_term(command_name)
+  if term.cfg.num_active == 0:
+    return torch.zeros(env.num_envs, device=env.device)
+
+  min_dist, _ = _get_min_robot_obstacle_dist(env, command_name)
+  margin = torch.clamp(min_dist - safe_radius, min=0.0)
+  return torch.exp(-sharpness * margin)
+
+
+def ball_protection(
+  env: ManagerBasedRlEnv,
+  command_name: str = "obstacle_pos",
+  activation_radius: float = 3.0,
+) -> torch.Tensor:
+  """Reward the robot for shielding the ball from the nearest obstacle.
+
+  When the nearest obstacle is within *activation_radius*:
+    - Computes the unit vector from the ball toward the nearest obstacle.
+    - Computes the unit vector from the ball toward the robot.
+    - Reward = activation_weight * (1 + cosine_similarity) / 2
+
+  A score of 1.0 means the robot is perfectly interposed between the ball
+  and the obstacle; 0.0 means it is on the opposite side.
+
+  Returns shape (N,), values in [0, 1].
+  """
+  term: ObstacleCommand = env.command_manager.get_term(command_name)
+  if term.cfg.num_active == 0:
+    return torch.zeros(env.num_envs, device=env.device)
+
+  robot = env.scene["robot"]
+  ball = env.scene["ball"]
+  N = env.num_envs
+  device = env.device
+
+  robot_xy = robot.data.root_link_pos_w[:, :2]  # (N, 2)
+  ball_xy = ball.data.root_link_pos_w[:, :2]  # (N, 2)
+
+  _, nearest_obs_xy = _get_min_robot_obstacle_dist(env, command_name)
+  dist_to_nearest = (nearest_obs_xy - robot_xy).norm(dim=-1)  # (N,)
+
+  # Smooth activation: 1 at r=0, ~0.37 at r=activation_radius.
+  sigma = activation_radius / 3.0
+  activation = torch.exp(-(dist_to_nearest / sigma).pow(2))
+
+  # Direction from ball toward obstacle.
+  ball_to_obs = nearest_obs_xy - ball_xy  # (N, 2)
+  ball_to_obs_norm = ball_to_obs / ball_to_obs.norm(dim=-1, keepdim=True).clamp(min=0.1)
+
+  # Direction from ball toward robot.
+  ball_to_robot = robot_xy - ball_xy  # (N, 2)
+  ball_to_robot_norm = ball_to_robot / ball_to_robot.norm(dim=-1, keepdim=True).clamp(
+    min=0.1
+  )
+
+  # Cosine similarity: +1 when robot is between ball and obstacle, -1 opposite.
+  cos = (ball_to_robot_norm * ball_to_obs_norm).sum(dim=-1).clamp(-1.0, 1.0)
+
+  # Also weight by how close the robot is to the ball (want robot near ball).
+  ball_dist = ball_to_robot.norm(dim=-1).clamp(max=2.0)
+  closeness = torch.exp(-ball_dist / 0.5)
+
+  return activation * (1.0 + cos) / 2.0 * closeness

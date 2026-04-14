@@ -25,10 +25,12 @@ from colosseum.robots.t1_23dof.sensors import (
   SELF_COLLISION_SENSOR,
 )
 from colosseum.tasks.dribbling.mdp.rewards import (
+  ball_protection,
   ball_vel_angle_body,
   ball_vel_norm,
   ball_vel_tracking_body,
   feet_distance_penalty,
+  obstacle_avoidance,
   pose_deviation,
   robot_ball_approach_vel,
   robot_ball_distance,
@@ -186,6 +188,18 @@ rewards = {
         ),
       ),
       "std": 0.3,
+    },
+  ),
+  # ------------------------------------------------------------------ #
+  # Obstacle-aware rewards                                               #
+  # ------------------------------------------------------------------ #
+  "obstacle_avoidance": RewardTermCfg(
+    func=obstacle_avoidance,
+    weight=-1.5,
+    params={
+      "command_name": "obstacle_pos",
+      "safe_radius": 0.5,  # penalty starts at 0.5 m from obstacle center
+      "sharpness": 4.0,
     },
   ),
 }

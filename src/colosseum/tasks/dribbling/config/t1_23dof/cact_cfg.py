@@ -11,11 +11,15 @@ from mjlab.managers.termination_manager import TerminationTermCfg
 from colosseum.robots.t1_23dof.constants import ACTION_SCALE
 from colosseum.tasks.dribbling.mdp.ball_velocity_command import BallVelocityCommandCfg
 from colosseum.tasks.dribbling.mdp.curriculum import (
+  obstacle_curriculum,
   push_ball_curriculum,
   yaw_reset_curriculum,
 )
 from colosseum.tasks.dribbling.mdp.gait_phase_command import GaitPhaseCommandCfg
 from colosseum.tasks.dribbling.mdp.head_ik_action import HeadIKActionCfg
+from colosseum.tasks.dribbling.mdp.obstacle_commands import ObstacleCommandCfg
+from colosseum.tasks.dribbling.mdp.terminations import ball_captured
+from colosseum.tasks.dribbling.obstacle_spec import NUM_OBSTACLES
 
 _ARM_JOINTS = {
   "Left_Shoulder_Pitch",
@@ -44,6 +48,13 @@ commands: Dict[str, CommandTermCfg] = {
     debug_vis=True,
   ),
   "gait_phase": GaitPhaseCommandCfg(),
+  # Obstacle command: starts with 0 active obstacles (unlocked by curriculum).
+  "obstacle_pos": ObstacleCommandCfg(
+    num_obstacles=NUM_OBSTACLES,
+    num_active=0,
+    distance_range=(2.5, 4.0),
+    max_speed=0.0,
+  ),
 }
 
 actions: dict[str, ActionTermCfg] = {
@@ -83,6 +94,44 @@ curriculum = {
       ],
     },
   ),
+  "obstacle": CurriculumTermCfg(
+    func=obstacle_curriculum,
+    params={
+      "command_name": "obstacle_pos",
+      "stages": [
+        # Phase 0: no obstacles — standard dribbling training.
+        {"step": 0, "num_active": 0, "distance_range": (2.5, 4.0), "max_speed": 0.0},
+        # Phase 1: one static obstacle, spawning 2.5–4 m away.
+        {
+          "step": 10000,
+          "num_active": 1,
+          "distance_range": (2.5, 4.0),
+          "max_speed": 0.0,
+        },
+        # Phase 2: one moving obstacle, very slow approach.
+        {
+          "step": 25000,
+          "num_active": 1,
+          "distance_range": (2.0, 4.0),
+          "max_speed": 0.1,
+        },
+        # Phase 3: one moving obstacle, slightly faster and tighter spawn.
+        {
+          "step": 50000,
+          "num_active": 1,
+          "distance_range": (1.5, 3.5),
+          "max_speed": 0.2,
+        },
+        # Phase 4: one moving obstacle, faster and tighter.
+        {
+          "step": 100000,
+          "num_active": 1,
+          "distance_range": (1.0, 3.0),
+          "max_speed": 0.4,
+        },
+      ],
+    },
+  ),
 }
 
 terminations = {
@@ -90,5 +139,9 @@ terminations = {
   "fell_over": TerminationTermCfg(
     func=bad_orientation,
     params={"limit_angle": math.radians(70.0)},
+  ),
+  "ball_captured": TerminationTermCfg(
+    func=ball_captured,
+    params={"command_name": "obstacle_pos", "capture_radius": 0.5},
   ),
 }

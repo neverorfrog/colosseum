@@ -25,6 +25,7 @@ from colosseum.tasks.dribbling.mdp.observations import (
   ball_velocity_xy,
   base_height,
   foot_ball_contact_force,
+  obstacle_positions_b,
 )
 
 # ---------------------------------------------------------------------------
@@ -72,13 +73,27 @@ privileged_ball_terms = {
 }
 
 # ---------------------------------------------------------------------------
-# Critic: actor + privileged ball + remaining GT terms + foot extras.
+# Privileged obstacles: encoder input, num_obstacles*2 D (XY body-frame).
+# All obstacles included even when inactive (parked underground) so the
+# observation dimension stays constant across curriculum stages.
+# ---------------------------------------------------------------------------
+
+privileged_obstacle_terms = {
+  "obstacle_pos": ObservationTermCfg(
+    func=obstacle_positions_b,
+    params={"command_name": "obstacle_pos"},
+  ),
+}
+
+# ---------------------------------------------------------------------------
+# Critic: actor + privileged ball + privileged obstacles + GT terms + foot extras.
 # Asymmetric actor-critic: critic sees everything, actor sees only proprio.
 # ---------------------------------------------------------------------------
 
 critic_terms = {
   **actor_terms,
   **privileged_ball_terms,
+  **privileged_obstacle_terms,
   "base_height": ObservationTermCfg(func=base_height),
   "ball_mass": ObservationTermCfg(
     func=ball_mass,
@@ -132,6 +147,11 @@ observations = {
   ),
   "privileged_ball": ObservationGroupCfg(
     terms=privileged_ball_terms,
+    concatenate_terms=True,
+    enable_corruption=False,
+  ),
+  "privileged_obstacles": ObservationGroupCfg(
+    terms=privileged_obstacle_terms,
     concatenate_terms=True,
     enable_corruption=False,
   ),

@@ -3,6 +3,8 @@ from mjlab.envs import ManagerBasedRlEnv
 from mjlab.managers import SceneEntityCfg
 from mjlab.sensor import ContactData, ContactSensor
 
+from colosseum.tasks.dribbling.mdp.obstacle_commands import ObstacleCommand
+
 from .observations import agent_to_goal_vector as goal_to_agent_vector
 from .rewards import is_healthy
 
