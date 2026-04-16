@@ -10,7 +10,7 @@ from mjlab.viewer import ViewerConfig
 
 from colosseum.assets.ball.ball_spec import get_ball_cfg
 from colosseum.config.types.task import TaskConfig, register_task
-from colosseum.envs.rma_based_env import RmaBasedEnvCfg
+from colosseum.envs.constraint_rma_env import ConstraintRmaEnvCfg
 from colosseum.robots.t1_23dof.constants import BASE_BODY_NAME, get_robot_cfg
 from colosseum.robots.t1_23dof.sensors import (
   FEET_GROUND_CONTACT_SENSOR,
@@ -27,6 +27,7 @@ from colosseum.tasks.dribbling.viz import DribblingViz
 
 from .algo_cfg import booster_t1_dribbling_ppo_cfg
 from .cact_cfg import actions, commands, curriculum, terminations
+from .constraint_cfg import dribbling_constraints
 from .event_cfg import events
 from .observation_cfg import observations
 from .reward_cfg import rewards
@@ -83,8 +84,8 @@ def sim_cfg() -> SimulationCfg:
 
 def booster_t1_dribbling_env_cfg(
   play: bool = False, use_depth_camera: bool = False, show_depth: bool = False
-) -> RmaBasedEnvCfg:
-  cfg = RmaBasedEnvCfg(
+) -> ConstraintRmaEnvCfg:
+  cfg = ConstraintRmaEnvCfg(
     scene=scene_cfg(play, use_depth_camera=use_depth_camera),
     use_depth_camera=use_depth_camera,
     observations=observations,
@@ -99,6 +100,7 @@ def booster_t1_dribbling_env_cfg(
     sim=sim_cfg(),
     decimation=4,
     episode_length_s=20.0,
+    constraints=dribbling_constraints,
     encoders={
       "ball": BallRmaTermCfg(
         privileged_obs_group="privileged_ball",
@@ -132,7 +134,7 @@ def booster_t1_dribbling_env_cfg(
 @dataclass(frozen=True)
 class T1DribblingTask(TaskConfig):
   name: str = "t1-dribbling"
-  env: RmaBasedEnvCfg = field(default_factory=booster_t1_dribbling_env_cfg)
+  env: ConstraintRmaEnvCfg = field(default_factory=booster_t1_dribbling_env_cfg)
   use_depth_camera: bool = False
   show_depth: bool = False
   """Show a cv2 filmstrip of the encoder's depth buffer during play (--show-depth)."""

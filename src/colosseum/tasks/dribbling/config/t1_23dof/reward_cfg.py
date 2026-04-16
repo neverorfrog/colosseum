@@ -1,16 +1,12 @@
 import math  # noqa: F401
 
-from mjlab.envs.mdp import (
-  action_rate_l2,
-  joint_pos_limits,
-)
+from mjlab.envs.mdp import action_rate_l2
 from mjlab.managers import RewardTermCfg
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.tasks.velocity.mdp import (
   angular_momentum_penalty,
   body_angular_velocity_penalty,
   feet_swing_height,
-  self_collision_cost,
   soft_landing,
 )
 
@@ -19,16 +15,10 @@ from colosseum.robots.t1_23dof.constants import (
   BASE_BODY_NAME,
   FOOT_SITE_NAMES,
 )
-from colosseum.robots.t1_23dof.sensors import (
-  FOOT_FOOT_CONTACT_SENSOR,
-  NONFOOT_BALL_CONTACT_SENSOR,
-  SELF_COLLISION_SENSOR,
-)
 from colosseum.tasks.dribbling.mdp.rewards import (
   ball_vel_angle,
   ball_vel_norm,
   ball_vel_tracking,
-  feet_distance_penalty,
   pose_deviation,
   robot_ball_approach_vel,
   robot_ball_distance,
@@ -43,7 +33,7 @@ rewards = {
   # ------------------------------------------------------------------ #
   "ball_vel_tracking": RewardTermCfg(
     func=ball_vel_tracking,
-    weight=2.0,
+    weight=4.0,
     params={"command_name": "ball_vel", "sharpness": 1.0},
   ),
   "ball_vel_norm": RewardTermCfg(
@@ -58,12 +48,12 @@ rewards = {
   ),
   "robot_ball_distance": RewardTermCfg(
     func=robot_ball_distance,
-    weight=1.0,
-    params={},
+    weight=0.05,
+    params={"sharpness": 0.1},
   ),
   "robot_ball_yaw": RewardTermCfg(
     func=robot_ball_yaw,
-    weight=4.0,
+    weight=3.0,
     params={"command_name": "ball_vel"},
   ),
   "robot_ball_approach_vel": RewardTermCfg(
@@ -92,7 +82,6 @@ rewards = {
     weight=-0.5,
     params={"sensor_name": "robot/root_angmom"},
   ),
-  "dof_pos_limits": RewardTermCfg(func=joint_pos_limits, weight=-1.0),
   "action_rate_l2": RewardTermCfg(func=action_rate_l2, weight=-0.1),
   "foot_swing_height": RewardTermCfg(
     func=feet_swing_height,
@@ -113,29 +102,6 @@ rewards = {
       "command_name": "ball_vel",
       "command_threshold": 0.05,
     },
-  ),
-  "self_collisions": RewardTermCfg(
-    func=self_collision_cost,
-    weight=-1.0,
-    params={"sensor_name": SELF_COLLISION_SENSOR.name, "force_threshold": 10.0},
-  ),
-  "feet_distance": RewardTermCfg(
-    func=feet_distance_penalty,
-    weight=-4.0,
-    params={
-      "asset_cfg": SceneEntityCfg("robot", site_names=FOOT_SITE_NAMES),
-      "min_dist": 0.15,
-    },
-  ),
-  "foot_foot_contact": RewardTermCfg(
-    func=self_collision_cost,
-    weight=-3.0,
-    params={"sensor_name": FOOT_FOOT_CONTACT_SENSOR.name, "force_threshold": 1.0},
-  ),
-  "nonfoot_ball_contact": RewardTermCfg(
-    func=self_collision_cost,
-    weight=-2.0,
-    params={"sensor_name": NONFOOT_BALL_CONTACT_SENSOR.name, "force_threshold": 1.0},
   ),
   # ------------------------------------------------------------------ #
   # Phase-schedule feet rewards                                          #
