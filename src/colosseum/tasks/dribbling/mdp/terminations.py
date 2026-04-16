@@ -6,7 +6,7 @@ from colosseum.tasks.dribbling.mdp.obstacle_commands import ObstacleCommand
 
 def ball_captured(
   env: ManagerBasedRlEnv,
-  command_name: str = "obstacle_pos",
+  command_name: str = "adversary",
   capture_radius: float = 0.5,
 ) -> torch.Tensor:
   """Terminate when the ball is within *capture_radius* of any active obstacle.

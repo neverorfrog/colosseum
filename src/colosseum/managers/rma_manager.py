@@ -87,6 +87,15 @@ class RmaTerm(ManagerTermBase):
     return self.cfg.latent_dim
 
   @property
+  def privileged_group_names(self) -> list[str]:
+    """All obs-group keys this term reads in encode_privileged.
+
+    Override in terms that consume more than one privileged group.
+    The default covers single-group terms (one cfg.privileged_obs_group).
+    """
+    return [self.cfg.privileged_obs_group]
+
+  @property
   @abc.abstractmethod
   def privileged_encoder(self) -> nn.Module:
     """The privileged (GT-supervised) encoder nn.Module."""
@@ -276,7 +285,10 @@ class RmaManager(ManagerBase):
   @property
   def privileged_group_names(self) -> list[str]:
     """Privileged obs group names that RmaPPO must store in the rollout buffer."""
-    return [t.cfg.privileged_obs_group for t in self._terms.values()]
+    names: list[str] = []
+    for t in self._terms.values():
+      names.extend(t.privileged_group_names)
+    return names
 
   @property
   def adaptation_group_names(self) -> list[str]:

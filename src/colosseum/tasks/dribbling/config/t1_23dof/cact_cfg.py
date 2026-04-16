@@ -49,7 +49,7 @@ commands: Dict[str, CommandTermCfg] = {
   ),
   "gait_phase": GaitPhaseCommandCfg(),
   # Obstacle command: starts with 0 active obstacles (unlocked by curriculum).
-  "obstacle_pos": ObstacleCommandCfg(
+  "adversary": ObstacleCommandCfg(
     num_obstacles=NUM_OBSTACLES,
     num_active=0,
     distance_range=(2.5, 4.0),
@@ -97,7 +97,7 @@ curriculum = {
   "obstacle": CurriculumTermCfg(
     func=obstacle_curriculum,
     params={
-      "command_name": "obstacle_pos",
+      "command_name": "adversary",
       "stages": [
         # Phase 0: no obstacles — standard dribbling training.
         {"step": 0, "num_active": 0, "distance_range": (2.5, 4.0), "max_speed": 0.0},
@@ -142,6 +142,6 @@ terminations = {
   ),
   "ball_captured": TerminationTermCfg(
     func=ball_captured,
-    params={"command_name": "obstacle_pos", "capture_radius": 0.5},
+    params={"command_name": "adversary", "capture_radius": 0.5},
   ),
 }

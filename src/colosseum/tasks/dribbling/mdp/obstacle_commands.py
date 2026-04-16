@@ -1,17 +1,26 @@
-"""Command term: obstacle positions for adversarial dribbling.
+"""Command term: obstacle positions and velocities for adversarial dribbling.
 
-ObstacleCommand holds the world-frame XY position of every obstacle and is
-the single source of truth for where obstacles live.  It is responsible for:
+ObstacleCommand holds the world-frame XY position and velocity of every
+obstacle.  It is the single source of truth for where obstacles live and how
+fast they are moving.  It is responsible for:
 
-  1. Sampling new positions around the environment origin at every episode
-     reset (``_resample_command``).
+  1. Sampling new positions around the robot at every episode reset
+     (``_resample_command``).
   2. Writing those positions to the MuJoCo mocap bodies so the collision
-     geometry matches (``write_mocap_pose_to_sim``).
+     geometry matches (``_write_obstacle_to_sim``).
   3. Stepping moving obstacles each environment tick (``_update_command``),
      enabled in later curriculum stages via ``max_speed > 0``.
 
-Inactive obstacles (``k >= num_active``) are parked underground so they
-have no physical effect.
+Inactive obstacles (``k >= num_active``) are parked at ground level (z=0)
+but at a large world-frame XY offset (_PARK_FAR) so they appear very far away
+in any body-frame observation and register near-zero danger regardless of the
+gate function used.  Parking underground is avoided because it corrupts the
+viewer.
+
+Velocity is set analytically from ``max_speed`` and ``cmd_dir`` (not
+finite-differenced), so it is exact and noise-free.  Velocity is zeroed on
+teleport events (episode reset or ball-velocity direction change) to avoid
+spurious high-danger readings.
 """
 
 from __future__ import annotations
@@ -26,21 +35,23 @@ if TYPE_CHECKING:
   from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv
   from mjlab.viewer.debug_visualizer import DebugVisualizer
 
-# Underground z used to park inactive obstacles out of reach.
-_PARK_Z: float = -10.0
+# Large world-frame XY offset for inactive obstacles so they appear
+# safely far away in body-frame observations (>> any detection_range).
+# Obstacles are kept at z=0 (ground level) to avoid viewer corruption.
+_PARK_FAR: float = 1000.0
 
 
 class ObstacleCommand(CommandTerm):
-  """World-frame obstacle position command.
+  """World-frame obstacle position+velocity command.
 
   At each episode reset, active obstacles are placed along the ball velocity
-  command direction at a random distance from the env origin, so the obstacle
-  starts directly in the robot's dribbling path.  Inactive obstacles are
-  teleported underground.
+  command direction at a random distance from the robot's current position.
+  Inactive obstacles are teleported both underground and far away so they
+  register as non-threatening in any proximity-based danger gate.
 
-  The command tensor exposed to the manager is the flat (N, num_obstacles*2)
-  array of world-frame XY positions; observation terms read it via
-  ``obstacle_positions_w``.
+  The command tensor is the flat (N, num_obstacles*2) array of world-frame
+  XY positions.  Observation terms read positions via ``obstacle_positions_w``
+  and velocities via ``obstacle_velocities_w``.
   """
 
   cfg: ObstacleCommandCfg
@@ -51,8 +62,10 @@ class ObstacleCommand(CommandTerm):
     K = cfg.num_obstacles
     # World-frame XY positions, shape (N, K, 2).
     self._positions_w = torch.zeros((N, K, 2), device=env.device)
-    # Last seen ball velocity direction, used to detect resamples of ball_vel.
-    # Shape (N, 2); initialised to NaN so the first step always triggers a resample.
+    # World-frame XY velocities, shape (N, K, 2).
+    # Set analytically from max_speed*cmd_dir; zeroed on teleport.
+    self._velocities_w = torch.zeros((N, K, 2), device=env.device)
+    # Last seen ball velocity direction; NaN forces resample on first tick.
     self._last_cmd_dir = torch.full((N, 2), float("nan"), device=env.device)
 
   # ------------------------------------------------------------------
@@ -69,6 +82,11 @@ class ObstacleCommand(CommandTerm):
     """World-frame XY positions, shape (N, num_obstacles, 2)."""
     return self._positions_w
 
+  @property
+  def obstacle_velocities_w(self) -> torch.Tensor:
+    """World-frame XY velocities, shape (N, num_obstacles, 2)."""
+    return self._velocities_w
+
   def _resample_command(self, env_ids: torch.Tensor) -> None:
     device = self._env.device
     n = len(env_ids)
@@ -79,11 +97,14 @@ class ObstacleCommand(CommandTerm):
     # Invalidate stored direction so the next _update_command tick resamples.
     self._last_cmd_dir[env_ids] = float("nan")
 
+    # Zero all velocities at episode start (teleport, not drift).
+    self._velocities_w[env_ids] = 0.0
+
     # Robot position is valid at reset time (events run before commands).
     robot = self._env.scene["robot"]
     robot_xy = robot.data.root_link_pos_w[env_ids, :2]  # (n, 2)
 
-    ball_vel_cmd = self._env.command_manager.get_command("ball_vel")[env_ids, :2]  # (n, 2)
+    ball_vel_cmd = self._env.command_manager.get_command("ball_vel")[env_ids, :2]
     cmd_speed = ball_vel_cmd.norm(dim=-1, keepdim=True).clamp(min=1e-3)
     cmd_dir = ball_vel_cmd / cmd_speed  # (n, 2)
 
@@ -94,20 +115,21 @@ class ObstacleCommand(CommandTerm):
         self._positions_w[env_ids, k, 1] = robot_xy[:, 1] + distances * cmd_dir[:, 1]
         self._write_obstacle_to_sim(k, env_ids, z=0.0)
       else:
-        # Park underground at env origin.
+        # Park far away at ground level so the body-frame distance is always
+        # >> any detection_range, without going underground (viewer-safe).
         env_origin_xy = self._env.scene.env_origins[env_ids, :2]
-        self._positions_w[env_ids, k, 0] = env_origin_xy[:, 0]
-        self._positions_w[env_ids, k, 1] = env_origin_xy[:, 1]
-        self._write_obstacle_to_sim(k, env_ids, z=_PARK_Z)
+        self._positions_w[env_ids, k, 0] = env_origin_xy[:, 0] + _PARK_FAR
+        self._positions_w[env_ids, k, 1] = env_origin_xy[:, 1] + _PARK_FAR
+        self._write_obstacle_to_sim(k, env_ids, z=0.0)
 
   def _update_command(self) -> None:
     """Reposition active obstacles every env tick.
 
     On a ball-velocity direction change the obstacle is teleported to
-    ``robot_xy + distance * cmd_dir`` (using the robot's *current* world-frame
-    position as the anchor so the obstacle lands in front of the robot wherever
-    it has moved to).  Between resamples the obstacle drifts toward the robot
-    at ``max_speed`` in world-frame along ``-cmd_dir``.
+    ``robot_xy + distance * cmd_dir`` and its velocity is zeroed (teleport,
+    not drift).  Between resamples the obstacle drifts toward the robot at
+    ``max_speed`` along ``-cmd_dir``, and its velocity is set analytically
+    to ``-cmd_dir * max_speed``.
     """
     if self.cfg.num_active == 0:
       return
@@ -115,7 +137,6 @@ class ObstacleCommand(CommandTerm):
     device = self._env.device
     N = self._env.num_envs
     all_ids = torch.arange(N, device=device)
-    dt = self._env.step_dt
     d_lo, d_hi = self.cfg.distance_range
 
     ball_vel_cmd = self._env.command_manager.get_command("ball_vel")[:, :2]  # (N, 2)
@@ -132,16 +153,26 @@ class ObstacleCommand(CommandTerm):
     dir_changed = ~(dot >= 0.95)
 
     for k in range(self.cfg.num_active):
-      # Teleport obstacle when direction changed; anchor to robot's current pos.
+      # --- Teleport on direction change (anchor to robot's current pos) ---
       if dir_changed.any():
         ids = dir_changed.nonzero(as_tuple=False).flatten()
         distances = torch.rand(len(ids), device=device) * (d_hi - d_lo) + d_lo
         self._positions_w[ids, k, 0] = robot_xy[ids, 0] + distances * cmd_dir[ids, 0]
         self._positions_w[ids, k, 1] = robot_xy[ids, 1] + distances * cmd_dir[ids, 1]
+        # Teleport → zero velocity (not a physical drift).
+        self._velocities_w[ids, k] = 0.0
 
-      # Approach: move in world-frame opposite to the dribble direction.
+      # --- Continuous drift for non-teleported envs ---
       if self.cfg.max_speed > 0:
+        drifting = ~dir_changed  # (N,)
+        dt = self._env.step_dt
         self._positions_w[:, k] -= cmd_dir * self.cfg.max_speed * dt
+        # Analytical velocity: moving opposite to dribble direction.
+        self._velocities_w[drifting, k] = -cmd_dir[drifting] * self.cfg.max_speed
+      else:
+        # Static obstacle: velocity stays zero for non-teleported envs.
+        non_teleported = ~dir_changed
+        self._velocities_w[non_teleported, k] = 0.0
 
       self._write_obstacle_to_sim(k, all_ids, z=0.0)
 
@@ -201,7 +232,7 @@ class ObstacleCommandCfg(CommandTermCfg):
   # Active obstacles at this curriculum stage (0 = none, ramps up).
   num_active: int = 0
 
-  # Sampling range for initial distance from the env origin (metres).
+  # Sampling range for initial distance from the robot (metres).
   distance_range: tuple[float, float] = (2.5, 4.0)
 
   # Maximum approach speed in m/s (0 = static obstacles).

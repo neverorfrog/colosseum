@@ -441,7 +441,7 @@ def robot_ball_approach_vel(
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Obstacles
 # ---------------------------------------------------------------------------
 
 
@@ -465,14 +465,9 @@ def _get_min_robot_obstacle_dist(
   return min_dist, nearest
 
 
-# ---------------------------------------------------------------------------
-# Reward functions
-# ---------------------------------------------------------------------------
-
-
 def obstacle_avoidance(
   env: ManagerBasedRlEnv,
-  command_name: str = "obstacle_pos",
+  command_name: str = "adversary",
   safe_radius: float = 0.6,
   sharpness: float = 5.0,
 ) -> torch.Tensor:
@@ -496,7 +491,7 @@ def obstacle_avoidance(
 
 def ball_protection(
   env: ManagerBasedRlEnv,
-  command_name: str = "obstacle_pos",
+  command_name: str = "adversary",
   activation_radius: float = 3.0,
 ) -> torch.Tensor:
   """Reward the robot for shielding the ball from the nearest obstacle.
@@ -517,8 +512,6 @@ def ball_protection(
 
   robot = env.scene["robot"]
   ball = env.scene["ball"]
-  N = env.num_envs
-  device = env.device
 
   robot_xy = robot.data.root_link_pos_w[:, :2]  # (N, 2)
   ball_xy = ball.data.root_link_pos_w[:, :2]  # (N, 2)

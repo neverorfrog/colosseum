@@ -4,6 +4,7 @@ Current architecture:
   PrivilegedEncoder  — small MLP, used in Phase 1 with GT inputs
   DepthEncoder       — shared depth encoder (CNN + GRU), used in Phase 2
   BallHead           — task head predicting [x, y, vx, vy] from DepthEncoder latent
+  ObstacleHead       — task head projecting shared depth latent to obstacle-specific latent
 """
 
 from __future__ import annotations
@@ -179,5 +180,38 @@ class BallHead(nn.Module):
 
     Returns:
       (..., 4) tensor ordered as [x, y, vx, vy]
+    """
+    return self.net(z)
+
+
+class ObstacleHead(nn.Module):
+  """Task head predicting body-frame [x, y, vx, vy] per obstacle from shared latent.
+
+  Symmetric with BallHead: predicts normalised body-frame positions and velocities
+  for each obstacle.  The output is used both as the actor's obstacle slot (Phase 2)
+  and as a supervised regression target.
+
+  Args:
+    latent_dim:    Dimension of the shared DepthEncoder output.
+    num_obstacles: Number of obstacles to track simultaneously.
+  """
+
+  def __init__(self, latent_dim: int = 64, num_obstacles: int = 1) -> None:
+    super().__init__()
+    output_dim = num_obstacles * 4  # [x, y, vx, vy] per obstacle
+    self.net = nn.Sequential(
+      nn.Linear(latent_dim, 32),
+      nn.ReLU(),
+      nn.Linear(32, output_dim),
+    )
+
+  def forward(self, z: Tensor) -> Tensor:
+    """Predict obstacle state from latent.
+
+    Args:
+      z: (..., latent_dim)
+
+    Returns:
+      (..., num_obstacles * 4) tensor ordered as [x0, y0, vx0, vy0, ...]
     """
     return self.net(z)

@@ -3,8 +3,6 @@ from mjlab.envs import ManagerBasedRlEnv
 from mjlab.sensor import ContactSensor
 from mjlab.utils.lab_api.math import quat_apply
 
-from colosseum.tasks.dribbling.mdp.obstacle_commands import ObstacleCommand
-
 
 def ball_position(env: ManagerBasedRlEnv) -> torch.Tensor:
   """Ball position relative to robot base in robot body frame. Shape (N, 2)."""
@@ -79,37 +77,52 @@ def foot_ball_contact_force(env: ManagerBasedRlEnv, sensor_name: str) -> torch.T
 
 def obstacle_positions_b(
   env: ManagerBasedRlEnv,
-  command_name: str = "obstacle_pos",
+  num_obstacles: int = 1,
 ) -> torch.Tensor:
-  """Obstacle XY positions in robot body frame.
+  """Obstacle XY positions in robot body frame, read directly from MuJoCo.
 
-  Returns a flat (N, num_obstacles * 2) tensor ordered as
-  [x0, y0, x1, y1, ...].  Active obstacles (k < num_active) are
-  expressed as body-frame relative XY from the robot.  Inactive obstacles
-  (k >= num_active) are zeroed out so the encoder always receives the same
-  clean "no obstacle" signal regardless of where parked obstacles happen to
-  be in the world.  The observation dimension stays constant across all
-  curriculum stages.
+  Returns a flat (N, num_obstacles * 2) tensor ordered as [x0, y0, x1, y1, ...].
+  Inactive obstacles are parked far away so they appear hundreds of metres away —
+  naturally near-zero danger in the encoder gate.
   """
   robot = env.scene["robot"]
-  term: ObstacleCommand = env.command_manager.get_term(command_name)
-  obs_pos_w = term.obstacle_positions_w  # (N, K, 2)
-  N, K, _ = obs_pos_w.shape
-  num_active = term.cfg.num_active
+  N = env.num_envs
 
   quat_w = robot.data.root_link_quat_w  # (N, 4)
   quat_conj = torch.cat([quat_w[:, :1], -quat_w[:, 1:]], dim=-1)
   robot_pos_w = robot.data.root_link_pos_w[:, :2]  # (N, 2)
+  zeros = torch.zeros(N, 1, device=quat_w.device)
 
   parts: list[torch.Tensor] = []
-  for k in range(K):
-    if k < num_active:
-      rel_xy = obs_pos_w[:, k, :] - robot_pos_w  # (N, 2)
-      rel_3d = torch.cat([rel_xy, torch.zeros(N, 1, device=rel_xy.device)], dim=-1)
-      rel_b = quat_apply(quat_conj, rel_3d)[:, :2]  # (N, 2)
-      parts.append(rel_b)
-    else:
-      # Inactive slot: zeros = "no obstacle here" sentinel.
-      parts.append(torch.zeros(N, 2, device=obs_pos_w.device))
+  for k in range(num_obstacles):
+    obs_pos_w = env.scene[f"obstacle_{k}"].data.root_link_pos_w[:, :2]  # (N, 2)
+    rel_xy = obs_pos_w - robot_pos_w
+    rel_3d = torch.cat([rel_xy, zeros], dim=-1)
+    parts.append(quat_apply(quat_conj, rel_3d)[:, :2])  # (N, 2)
 
-  return torch.cat(parts, dim=-1)  # (N, K*2)
+  return torch.cat(parts, dim=-1)  # (N, num_obstacles*2)
+
+
+def obstacle_velocities_b(
+  env: ManagerBasedRlEnv,
+  num_obstacles: int = 1,
+) -> torch.Tensor:
+  """Obstacle XY velocities in robot body frame, read directly from MuJoCo.
+
+  Returns a flat (N, num_obstacles * 2) tensor ordered as [vx0, vy0, vx1, vy1, ...].
+  Velocity is a pure rotation from world into body frame (no translation).
+  """
+  robot = env.scene["robot"]
+  N = env.num_envs
+
+  quat_w = robot.data.root_link_quat_w  # (N, 4)
+  quat_conj = torch.cat([quat_w[:, :1], -quat_w[:, 1:]], dim=-1)
+  zeros = torch.zeros(N, 1, device=quat_w.device)
+
+  parts: list[torch.Tensor] = []
+  for k in range(num_obstacles):
+    vel_w = env.scene[f"obstacle_{k}"].data.root_link_lin_vel_w[:, :2]  # (N, 2)
+    vel_3d = torch.cat([vel_w, zeros], dim=-1)
+    parts.append(quat_apply(quat_conj, vel_3d)[:, :2])  # (N, 2)
+
+  return torch.cat(parts, dim=-1)  # (N, num_obstacles*2)

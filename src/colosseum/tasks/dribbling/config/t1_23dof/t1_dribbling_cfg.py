@@ -24,7 +24,7 @@ from colosseum.robots.t1_23dof.sensors import (
   SELF_COLLISION_SENSOR,
 )
 from colosseum.tasks.dribbling.mdp.obstacle_commands import ObstacleCommandCfg
-from colosseum.tasks.dribbling.mdp.rma_terms import BallRmaTermCfg, ObstacleRmaTermCfg
+from colosseum.tasks.dribbling.mdp.rma_terms import DribblingRmaTermCfg
 from colosseum.tasks.dribbling.obstacle_spec import NUM_OBSTACLES, get_obstacle_cfg
 from colosseum.tasks.dribbling.viz import DribblingViz
 
@@ -118,14 +118,10 @@ def booster_t1_dribbling_env_cfg(
     decimation=4,
     episode_length_s=20.0,
     encoders={
-      "ball": BallRmaTermCfg(
+      "dribbling": DribblingRmaTermCfg(
         privileged_obs_group="privileged_ball",
+        obstacle_privileged_obs_group="privileged_obstacles",
         adaptation_obs_group="depth_frames" if use_depth_camera else None,
-        latent_dim=64,
-      ),
-      "obstacle": ObstacleRmaTermCfg(
-        privileged_obs_group="privileged_obstacles",
-        latent_dim=32,
         num_obstacles=num_obstacles,
       ),
     },
@@ -145,7 +141,7 @@ def booster_t1_dribbling_env_cfg(
     # by replacing the command config with a fresh one (avoid mutating the
     # shared module-level dict from cact_cfg).
     cfg.commands = dict(cfg.commands)
-    cfg.commands["obstacle_pos"] = ObstacleCommandCfg(
+    cfg.commands["adversary"] = ObstacleCommandCfg(
       num_obstacles=num_obstacles,
       num_active=num_obstacles,
       distance_range=(2.0, 3.5),

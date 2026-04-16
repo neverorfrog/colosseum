@@ -25,7 +25,6 @@ from colosseum.robots.t1_23dof.sensors import (
   SELF_COLLISION_SENSOR,
 )
 from colosseum.tasks.dribbling.mdp.rewards import (
-  ball_protection,
   ball_vel_angle_body,
   ball_vel_norm,
   ball_vel_tracking_body,
@@ -45,7 +44,7 @@ rewards = {
   # ------------------------------------------------------------------ #
   "ball_vel_tracking": RewardTermCfg(
     func=ball_vel_tracking_body,
-    weight=2.0,
+    weight=4.0,
     params={"command_name": "ball_vel", "sharpness": 1.0},
   ),
   "ball_vel_norm": RewardTermCfg(
@@ -60,17 +59,17 @@ rewards = {
   ),
   "robot_ball_distance": RewardTermCfg(
     func=robot_ball_distance,
-    weight=0.1,
+    weight=0.05,
     params={"sharpness": 0.1},  # half-max at ~1.2m; robot can play ball forward
   ),
   "robot_ball_yaw": RewardTermCfg(
     func=robot_ball_yaw_body,
-    weight=1.0,
+    weight=3.0,
     params={"command_name": "ball_vel"},
   ),
   "robot_ball_approach_vel": RewardTermCfg(
     func=robot_ball_approach_vel,
-    weight=0.5,
+    weight=1.0,
     params={"command_name": "ball_vel"},
   ),
   # ------------------------------------------------------------------ #
@@ -123,7 +122,7 @@ rewards = {
   ),
   "feet_distance": RewardTermCfg(
     func=feet_distance_penalty,
-    weight=-4.0,
+    weight=-6.0,
     params={
       "asset_cfg": SceneEntityCfg("robot", site_names=FOOT_SITE_NAMES),
       "min_dist": 0.15,
@@ -131,7 +130,7 @@ rewards = {
   ),
   "foot_foot_contact": RewardTermCfg(
     func=self_collision_cost,
-    weight=-3.0,
+    weight=-10.0,
     params={"sensor_name": FOOT_FOOT_CONTACT_SENSOR.name, "force_threshold": 1.0},
   ),
   "nonfoot_ball_contact": RewardTermCfg(
@@ -195,11 +194,11 @@ rewards = {
   # ------------------------------------------------------------------ #
   "obstacle_avoidance": RewardTermCfg(
     func=obstacle_avoidance,
-    weight=-1.5,
+    weight=-1.0,
     params={
-      "command_name": "obstacle_pos",
+      "command_name": "adversary",
       "safe_radius": 0.5,  # penalty starts at 0.5 m from obstacle center
-      "sharpness": 4.0,
+      "sharpness": 2.0,
     },
   ),
 }

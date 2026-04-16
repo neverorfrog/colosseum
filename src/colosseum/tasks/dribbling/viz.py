@@ -16,7 +16,7 @@ def _get_ball_term(env):
   """Safely return the ball RMA term, or None if not present."""
   try:
     unwrapped = getattr(env, "unwrapped", env)
-    return unwrapped.rma_manager._terms.get("ball")
+    return unwrapped.rma_manager._terms.get("dribbling")
   except AttributeError:
     return None
 

@@ -300,8 +300,11 @@ class RmaPPO(PPO):
       raise RuntimeError("Phase 2 requires at least one adaptation observation group.")
     frame_group = self.rma_manager.adaptation_group_names[0]
 
-    ball_term = self.rma_manager._terms.get("ball")
-    warmup_steps = getattr(getattr(ball_term, "cfg", None), "warmup_steps", 0)
+    warmup_steps = max(
+      (getattr(getattr(term, "cfg", None), "warmup_steps", 0)
+       for term in self.rma_manager._terms.values()),
+      default=0,
+    )
 
     # --- Collection phase (all networks frozen) ---
     with torch.no_grad():

@@ -127,7 +127,7 @@ class obstacle_curriculum:
       CurriculumTermCfg(
       func=obstacle_curriculum,
       params={
-          "command_name": "obstacle_pos",
+          "command_name": "adversary",
           "stages": [
           {"step":      0, "num_active": 0, "distance_range": (3.0, 5.0), "max_speed": 0.0},
           {"step":  10000, "num_active": 1, "distance_range": (2.5, 4.0), "max_speed": 0.0},
