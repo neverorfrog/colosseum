@@ -53,7 +53,7 @@ class GridAbstractionTermCfg(AbstractionTermCfg):
 
   grid_frame: GridFrame
   obstacle_mask: Optional[torch.Tensor] = None
-  direction_method: Literal["harmonic", "gradient"] = "gradient"
+  direction_method: Literal["harmonic", "gradient"] = "harmonic"
   wall_center_weight: float = 2.0
   debug_vis: bool = True
 

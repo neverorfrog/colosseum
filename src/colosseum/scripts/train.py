@@ -18,6 +18,7 @@ import os
 import signal
 import subprocess
 import sys
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
@@ -31,21 +32,20 @@ from mjlab.utils.torch import configure_torch_backends
 
 # Import tasks to populate registry
 import colosseum.tasks  # noqa: F401
-
 from colosseum.config.types.experiment import TrainConfig
 from colosseum.utils.logger import (
-    generate_run_name,
-    save_experiment_config,
-    setup_loguru,
-    setup_wandb,
-    teardown_wandb,
+  generate_run_name,
+  save_experiment_config,
+  setup_loguru,
+  setup_wandb,
+  teardown_wandb,
 )
 from colosseum.utils.torch import get_device, set_seed
 from colosseum.utils.train.env import make_env
 
 
 def _make_env(env_cfg: ManagerBasedRlEnvCfg, device: str) -> ManagerBasedRlEnv:
-    return make_env(env_cfg, device)
+  return make_env(env_cfg, device)
 
 
 def _init_distributed(use_cuda: bool) -> tuple[bool, int, int, int]:
@@ -315,4 +315,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+  main()

@@ -1,14 +1,27 @@
-"""Concrete RMA encoder terms for the dribbling task.
+"""Unified RMA encoder term for the dribbling task.
 
-BallRmaTerm pairs two encoders for the ball latent slot:
-  privileged_encoder  — GT ball obs (pos, vel) -> MLP -> latent  (Phase 1)
-  adaptation_encoder  — depth frame + recurrent hidden state -> latent (Phase 2)
+DribblingRmaTerm follows the standard RMA two-phase paradigm:
+  - Both phases produce the same latent z (latent_dim) that the actor consumes.
+  - Phase 1: privileged encoder (MLP) reads all GT info → z.
+  - Phase 2: depth encoder (CNN + GRU) reads depth frames → z.
+  - The actor is frozen in Phase 2; only the depth encoder is trained.
 
-The adaptation path uses:
-  - shared DepthEncoder (CNN + GRU) producing a 64D latent
-  - BallHead producing [x, y, vx, vy] for supervised Phase 2 loss only
+Phase 1 (privileged, GT inputs):
+    priv_encoder:  cat([ball_pos_vel (4D), obs_norm (K*4D)])  →  z  (latent_dim)
+    obs_norm:      body-frame obstacle pos+vel normalised by pos_scale / vel_scale,
+                   clipped to ±2 (so 1000 m parked obstacles → 2.0, a clear "far" sentinel)
 
-The actor always consumes the shared latent, not BallHead predictions.
+Phase 2 (visual adaptation):
+    DepthEncoder (CNN + GRU):  depth frame  →  z  (latent_dim)
+    BallHead:     z  →  [x, y, vx, vy]             (supervision only, not actor input)
+    ObstacleHead: z  →  [x0,y0,vx0,vy0, ...]       (supervision only, not actor input)
+
+Training losses (Phase 2):
+    latent_mse:   ||z_depth - z_priv||²                      (main alignment signal)
+    ball_pos:     BallHead[:2]  vs  GT ball position          (auxiliary)
+    ball_vel:     BallHead[2:]  vs  GT ball velocity          (auxiliary)
+    obstacle_pos: ObstacleHead[:K*2]  vs  GT obstacle pos     (auxiliary)
+    obstacle_vel: ObstacleHead[K*2:]  vs  GT obstacle vel     (auxiliary)
 """
 
 from __future__ import annotations
@@ -21,88 +34,133 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from colosseum.algorithm.encoders import BallHead, DepthEncoder, PrivilegedEncoder
+from colosseum.algorithm.encoders import (
+  BallHead,
+  DepthEncoder,
+  ObstacleHead,
+  PrivilegedEncoder,
+)
 from colosseum.managers.rma_manager import RmaTerm, RmaTermCfg
 
 if TYPE_CHECKING:
   from mjlab.envs import ManagerBasedRlEnv
 
 
-@dataclass(kw_only=True)
-class BallRmaTermCfg(RmaTermCfg):
-  """Config for the dribbling ball encoder term."""
+# ---------------------------------------------------------------------------
+# Config
+# ---------------------------------------------------------------------------
 
+
+@dataclass(kw_only=True)
+class DribblingRmaTermCfg(RmaTermCfg):
+  """Configuration for the unified dribbling RMA encoder term."""
+
+  # Privileged observation group names (must match observation_cfg.py).
   privileged_obs_group: str = "privileged_ball"
+  obstacle_privileged_obs_group: str = "privileged_obstacles"
+
+  # Adaptation (depth) observation group — None until Phase 2.
   adaptation_obs_group: str | None = None
 
-  # Shared latent dimensions
+  # Single latent dimension shared by both phases.
   latent_dim: int = 64
+
+  # Number of obstacles — obstacle input to encoder = K*4 normalised values.
+  num_obstacles: int = 1
+
+  # DepthEncoder / GRU settings.
   gru_hidden: int = 256
 
-  # Depth preprocessing
-  # 192x108 preserves the D455's 16:9 aspect ratio (1280x720 native) and
-  # gives the ball ~6 pixels at 2 m — enough for sub-pixel localization and
-  # frame-to-frame motion estimation. Smaller squares like 80x60 both stretch
-  # the image and subsample the ball below the 2-pixel threshold.
+  # Depth frame settings.
   sensor_name: str = "head_rgbd"
   height: int = 108
   width: int = 192
   depth_clip: float = 6.0
 
-  # Training losses
-  lambda_pos: float = 1.0
-  lambda_vel: float = 0.5
+  # Obstacle normalisation: divide raw body-frame values before concatenating.
+  # Clipped to ±2 after division (1000 m parked obstacles → 2.0).
+  obs_pos_scale: float = 5.0   # metres
+  obs_vel_scale: float = 1.0   # m/s
+
+  # Training loss weights.
+  lambda_ball_pos: float = 1.0
+  lambda_ball_vel: float = 0.5
+  lambda_obstacle_pos: float = 1.0
+  lambda_obstacle_vel: float = 0.5
+
+  # TBPTT / warmup.
   tbptt_chunk_len: int = 16
   warmup_steps: int = 4
 
-  # FOV tracking (camera-space projection)
+  # Ball FOV tracking (for adaptation mask).
   camera_name: str = "robot/d455_color"
   camera_fovy: float = 60.0
   camera_aspect_ratio: float = 4.0 / 3.0
 
-  def build(self, env: ManagerBasedRlEnv) -> BallRmaTerm:
-    return BallRmaTerm(cfg=self, env=env)
+  def build(self, env: ManagerBasedRlEnv) -> DribblingRmaTerm:
+    return DribblingRmaTerm(cfg=self, env=env)
 
 
-class BallRmaTerm(RmaTerm):
-  """Privileged MLP + shared depth encoder for dribbling ball information."""
+# ---------------------------------------------------------------------------
+# Term
+# ---------------------------------------------------------------------------
 
-  def __init__(self, cfg: BallRmaTermCfg, env: ManagerBasedRlEnv) -> None:
+
+class DribblingRmaTerm(RmaTerm):
+  """Unified ball + obstacle RMA encoder for dribbling.
+
+  See module docstring for architecture overview.
+  """
+
+  cfg: DribblingRmaTermCfg
+
+  def __init__(self, cfg: DribblingRmaTermCfg, env: ManagerBasedRlEnv) -> None:
     super().__init__(cfg, env)
+    N = env.num_envs
+    device = env.device
+    K = cfg.num_obstacles
 
-    group_dim = env.observation_manager.group_obs_dim[cfg.privileged_obs_group]
-    input_dim = group_dim[0] if isinstance(group_dim, tuple) else int(group_dim)
+    # ------------------------------------------------------------------
+    # Phase 1: single privileged encoder over all GT info.
+    # Input: cat([ball_pos_vel (4), obs_norm (K*4)]) = 4 + K*4
+    # ------------------------------------------------------------------
     self._priv_encoder = PrivilegedEncoder(
-      input_dim=input_dim,
+      input_dim=4 + K * 4,
       latent_dim=cfg.latent_dim,
-    ).to(env.device)
+    ).to(device)
 
+    # ------------------------------------------------------------------
+    # Phase 2: shared depth encoder + supervision heads.
+    # Both heads are auxiliary — their outputs are NOT the actor latent.
+    # ------------------------------------------------------------------
     self._depth_encoder = DepthEncoder(
       latent_dim=cfg.latent_dim,
       gru_hidden=cfg.gru_hidden,
-    ).to(env.device)
-    self._ball_head = BallHead(latent_dim=cfg.latent_dim).to(env.device)
+    ).to(device)
 
-    N = env.num_envs
-    device = env.device
+    self._ball_head = BallHead(latent_dim=cfg.latent_dim).to(device)
 
+    self._obstacle_head = ObstacleHead(
+      latent_dim=cfg.latent_dim,
+      num_obstacles=K,
+    ).to(device)
+
+    # ------------------------------------------------------------------
+    # Runtime state
+    # ------------------------------------------------------------------
     self._gru_hidden = torch.zeros((1, N, cfg.gru_hidden), device=device)
     self._current_frame = torch.zeros((N, 1, cfg.height, cfg.width), device=device)
 
     self._ball_in_fov = torch.zeros(N, device=device, dtype=torch.bool)
     self._steps_since_reset = torch.zeros(N, device=device, dtype=torch.long)
-
     self._reset_event = torch.zeros(N, device=device, dtype=torch.bool)
     self._reset_pending = torch.zeros(N, device=device, dtype=torch.bool)
 
-    # Fixed normalization constants (body-frame ball [x, y, vx, vy]).
-    # Chosen from domain knowledge of the dribbling task rather than EMA
-    # running stats: an EMA normalizer creates a feedback loop (stats drift
-    # with resets → target magnitude jumps → loss spikes → more drift).
-    self._target_mean = torch.tensor([0.5, 0.0, 0.0, 0.0], device=device)
-    self._target_std = torch.tensor([1.0, 0.5, 1.5, 1.5], device=device)
+    # Ball normalisation constants (used in BallHead loss target).
+    self._ball_mean = torch.tensor([0.5, 0.0, 0.0, 0.0], device=device)
+    self._ball_std = torch.tensor([1.0, 0.5, 1.5, 1.5], device=device)
 
-    # Cached prediction for visualization (updated each encode_adaptation call)
+    # Cached outputs for visualisation / diagnostics.
     self._last_ball_pred: torch.Tensor | None = None
     self._last_z_adapt: torch.Tensor | None = None
 
@@ -111,26 +169,38 @@ class BallRmaTerm(RmaTerm):
   # ------------------------------------------------------------------
 
   @property
+  def privileged_group_names(self) -> list[str]:
+    return [self.cfg.privileged_obs_group, self.cfg.obstacle_privileged_obs_group]
+
+  @property
   def privileged_encoder(self) -> nn.Module:
     return self._priv_encoder
 
   @property
   def adaptation_encoder(self) -> nn.Module:
-    # Return both modules so adaptation_parameters() includes both parameter sets.
-    return nn.ModuleList([self._depth_encoder, self._ball_head])
+    return nn.ModuleList([self._depth_encoder, self._ball_head, self._obstacle_head])
 
   # ------------------------------------------------------------------
   # Encoding
   # ------------------------------------------------------------------
 
   def encode_privileged(self, obs_dict: dict[str, torch.Tensor]) -> torch.Tensor:
-    return self._priv_encoder(obs_dict[self.cfg.privileged_obs_group])
+    cfg: DribblingRmaTermCfg = self.cfg  # type: ignore[assignment]
+
+    ball_raw = obs_dict[cfg.privileged_obs_group]                  # (N, 4)
+    obs_raw = obs_dict[cfg.obstacle_privileged_obs_group]          # (N, K*4)
+    obs_norm = self._normalise_obs(obs_raw)                        # (N, K*4)
+
+    priv_input = torch.cat([ball_raw, obs_norm], dim=-1)           # (N, 4 + K*4)
+    return self._priv_encoder(priv_input)                          # (N, latent_dim)
 
   def encode_adaptation(self, obs_dict: dict[str, torch.Tensor]) -> torch.Tensor:
-    cfg: BallRmaTermCfg = self.cfg  # type: ignore[assignment]
+    cfg: DribblingRmaTermCfg = self.cfg  # type: ignore[assignment]
+    N = self._env.num_envs
+    device = self._env.device
 
     if cfg.adaptation_obs_group is None or cfg.adaptation_obs_group not in obs_dict:
-      return torch.zeros(self._env.num_envs, cfg.latent_dim, device=self._env.device)
+      return torch.zeros(N, cfg.latent_dim, device=device)
 
     frame = obs_dict[cfg.adaptation_obs_group]
     if frame.dim() == 5:
@@ -138,16 +208,14 @@ class BallRmaTerm(RmaTerm):
 
     z_t, new_hidden = self._depth_encoder(frame, self._gru_hidden)
     self._gru_hidden = new_hidden
+    self._last_z_adapt = z_t.detach()
 
-    # Cache ball head prediction for visualization (no extra forward pass needed)
+    # Heads are supervision-only — cached for diagnostics, not returned.
     with torch.no_grad():
-      pred = self._ball_head(z_t)
-      pred = pred * self._target_std + self._target_mean
+      pred = self._ball_head(z_t) * self._ball_std + self._ball_mean
       self._last_ball_pred = pred
-      # Cache the adaptation latent for Check B diagnostics
-      self._last_z_adapt = z_t.detach()
 
-    return z_t
+    return z_t  # (N, latent_dim)
 
   # ------------------------------------------------------------------
   # Adaptation mask and reset events
@@ -164,9 +232,8 @@ class BallRmaTerm(RmaTerm):
   # ------------------------------------------------------------------
 
   def update(self) -> None:
-    cfg: BallRmaTermCfg = self.cfg  # type: ignore[assignment]
+    cfg: DribblingRmaTermCfg = self.cfg  # type: ignore[assignment]
 
-    # reset() marks pending events; update() publishes per-step event mask.
     self._reset_event = self._reset_pending.clone()
     self._reset_pending.zero_()
 
@@ -178,7 +245,7 @@ class BallRmaTerm(RmaTerm):
       return
 
     depth = sensor.data.depth  # (N, H, W, 1)
-    depth = depth.permute(0, 3, 1, 2).float()  # (N, 1, H, W)
+    depth = depth.permute(0, 3, 1, 2).float()
     depth = F.interpolate(
       depth,
       size=(cfg.height, cfg.width),
@@ -189,10 +256,10 @@ class BallRmaTerm(RmaTerm):
     self._current_frame = depth
 
     cam_id = self._env.sim.mj_model.camera(cfg.camera_name).id
-    cam_pos = self._env.sim.data.cam_xpos[:, cam_id, :]  # (N, 3)
-    cam_mat = self._env.sim.data.cam_xmat[:, cam_id, :].reshape(-1, 3, 3)  # (N, 3, 3)
+    cam_pos = self._env.sim.data.cam_xpos[:, cam_id, :]
+    cam_mat = self._env.sim.data.cam_xmat[:, cam_id, :].reshape(-1, 3, 3)
 
-    ball_pos_w = self._env.scene["ball"].data.root_link_pos_w  # (N, 3)
+    ball_pos_w = self._env.scene["ball"].data.root_link_pos_w
     p_rel = ball_pos_w - cam_pos
     p_cam = torch.bmm(cam_mat.transpose(1, 2), p_rel.unsqueeze(-1)).squeeze(-1)
 
@@ -233,40 +300,13 @@ class BallRmaTerm(RmaTerm):
     self._reset_pending[env_ids] = True
 
   def get_current_adaptation_obs(self) -> dict[str, torch.Tensor]:
-    cfg: BallRmaTermCfg = self.cfg  # type: ignore[assignment]
+    cfg: DribblingRmaTermCfg = self.cfg  # type: ignore[assignment]
     if cfg.adaptation_obs_group is None:
       return {}
     return {cfg.adaptation_obs_group: self._current_frame}
 
   # ------------------------------------------------------------------
-  # Checkpointing (target normalization stats)
-  # ------------------------------------------------------------------
-
-  def extra_state_dict(self) -> dict:
-    return {}
-
-  def load_extra_state_dict(self, state: dict) -> None:
-    # Legacy checkpoints carry EMA target stats that are no longer used.
-    del state
-
-  # ------------------------------------------------------------------
-  # Inference-time ball prediction (for verification / visualization)
-  # ------------------------------------------------------------------
-
-  def predict_ball_state(self) -> torch.Tensor | None:
-    """Return the latest ball head prediction [x, y, vx, vy].
-
-    Cached during encode_adaptation() — no extra forward pass. Returns None
-    if no adaptation encoder is active or encode_adaptation hasn't run yet.
-
-    Returns:
-      (N, 4) tensor of [x, y, vx, vy] in the same frame as privileged_ball,
-      or None.
-    """
-    return self._last_ball_pred
-
-  # ------------------------------------------------------------------
-  # Custom adaptation loss
+  # Adaptation loss (Phase 2)
   # ------------------------------------------------------------------
 
   def compute_loss(
@@ -275,22 +315,22 @@ class BallRmaTerm(RmaTerm):
     adaptation_obs: dict[str, torch.Tensor],
     mask: torch.Tensor | None = None,
   ) -> dict[str, torch.Tensor] | None:
-    cfg: BallRmaTermCfg = self.cfg  # type: ignore[assignment]
+    cfg: DribblingRmaTermCfg = self.cfg  # type: ignore[assignment]
+    K = cfg.num_obstacles
 
-    if cfg.adaptation_obs_group is None:
-      return None
-    if cfg.adaptation_obs_group not in adaptation_obs:
+    if cfg.adaptation_obs_group is None or cfg.adaptation_obs_group not in adaptation_obs:
       return None
     if cfg.privileged_obs_group not in privileged_obs:
       return None
 
-    frames = adaptation_obs[cfg.adaptation_obs_group]
-    gt = privileged_obs[cfg.privileged_obs_group]
+    frames = adaptation_obs[cfg.adaptation_obs_group]   # (B, T, 1, H, W)
+    gt_ball = privileged_obs[cfg.privileged_obs_group]  # (B, T, 4)
+    gt_obs = privileged_obs.get(cfg.obstacle_privileged_obs_group)  # (B, T, K*4) or None
 
     if frames.dim() == 4:
       frames = frames.unsqueeze(1)
-    if gt.dim() == 2:
-      gt = gt.unsqueeze(1)
+    if gt_ball.dim() == 2:
+      gt_ball = gt_ball.unsqueeze(1)
 
     B, T = frames.shape[0], frames.shape[1]
 
@@ -298,9 +338,7 @@ class BallRmaTerm(RmaTerm):
     if reset_mask is None:
       reset_mask = torch.zeros((B, T), device=frames.device, dtype=torch.bool)
     else:
-      if reset_mask.dim() == 1:
-        reset_mask = reset_mask.reshape(B, T)
-      reset_mask = reset_mask.to(dtype=torch.bool)
+      reset_mask = reset_mask.reshape(B, T).to(dtype=torch.bool)
 
     loss_mask = mask
     if loss_mask is None:
@@ -308,44 +346,102 @@ class BallRmaTerm(RmaTerm):
     if loss_mask is None:
       loss_mask = torch.ones((B, T), device=frames.device, dtype=torch.bool)
     else:
-      if loss_mask.dim() == 1:
-        loss_mask = loss_mask.reshape(B, T)
-      loss_mask = loss_mask.to(dtype=torch.bool)
+      loss_mask = loss_mask.reshape(B, T).to(dtype=torch.bool)
 
+    # Encode full sequence with depth encoder.
     z_seq, _ = self._depth_encoder.encode_sequence(
       frames,
       hidden=None,
       reset_mask=reset_mask,
       tbptt_chunk_len=cfg.tbptt_chunk_len,
-    )
-    pred = self._ball_head(z_seq)  # (B, T, 4)
+    )  # (B, T, latent_dim)
 
-    target = (gt - self._target_mean) / self._target_std
-
-    pos_err = (pred[:, :, :2] - target[:, :, :2]).pow(2).mean(dim=-1)
-    vel_err = (pred[:, :, 2:] - target[:, :, 2:]).pow(2).mean(dim=-1)
-
-    # Direct latent supervision: regress z_adapt onto the frozen privileged
-    # latent. The ball_head bottleneck (64→32→4) has a huge left-nullspace,
-    # so pos/vel losses alone leave z_seq severely under-constrained — the
-    # actor then sees out-of-distribution latents at inference time. This
-    # is the core RMA loss and must dominate the task-head losses.
+    # ------------------------------------------------------------------
+    # Latent alignment: push z_depth toward z_priv (main RMA signal).
+    # ------------------------------------------------------------------
     with torch.no_grad():
-      gt_flat = gt.reshape(-1, gt.shape[-1])
-      z_priv_seq = self._priv_encoder(gt_flat).reshape(B, T, -1)
-    latent_err = (z_seq - z_priv_seq).pow(2).mean(dim=-1)
+      gt_ball_flat = gt_ball.reshape(-1, 4)
+      if gt_obs is not None:
+        if gt_obs.dim() == 2:
+          gt_obs = gt_obs.unsqueeze(1)
+        gt_obs_norm = self._normalise_obs(gt_obs.reshape(-1, K * 4)).reshape(B, T, K * 4)
+        priv_input = torch.cat([gt_ball_flat, gt_obs_norm.reshape(-1, K * 4)], dim=-1)
+      else:
+        obs_zeros = torch.zeros(B * T, K * 4, device=frames.device)
+        priv_input = torch.cat([gt_ball_flat, obs_zeros], dim=-1)
+      z_priv = self._priv_encoder(priv_input).reshape(B, T, -1)
+    latent_err = (z_seq - z_priv).pow(2).mean(dim=-1)
+
+    # ------------------------------------------------------------------
+    # Ball supervision (BallHead auxiliary).
+    # ------------------------------------------------------------------
+    ball_pred = self._ball_head(z_seq)  # (B, T, 4)
+    target_ball = (gt_ball - self._ball_mean) / self._ball_std
+    pos_err = (ball_pred[:, :, :2] - target_ball[:, :, :2]).pow(2).mean(dim=-1)
+    vel_err = (ball_pred[:, :, 2:] - target_ball[:, :, 2:]).pow(2).mean(dim=-1)
+
+    # ------------------------------------------------------------------
+    # Obstacle supervision (ObstacleHead auxiliary).
+    # ------------------------------------------------------------------
+    obs_losses: dict[str, torch.Tensor] = {}
+    if gt_obs is not None:
+      obs_pred = self._obstacle_head(z_seq)   # (B, T, K*4)
+      obs_pos_err = (obs_pred[:, :, :K*2] - gt_obs_norm[:, :, :K*2]).pow(2).mean(dim=-1)
+      obs_vel_err = (obs_pred[:, :, K*2:] - gt_obs_norm[:, :, K*2:]).pow(2).mean(dim=-1)
+      if loss_mask.any():
+        obs_losses["obstacle_pos"] = cfg.lambda_obstacle_pos * obs_pos_err[loss_mask].mean()
+        obs_losses["obstacle_vel"] = cfg.lambda_obstacle_vel * obs_vel_err[loss_mask].mean()
+      else:
+        obs_losses["obstacle_pos"] = obs_pos_err.sum() * 0.0
+        obs_losses["obstacle_vel"] = obs_vel_err.sum() * 0.0
 
     if loss_mask.any():
+      latent_loss = latent_err[loss_mask].mean()
       pos_loss = pos_err[loss_mask].mean()
       vel_loss = vel_err[loss_mask].mean()
-      latent_loss = latent_err[loss_mask].mean()
     else:
+      latent_loss = latent_err.sum() * 0.0
       pos_loss = pos_err.sum() * 0.0
       vel_loss = vel_err.sum() * 0.0
-      latent_loss = latent_err.sum() * 0.0
 
     return {
       "latent_mse": latent_loss,
-      "ball_pos": cfg.lambda_pos * pos_loss,
-      "ball_vel": cfg.lambda_vel * vel_loss,
+      "ball_pos": cfg.lambda_ball_pos * pos_loss,
+      "ball_vel": cfg.lambda_ball_vel * vel_loss,
+      **obs_losses,
     }
+
+  # ------------------------------------------------------------------
+  # Checkpointing
+  # ------------------------------------------------------------------
+
+  def extra_state_dict(self) -> dict:
+    return {}
+
+  def load_extra_state_dict(self, state: dict) -> None:
+    del state
+
+  # ------------------------------------------------------------------
+  # Visualisation helpers
+  # ------------------------------------------------------------------
+
+  def predict_ball_state(self) -> torch.Tensor | None:
+    """Latest ball head prediction [x, y, vx, vy] cached from encode_adaptation."""
+    return self._last_ball_pred
+
+  # ------------------------------------------------------------------
+  # Internal helpers
+  # ------------------------------------------------------------------
+
+  def _normalise_obs(self, obs_raw: torch.Tensor) -> torch.Tensor:
+    """Normalise raw body-frame obstacle coordinates and clip to ±2.
+
+    Layout: [..., x0, y0, ..., xK, yK, vx0, vy0, ..., vxK, vyK]
+    Positions divided by obs_pos_scale, velocities by obs_vel_scale.
+    Inactive obstacles at 1000 m clip to 2.0 — a clear "far away" signal.
+    """
+    cfg: DribblingRmaTermCfg = self.cfg  # type: ignore[assignment]
+    K = cfg.num_obstacles
+    pos = obs_raw[..., : K * 2] / cfg.obs_pos_scale
+    vel = obs_raw[..., K * 2 :] / cfg.obs_vel_scale
+    return torch.cat([pos, vel], dim=-1).clamp(-2.0, 2.0)

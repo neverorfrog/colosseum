@@ -300,8 +300,11 @@ class RmaPPO(PPO):
       raise RuntimeError("Phase 2 requires at least one adaptation observation group.")
     frame_group = self.rma_manager.adaptation_group_names[0]
 
-    ball_term = self.rma_manager._terms.get("ball")
-    warmup_steps = getattr(getattr(ball_term, "cfg", None), "warmup_steps", 0)
+    warmup_steps = max(
+      (getattr(getattr(term, "cfg", None), "warmup_steps", 0)
+       for term in self.rma_manager._terms.values()),
+      default=0,
+    )
 
     # --- Collection phase (all networks frozen) ---
     with torch.no_grad():
@@ -315,7 +318,9 @@ class RmaPPO(PPO):
         obs_dict, _, _, _, _ = self.env.step(actions)
         # env.step() calls rma_manager.update() → depth buffers and FOV state are current
 
-        # Snapshot aligned pairs from this physics state
+        # Snapshot aligned pairs from this physics state.
+        # Adaptation obs (depth frames) are offloaded to CPU immediately to
+        # avoid accumulating several GiB on the GPU across num_steps_per_env.
         priv_obs_list.append(self.get_privileged_obs(obs_dict))
         adapt_obs = self.rma_manager.get_adaptation_obs()
         if frame_group not in adapt_obs:

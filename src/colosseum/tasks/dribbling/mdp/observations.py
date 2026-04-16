@@ -73,3 +73,56 @@ def foot_ball_contact_force(env: ManagerBasedRlEnv, sensor_name: str) -> torch.T
   assert sensor_data.force is not None
   force = sensor_data.force.flatten(start_dim=1)  # [B, N*3]
   return force.norm(dim=-1, keepdim=True)
+
+
+def obstacle_positions_b(
+  env: ManagerBasedRlEnv,
+  num_obstacles: int = 1,
+) -> torch.Tensor:
+  """Obstacle XY positions in robot body frame, read directly from MuJoCo.
+
+  Returns a flat (N, num_obstacles * 2) tensor ordered as [x0, y0, x1, y1, ...].
+  Inactive obstacles are parked far away so they appear hundreds of metres away —
+  naturally near-zero danger in the encoder gate.
+  """
+  robot = env.scene["robot"]
+  N = env.num_envs
+
+  quat_w = robot.data.root_link_quat_w  # (N, 4)
+  quat_conj = torch.cat([quat_w[:, :1], -quat_w[:, 1:]], dim=-1)
+  robot_pos_w = robot.data.root_link_pos_w[:, :2]  # (N, 2)
+  zeros = torch.zeros(N, 1, device=quat_w.device)
+
+  parts: list[torch.Tensor] = []
+  for k in range(num_obstacles):
+    obs_pos_w = env.scene[f"obstacle_{k}"].data.root_link_pos_w[:, :2]  # (N, 2)
+    rel_xy = obs_pos_w - robot_pos_w
+    rel_3d = torch.cat([rel_xy, zeros], dim=-1)
+    parts.append(quat_apply(quat_conj, rel_3d)[:, :2])  # (N, 2)
+
+  return torch.cat(parts, dim=-1)  # (N, num_obstacles*2)
+
+
+def obstacle_velocities_b(
+  env: ManagerBasedRlEnv,
+  num_obstacles: int = 1,
+) -> torch.Tensor:
+  """Obstacle XY velocities in robot body frame, read directly from MuJoCo.
+
+  Returns a flat (N, num_obstacles * 2) tensor ordered as [vx0, vy0, vx1, vy1, ...].
+  Velocity is a pure rotation from world into body frame (no translation).
+  """
+  robot = env.scene["robot"]
+  N = env.num_envs
+
+  quat_w = robot.data.root_link_quat_w  # (N, 4)
+  quat_conj = torch.cat([quat_w[:, :1], -quat_w[:, 1:]], dim=-1)
+  zeros = torch.zeros(N, 1, device=quat_w.device)
+
+  parts: list[torch.Tensor] = []
+  for k in range(num_obstacles):
+    vel_w = env.scene[f"obstacle_{k}"].data.root_link_lin_vel_w[:, :2]  # (N, 2)
+    vel_3d = torch.cat([vel_w, zeros], dim=-1)
+    parts.append(quat_apply(quat_conj, vel_3d)[:, :2])  # (N, 2)
+
+  return torch.cat(parts, dim=-1)  # (N, num_obstacles*2)

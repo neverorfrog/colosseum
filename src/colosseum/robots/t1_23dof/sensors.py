@@ -129,8 +129,16 @@ FOOT_HEIGHT_SCAN = TerrainHeightSensorCfg(
 
 WALL_COLLISION_SENSOR = ContactSensorCfg(
   name="wall_collision",
-  primary=ContactMatch(mode="subtree", pattern="Trunk", entity="robot"),
-  secondary=ContactMatch(mode="subtree", pattern="walls"),
+  primary=ContactMatch(
+    mode="geom",
+    entity="robot",
+    pattern=r".+",
+    exclude=tuple(FOOT_GEOM_NAMES),
+  ),
+  # No secondary: fires for any contact with non-foot robot geoms.
+  # Wall geoms are the only non-terrain objects in the maze, so non-foot
+  # contact is effectively wall contact (ground contact only during falls,
+  # which already trigger height-based termination).
   fields=("found", "force"),
   reduce="netforce",
   num_slots=1,
@@ -160,5 +168,19 @@ HEAD_RGBD_SENSOR = CameraSensorCfg(
   height=HEAD_CAMERA_HEIGHT,
   data_types=("rgb", "depth"),
   use_textures=True,
+  use_shadows=False,
+)
+
+# Low-resolution depth-only sensor for Phase 2 training.
+# Renders at the encoder's native input resolution (128x72) so no downsampling
+# is needed and GPU memory scales ~300x better than HEAD_RGBD_SENSOR.
+# Use this in training configs; HEAD_RGBD_SENSOR is for visualisation / play.
+HEAD_DEPTH_SENSOR_TRAIN = CameraSensorCfg(
+  name="head_rgbd",
+  camera_name=f"robot/{HEAD_CAMERA_NAME}",
+  width=128,
+  height=72,
+  data_types=("depth",),
+  use_textures=False,
   use_shadows=False,
 )

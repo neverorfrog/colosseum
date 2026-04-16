@@ -68,48 +68,69 @@ class MazeTerrainEntity(TerrainEntity):
     )
 
   def _create_mazes(self) -> None:
-    """Create maze walls for each parallel environment.
+    """Create maze walls as K mocap bodies shared across all environments.
 
-    Merges adjacent wall cells into rectangular blocks to reduce the number
-    of MuJoCo bodies (one body per block instead of one per cell).
+    Instead of N×K static bodies (N envs × K wall blocks), creates K mocap
+    bodies. Wall positions are driven per-world via data.mocap_pos, so each
+    world sees its own walls at the correct location while the model only
+    contains K geoms. This reduces broadphase cost from O((N·K) log(N·K))
+    to O(K log K) per world.
+
+    Call reset_wall_positions (startup + reset events) to populate mocap_pos.
     """
     assert self.env_origins is not None
-    walls_parent = self._spec.worldbody.add_body(name="walls", pos=(0, 0, 0))
     wall_blocks = self._find_wall_blocks()
 
-    for env_idx in range(self.cfg.num_envs):
-      env_origin = self.env_origins[env_idx]
+    if not wall_blocks:
+      self.wall_local_centers = torch.zeros(0, 3, dtype=torch.float32, device=self._device)
+      return
 
-      for block_idx, (i_range, j_range) in enumerate(wall_blocks):
-        i_start, i_end = i_range
-        j_start, j_end = j_range
+    half = (self.maze.cell_size / 2) * self.maze.wall_size_factor
+    local_centers: list[list[float]] = []
 
-        start_x_l, start_y_l = self.maze.grid_to_local(i_start, j_start)
-        end_x_l, _ = self.maze.grid_to_local(i_start, j_end)
-        _, end_y_l = self.maze.grid_to_local(i_end, j_start)
+    # Default body position uses env 0's origin so the initial visual is correct.
+    env0_x = self.env_origins[0, 0].item()
+    env0_y = self.env_origins[0, 1].item()
 
-        center_x_w = (start_x_l + end_x_l) / 2 + env_origin[0].item()
-        center_y_w = (start_y_l + end_y_l) / 2 + env_origin[1].item()
+    for block_idx, (i_range, j_range) in enumerate(wall_blocks):
+      i_start, i_end = i_range
+      j_start, j_end = j_range
 
-        wall_body = walls_parent.add_body(
-          name=f"{env_idx}_wall_block_{block_idx}",
-          pos=(center_x_w, center_y_w, 0),
-        )
+      start_x_l, start_y_l = self.maze.grid_to_local(i_start, j_start)
+      end_x_l, _ = self.maze.grid_to_local(i_start, j_end)
+      _, end_y_l = self.maze.grid_to_local(i_end, j_start)
 
-        half = (self.maze.cell_size / 2) * self.maze.wall_size_factor
-        wall_body.add_geom(
-          name=f"{env_idx}_wall_block_{block_idx}_geom",
-          type=mujoco.mjtGeom.mjGEOM_BOX,
-          pos=(0, 0, self.maze.wall_height / 2),
-          size=(
-            half * (j_end - j_start + 1),
-            half * (i_end - i_start + 1),
-            self.maze.wall_height / 2,
-          ),
-          rgba=(0.8, 0.8, 0.8, 1.0),
-          conaffinity=1,
-          contype=1,
-        )
+      cx = (start_x_l + end_x_l) / 2
+      cy = (start_y_l + end_y_l) / 2
+      cz = self.maze.wall_height / 2
+
+      local_centers.append([cx, cy, cz])
+
+      # One mocap body per block: position is overridden per-world at runtime.
+      body = self._spec.worldbody.add_body(
+        name=f"wall_block_{block_idx}",
+        pos=(env0_x + cx, env0_y + cy, cz),
+      )
+      body.mocap = True
+
+      body.add_geom(
+        name=f"wall_block_{block_idx}_geom",
+        type=mujoco.mjtGeom.mjGEOM_BOX,
+        pos=(0, 0, 0),
+        size=(
+          half * (j_end - j_start + 1),
+          half * (i_end - i_start + 1),
+          cz,
+        ),
+        rgba=(0.8, 0.8, 0.8, 1.0),
+        conaffinity=1,
+        contype=1,
+        group=1,
+      )
+
+    self.wall_local_centers = torch.tensor(
+      local_centers, dtype=torch.float32, device=self._device
+    )  # (K, 3)
 
   def _find_wall_blocks(self) -> list[tuple[tuple[int, int], tuple[int, int]]]:
     visited = [[False] * self.maze.num_cols for _ in range(self.maze.num_rows)]

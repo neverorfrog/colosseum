@@ -36,10 +36,26 @@ def goal_distance_cost(
   return torch.exp(-distance)
 
 
-def wall_collisions(env: ManagerBasedRlEnv, sensor_name: str) -> torch.Tensor:
-  """Penalty: 1.0 for each env colliding with a wall."""
+def wall_collisions(
+  env: ManagerBasedRlEnv,
+  sensor_name: str,
+  min_robot_height: float = 0.3,
+) -> torch.Tensor:
+  """Penalty: 1.0 for each env where a non-foot robot body contacts a wall.
+
+  The sensor has no secondary filter (MuJoCo contact-sensor API only supports
+  a single secondary body), so it fires for any non-foot contact — including
+  ground contact when the robot falls.  We mask out the penalty when the
+  robot's base height is below ``min_robot_height`` to avoid penalising
+  falls as if they were wall collisions.
+  """
   sensor: ContactSensor = env.scene[sensor_name]
-  return sensor.data.found.any(dim=-1).float()
+  has_contact = sensor.data.found.any(dim=-1).float()
+  robot_height = (
+    env.scene["robot"].data.root_link_pos_w[:, 2] - env.scene.env_origins[:, 2]
+  )
+  is_upright = (robot_height > min_robot_height).float()
+  return has_contact * is_upright
 
 
 def contact_force_penalty(env: ManagerBasedRlEnv, sensor_name: str) -> torch.Tensor:

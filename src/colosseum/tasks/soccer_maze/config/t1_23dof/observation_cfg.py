@@ -1,3 +1,5 @@
+"""Observation configuration for T1 soccer-maze task."""
+
 from mjlab.envs.mdp.observations import (
   builtin_sensor,
   generated_commands,
@@ -7,6 +9,7 @@ from mjlab.envs.mdp.observations import (
   projected_gravity,
 )
 from mjlab.managers.observation_manager import ObservationGroupCfg, ObservationTermCfg
+from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.tasks.velocity.mdp.observations import (
   foot_air_time,
   foot_contact,
@@ -16,26 +19,34 @@ from mjlab.tasks.velocity.mdp.observations import (
 from mjlab.utils.noise import UniformNoiseCfg as Unoise
 
 from colosseum.assets.ball.ball_spec import BALL_FRICTION, BALL_MASS
-from colosseum.tasks.dribbling.obstacle_spec import NUM_OBSTACLES
 from colosseum.tasks.dribbling.mdp.observations import (
   ball_friction,
   ball_mass,
   ball_position,
-  ball_vel_command_body,
-  ball_velocity,
-  ball_velocity_xy,
   base_height,
   foot_ball_contact_force,
-  obstacle_positions_b,
-  obstacle_velocities_b,
+)
+from colosseum.tasks.maze.mdp.observations import agent_pos_local, agent_to_goal_vector
+from colosseum.tasks.soccer_maze.mdp.observations import (
+  ball_vel_command_body,
+  ball_vel_xy_body,
 )
 
-# ---------------------------------------------------------------------------
-# Actor: proprioceptive only.
-# Encoder latents are concatenated by RmaPPO, not via the obs manager.
-# ---------------------------------------------------------------------------
+_ASSET_CFG = SceneEntityCfg("robot", site_names="root_site", joint_names=".*")
 
 actor_terms = {
+  # Maze spatial context
+  "agent_pos_local": ObservationTermCfg(
+    func=agent_pos_local,
+    params={"asset_cfg": _ASSET_CFG},
+    noise=Unoise(n_min=-0.01, n_max=0.01),
+  ),
+  "agent_to_goal": ObservationTermCfg(
+    func=agent_to_goal_vector,
+    params={"asset_cfg": _ASSET_CFG},
+    noise=Unoise(n_min=-0.05, n_max=0.05),
+  ),
+  # Proprioception
   "base_ang_vel": ObservationTermCfg(
     func=builtin_sensor,
     params={"sensor_name": "robot/imu_ang_vel"},
@@ -54,61 +65,35 @@ actor_terms = {
     noise=Unoise(n_min=-1.5, n_max=1.5),
   ),
   "actions": ObservationTermCfg(func=last_action),
+  # Dribbling task context
   "gait_phase": ObservationTermCfg(
     func=generated_commands,
     params={"command_name": "gait_phase"},
   ),
+  # Command in body frame: consistent with ball_pos (also body frame).
+  # The world-frame command from AbstractionVelocityCommand cannot be interpreted
+  # without heading knowledge, which the actor lacks (projected_gravity gives
+  # roll/pitch but not yaw).
   "command": ObservationTermCfg(
     func=ball_vel_command_body,
     params={"command_name": "ball_vel"},
   ),
-}
-
-# ---------------------------------------------------------------------------
-# Privileged ball: encoder input, 4D = ball_pos_xy(2) + ball_vel_xy(2).
-# Also included wholesale in the critic so it sees the same values.
-# ---------------------------------------------------------------------------
-
-privileged_ball_terms = {
-  "ball_pos": ObservationTermCfg(func=ball_position),  # (N, 2)
-  "ball_vel_xy": ObservationTermCfg(func=ball_velocity_xy),  # (N, 2)
-}
-
-# ---------------------------------------------------------------------------
-# Privileged obstacles: encoder input, num_obstacles*4 D
-# = XY body-frame position (2) + XY body-frame velocity (2) per obstacle.
-# Inactive obstacles are parked far away (not underground), so they appear
-# at large body-frame distances with zero velocity — naturally near-zero danger.
-# ---------------------------------------------------------------------------
-
-privileged_obstacle_terms = {
-  "obstacle_pos": ObservationTermCfg(
-    func=obstacle_positions_b,
-    params={"num_obstacles": NUM_OBSTACLES},
+  "foot_ball_contact_force": ObservationTermCfg(
+    func=foot_ball_contact_force,
+    params={"sensor_name": "foot_ball_contact"},
   ),
-  "obstacle_vel": ObservationTermCfg(
-    func=obstacle_velocities_b,
-    params={"num_obstacles": NUM_OBSTACLES},
-  ),
+  # Ball state in body frame: consistent with command above.
+  "ball_pos": ObservationTermCfg(func=ball_position),
+  "ball_vel_xy": ObservationTermCfg(func=ball_vel_xy_body),
 }
-
-# ---------------------------------------------------------------------------
-# Critic: actor + privileged ball + privileged obstacles + GT terms + foot extras.
-# Asymmetric actor-critic: critic sees everything, actor sees only proprio.
-# ---------------------------------------------------------------------------
 
 critic_terms = {
   **actor_terms,
-  **privileged_ball_terms,
-  **privileged_obstacle_terms,
+  # Additional privileged terms
   "base_height": ObservationTermCfg(func=base_height),
   "ball_mass": ObservationTermCfg(
     func=ball_mass,
     params={"ball_mass": BALL_MASS},
-  ),
-  "foot_ball_contact_force": ObservationTermCfg(
-    func=foot_ball_contact_force,
-    params={"sensor_name": "foot_ball_contact"},
   ),
   "ball_friction": ObservationTermCfg(
     func=ball_friction,
@@ -137,10 +122,6 @@ critic_terms = {
   ),
 }
 
-# ---------------------------------------------------------------------------
-# Observation groups
-# ---------------------------------------------------------------------------
-
 observations = {
   "actor": ObservationGroupCfg(
     terms=actor_terms,
@@ -149,16 +130,6 @@ observations = {
   ),
   "critic": ObservationGroupCfg(
     terms=critic_terms,
-    concatenate_terms=True,
-    enable_corruption=False,
-  ),
-  "privileged_ball": ObservationGroupCfg(
-    terms=privileged_ball_terms,
-    concatenate_terms=True,
-    enable_corruption=False,
-  ),
-  "privileged_obstacles": ObservationGroupCfg(
-    terms=privileged_obstacle_terms,
     concatenate_terms=True,
     enable_corruption=False,
   ),

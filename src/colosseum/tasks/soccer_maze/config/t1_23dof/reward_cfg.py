@@ -1,41 +1,48 @@
-import math  # noqa: F401
+"""Reward configuration for T1 soccer-maze task."""
 
-from mjlab.envs.mdp import action_rate_l2
+import math
+
+from mjlab.envs.mdp import action_rate_l2, joint_pos_limits
 from mjlab.managers import RewardTermCfg
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.tasks.velocity.mdp import (
   angular_momentum_penalty,
   body_angular_velocity_penalty,
   feet_swing_height,
+  self_collision_cost,
   soft_landing,
 )
 
 from colosseum.mdp.rewards import flat_orientation
-from colosseum.robots.t1_23dof.constants import (
-  BASE_BODY_NAME,
-  FOOT_SITE_NAMES,
+from colosseum.robots.t1_23dof.constants import BASE_BODY_NAME, FOOT_SITE_NAMES
+from colosseum.robots.t1_23dof.sensors import (
+  FOOT_FOOT_CONTACT_SENSOR,
+  NONFOOT_BALL_CONTACT_SENSOR,
+  SELF_COLLISION_SENSOR,
 )
 from colosseum.tasks.dribbling.mdp.rewards import (
-  ball_vel_angle_body,
   ball_vel_norm,
-  ball_vel_tracking_body,
   feet_distance_penalty,
-  obstacle_avoidance,
   pose_deviation,
   robot_ball_approach_vel,
   robot_ball_distance,
-  robot_ball_yaw_body,
   stance_phase_schedule,
   swing_phase_schedule,
+)
+from colosseum.tasks.maze.mdp.rewards import wall_collisions
+from colosseum.tasks.soccer_maze.mdp.rewards import (
+  ball_vel_angle_body,
+  ball_vel_tracking_body,
+  robot_ball_yaw_body,
 )
 
 rewards = {
   # ------------------------------------------------------------------ #
-  # Task rewards                                                         #
+  # Task: ball velocity tracking                                         #
   # ------------------------------------------------------------------ #
   "ball_vel_tracking": RewardTermCfg(
     func=ball_vel_tracking_body,
-    weight=4.0,
+    weight=2.0,
     params={"command_name": "ball_vel", "sharpness": 1.0},
   ),
   "ball_vel_norm": RewardTermCfg(
@@ -48,23 +55,37 @@ rewards = {
     weight=4.0,
     params={"command_name": "ball_vel"},
   ),
+  # ------------------------------------------------------------------ #
+  # Task: robot–ball relationship                                        #
+  # ------------------------------------------------------------------ #
   "robot_ball_distance": RewardTermCfg(
     func=robot_ball_distance,
-    weight=0.05,
-    params={"sharpness": 0.1},
+    weight=0.3,
+    params={"sharpness": 0.5},
   ),
   "robot_ball_yaw": RewardTermCfg(
     func=robot_ball_yaw_body,
-    weight=3.0,
+    weight=1.0,
     params={"command_name": "ball_vel"},
   ),
   "robot_ball_approach_vel": RewardTermCfg(
     func=robot_ball_approach_vel,
-    weight=1.0,
+    weight=0.5,
     params={"command_name": "ball_vel"},
   ),
   # ------------------------------------------------------------------ #
-  # Locomotion regularization                                            #
+  # Maze: wall collision penalty                                         #
+  # ------------------------------------------------------------------ #
+  # "wall_collisions": RewardTermCfg(
+  #   func=wall_collisions,
+  #   weight=-10.0,
+  #   params={
+  #     "sensor_name": "wall_collision",
+  #     "min_robot_height": 0.3,
+  #   },
+  # ),
+  # ------------------------------------------------------------------ #
+  # Locomotion regularization                                          #
   # ------------------------------------------------------------------ #
   "upright": RewardTermCfg(
     func=flat_orientation,
@@ -84,6 +105,7 @@ rewards = {
     weight=-0.5,
     params={"sensor_name": "robot/root_angmom"},
   ),
+  "dof_pos_limits": RewardTermCfg(func=joint_pos_limits, weight=-1.0),
   "action_rate_l2": RewardTermCfg(func=action_rate_l2, weight=-0.1),
   "foot_swing_height": RewardTermCfg(
     func=feet_swing_height,
@@ -112,7 +134,7 @@ rewards = {
   ),
   "feet_distance": RewardTermCfg(
     func=feet_distance_penalty,
-    weight=-6.0,
+    weight=-4.0,
     params={
       "asset_cfg": SceneEntityCfg("robot", site_names=FOOT_SITE_NAMES),
       "min_dist": 0.15,
@@ -120,7 +142,7 @@ rewards = {
   ),
   "foot_foot_contact": RewardTermCfg(
     func=self_collision_cost,
-    weight=-10.0,
+    weight=-3.0,
     params={"sensor_name": FOOT_FOOT_CONTACT_SENSOR.name, "force_threshold": 1.0},
   ),
   "nonfoot_ball_contact": RewardTermCfg(
@@ -156,10 +178,7 @@ rewards = {
     params={
       "asset_cfg": SceneEntityCfg(
         "robot",
-        joint_names=(
-          r"(?i).*shoulder.*",
-          r"(?i).*elbow.*",
-        ),
+        joint_names=(r"(?i).*shoulder.*", r"(?i).*elbow.*"),
       ),
       "std": 0.1,
     },
@@ -170,25 +189,9 @@ rewards = {
     params={
       "asset_cfg": SceneEntityCfg(
         "robot",
-        joint_names=(
-          r"(?i).*hip.*",
-          r"(?i).*knee.*",
-          r"(?i).*ankle.*",
-        ),
+        joint_names=(r"(?i).*hip.*", r"(?i).*knee.*", r"(?i).*ankle.*"),
       ),
       "std": 0.3,
-    },
-  ),
-  # ------------------------------------------------------------------ #
-  # Obstacle-aware rewards                                               #
-  # ------------------------------------------------------------------ #
-  "obstacle_avoidance": RewardTermCfg(
-    func=obstacle_avoidance,
-    weight=-1.0,
-    params={
-      "command_name": "adversary",
-      "safe_radius": 0.5,  # penalty starts at 0.5 m from obstacle center
-      "sharpness": 2.0,
     },
   ),
 }
