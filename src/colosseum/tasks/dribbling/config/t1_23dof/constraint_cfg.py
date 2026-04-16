@@ -17,40 +17,40 @@ dribbling_constraints: dict[str, ConstraintTermCfg] = {
     max_p=1.0,
     params={"sensor_name": "self_collision", "force_threshold": 1.0},
   ),
-  # Foot touching the other foot.
-  "foot_foot_contact": ConstraintTermCfg(
-    func=constraints.sensor_any_contact,
-    max_p=1.0,
-    params={"sensor_name": "foot_foot_contact", "force_threshold": 1.0},
-  ),
-  # Non-foot body part touching the ball (wrong technique).
-  "nonfoot_ball_contact": ConstraintTermCfg(
-    func=constraints.sensor_any_contact,
-    max_p=1.0,
-    params={"sensor_name": "nonfoot_ball_contact", "force_threshold": 1.0},
-  ),
-  # Non-foot body part touching the ground (robot has fallen).
-  "nonfoot_ground_contact": ConstraintTermCfg(
-    func=constraints.sensor_any_contact,
-    max_p=1.0,
-    params={"sensor_name": "nonfoot_ground_touch", "force_threshold": 1.0},
-  ),
+  # # Foot touching the other foot.
+  # "foot_foot_contact": ConstraintTermCfg(
+  #   func=constraints.sensor_any_contact,
+  #   max_p=1.0,
+  #   params={"sensor_name": "foot_foot_contact", "force_threshold": 1.0},
+  # ),
+  # # Non-foot body part touching the ball (wrong technique).
+  # "nonfoot_ball_contact": ConstraintTermCfg(
+  #   func=constraints.sensor_any_contact,
+  #   max_p=1.0,
+  #   params={"sensor_name": "nonfoot_ball_contact", "force_threshold": 1.0},
+  # ),
+  # # Non-foot body part touching the ground (robot has fallen).
+  # "nonfoot_ground_contact": ConstraintTermCfg(
+  #   func=constraints.sensor_any_contact,
+  #   max_p=1.0,
+  #   params={"sensor_name": "nonfoot_ground_touch", "force_threshold": 1.0},
+  # ),
   # ------------------------------------------------------------------ #
   # Soft constraints — stochastic termination proportional to severity  #
   # ------------------------------------------------------------------ #
   # Base tilt: horizontal gravity component > 0.5 (≈ 30° from upright).
   # Adds pressure before the hard bad_orientation termination at 70°.
-  "base_orientation": ConstraintTermCfg(
-    func=constraints.base_orientation,
-    max_p=0.5,
-    params={"limit": 0.5, "asset_cfg": SceneEntityCfg("robot")},
-  ),
+  # "base_orientation": ConstraintTermCfg(
+  #   func=constraints.base_orientation,
+  #   max_p=0.5,
+  #   params={"limit": 0.5, "asset_cfg": SceneEntityCfg("robot")},
+  # ),
   # Base height < 0.4 m — catches forward/sideways falls that stay
   # within the 70° orientation limit.
   "min_base_height": ConstraintTermCfg(
     func=constraints.min_base_height,
     max_p=0.5,
-    params={"limit": 0.4, "asset_cfg": SceneEntityCfg("robot")},
+    params={"limit": 0.45, "asset_cfg": SceneEntityCfg("robot")},
   ),
   # Feet too close together (XY plane): replaces feet_distance reward.
   "feet_distance": ConstraintTermCfg(
@@ -58,7 +58,7 @@ dribbling_constraints: dict[str, ConstraintTermCfg] = {
     max_p=0.25,
     params={
       "asset_cfg": SceneEntityCfg("robot", site_names=FOOT_SITE_NAMES),
-      "min_dist": 0.1,
+      "min_dist": 0.05,
     },
   ),
   # Joint range: hip and knee — 90% of physical range from default.
@@ -92,9 +92,9 @@ dribbling_constraints: dict[str, ConstraintTermCfg] = {
   #   },
   # ),
   # Peak foot impact force > 600 N (≈ 1g for a 60 kg robot).
-  "foot_contact_force": ConstraintTermCfg(
-    func=constraints.sensor_peak_force,
-    max_p=0.25,
-    params={"sensor_name": "feet_ground_contact", "limit": 600.0},
-  ),
+  # "foot_contact_force": ConstraintTermCfg(
+  #   func=constraints.sensor_peak_force,
+  #   max_p=0.25,
+  #   params={"sensor_name": "feet_ground_contact", "limit": 600.0},
+  # ),
 }

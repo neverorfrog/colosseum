@@ -7,6 +7,7 @@ from mjlab.tasks.velocity.mdp import (
   angular_momentum_penalty,
   body_angular_velocity_penalty,
   feet_swing_height,
+  self_collision_cost,
   soft_landing,
 )
 
@@ -14,6 +15,11 @@ from colosseum.mdp.rewards import flat_orientation
 from colosseum.robots.t1_23dof.constants import (
   BASE_BODY_NAME,
   FOOT_SITE_NAMES,
+)
+from colosseum.robots.t1_23dof.sensors import (
+  FOOT_FOOT_CONTACT_SENSOR,
+  NONFOOT_BALL_CONTACT_SENSOR,
+  SELF_COLLISION_SENSOR,
 )
 from colosseum.tasks.dribbling.mdp.rewards import (
   ball_vel_angle_body,
@@ -105,29 +111,29 @@ rewards = {
       "command_threshold": 0.05,
     },
   ),
-  "self_collisions": RewardTermCfg(
-    func=self_collision_cost,
-    weight=-1.0,
-    params={"sensor_name": SELF_COLLISION_SENSOR.name, "force_threshold": 10.0},
-  ),
-  "feet_distance": RewardTermCfg(
-    func=feet_distance_penalty,
-    weight=-6.0,
-    params={
-      "asset_cfg": SceneEntityCfg("robot", site_names=FOOT_SITE_NAMES),
-      "min_dist": 0.15,
-    },
-  ),
-  "foot_foot_contact": RewardTermCfg(
-    func=self_collision_cost,
-    weight=-10.0,
-    params={"sensor_name": FOOT_FOOT_CONTACT_SENSOR.name, "force_threshold": 1.0},
-  ),
-  "nonfoot_ball_contact": RewardTermCfg(
-    func=self_collision_cost,
-    weight=-2.0,
-    params={"sensor_name": NONFOOT_BALL_CONTACT_SENSOR.name, "force_threshold": 1.0},
-  ),
+  # "self_collisions": RewardTermCfg(
+  #   func=self_collision_cost,
+  #   weight=-1.0,
+  #   params={"sensor_name": SELF_COLLISION_SENSOR.name, "force_threshold": 10.0},
+  # ),
+  # "feet_distance": RewardTermCfg(
+  #   func=feet_distance_penalty,
+  #   weight=-6.0,
+  #   params={
+  #     "asset_cfg": SceneEntityCfg("robot", site_names=FOOT_SITE_NAMES),
+  #     "min_dist": 0.15,
+  #   },
+  # ),
+  # "foot_foot_contact": RewardTermCfg(
+  #   func=self_collision_cost,
+  #   weight=-10.0,
+  #   params={"sensor_name": FOOT_FOOT_CONTACT_SENSOR.name, "force_threshold": 1.0},
+  # ),
+  # "nonfoot_ball_contact": RewardTermCfg(
+  #   func=self_collision_cost,
+  #   weight=-2.0,
+  #   params={"sensor_name": NONFOOT_BALL_CONTACT_SENSOR.name, "force_threshold": 1.0},
+  # ),
   # ------------------------------------------------------------------ #
   # Phase-schedule feet rewards                                          #
   # ------------------------------------------------------------------ #
@@ -184,7 +190,7 @@ rewards = {
   # ------------------------------------------------------------------ #
   "obstacle_avoidance": RewardTermCfg(
     func=obstacle_avoidance,
-    weight=-1.0,
+    weight=-2.0,
     params={
       "command_name": "adversary",
       "safe_radius": 0.5,  # penalty starts at 0.5 m from obstacle center

@@ -277,7 +277,10 @@ class PPO(BaseAlgorithm):
 
         # Step environment (action clipping handled by vecenv_wrapper)
         obs_dict, rewards, terminated, truncated, infos = self.env.step(actions)
-        dones = (terminated | truncated).float()
+        if terminated.is_floating_point():
+          dones = torch.clamp(terminated + truncated.float(), 0.0, 1.0)
+        else:
+          dones = (terminated | truncated).float()
 
         # Extract next observations
         next_actor_obs = self.get_actor_obs(obs_dict)
@@ -303,20 +306,21 @@ class PPO(BaseAlgorithm):
             truncated_values = self.value_net(norm_next_critic).squeeze(-1)
             rewards = rewards + self.config.gamma * truncated_values * truncated_mask
         self.episode_length_buf += 1
-        done_ids = dones.nonzero(as_tuple=False).squeeze(-1)
-        if len(done_ids) > 0:
-          self.rewbuffer.extend(self.cur_reward_sum[done_ids].cpu().numpy().tolist())
-          self.cur_reward_sum[done_ids] = 0.0
+        episode_done_ids = (dones >= 1.0).nonzero(as_tuple=False).squeeze(-1)
+        if len(episode_done_ids) > 0:
+          self.rewbuffer.extend(self.cur_reward_sum[episode_done_ids].cpu().numpy().tolist())
+          self.cur_reward_sum[episode_done_ids] = 0.0
           self.episode_lengths.extend(
-            self.episode_length_buf[done_ids].cpu().numpy().tolist()
+            self.episode_length_buf[episode_done_ids].cpu().numpy().tolist()
           )
-          self.episode_length_buf[done_ids] = 0
+          self.episode_length_buf[episode_done_ids] = 0
 
         # Update episode tracking
-        self.update_episode_counts(terminated, truncated)
+        hard_terminated = terminated >= 1.0 if terminated.is_floating_point() else terminated
+        self.update_episode_counts(hard_terminated, truncated)
 
         # Only update episode metrics when episodes actually ended
-        if "log" in infos and dones.any():
+        if "log" in infos and (dones >= 1.0).any():
           self.latest_episode_metrics = extract_episode_metrics(infos["log"])
 
         # Store RAW observations in buffer (RSL-RL pattern)

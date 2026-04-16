@@ -47,7 +47,8 @@ cuda = "12.0"
 colosseum = {path = ".", editable = true}
 loguru = "==0.7.3"
 gymnasium = {version = "*", extras = ["classic_control"]}
-mjlab = {git = "https://github.com/neverorfrog/mjlab.git", branch = "main", editable = true}
+# mjlab = {git = "https://github.com/neverorfrog/mjlab.git", branch = "main", editable = true}
+mjlab = { path = "/home/neverorfrog/code/spqr/colosseum/external/mjlab" , editable = true }
 
 [tool.pixi.feature.train.tasks]
 train-rsl-rl = { cmd = "python -m colosseum.scripts.train_rsl_rl", description = "Train with RSL-RL (colosseum tasks)" }

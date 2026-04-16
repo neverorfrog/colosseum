@@ -70,10 +70,11 @@ class ConstraintBasedEnv(ManagerBasedRlEnv):
       # Scale rewards down proportionally to violation severity (Algorithm 1, paper)
       rewards = torch.clip(rewards * (1.0 - cstr_prob), min=0.0)
 
-      # Option A: sample binary termination from probability (Bernoulli)
-      # In expectation equivalent to float dones; variance is negligible at 4096+ envs
-      cstr_terminated = torch.bernoulli(cstr_prob).bool()
-      terminated = terminated | cstr_terminated
+      # Option B: return float terminated so GAE discount softens without resetting the env.
+      # Hard resets (terminated=True) stay at 1.0; constraint probability fills the rest.
+      terminated_float = cstr_prob.clone()
+      terminated_float[terminated] = 1.0
+      terminated = terminated_float
 
     return obs, rewards, terminated, truncated, extras
 

@@ -1240,7 +1240,7 @@ packages:
 - pypi: ./
   name: colosseum
   version: 0.1.0
-  sha256: 2067c70382786ca41776015b7746d3fe20b60e3f396a41db497ce32b10dc6aeb
+  sha256: bcbca4fbcadd57b8bc8c56ae5188d1830f7ebd64cc699db278da6907da17a440
   requires_dist:
   - ty>=0.0.1a34,<0.0.1a35
   - pydantic>=2.12.5,<3
