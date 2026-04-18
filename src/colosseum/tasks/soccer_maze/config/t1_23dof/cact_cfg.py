@@ -13,15 +13,12 @@ from mjlab.managers.termination_manager import TerminationTermCfg
 
 from colosseum.robots.t1_23dof.constants import ACTION_SCALE
 from colosseum.tasks.dribbling.mdp.gait_phase_command import GaitPhaseCommandCfg
-from colosseum.tasks.maze.mdp.abstraction_velocity_command import (
-  AbstractionVelocityCommandCfg,
-)
-from colosseum.tasks.maze.mdp.curriculums import (
-  base_velocity_curriculum,
-  wall_collision_termination_curriculum,
-)
-from colosseum.tasks.maze.mdp.goal_command import MazeGoalCommandCfg
+# from colosseum.tasks.soccer_maze.mdp.sokoban_command import SokobanCommandCfg
+from colosseum.mdp.abstraction.maze.abstraction_velocity_command import AbstractionVelocityCommandCfg
+from colosseum.mdp.abstraction.maze.goal_command import MazeGoalCommandCfg
 from colosseum.tasks.maze.mdp.terminations import arrived_at_goal, collided_with_wall
+# from colosseum.tasks.soccer_maze.mdp.curriculums import sokoban_cache_curriculum
+# from colosseum.tasks.soccer_maze.mdp.terminations import sokoban_plan_deviated
 
 _ARM_JOINTS = {
   "Left_Shoulder_Pitch",
@@ -41,16 +38,20 @@ _ACTION_SCALE = {
 }
 
 commands: Dict[str, CommandTermCfg] = {
-  # Ball target velocity: world-frame direction from the maze abstraction
-  # queried at the ball's current position.
+  # Ball velocity command driven by the harmonic field queried at ball position.
+  # Key kept as "ball_vel": rewards and observations read get_command("ball_vel")[:, :2].
   "ball_vel": AbstractionVelocityCommandCfg(
-    query_entity="ball",
-    omnidirectional=True,
-    use_root_pos=False,  # ball has no root_site
-    base_velocity=0.3,  # ramped up by curriculum
-    ema_smoothing=0.3,
     abstraction_name="grid",
+    base_velocity=0.5,
+    query_entity="ball",
+    use_root_pos=True,
+    omnidirectional=True,
   ),
+  # "ball_vel": SokobanCommandCfg(
+  #   abstraction_name="sokoban",
+  #   ball_speed=0.5,
+  #   robot_speed=1.0,
+  # ),
   "goal": MazeGoalCommandCfg(static_goals=True),
   "gait_phase": GaitPhaseCommandCfg(),
 }
@@ -65,17 +66,13 @@ actions: dict[str, ActionTermCfg] = {
 }
 
 curriculum: dict[str, CurriculumTermCfg] = {
-  "command_vel": CurriculumTermCfg(
-    func=base_velocity_curriculum,
-    params={
-      "command_name": "ball_vel",
-      "velocity_stages": [
-        {"step": 0, "base_velocity": 0.3},
-        {"step": 500 * 24, "base_velocity": 0.6},
-        {"step": 1000 * 24, "base_velocity": 1.0},
-      ],
-    },
-  ),
+  # "sokoban_cache": CurriculumTermCfg(
+  #   func=sokoban_cache_curriculum,
+  #   params={
+  #     "abstraction_name": "sokoban",
+  #     "clear_at_steps": [],
+  #   },
+  # ),
   # "wall_termination": CurriculumTermCfg(
   #   func=wall_collision_termination_curriculum,
   #   params={
@@ -92,6 +89,10 @@ terminations: dict[str, TerminationTermCfg] = {
     func=bad_orientation,
     params={"limit_angle": math.radians(70.0)},
   ),
+  # "sokoban_deviated": TerminationTermCfg(
+  #   func=sokoban_plan_deviated,
+  #   params={"abstraction_name": "sokoban"},
+  # ),
   "arrived_at_goal": TerminationTermCfg(
     func=arrived_at_goal,
     params={

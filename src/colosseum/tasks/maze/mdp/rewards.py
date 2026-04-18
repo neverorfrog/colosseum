@@ -8,7 +8,7 @@ from mjlab.managers import SceneEntityCfg
 from mjlab.sensor import ContactSensor
 
 from colosseum.envs.abstraction_based_env import AbstractionBasedEnv
-from colosseum.tasks.maze.mdp.grid_abstraction import GridAbstraction
+from colosseum.mdp.abstraction.maze.grid_abstraction import GridAbstraction
 from colosseum.tasks.maze.mdp.observations import (
   agent_pos_local,
   agent_to_goal_vector,

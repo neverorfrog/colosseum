@@ -7,7 +7,7 @@ from mjlab.managers.scene_entity_config import SceneEntityCfg
 
 from colosseum.robots.t1_23dof.constants import BASE_BODY_NAME, FOOT_GEOM_NAMES
 from colosseum.tasks.maze.mdp.events import reset_wall_positions
-from colosseum.tasks.soccer_maze.mdp.events import reset_robot_and_ball
+from colosseum.tasks.soccer_maze.mdp.events import reset_robot_and_ball_sokoban
 
 events = {
   # Mocap walls must be positioned at startup and after every reset.
@@ -19,16 +19,17 @@ events = {
     func=reset_wall_positions,
     mode="reset",
   ),
-  # Robot and ball are reset together so the ball position is computed from
-  # the same sampled maze cell — no data-staleness between separate events.
+  # Robot and ball are reset to independent cells with within-cell jitter.
+  # This gives the RL agent diverse continuous states while keeping the
+  # abstract (cell-level) configuration valid for the Sokoban plan.
   "reset_robot_and_ball": EventTermCfg(
-    func=reset_robot_and_ball,
+    func=reset_robot_and_ball_sokoban,
     mode="reset",
     params={
       "robot_z_offset": 0.665,
-      "ball_x_offset": 0.4,
       "ball_z": 0.2,
-      "yaw_range": (0.0, 0.0),
+      "yaw_range": (-3.14159, 3.14159),
+      "jitter_fraction": 0.3,
     },
   ),
   "reset_robot_joints": EventTermCfg(

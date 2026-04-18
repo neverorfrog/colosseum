@@ -30,6 +30,7 @@ from colosseum.tasks.maze.mdp.observations import agent_pos_local, agent_to_goal
 from colosseum.tasks.soccer_maze.mdp.observations import (
   ball_vel_command_body,
   ball_vel_xy_body,
+  obstacle_map,
 )
 
 _ASSET_CFG = SceneEntityCfg("robot", site_names="root_site", joint_names=".*")
@@ -90,6 +91,10 @@ actor_terms = {
 critic_terms = {
   **actor_terms,
   # Additional privileged terms
+  "obstacle_map": ObservationTermCfg(
+    func=obstacle_map,
+    params={"abstraction_name": "grid"},
+  ),
   "base_height": ObservationTermCfg(func=base_height),
   "ball_mass": ObservationTermCfg(
     func=ball_mass,

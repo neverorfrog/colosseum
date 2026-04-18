@@ -19,7 +19,7 @@ from colosseum.robots.t1_23dof.sensors import (
 )
 from colosseum.tasks.maze.maps import MAPS
 from colosseum.tasks.maze.maze import Maze, MazeCfg
-from colosseum.tasks.maze.mdp.grid_abstraction import GridAbstractionTermCfg
+from colosseum.mdp.abstraction.maze.grid_abstraction import GridAbstractionTermCfg
 from colosseum.tasks.maze.terrain import MazeTerrainEntityCfg
 
 from .algo_cfg import t1_maze_ppo_cfg
@@ -81,7 +81,7 @@ def abstractions_cfg(
   return {
     "grid": GridAbstractionTermCfg(
       grid_frame=grid_frame,
-      obstacle_mask=obstacle_mask,
+      map=obstacle_mask,
       direction_method="harmonic",
       wall_center_weight=wall_center_weight,
     ),

@@ -24,6 +24,9 @@ class MazeTerrainEntity(TerrainEntity):
   def __init__(self, cfg: MazeTerrainEntityCfg, device: str) -> None:
     self.maze = Maze(cfg.maze_cfg)
 
+    self.valid_free_positions_local = torch.tensor(
+      self.maze.valid_free_positions_local, dtype=torch.float32, device=device
+    )
     self.valid_reset_positions_local = torch.tensor(
       self.maze.valid_reset_positions_local, dtype=torch.float32, device=device
     )

@@ -2,12 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from math import ceil, floor
-from typing import TYPE_CHECKING
 
 import torch
-
-if TYPE_CHECKING:
-  from colosseum.tasks.maze.maze import Maze
 
 
 @dataclass
@@ -95,8 +91,29 @@ class GridFrame:
     j = torch.clamp(j, 0, self.num_cols - 1)
     return torch.stack([i, j], dim=1)
 
+  def grid_direction_to_local(self, di: float, dj: float) -> tuple[float, float]:
+    """Convert a grid-space direction (row/col deltas) to local-frame unit vector.
+
+    Grid space: i increases downward, j increases rightward.
+    Local space: x increases rightward, y increases upward.
+    Conversion: dx = dj, dy = -di
+
+    Args:
+        di: Row delta in grid space (positive = downward in grid).
+        dj: Column delta in grid space (positive = rightward in grid).
+
+    Returns:
+        (dx, dy) unit vector in local frame. Returns (0, 0) for zero input.
+    """
+    dx = float(dj)
+    dy = float(-di)
+    norm = (dx * dx + dy * dy) ** 0.5
+    if norm < 1e-6:
+      return 0.0, 0.0
+    return dx / norm, dy / norm
+
   @classmethod
-  def from_maze(cls, maze: Maze) -> GridFrame:
+  def from_maze(cls, maze) -> GridFrame:
     return cls(
       num_rows=maze.num_rows,
       num_cols=maze.num_cols,

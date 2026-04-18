@@ -7,6 +7,10 @@ from typing import TYPE_CHECKING
 import torch
 from mjlab.utils.lab_api.math import quat_apply
 
+from colosseum.envs.abstraction_based_env import AbstractionBasedEnv
+from colosseum.mdp.abstraction.maze.grid_abstraction import GridAbstraction
+# from colosseum.mdp.abstraction.maze.sokoban_grid_abstraction import SokobanGridAbstraction
+
 if TYPE_CHECKING:
   from mjlab.envs import ManagerBasedRlEnv
 
@@ -26,6 +30,22 @@ def ball_vel_command_body(env: ManagerBasedRlEnv, command_name: str) -> torch.Te
     [command, torch.zeros(env.num_envs, 1, device=env.device)], dim=-1
   )  # [N, 3]
   return quat_apply(quat_conj, cmd_3d)[:, :2]  # [N, 2]
+
+
+def obstacle_map(env: ManagerBasedRlEnv, abstraction_name: str) -> torch.Tensor:
+  """Flattened obstacle mask as bird's-eye view of the maze. Shape [N, rows*cols].
+
+  Each element is 1.0 (wall) or 0.0 (free).  The mask is env-independent so the
+  same tensor is broadcast across all environments.  Row-major order: element
+  [i * cols + j] corresponds to grid cell (i, j).
+
+  This is a privileged observation — add it to critic_terms only.
+  """
+  assert isinstance(env, AbstractionBasedEnv)
+  abstraction = env.abstraction_manager.get_term(abstraction_name)
+  assert isinstance(abstraction, GridAbstraction)
+  flat = abstraction.map.float().flatten()  # [rows*cols]
+  return flat.unsqueeze(0).expand(env.num_envs, -1)  # [N, rows*cols]
 
 
 def ball_vel_xy_body(env: ManagerBasedRlEnv) -> torch.Tensor:

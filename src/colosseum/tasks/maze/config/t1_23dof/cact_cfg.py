@@ -11,14 +11,14 @@ from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.managers.termination_manager import TerminationTermCfg
 
 from colosseum.robots.t1_23dof.constants import ACTION_SCALE
-from colosseum.tasks.maze.mdp.abstraction_velocity_command import (
+from colosseum.mdp.abstraction.maze.abstraction_velocity_command import (
   AbstractionVelocityCommandCfg,
 )
 from colosseum.tasks.maze.mdp.curriculums import (
   base_velocity_curriculum,
   wall_collision_termination_curriculum,
 )
-from colosseum.tasks.maze.mdp.goal_command import MazeGoalCommandCfg
+from colosseum.mdp.abstraction.maze.goal_command import MazeGoalCommandCfg
 from colosseum.tasks.maze.mdp.terminations import arrived_at_goal, collided_with_wall
 
 commands: dict[str, CommandTermCfg] = {

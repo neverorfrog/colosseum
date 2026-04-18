@@ -16,6 +16,7 @@ from colosseum.assets.ball.ball_spec import get_ball_cfg
 from colosseum.config.types.task import TaskConfig, register_task
 from colosseum.envs.abstraction_based_env import AbstractionBasedEnvCfg
 from colosseum.managers.abstraction_manager import AbstractionTermCfg
+from colosseum.mdp.abstraction.maze.grid_abstraction import GridAbstractionTermCfg
 from colosseum.robots.t1_23dof.constants import BASE_BODY_NAME, get_robot_cfg
 from colosseum.robots.t1_23dof.sensors import (
   FEET_GROUND_CONTACT_SENSOR,
@@ -29,7 +30,8 @@ from colosseum.robots.t1_23dof.sensors import (
 )
 from colosseum.tasks.maze.maps import MAPS
 from colosseum.tasks.maze.maze import Maze, MazeCfg
-from colosseum.tasks.maze.mdp.grid_abstraction import GridAbstractionTermCfg
+
+# from colosseum.mdp.abstraction.maze.sokoban_grid_abstraction import SokobanGridAbstractionTermCfg
 from colosseum.tasks.maze.terrain import MazeTerrainEntityCfg
 
 from .algo_cfg import t1_soccer_maze_ppo_cfg
@@ -97,17 +99,24 @@ def abstractions_cfg(
   return {
     "grid": GridAbstractionTermCfg(
       grid_frame=grid_frame,
-      obstacle_mask=obstacle_mask,
+      map=obstacle_mask,
       direction_method="harmonic",
       wall_center_weight=wall_center_weight,
     ),
+    # "sokoban": SokobanGridAbstractionTermCfg(
+    #   grid_frame=grid_frame,
+    #   map=obstacle_mask,
+    #   wall_center_weight=wall_center_weight,
+    #   robot_entity="robot",
+    #   ball_entity="ball",
+    # ),
   }
 
 
 def t1_soccer_maze_env_cfg(
   scenario: str = "umaze",
   num_envs: int = 64,
-  resolution_factor: int = 3,
+  resolution_factor: int = 1,
   wall_center_weight: float = 2.0,
   play: bool = False,
 ) -> AbstractionBasedEnvCfg:
@@ -122,7 +131,7 @@ def t1_soccer_maze_env_cfg(
   """
   maze = Maze(
     MazeCfg(
-      maze_map=MAPS[scenario], cell_size=5.0, wall_height=2.0, wall_size_factor=1.0
+      maze_map=MAPS[scenario], cell_size=2.0, wall_height=2.0, wall_size_factor=1.0
     )
   )
 
