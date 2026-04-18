@@ -42,9 +42,9 @@ commands: Dict[str, CommandTermCfg] = {
   "ball_vel": BallVelocityCommandCfg(
     robot_entity="robot",
     ball_entity="ball",
-    speed_range=(0.3, 2.0),
+    speed_range=(0.1, 1.5),
     heading_range=math.pi / 2,  # ±90° from forward
-    resampling_time_range=(10.0, 20.0),
+    resampling_time_range=(3.0, 8.0),
     debug_vis=True,
   ),
   "gait_phase": GaitPhaseCommandCfg(),
@@ -149,6 +149,6 @@ terminations = {
   ),
   "ball_captured": TerminationTermCfg(
     func=ball_captured,
-    params={"command_name": "adversary", "capture_radius": 0.5},
+    params={"command_name": "adversary", "capture_radius": 0.3},
   ),
 }

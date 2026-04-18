@@ -468,25 +468,28 @@ def _get_min_robot_obstacle_dist(
 def obstacle_avoidance(
   env: ManagerBasedRlEnv,
   command_name: str = "adversary",
-  safe_radius: float = 0.6,
-  sharpness: float = 5.0,
+  safe_radius: float = 0.5,
+  contact_radius: float = 0.1,
+  detection_range: float = 3.0,
 ) -> torch.Tensor:
-  """Penalty for being within *safe_radius* metres of any obstacle.
+  """Repulsive potential penalty based on proximity to the nearest detected obstacle.
 
-  Uses an exponential kernel so the penalty is smooth and non-zero even
-  before physical contact:
+  An obstacle is considered detected only when it is within *detection_range*.
+  For detected obstacles uses a 1/r^2 potential normalised to safe_radius:
+    - penalty = 1.0  at dist == safe_radius
+    - penalty > 1.0  inside  safe_radius  (grows sharply toward contact)
+    - penalty < 1.0  outside safe_radius  (decays toward zero)
 
-    penalty = exp(-sharpness * max(dist - safe_radius, 0))
-
-  Returns shape (N,), values in (0, 1].  Zero when no obstacles are active.
+  Returns shape (N,), values >= 0.  Zero when no obstacles are active or detected.
   """
   term: ObstacleCommand = env.command_manager.get_term(command_name)
   if term.cfg.num_active == 0:
     return torch.zeros(env.num_envs, device=env.device)
 
   min_dist, _ = _get_min_robot_obstacle_dist(env, command_name)
-  margin = torch.clamp(min_dist - safe_radius, min=0.0)
-  return torch.exp(-sharpness * margin)
+  detected = min_dist < detection_range
+  penalty = (safe_radius / min_dist.clamp(min=contact_radius)).pow(2)
+  return detected.float() * penalty
 
 
 def ball_protection(

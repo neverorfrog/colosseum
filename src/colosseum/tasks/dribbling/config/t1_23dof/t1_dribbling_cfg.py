@@ -59,22 +59,22 @@ def scene_cfg(
     f"obstacle_{k}": get_obstacle_cfg(k) for k in range(num_obstacles)
   }
 
-  # Warp Texture2D requires power-of-2 dimensions; the default 300×300 checker
-  # crashes create_render_context whenever a camera sensor is present.
-  base_terrain = TerrainEntityCfg()
-  terrain = (
-    replace(
-      base_terrain,
-      textures=tuple(
-        replace(t, width=256, height=256) for t in base_terrain.textures
-      ),
-    )
-    if use_depth_camera
-    else base_terrain
-  )
+  # # Warp Texture2D requires power-of-2 dimensions; the default 300×300 checker
+  # # crashes create_render_context whenever a camera sensor is present.
+  # base_terrain = TerrainEntityCfg()
+  # terrain = (
+  #   replace(
+  #     base_terrain,
+  #     textures=tuple(
+  #       replace(t, width=256, height=256) for t in base_terrain.textures
+  #     ),
+  #   )
+  #   if use_depth_camera
+  #   else base_terrain
+  # )
 
   return SceneCfg(
-    terrain=terrain,
+    terrain=TerrainEntityCfg(),
     sensors=tuple(sensors),
     entities={
       "ball": get_ball_cfg(),

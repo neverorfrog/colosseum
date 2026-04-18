@@ -845,6 +845,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/af/33/ee4519fa02ed11a94aef9559552f3b17bb863f2ecfe1a35dc7f548cde231/matplotlib_inline-0.2.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/37/8c/52f0299f1675cdfa1ab39a6028a2e5adf9032ae1118c9895c84b08af162b/mediapy-1.2.6-py3-none-any.whl
+      - pypi: git+https://github.com/neverorfrog/mjlab.git?branch=main#d731f41d439153402cbb6f528967e9e4aa70ec79
       - pypi: https://files.pythonhosted.org/packages/71/da/116ec59e1de628fbd6330e21d05452d6755f5ab0b55c55a2b37c81ec0868/mjviser-0.0.11-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/a9/80/19189ea605017473660e43762dc853d2797984b3c7bf30ce656099add30c/ml_dtypes-0.5.4-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/6b/96/5c095b940de3aa6b43a71ec76275ac3537b21bd45c7499b5a17a429110fa/msgspec-0.20.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
@@ -921,7 +922,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/2e/54/647ade08bf0db230bfea292f893923872fd20be6ac6f53b2b936ba839d75/zipp-3.23.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/bb/1f/e9cfd801a3f9190bf3e759c422bbfd2247db9d7f3d54a56ecde70137791a/zstandard-0.25.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
       - pypi: ./
-      - pypi: /home/neverorfrog/code/spqr/colosseum/external/mjlab
 packages:
 - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
   build_number: 20
@@ -1240,7 +1240,7 @@ packages:
 - pypi: ./
   name: colosseum
   version: 0.1.0
-  sha256: bcbca4fbcadd57b8bc8c56ae5188d1830f7ebd64cc699db278da6907da17a440
+  sha256: cc2fadab5871234c2e07eeecc4995fc55c6eb654e9eb5fa5092fbb2de54cd706
   requires_dist:
   - ty>=0.0.1a34,<0.0.1a35
   - pydantic>=2.12.5,<3
@@ -3683,10 +3683,9 @@ packages:
   license_family: MIT
   size: 11676
   timestamp: 1734157119152
-- pypi: /home/neverorfrog/code/spqr/colosseum/external/mjlab
+- pypi: git+https://github.com/neverorfrog/mjlab.git?branch=main#d731f41d439153402cbb6f528967e9e4aa70ec79
   name: mjlab
   version: 1.2.0
-  sha256: 5a459bba797e1a319fbf73f96de218b2e9be208f9b22a1ce2e710304e262b1c7
   requires_dist:
   - prettytable
   - tqdm
