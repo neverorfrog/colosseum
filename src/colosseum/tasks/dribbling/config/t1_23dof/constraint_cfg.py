@@ -12,11 +12,11 @@ dribbling_constraints: dict[str, ConstraintTermCfg] = {
   # Hard constraints (max_p = 1.0) — immediate termination on violation #
   # ------------------------------------------------------------------ #
   # Any self-collision between trunk subtrees.
-  "self_collision": ConstraintTermCfg(
-    func=constraints.sensor_any_contact,
-    max_p=1.0,
-    params={"sensor_name": "self_collision", "force_threshold": 1.0},
-  ),
+  # "self_collision": ConstraintTermCfg(
+  #   func=constraints.sensor_any_contact,
+  #   max_p=1.0,
+  #   params={"sensor_name": "self_collision", "force_threshold": 1.0},
+  # ),
   # # Foot touching the other foot.
   # "foot_foot_contact": ConstraintTermCfg(
   #   func=constraints.sensor_any_contact,
@@ -47,11 +47,11 @@ dribbling_constraints: dict[str, ConstraintTermCfg] = {
   # ),
   # Base height < 0.4 m — catches forward/sideways falls that stay
   # within the 70° orientation limit.
-  "min_base_height": ConstraintTermCfg(
-    func=constraints.min_base_height,
-    max_p=0.5,
-    params={"limit": 0.45, "asset_cfg": SceneEntityCfg("robot")},
-  ),
+  # "min_base_height": ConstraintTermCfg(
+  #   func=constraints.min_base_height,
+  #   max_p=0.5,
+  #   params={"limit": 0.45, "asset_cfg": SceneEntityCfg("robot")},
+  # ),
   # Feet too close together (XY plane): replaces feet_distance reward.
   "feet_distance": ConstraintTermCfg(
     func=feet_distance_penalty,

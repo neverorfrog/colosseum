@@ -22,14 +22,15 @@ from colosseum.robots.t1_23dof.sensors import (
   SELF_COLLISION_SENSOR,
 )
 from colosseum.tasks.dribbling.mdp.rewards import (
+  ball_protection_gated,
   ball_vel_angle_body,
   ball_vel_norm,
   ball_vel_tracking_body,
   feet_distance_penalty,
-  obstacle_avoidance,
+  obstacle_avoidance_gated,
   pose_deviation,
-  robot_ball_approach_vel,
-  robot_ball_distance,
+  robot_ball_approach_vel_gated,
+  robot_ball_distance_gated,
   robot_ball_yaw_body,
   stance_phase_schedule,
   swing_phase_schedule,
@@ -55,9 +56,16 @@ rewards = {
     params={"command_name": "ball_vel"},
   ),
   "robot_ball_distance": RewardTermCfg(
-    func=robot_ball_distance,
+    func=robot_ball_distance_gated,
     weight=0.05,
-    params={"sharpness": 0.1},
+    params={
+      "command_name": "adversary",
+      "ball_vel_command_name": "ball_vel",
+      "sharpness_base": 0.5,
+      "sharpness_tight": 2.0,
+      "ball_far_loosening": 0.7,
+      "ball_far_threshold": 1.0,
+    },
   ),
   "robot_ball_yaw": RewardTermCfg(
     func=robot_ball_yaw_body,
@@ -65,9 +73,32 @@ rewards = {
     params={"command_name": "ball_vel"},
   ),
   "robot_ball_approach_vel": RewardTermCfg(
-    func=robot_ball_approach_vel,
+    func=robot_ball_approach_vel_gated,
+    weight=3.0,
+    params={
+      "command_name": "adversary",
+      "ball_vel_command_name": "ball_vel",
+      "ball_far_threshold": 1.0,
+    },
+  ),
+  "obstacle_avoidance": RewardTermCfg(
+    func=obstacle_avoidance_gated,
+    weight=-3.0,
+    params={
+      "command_name": "adversary",
+      "ball_vel_command_name": "ball_vel",
+      "safe_radius": 0.7,
+      "sharpness": 2.0,
+    },
+  ),
+  "ball_protection": RewardTermCfg(
+    func=ball_protection_gated,
     weight=1.0,
-    params={"command_name": "ball_vel"},
+    params={
+      "command_name": "adversary",
+      "ball_vel_command_name": "ball_vel",
+      "activation_radius": 3.0,
+    },
   ),
   # ------------------------------------------------------------------ #
   # Locomotion regularization                                            #
@@ -111,11 +142,11 @@ rewards = {
       "command_threshold": 0.05,
     },
   ),
-  # "self_collisions": RewardTermCfg(
-  #   func=self_collision_cost,
-  #   weight=-1.0,
-  #   params={"sensor_name": SELF_COLLISION_SENSOR.name, "force_threshold": 10.0},
-  # ),
+  "self_collisions": RewardTermCfg(
+    func=self_collision_cost,
+    weight=-1.0,
+    params={"sensor_name": SELF_COLLISION_SENSOR.name, "force_threshold": 10.0},
+  ),
   # "feet_distance": RewardTermCfg(
   #   func=feet_distance_penalty,
   #   weight=-6.0,
@@ -124,16 +155,16 @@ rewards = {
   #     "min_dist": 0.15,
   #   },
   # ),
-  # "foot_foot_contact": RewardTermCfg(
-  #   func=self_collision_cost,
-  #   weight=-10.0,
-  #   params={"sensor_name": FOOT_FOOT_CONTACT_SENSOR.name, "force_threshold": 1.0},
-  # ),
-  # "nonfoot_ball_contact": RewardTermCfg(
-  #   func=self_collision_cost,
-  #   weight=-2.0,
-  #   params={"sensor_name": NONFOOT_BALL_CONTACT_SENSOR.name, "force_threshold": 1.0},
-  # ),
+  "foot_foot_contact": RewardTermCfg(
+    func=self_collision_cost,
+    weight=-10.0,
+    params={"sensor_name": FOOT_FOOT_CONTACT_SENSOR.name, "force_threshold": 1.0},
+  ),
+  "nonfoot_ball_contact": RewardTermCfg(
+    func=self_collision_cost,
+    weight=-2.0,
+    params={"sensor_name": NONFOOT_BALL_CONTACT_SENSOR.name, "force_threshold": 1.0},
+  ),
   # ------------------------------------------------------------------ #
   # Phase-schedule feet rewards                                          #
   # ------------------------------------------------------------------ #
@@ -179,22 +210,21 @@ rewards = {
         joint_names=(
           r"(?i).*hip.*",
           r"(?i).*knee.*",
-          r"(?i).*ankle.*",
+          r"(?i).*ankle_pitch.*",
         ),
       ),
       "std": 0.3,
     },
   ),
-  # ------------------------------------------------------------------ #
-  # Obstacle-aware rewards                                               #
-  # ------------------------------------------------------------------ #
-  "obstacle_avoidance": RewardTermCfg(
-    func=obstacle_avoidance,
-    weight=-2.0,
+  "pose_ankle_roll": RewardTermCfg(
+    func=pose_deviation,
+    weight=2.0,
     params={
-      "command_name": "adversary",
-      "safe_radius": 0.5,  # penalty starts at 0.5 m from obstacle center
-      "sharpness": 2.0,
+      "asset_cfg": SceneEntityCfg(
+        "robot",
+        joint_names=(r"(?i).*ankle_roll.*",),
+      ),
+      "std": 0.05,
     },
   ),
 }

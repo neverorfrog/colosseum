@@ -541,3 +541,145 @@ def ball_protection(
   closeness = torch.exp(-ball_dist / 0.5)
 
   return activation * (1.0 + cos) / 2.0 * closeness
+
+
+# ---------------------------------------------------------------------------
+# Context-aware gating
+# ---------------------------------------------------------------------------
+
+
+def _compute_gates(
+  env: ManagerBasedRlEnv,
+  adversary_command_name: str = "adversary",
+  ball_vel_command_name: str = "ball_vel",
+  ball_far_threshold: float = 1.0,
+  lookahead: float = 3.5,
+  r_base: float = 0.5,
+  k_speed: float = 0.5,
+  gate_sharpness: float = 5.0,
+) -> tuple[torch.Tensor, torch.Tensor]:
+  """Smooth per-env gate scalars in [0, 1].
+
+  danger : max tube-intersection score over all active obstacles.
+    Tube runs along the commanded ball-velocity direction from the ball;
+    radius = r_base + k_speed * obstacle_speed; capped at lookahead distance.
+  ball_far : sigmoid gate that rises as robot–ball XY distance exceeds
+    ball_far_threshold.
+  """
+  device = env.device
+  N = env.num_envs
+
+  robot_xy = env.scene["robot"].data.root_link_pos_w[:, :2]
+  ball_xy = env.scene["ball"].data.root_link_pos_w[:, :2]
+  dist = (ball_xy - robot_xy).norm(dim=-1)
+  ball_far = torch.sigmoid(gate_sharpness * (dist - ball_far_threshold))
+
+  term: ObstacleCommand = env.command_manager.get_term(adversary_command_name)
+  if term.cfg.num_active == 0:
+    return torch.zeros(N, device=device), ball_far
+
+  ball_vel_cmd = env.command_manager.get_command(ball_vel_command_name)[:, :2]
+  cmd_dir = ball_vel_cmd / ball_vel_cmd.norm(dim=-1, keepdim=True).clamp(min=1e-3)
+
+  obs_xy = term.obstacle_positions_w  # (N, K, 2)
+  obs_speed = term.obstacle_velocities_w.norm(dim=-1)  # (N, K)
+
+  ball_to_obs = obs_xy - ball_xy.unsqueeze(1)  # (N, K, 2)
+  proj = (ball_to_obs * cmd_dir.unsqueeze(1)).sum(dim=-1)  # (N, K)
+  d_perp = (ball_to_obs - proj.unsqueeze(-1) * cmd_dir.unsqueeze(1)).norm(dim=-1)  # (N, K)
+
+  r = r_base + k_speed * obs_speed  # (N, K)
+  inside_tube = torch.sigmoid(gate_sharpness * (r - d_perp))
+  in_front = torch.sigmoid(gate_sharpness * proj)
+  in_range = torch.sigmoid(gate_sharpness * (lookahead - proj))
+  danger = (inside_tube * in_front * in_range).max(dim=-1).values
+
+  return danger, ball_far
+
+
+def obstacle_avoidance_gated(
+  env: ManagerBasedRlEnv,
+  command_name: str = "adversary",
+  ball_vel_command_name: str = "ball_vel",
+  safe_radius: float = 0.6,
+  sharpness: float = 5.0,
+  ball_far_threshold: float = 1.0,
+  lookahead: float = 3.5,
+  r_base: float = 0.5,
+  k_speed: float = 0.5,
+  gate_sharpness: float = 5.0,
+) -> torch.Tensor:
+  """obstacle_avoidance weighted by the danger tube gate."""
+  danger, _ = _compute_gates(
+    env, command_name, ball_vel_command_name,
+    ball_far_threshold, lookahead, r_base, k_speed, gate_sharpness,
+  )
+  return danger * obstacle_avoidance(env, command_name, safe_radius, sharpness)
+
+
+def ball_protection_gated(
+  env: ManagerBasedRlEnv,
+  command_name: str = "adversary",
+  ball_vel_command_name: str = "ball_vel",
+  activation_radius: float = 3.0,
+  ball_far_threshold: float = 1.0,
+  lookahead: float = 3.5,
+  r_base: float = 0.5,
+  k_speed: float = 0.5,
+  gate_sharpness: float = 5.0,
+) -> torch.Tensor:
+  """ball_protection weighted by the danger tube gate."""
+  danger, _ = _compute_gates(
+    env, command_name, ball_vel_command_name,
+    ball_far_threshold, lookahead, r_base, k_speed, gate_sharpness,
+  )
+  return danger * ball_protection(env, command_name, activation_radius)
+
+
+def robot_ball_distance_gated(
+  env: ManagerBasedRlEnv,
+  command_name: str = "adversary",
+  ball_vel_command_name: str = "ball_vel",
+  sharpness_base: float = 0.5,
+  sharpness_tight: float = 2.0,
+  ball_far_loosening: float = 0.7,
+  ball_far_threshold: float = 1.0,
+  lookahead: float = 3.5,
+  r_base: float = 0.5,
+  k_speed: float = 0.5,
+  gate_sharpness: float = 5.0,
+) -> torch.Tensor:
+  """robot_ball_distance with sharpness tight under danger, loose when ball_far.
+
+  effective_sharpness = (base + (tight - base) * danger) * (1 - loosening * ball_far)
+  """
+  danger, ball_far = _compute_gates(
+    env, command_name, ball_vel_command_name, ball_far_threshold,
+    lookahead, r_base, k_speed, gate_sharpness,
+  )
+  effective_sharpness = (
+    sharpness_base + (sharpness_tight - sharpness_base) * danger
+  ) * (1.0 - ball_far_loosening * ball_far)
+  effective_sharpness = effective_sharpness.clamp(min=0.05)
+  robot_pos = env.scene["robot"].data.root_link_pos_w[:, :2]
+  ball_pos = env.scene["ball"].data.root_link_pos_w[:, :2]
+  dist_sq = ((ball_pos - robot_pos) ** 2).sum(dim=-1)
+  return torch.exp(-effective_sharpness * dist_sq)
+
+
+def robot_ball_approach_vel_gated(
+  env: ManagerBasedRlEnv,
+  command_name: str = "adversary",
+  ball_vel_command_name: str = "ball_vel",
+  ball_far_threshold: float = 1.0,
+  lookahead: float = 3.5,
+  r_base: float = 0.5,
+  k_speed: float = 0.5,
+  gate_sharpness: float = 5.0,
+) -> torch.Tensor:
+  """robot_ball_approach_vel gated by ball_far * (1 - danger)."""
+  danger, ball_far = _compute_gates(
+    env, command_name, ball_vel_command_name, ball_far_threshold,
+    lookahead, r_base, k_speed, gate_sharpness,
+  )
+  return ball_far * (1.0 - danger) * robot_ball_approach_vel(env, ball_vel_command_name)

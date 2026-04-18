@@ -14,7 +14,7 @@ OBSTACLE_HEIGHT: float = 1.2  # m
 OBSTACLE_RADIUS: float = 0.15  # m
 
 # Default number of obstacle instances used in scene and encoder configs.
-NUM_OBSTACLES: int = 1
+NUM_OBSTACLES: int = 3
 
 # Default local position used before the first episode reset.
 # Placed far away so inactive obstacles do not interfere with the robot spawn.

@@ -99,35 +99,42 @@ curriculum = {
     params={
       "command_name": "adversary",
       "stages": [
-        # Phase 0: no obstacles — standard dribbling training.
         {"step": 0, "num_active": 0, "distance_range": (2.5, 4.0), "max_speed": 0.0},
-        # Phase 1: one static obstacle, spawning 2.5–4 m away.
         {
-          "step": 10000,
-          "num_active": 1,
-          "distance_range": (2.5, 4.0),
-          "max_speed": 0.0,
-        },
-        # Phase 2: one moving obstacle, very slow approach.
-        {
-          "step": 25000,
+          "step": 2_000,
           "num_active": 1,
           "distance_range": (2.0, 4.0),
           "max_speed": 0.1,
         },
-        # Phase 3: one moving obstacle, slightly faster and tighter spawn.
         {
-          "step": 50000,
+          "step": 5_000,
           "num_active": 1,
           "distance_range": (1.5, 3.5),
-          "max_speed": 0.2,
+          "max_speed": 0.5,
         },
-        # Phase 4: one moving obstacle, faster and tighter.
         {
-          "step": 100000,
-          "num_active": 1,
-          "distance_range": (1.0, 3.0),
-          "max_speed": 0.4,
+          "step": 8_000,
+          "num_active": 2,
+          "distance_range": (2.0, 4.0),
+          "max_speed": 0.3,
+        },
+        {
+          "step": 10_000,
+          "num_active": 2,
+          "distance_range": (1.5, 3.5),
+          "max_speed": 0.5,
+        },
+        {
+          "step": 15000,
+          "num_active": 3,
+          "distance_range": (2.0, 4.0),
+          "max_speed": 0.3,
+        },
+        {
+          "step": 20000,
+          "num_active": 3,
+          "distance_range": (1.5, 3.5),
+          "max_speed": 0.5,
         },
       ],
     },
