@@ -25,16 +25,14 @@ from colosseum.robots.t1_23dof.sensors import (
   SELF_COLLISION_SENSOR,
 )
 from colosseum.tasks.dribbling.mdp.rewards import (
-  ball_protection_gated,
+  robot_ball_approach_vel,
+  robot_ball_distance,
   ball_vel_angle_body,
   ball_vel_norm,
   ball_vel_tracking_body,
   feet_distance_penalty,
-  obstacle_danger_reduction,
   obstacle_avoidance,
   pose_deviation,
-  robot_ball_approach_vel_gated,
-  robot_ball_distance_gated,
   robot_ball_yaw_body,
   stance_phase_schedule,
   swing_phase_schedule,
@@ -44,81 +42,57 @@ rewards = {
   # ------------------------------------------------------------------ #
   # Task rewards                                                         #
   # ------------------------------------------------------------------ #
-  "ball_vel_tracking": RewardTermCfg(
+  "ball_vel_tracking": RewardTermCfg(  # Match the full commanded ball-velocity vector.
     func=ball_vel_tracking_body,
-    weight=2.0,
-    params={"command_name": "ball_vel", "sharpness": 1.0},
+    weight=3.0,
+    params={
+      "command_name": "ball_vel",  # Which ball-velocity command to track.
+      "sharpness": 1.5,  # Larger -> penalize vector tracking error more strongly.
+    },
   ),
-  "ball_vel_norm": RewardTermCfg(
+  "ball_vel_norm": RewardTermCfg(  # Match the commanded ball-speed magnitude.
     func=ball_vel_norm,
     weight=4.0,
-    params={"command_name": "ball_vel", "sharpness": 1.0},
+    params={
+      "command_name": "ball_vel",  # Which ball-speed command to match.
+      "sharpness": 1.0,  # Larger -> tighter speed matching.
+    },
   ),
-  "ball_vel_angle": RewardTermCfg(
+  "ball_vel_angle": RewardTermCfg(  # Align ball-motion direction with the command.
     func=ball_vel_angle_body,
     weight=4.0,
-    params={"command_name": "ball_vel"},
+    params={"command_name": "ball_vel"},  # Which ball-direction command to align with.
   ),
-  "robot_ball_distance": RewardTermCfg(
-    func=robot_ball_distance_gated,
-    weight=1.0,
-    params={
-      "command_name": "adversary",
-      "ball_vel_command_name": "ball_vel",
-      "sharpness_base": 0.5,
-      "ball_far_loosening": 0.7,
-      "ball_far_threshold": 1.0,
-    },
+  "robot_ball_distance": RewardTermCfg(  # Keep the robot reasonably close to the ball.
+    func=robot_ball_distance,
+    weight=2.0,
+    params={"sharpness": 1.0},  # Larger -> reward drops faster as robot-ball distance grows.
   ),
-  "robot_ball_yaw": RewardTermCfg(
+  "robot_ball_yaw": RewardTermCfg(  # Keep the ball in front of the robot along the command.
     func=robot_ball_yaw_body,
-    weight=4.0,
-    params={"command_name": "ball_vel"},
+    weight=2.0,
+    params={"command_name": "ball_vel"},  # Which command defines the preferred facing direction.
   ),
-  "robot_ball_approach_vel": RewardTermCfg(
-    func=robot_ball_approach_vel_gated,
-    weight=1.0,
-    params={
-      "command_name": "adversary",
-      "ball_vel_command_name": "ball_vel",
-      "ball_far_threshold": 1.0,
-    },
+  "robot_ball_approach_vel": RewardTermCfg(  # Reward base motion that closes distance to the ball.
+    func=robot_ball_approach_vel,
+    weight=2.0,
+    params={"command_name": "ball_vel"},  # Command whose speed sets the desired approach urgency.
   ),
-  "obstacle_avoidance": RewardTermCfg(
+  "obstacle_avoidance": RewardTermCfg(  # Local obstacle penalty when the nearest obstacle is near and in front.
     func=obstacle_avoidance,
     weight=-1.5,
     params={
-      "command_name": "adversary",
-      "ball_vel_command_name": "ball_vel",
-      "detection_range": 2.0,
-      "collision_near_distance": 0.5,
-      "collision_far_distance": 1.5,
-      "direction_sharpness": 4.0,
-      "collision_weight": 0.2,
-      "direction_weight": 1.0,
-      "min_cmd_speed": 0.05,
-      "cmd_speed_ref": 1.0,
-      "ball_engagement_radius": 0.5,
+      "command_name": "adversary",  # Obstacle command term providing obstacle positions/velocities.
+      "ball_vel_command_name": "ball_vel",  # Ball command used for the kick-direction penalty.
+      "collision_detection_range": 1.2,  # Body-obstacle penalty only inside this robot-obstacle distance.
+      "direction_detection_range": 2.0,  # Kick-direction penalty only inside this robot-obstacle distance.
+      "collision_near_distance": 0.5,  # Maximum collision penalty at or below this distance.
+      "collision_far_distance": 1.2,  # Collision penalty fades to zero at or above this distance.
+      "direction_sharpness": 4.0,  # Larger -> stronger penalty for commanding the ball toward the obstacle.
+      "collision_weight": 0.35,  # Relative weight of body-obstacle proximity.
+      "direction_weight": 1.0,  # Relative weight of "do not kick toward obstacle".
     },
   ),
-  "obstacle_progress": RewardTermCfg(
-    func=obstacle_danger_reduction,
-    weight=4.0,
-    params={
-      "command_name": "adversary",
-      "ball_vel_command_name": "ball_vel",
-      "ball_far_threshold": 1.0,
-    },
-  ),
-  # "ball_protection": RewardTermCfg(
-  #   func=ball_protection_gated,
-  #   weight=1.0,
-  #   params={
-  #     "command_name": "adversary",
-  #     "ball_vel_command_name": "ball_vel",
-  #     "activation_radius": 3.0,
-  #   },
-  # ),
   # ------------------------------------------------------------------ #
   # Locomotion regularization                                            #
   # ------------------------------------------------------------------ #

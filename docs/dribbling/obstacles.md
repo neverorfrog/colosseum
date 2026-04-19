@@ -526,7 +526,7 @@ The active obstacle penalty is `obstacle_avoidance(...)`.
 
 It uses the nearest obstacle and applies a penalty only when the obstacle is:
 
-- within `detection_range`
+- within the relevant collision or direction detection range
 - in front of the robot (`body-frame x > 0`)
 
 So the obstacle must be both:
@@ -569,8 +569,6 @@ Then:
 ```python
 direction_term = exp(direction_sharpness * toward_obstacle) - 1
 direction_term /= exp(direction_sharpness) - 1
-direction_term *= 1[cmd_speed > min_cmd_speed]
-direction_term *= clamp(cmd_speed / cmd_speed_ref, 0, 1)
 ```
 
 Properties:
@@ -578,31 +576,22 @@ Properties:
 - range `[0, 1]`
 - near 0 if the commanded ball direction is not toward the obstacle
 - near 1 if the command points directly at the obstacle
-- additionally scaled by commanded ball speed
-- low-speed commands into the obstacle are penalized less than high-speed ones
-
-This speed scaling is important in practice:
-
-- without it, the obstacle direction penalty was almost independent of the
-  requested ball speed
-- that could create a stall point where “go forward” and “avoid obstacle”
-  approximately balanced each other
-- at higher requested speeds, the main ball-tracking rewards could then
-  overpower obstacle avoidance and push the robot directly into the obstacle
-
-The `cmd_speed_ref` parameter controls when the speed scaling saturates:
-
-- if `cmd_speed = cmd_speed_ref`, the scaling factor is `1.0`
-- if `cmd_speed < cmd_speed_ref`, the scaling factor is smaller than `1.0`
-- if `cmd_speed > cmd_speed_ref`, the factor is clipped at `1.0`
+- only active when the nearest obstacle is already near and in front of the robot
 
 ### Final Penalty
 
 ```python
-penalty = visible * (
+penalty = obstacle_near * (
     collision_weight * collision_term +
     direction_weight * direction_term
 )
+```
+
+where:
+
+```python
+collision_near = 1[min_dist <= collision_detection_range and obs_x_body > 0]
+direction_near = 1[min_dist <= direction_detection_range and obs_x_body > 0]
 ```
 
 Current defaults give a maximum of:
@@ -611,9 +600,9 @@ Current defaults give a maximum of:
 collision_weight + direction_weight = 0.2 + 1.0 = 1.2
 ```
 
-With reward weight `-1.0` in
+With reward weight `-1.5` in
 [reward_cfg.py](/home/valeriospagnoli/SPQR/colosseum/src/colosseum/tasks/dribbling/config/t1_23dof/reward_cfg.py:87),
-the worst-case obstacle contribution is approximately `-1.2`.
+the worst-case obstacle contribution is approximately `-1.8`.
 
 This was intentionally normalized so the obstacle term stays comparable to the
 other task rewards.
@@ -622,134 +611,33 @@ Current default obstacle-reward parameters are:
 
 - `collision_near_distance = 0.5`
 - `collision_far_distance = 1.5`
+- `collision_detection_range = 1.5`
+- `direction_detection_range = 2.0`
 - `direction_sharpness = 4.0`
 - `collision_weight = 0.2`
 - `direction_weight = 1.0`
-- `min_cmd_speed = 0.05`
-- `cmd_speed_ref = 1.0`
 
-## Context Gates
+## Active Minimal Reward Setup
 
-Several obstacle-aware shaping terms use `_compute_gates(...)` from
-[rewards.py](/home/valeriospagnoli/SPQR/colosseum/src/colosseum/tasks/dribbling/mdp/rewards.py:635).
+The active task reward setup is intentionally simple:
 
-It returns two smooth scalars in `[0, 1]`:
+- `ball_vel_tracking`
+- `ball_vel_norm`
+- `ball_vel_angle`
+- `robot_ball_distance`
+- `robot_ball_approach_vel`
+- `robot_ball_yaw`
+- `obstacle_avoidance`
 
-- `danger`
-- `ball_far`
+In this setup:
 
-### `danger`
+- the robot always keeps the standard no-obstacle ball-carrying incentives
+- obstacles affect behavior only through the nearest-obstacle local penalty
+- there is no active danger-based tightening, progress reward, or protection reward
 
-`danger` is a soft score for whether the nearest obstacle lies inside a tube
-that extends forward from the ball along the commanded ball direction.
-
-The computation is:
-
-- `cmd_dir`: unit direction of the commanded ball velocity
-- `ball_to_obs`: vector from ball to nearest obstacle
-- `proj`: projection of `ball_to_obs` onto `cmd_dir`
-- `d_perp`: perpendicular distance from the obstacle to the commanded path
-
-Then:
-
-```python
-r = r_base + k_speed * obstacle_speed
-inside_tube = sigmoid(gate_sharpness * (r - d_perp))
-in_front = sigmoid(gate_sharpness * proj)
-in_range = sigmoid(gate_sharpness * (lookahead - proj))
-danger = inside_tube * in_front * in_range
-```
-
-Interpretation:
-
-- high `danger` means the nearest obstacle is near the intended ball path
-- low `danger` means it is behind the ball, too far laterally, or too far ahead
-
-### `ball_far`
-
-`ball_far` is a soft gate that increases when the ball is far from the robot:
-
-```python
-ball_far = sigmoid(gate_sharpness * (robot_ball_distance - ball_far_threshold))
-```
-
-Interpretation:
-
-- low `ball_far` means the robot is already near the ball
-- high `ball_far` means the robot should receive stronger recovery pressure
-
-## Active Gated Rewards
-
-The current reward set uses the obstacle context gates in two important ways.
-
-### `robot_ball_distance_gated`
-
-This term is still active and rewards staying near the ball:
-
-```python
-reward = exp(-effective_sharpness * robot_ball_distance^2)
-```
-
-where:
-
-```python
-effective_sharpness = sharpness_base * (1 - ball_far_loosening * ball_far)
-```
-
-Purpose:
-
-- keep the robot near the ball in normal dribbling
-- loosen the penalty somewhat when the ball is already far away
-
-Important note:
-
-- this term is now intentionally obstacle-neutral
-- obstacle danger should affect how the robot resolves the dribble, not force a
-  tighter attachment that can make hovering near the ball attractive
-
-### `robot_ball_approach_vel_gated`
-
-This term is also active and rewards moving toward the ball when the ball is
-far:
-
-```python
-reward = ball_far * robot_ball_approach_vel(...)
-```
-
-This is an intentional design choice.
-
-The recovery signal toward the ball must remain active even when an obstacle is
-dangerous. Earlier versions also multiplied by `(1 - danger)`, but that made
-the robot lose its “go back to the ball” incentive under obstacle pressure and
-encouraged orbiting / hovering failure modes.
-
-### `obstacle_progress`
-
-This term is active and rewards making the obstacle situation safer over time:
-
-```python
-reward = clamp(prev_danger - current_danger, min=0)
-```
-
-Purpose:
-
-- give explicit credit for reducing obstacle threat
-- break the local optimum of freezing near the ball until the command changes
-- reward actual progress around the obstacle rather than just safe stalling
-
-Implementation note:
-
-- the reward stores the previous danger value inside the obstacle command term
-- on episode resets, the stored danger is aligned to the current value so reset
-  transitions do not create spurious reward spikes
-
-### `ball_protection`
-
-`ball_protection` is currently disabled in the main reward config.
-
-That is intentional. While it can be useful in some setups, it also makes it
-easier for the robot to learn “shield and hover” behaviors instead of decisive
-dribbling around the obstacle.
+This is meant to preserve the baseline dribbling behavior and only relax the
+desired motion locally when the closest obstacle is within `2.0m` and in front
+of the robot.
 
 ## Frame Conventions
 
@@ -812,9 +700,9 @@ The current obstacle system is designed around these principles:
 - learning sees only the nearest obstacle
 - early curriculum stages are simple and gait-friendly
 - later stages create ball-centric pressure, not just robot-body pressure
-- obstacle reward is bounded and aligned with the ball-control objective
-- obstacle danger is allowed to change dribbling behavior, but it should not
-  remove the robot's incentive to recover the ball
+- obstacle reward is bounded and only active when the nearest obstacle is near
+  and in front of the robot
+- the standard ball-carrying rewards remain active even in obstacle scenes
 - obstacle stages can now be pinned from the CLI for debugging and checkpointing
 
 In short:
