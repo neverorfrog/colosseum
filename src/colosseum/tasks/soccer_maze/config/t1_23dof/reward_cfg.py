@@ -24,8 +24,6 @@ from colosseum.tasks.dribbling.mdp.rewards import (
   ball_vel_norm,
   feet_distance_penalty,
   pose_deviation,
-  robot_ball_approach_vel,
-  robot_ball_distance,
   stance_phase_schedule,
   swing_phase_schedule,
 )
@@ -33,45 +31,68 @@ from colosseum.tasks.maze.mdp.rewards import wall_collisions
 from colosseum.tasks.soccer_maze.mdp.rewards import (
   ball_vel_angle_body,
   ball_vel_tracking_body,
+  robot_ang_vel_tracking,
+  robot_ball_approach_vel_push,
+  robot_ball_distance_push,
   robot_ball_yaw_body,
+  robot_heading_alignment,
+  robot_lin_vel_tracking,
 )
 
 rewards = {
   # ------------------------------------------------------------------ #
-  # Task: ball velocity tracking                                         #
+  # Task: ball velocity tracking                                       #
   # ------------------------------------------------------------------ #
   "ball_vel_tracking": RewardTermCfg(
     func=ball_vel_tracking_body,
     weight=2.0,
-    params={"command_name": "ball_vel", "sharpness": 1.0},
+    params={"command_name": "sokoban", "sharpness": 1.0},
   ),
   "ball_vel_norm": RewardTermCfg(
     func=ball_vel_norm,
     weight=4.0,
-    params={"command_name": "ball_vel", "sharpness": 1.0},
+    params={"command_name": "sokoban", "sharpness": 1.0},
   ),
   "ball_vel_angle": RewardTermCfg(
     func=ball_vel_angle_body,
     weight=4.0,
-    params={"command_name": "ball_vel"},
+    params={"command_name": "sokoban"},
+  ),
+  # ------------------------------------------------------------------ #
+  # Task: robot velocity tracking (MOVE actions)                        #
+  # ------------------------------------------------------------------ #
+  "robot_lin_vel": RewardTermCfg(
+    func=robot_lin_vel_tracking,
+    weight=2.0,
+    params={"command_name": "sokoban", "std": math.sqrt(0.25)},
+  ),
+  "robot_ang_vel": RewardTermCfg(
+    func=robot_ang_vel_tracking,
+    weight=1.5,
+    params={"command_name": "sokoban", "std": math.sqrt(0.25)},
+  ),
+  "robot_heading": RewardTermCfg(
+    func=robot_heading_alignment,
+    weight=1.5,
+    params={"command_name": "sokoban"},
   ),
   # ------------------------------------------------------------------ #
   # Task: robot–ball relationship                                        #
   # ------------------------------------------------------------------ #
   "robot_ball_distance": RewardTermCfg(
-    func=robot_ball_distance,
+    func=robot_ball_distance_push,
     weight=0.3,
-    params={"sharpness": 0.5},
+    params={"command_name": "sokoban", "sharpness": 0.5},
   ),
   "robot_ball_yaw": RewardTermCfg(
     func=robot_ball_yaw_body,
     weight=1.0,
-    params={"command_name": "ball_vel"},
+    params={"command_name": "sokoban"},
   ),
   "robot_ball_approach_vel": RewardTermCfg(
-    func=robot_ball_approach_vel,
-    weight=0.5,
-    params={"command_name": "ball_vel"},
+    func=robot_ball_approach_vel_push,
+    weight=2.0,
+    params={"command_name": "sokoban"},
   ),
   # ------------------------------------------------------------------ #
   # Maze: wall collision penalty                                         #
@@ -114,7 +135,7 @@ rewards = {
       "sensor_name": "feet_ground_contact",
       "height_sensor_name": "foot_height_scan",
       "target_height": 0.1,
-      "command_name": "ball_vel",
+      "command_name": "sokoban",
       "command_threshold": 0.05,
     },
   ),
@@ -123,7 +144,7 @@ rewards = {
     weight=-1e-5,
     params={
       "sensor_name": "feet_ground_contact",
-      "command_name": "ball_vel",
+      "command_name": "sokoban",
       "command_threshold": 0.05,
     },
   ),

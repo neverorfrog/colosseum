@@ -30,6 +30,9 @@ class MazeTerrainEntity(TerrainEntity):
     self.valid_reset_positions_local = torch.tensor(
       self.maze.valid_reset_positions_local, dtype=torch.float32, device=device
     )
+    self.valid_ball_positions_local = torch.tensor(
+      self.maze.valid_ball_positions_local, dtype=torch.float32, device=device
+    )
     self.valid_goal_positions_local = torch.tensor(
       self.maze.valid_goal_positions_local, dtype=torch.float32, device=device
     )

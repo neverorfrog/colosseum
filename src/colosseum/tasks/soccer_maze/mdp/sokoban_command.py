@@ -57,6 +57,28 @@ class SokobanCommand(CommandTerm):
   def command(self) -> torch.Tensor:
     return self.command_buffer
 
+  # ── Typed sub-command accessors (no raw slicing outside this class) ──────────
+
+  @property
+  def ball_vel(self) -> torch.Tensor:
+    """[N, 2] ball world-frame velocity command; zero during MOVE."""
+    return self.command_buffer[:, 0:2]
+
+  @property
+  def robot_lin_vel(self) -> torch.Tensor:
+    """[N, 2] robot body-frame linear velocity command; zero during PUSH."""
+    return self.command_buffer[:, 3:5]
+
+  @property
+  def robot_omega_z(self) -> torch.Tensor:
+    """[N] robot body-frame yaw-rate command; zero during PUSH."""
+    return self.command_buffer[:, 5]
+
+  @property
+  def is_push(self) -> torch.Tensor:
+    """[N] bool: True when the current plan action is a PUSH."""
+    return self.command_buffer[:, 6].bool()
+
   def _resample_command(self, env_ids: torch.Tensor) -> None:
     """Zero the buffer for reset envs; the abstraction handles plan re-init."""
     self.command_buffer[env_ids] = 0.0
@@ -197,7 +219,7 @@ class SokobanCommandCfg(CommandTermCfg):
   robot_speed: float = 1.0
 
   # Heading correction (same params as AbstractionVelocityCommand)
-  body_forward_axis: tuple[float, float, float] = (0.0, 1.0, 0.0)
+  body_forward_axis: tuple[float, float, float] = (1.0, 0.0, 0.0)
   min_velocity: float = 0.1
   max_velocity: float = 2.0
   min_alignment_scale: float = 0.3

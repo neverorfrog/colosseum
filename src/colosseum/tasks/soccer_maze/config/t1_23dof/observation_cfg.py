@@ -31,12 +31,13 @@ from colosseum.tasks.soccer_maze.mdp.observations import (
   ball_vel_command_body,
   ball_vel_xy_body,
   obstacle_map,
+  robot_vel_command,
 )
 
 _ASSET_CFG = SceneEntityCfg("robot", site_names="root_site", joint_names=".*")
 
 actor_terms = {
-  # Maze spatial context
+  # # Maze spatial context
   "agent_pos_local": ObservationTermCfg(
     func=agent_pos_local,
     params={"asset_cfg": _ASSET_CFG},
@@ -66,22 +67,18 @@ actor_terms = {
     noise=Unoise(n_min=-1.5, n_max=1.5),
   ),
   "actions": ObservationTermCfg(func=last_action),
-  # Dribbling task context
   "gait_phase": ObservationTermCfg(
     func=generated_commands,
     params={"command_name": "gait_phase"},
   ),
-  # Command in body frame: consistent with ball_pos (also body frame).
-  # The world-frame command from AbstractionVelocityCommand cannot be interpreted
-  # without heading knowledge, which the actor lacks (projected_gravity gives
-  # roll/pitch but not yaw).
-  "command": ObservationTermCfg(
+  # Dribbling task context
+  "ball_vel_cmd": ObservationTermCfg(
     func=ball_vel_command_body,
-    params={"command_name": "ball_vel"},
+    params={"command_name": "sokoban"},
   ),
-  "foot_ball_contact_force": ObservationTermCfg(
-    func=foot_ball_contact_force,
-    params={"sensor_name": "foot_ball_contact"},
+  "robot_vel_cmd": ObservationTermCfg(
+    func=robot_vel_command,
+    params={"command_name": "sokoban"},
   ),
   # Ball state in body frame: consistent with command above.
   "ball_pos": ObservationTermCfg(func=ball_position),
@@ -93,7 +90,11 @@ critic_terms = {
   # Additional privileged terms
   "obstacle_map": ObservationTermCfg(
     func=obstacle_map,
-    params={"abstraction_name": "grid"},
+    params={"abstraction_name": "sokoban"},
+  ),
+  "foot_ball_contact_force": ObservationTermCfg(
+    func=foot_ball_contact_force,
+    params={"sensor_name": "foot_ball_contact"},
   ),
   "base_height": ObservationTermCfg(func=base_height),
   "ball_mass": ObservationTermCfg(

@@ -25,18 +25,11 @@ def reset_robot_and_ball_sokoban(
   yaw_range: tuple[float, float] = (-math.pi, math.pi),
   jitter_fraction: float = 0.3,
 ) -> None:
-  """Reset robot and ball to independent, jittered positions within valid maze cells.
+  """Reset robot and ball to pre-validated Sokoban reset cells with within-cell jitter.
 
-  Sokoban-aware variant of ``reset_robot_and_ball``.  Each entity is placed at
-  the centre of an independently sampled valid maze cell, plus a small continuous
-  jitter so the RL agent sees diverse continuous states that all share the same
-  abstract (cell-level) configuration.
-
-  The jitter keeps both entities strictly within their sampled cell:
-      delta ∈ [-jitter_fraction × cell_size/2, +jitter_fraction × cell_size/2]
-
-  Robot and ball are guaranteed to be in different cells (ball index is shifted
-  by one if the same cell is drawn).
+  Robot is sampled from 'r' cells; ball from 'b' cells.  Both sets must be
+  defined in the maze map and must form a jointly Sokoban-solvable configuration
+  (verified manually when designing the map).
 
   Args:
       env:             Environment instance.
@@ -59,29 +52,31 @@ def reset_robot_and_ball_sokoban(
   if not isinstance(terrain, MazeTerrainEntity):
     raise ValueError(f"Expected MazeTerrainEntity, got {type(terrain)}")
 
-  # All free (non-wall) cells — superset of 'r' cells, sufficient for robot and ball.
-  valid_local = terrain.valid_free_positions_local  # (num_valid, 2) cell centres
-  num_valid = valid_local.shape[0]
-  if num_valid < 2:
-    raise ValueError(
-      "Maze has fewer than 2 free cells — cannot place robot and ball in distinct cells."
-    )
+  valid_robot_local = terrain.valid_reset_positions_local  # 'r' cells
+  valid_ball_local = terrain.valid_ball_positions_local    # 'b' cells
+
+  # Fall back to all free cells if dedicated 'b' cells are not defined.
+  if valid_ball_local.shape[0] == 0:
+    valid_ball_local = terrain.valid_free_positions_local
+
+  num_robot = valid_robot_local.shape[0]
+  num_ball  = valid_ball_local.shape[0]
+  if num_robot == 0 or num_ball == 0:
+    raise ValueError("Maze has no 'r' or 'b' reset cells — add them to the maze map.")
 
   n = len(env_ids)
   half_jitter = jitter_fraction * (terrain.maze.cell_size / 2)
 
   # ── Robot cell ──────────────────────────────────────────────────────────────
-  robot_idx = torch.randint(0, num_valid, (n,), device=env.device)
-  robot_local = valid_local[robot_idx]  # (n, 2)
+  robot_idx = torch.randint(0, num_robot, (n,), device=env.device)
+  robot_local = valid_robot_local[robot_idx]  # (n, 2)
 
   robot_jitter = torch.empty((n, 2), device=env.device).uniform_(-half_jitter, half_jitter)
   robot_local = robot_local + robot_jitter
 
-  # ── Ball cell (different from robot cell) ───────────────────────────────────
-  ball_idx = torch.randint(0, num_valid, (n,), device=env.device)
-  same = ball_idx == robot_idx
-  ball_idx[same] = (robot_idx[same] + 1) % num_valid
-  ball_local = valid_local[ball_idx]  # (n, 2)
+  # ── Ball cell ───────────────────────────────────────────────────────────────
+  ball_idx = torch.randint(0, num_ball, (n,), device=env.device)
+  ball_local = valid_ball_local[ball_idx]  # (n, 2)
 
   ball_jitter = torch.empty((n, 2), device=env.device).uniform_(-half_jitter, half_jitter)
   ball_local = ball_local + ball_jitter

@@ -15,8 +15,7 @@ from mjlab.viewer import ViewerConfig
 from colosseum.assets.ball.ball_spec import get_ball_cfg
 from colosseum.config.types.task import TaskConfig, register_task
 from colosseum.envs.abstraction_based_env import AbstractionBasedEnvCfg
-from colosseum.managers.abstraction_manager import AbstractionTermCfg
-from colosseum.mdp.abstraction.maze.grid_abstraction import GridAbstractionTermCfg
+from colosseum.mdp.abstraction.maze.sokoban_grid_abstraction import SokobanGridAbstractionTermCfg
 from colosseum.robots.t1_23dof.constants import BASE_BODY_NAME, get_robot_cfg
 from colosseum.robots.t1_23dof.sensors import (
   FEET_GROUND_CONTACT_SENSOR,
@@ -31,7 +30,6 @@ from colosseum.robots.t1_23dof.sensors import (
 from colosseum.tasks.maze.maps import MAPS
 from colosseum.tasks.maze.maze import Maze, MazeCfg
 
-# from colosseum.mdp.abstraction.maze.sokoban_grid_abstraction import SokobanGridAbstractionTermCfg
 from colosseum.tasks.maze.terrain import MazeTerrainEntityCfg
 
 from .algo_cfg import t1_soccer_maze_ppo_cfg
@@ -93,23 +91,17 @@ def abstractions_cfg(
   maze: Maze,
   resolution_factor: int = 3,
   wall_center_weight: float = 2.0,
-) -> dict[str, AbstractionTermCfg]:
+) -> dict[str, SokobanGridAbstractionTermCfg]:
   grid_frame = maze.build_upsampled_grid_frame(resolution_factor)
   obstacle_mask = maze.build_obstacle_mask(resolution_factor)
   return {
-    "grid": GridAbstractionTermCfg(
+    "sokoban": SokobanGridAbstractionTermCfg(
       grid_frame=grid_frame,
       map=obstacle_mask,
-      direction_method="harmonic",
       wall_center_weight=wall_center_weight,
+      robot_entity="robot",
+      ball_entity="ball",
     ),
-    # "sokoban": SokobanGridAbstractionTermCfg(
-    #   grid_frame=grid_frame,
-    #   map=obstacle_mask,
-    #   wall_center_weight=wall_center_weight,
-    #   robot_entity="robot",
-    #   ball_entity="ball",
-    # ),
   }
 
 

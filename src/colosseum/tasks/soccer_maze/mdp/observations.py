@@ -9,7 +9,7 @@ from mjlab.utils.lab_api.math import quat_apply
 
 from colosseum.envs.abstraction_based_env import AbstractionBasedEnv
 from colosseum.mdp.abstraction.maze.grid_abstraction import GridAbstraction
-# from colosseum.mdp.abstraction.maze.sokoban_grid_abstraction import SokobanGridAbstraction
+from colosseum.tasks.soccer_maze.mdp.sokoban_command import SokobanCommand
 
 if TYPE_CHECKING:
   from mjlab.envs import ManagerBasedRlEnv
@@ -46,6 +46,19 @@ def obstacle_map(env: ManagerBasedRlEnv, abstraction_name: str) -> torch.Tensor:
   assert isinstance(abstraction, GridAbstraction)
   flat = abstraction.map.float().flatten()  # [rows*cols]
   return flat.unsqueeze(0).expand(env.num_envs, -1)  # [N, rows*cols]
+
+
+def robot_vel_command(env: ManagerBasedRlEnv, command_name: str) -> torch.Tensor:
+  """Robot velocity command in body frame. Shape [N, 3]: [vx_b, vy_b, omega_z].
+
+  Same format as AbstractionVelocityCommand so the actor gets both the linear
+  direction and the heading correction to produce.  Non-zero during MOVE only;
+  zero during PUSH (robot should stand still while pushing the ball).
+  """
+  sokoban: SokobanCommand = env.command_manager.get_term(command_name)  # type: ignore[assignment]
+  return torch.cat(
+    [sokoban.robot_lin_vel, sokoban.robot_omega_z.unsqueeze(1)], dim=-1
+  )  # [N, 3]
 
 
 def ball_vel_xy_body(env: ManagerBasedRlEnv) -> torch.Tensor:

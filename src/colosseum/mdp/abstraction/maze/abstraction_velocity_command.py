@@ -200,7 +200,7 @@ class AbstractionVelocityCommandCfg(CommandTermCfg):
   use_root_pos: bool = False
 
   # --- Heading-constrained mode only (omnidirectional=False) ---
-  body_forward_axis: tuple[float, float, float] = (0.0, 1.0, 0.0)
+  body_forward_axis: tuple[float, float, float] = (1.0, 0.0, 0.0)
   min_velocity: float = 0.1
   max_velocity: float = 2.0
   min_alignment_scale: float = 0.3

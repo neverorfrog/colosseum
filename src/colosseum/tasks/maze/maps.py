@@ -4,15 +4,17 @@ Cell encoding:
   1 / 'W' / 'w': Wall
   0:             Empty cell
   'r' / 'R':     Valid robot reset position
+  'b' / 'B':     Valid ball reset position
   'g' / 'G':     Valid goal position
 """
 
 UMAZE = [
   [1, 1, 1, 1, 1],
-  [1, 0, "g", 0, 1],
-  [1, 1, 1, 0, 1],
-  [1, "r", 0, 0, 1],
   [1, 0, 0, 0, 1],
+  [1, "g", 0, 0, 1],
+  [1, 1, 0, 0, 1],
+  [1, 0, "b", 0, 1],
+  [1, "r", 0, 0, 1],
   [1, 1, 1, 1, 1],
 ]
 
