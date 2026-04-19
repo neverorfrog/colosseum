@@ -61,7 +61,7 @@ rewards = {
   ),
   "robot_ball_distance": RewardTermCfg(
     func=robot_ball_distance_gated,
-    weight=0.3,
+    weight=1.0,
     params={
       "command_name": "adversary",
       "ball_vel_command_name": "ball_vel",
@@ -77,7 +77,7 @@ rewards = {
   ),
   "robot_ball_approach_vel": RewardTermCfg(
     func=robot_ball_approach_vel_gated,
-    weight=0.5,
+    weight=1.0,
     params={
       "command_name": "adversary",
       "ball_vel_command_name": "ball_vel",
@@ -86,11 +86,11 @@ rewards = {
   ),
   "obstacle_avoidance": RewardTermCfg(
     func=obstacle_avoidance,
-    weight=-1.0,
+    weight=-1.5,
     params={
       "command_name": "adversary",
       "ball_vel_command_name": "ball_vel",
-      "detection_range": 3.0,
+      "detection_range": 2.0,
       "collision_near_distance": 0.5,
       "collision_far_distance": 1.5,
       "direction_sharpness": 4.0,
@@ -98,12 +98,12 @@ rewards = {
       "direction_weight": 1.0,
       "min_cmd_speed": 0.05,
       "cmd_speed_ref": 1.0,
-      "ball_engagement_radius": 1.0,
+      "ball_engagement_radius": 0.5,
     },
   ),
   "obstacle_progress": RewardTermCfg(
     func=obstacle_danger_reduction,
-    weight=2.0,
+    weight=4.0,
     params={
       "command_name": "adversary",
       "ball_vel_command_name": "ball_vel",
