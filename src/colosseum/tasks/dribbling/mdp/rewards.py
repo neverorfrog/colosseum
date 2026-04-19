@@ -503,9 +503,10 @@ def obstacle_avoidance(
   command_name: str = "adversary",
   ball_vel_command_name: str = "ball_vel",
   detection_range: float = 3.0,
-  collision_sharpness: float = 2.0,
+  collision_near_distance: float = 0.5,
+  collision_far_distance: float = 1.5,
   direction_sharpness: float = 4.0,
-  collision_weight: float = 0.4,
+  collision_weight: float = 0.2,
   direction_weight: float = 1.0,
   min_cmd_speed: float = 0.05,
   cmd_speed_ref: float = 1.0,
@@ -518,13 +519,18 @@ def obstacle_avoidance(
     - in front of the robot in body frame (local x > 0).
 
   The penalty is the sum of:
-    1. collision term:   exp(-collision_sharpness * ||robot - obstacle||^2)
+    1. collision term:   clipped quadratic on robot-obstacle distance
     2. direction term:   exp(direction_sharpness * max(0, cos(cmd, ball->obs))) - 1
 
-  The first discourages direct collision with the obstacle. The second
-  discourages commanding ball motion toward the obstacle, is weighted more
-  heavily by default, and scales with the requested ball speed so fast
-  commands into the obstacle are penalized more strongly than slow ones.
+  The first discourages direct collision with the obstacle:
+    - 0.0 when distance >= collision_far_distance
+    - 1.0 when distance <= collision_near_distance
+    - quadratic interpolation in between
+
+  The second discourages commanding ball motion toward the obstacle, is
+  weighted more heavily by default, and scales with the requested ball speed
+  so fast commands into the obstacle are penalized more strongly than slow
+  ones.
   The full obstacle penalty is also down-weighted when the robot is far from
   the ball, so obstacle shaping mainly acts during actual dribbling
   interactions instead of rewarding the robot for abandoning the ball.
@@ -538,7 +544,11 @@ def obstacle_avoidance(
 
   visible = (min_dist < detection_range) & (nearest_obs_b[:, 0] > 0.0)
 
-  collision_term = torch.exp(-collision_sharpness * min_dist.pow(2))
+  collision_span = max(collision_far_distance - collision_near_distance, 1e-6)
+  collision_progress = (
+    (collision_far_distance - min_dist) / collision_span
+  ).clamp(min=0.0, max=1.0)
+  collision_term = collision_progress.pow(2)
 
   ball_xy = env.scene["ball"].data.root_link_pos_w[:, :2]
   robot_xy = env.scene["robot"].data.root_link_pos_w[:, :2]
@@ -683,9 +693,10 @@ def obstacle_avoidance_gated(
   k_speed: float = 0.5,
   gate_sharpness: float = 5.0,
   detection_range: float = 3.0,
-  collision_sharpness: float = 2.0,
+  collision_near_distance: float = 0.5,
+  collision_far_distance: float = 1.5,
   direction_sharpness: float = 4.0,
-  collision_weight: float = 0.4,
+  collision_weight: float = 0.2,
   direction_weight: float = 1.0,
   min_cmd_speed: float = 0.05,
   cmd_speed_ref: float = 1.0,
@@ -701,7 +712,8 @@ def obstacle_avoidance_gated(
     command_name=command_name,
     ball_vel_command_name=ball_vel_command_name,
     detection_range=detection_range,
-    collision_sharpness=collision_sharpness,
+    collision_near_distance=collision_near_distance,
+    collision_far_distance=collision_far_distance,
     direction_sharpness=direction_sharpness,
     collision_weight=collision_weight,
     direction_weight=direction_weight,
