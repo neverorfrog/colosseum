@@ -223,14 +223,13 @@ class PPO(BaseAlgorithm):
       learning_time_sum += learning_time
 
       self.global_step += steps_per_iter
+      self._maybe_save_checkpoint(self.global_step)
       self._maybe_evaluate(self.global_step)
 
       # ============================================
       # LOGGING PHASE
       # ============================================
       if iteration % log_interval_iters == 0:
-        # Save checkpoint at log intervals (not every iteration)
-        self._maybe_save_checkpoint(self.global_step)
         # Rolling mean episode return (RSL-RL style)
         if len(self.rewbuffer) > 0:
           losses_buffer["mean_reward"].append(statistics.mean(self.rewbuffer))

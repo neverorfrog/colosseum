@@ -287,6 +287,7 @@ def log_training_step(
     total_steps: int,
     loss_dict: dict[str, float],
     episode_metrics: dict[str, float] | None = None,
+    phase: int | None = None,
     collection_time: float = 0.0,
     learning_time: float = 0.0,
     elapsed_time: float = 0.0,
@@ -307,6 +308,7 @@ def log_training_step(
         total_steps: Total number of training steps
         loss_dict: Dictionary of training losses (averaged over log_interval)
         episode_metrics: Optional episode metrics from environment (already prefixed)
+        phase: Optional training phase identifier (e.g. 1 or 2)
         collection_time: Time spent collecting data since last log (seconds)
         learning_time: Time spent learning since last log (seconds)
         elapsed_time: Total time elapsed since training started (seconds)
@@ -319,6 +321,18 @@ def log_training_step(
     total_time = collection_time + learning_time
     total_samples = num_envs * log_interval * steps_per_log_step
     fps = total_samples / total_time if total_time > 0 else 0
+
+    obstacle_stage_name = None
+    if episode_metrics is not None:
+        obstacle_stage_idx = episode_metrics.get("Curriculum/obstacle_stage_index")
+        if obstacle_stage_idx is not None:
+            obstacle_stage_name = {
+                0: "none",
+                1: "static_blocker",
+                2: "lateral_blocker",
+                3: "ball_attacker",
+                4: "mixed_attackers",
+            }.get(int(round(obstacle_stage_idx)), "unknown")
 
     # Console output - choose between Rich and loguru
     if use_rich:
@@ -363,6 +377,10 @@ def log_training_step(
         if episode_metrics:
             table.add_row("", "")  # Spacer
             table.add_row("Episode Metrics", "", style="bold yellow")
+            if phase is not None:
+                table.add_row("  Training/phase", str(phase))
+            if obstacle_stage_name is not None:
+                table.add_row("  Curriculum/obstacle_stage", obstacle_stage_name)
             for k, v in episode_metrics.items():
                 # Format based on magnitude
                 if abs(v) < 0.01:
@@ -406,6 +424,10 @@ def log_training_step(
         if episode_metrics:
             lines.append("-" * 80)
             lines.append("Episode Metrics:")
+            if phase is not None:
+                lines.append(f"  {'Training/phase':.<30} {phase}")
+            if obstacle_stage_name is not None:
+                lines.append(f"  {'Curriculum/obstacle_stage':.<30} {obstacle_stage_name}")
             for k, v in episode_metrics.items():
                 if abs(v) < 0.01:
                     formatted = f"{v:.6f}"
