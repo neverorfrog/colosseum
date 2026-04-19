@@ -55,7 +55,7 @@ rewards = {
     weight=4.0,
     params={
       "command_name": "ball_vel",  # Which ball-speed command to match.
-      "sharpness": 1.0,  # Larger -> tighter speed matching.
+      "sharpness": 1.5,  # Larger -> tighter speed matching.
     },
   ),
   "ball_vel_angle": RewardTermCfg(  # Align ball-motion direction with the command.
@@ -65,7 +65,7 @@ rewards = {
   ),
   "robot_ball_distance": RewardTermCfg(  # Keep the robot reasonably close to the ball.
     func=robot_ball_distance,
-    weight=2.0,
+    weight=1.5,
     params={"sharpness": 1.0},  # Larger -> reward drops faster as robot-ball distance grows.
   ),
   "robot_ball_yaw": RewardTermCfg(  # Keep the ball in front of the robot along the command.
