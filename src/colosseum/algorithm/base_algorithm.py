@@ -268,6 +268,7 @@ class BaseAlgorithm(ABC):
 
     # Prepare episode metrics for display
     episode_metrics_for_display = None
+    curriculum_step, obstacle_stage_progress_pct = self._get_curriculum_progress_info()
     if self.latest_episode_metrics is not None:
       episode_metrics_for_display = self.latest_episode_metrics.copy()
 
@@ -329,6 +330,8 @@ class BaseAlgorithm(ABC):
       loss_dict=avg_losses,
       episode_metrics=episode_metrics_for_display,
       phase=self._metadata.get("phase"),
+      curriculum_step=curriculum_step,
+      obstacle_stage_progress_pct=obstacle_stage_progress_pct,
       collection_time=collection_time,
       learning_time=learning_time,
       elapsed_time=elapsed_time,
@@ -395,8 +398,12 @@ class BaseAlgorithm(ABC):
     ckpt_dir = self._checkpoint_dir
     ckpt_dir.mkdir(parents=True, exist_ok=True)
 
-    # File name includes zero-padded step count
-    ckpt_path = ckpt_dir / f"model_{step:07d}.pt"
+    phase_index = self._get_current_phase_index()
+    ckpt_path = ckpt_dir / self._format_checkpoint_name(
+      step=step,
+      phase_index=phase_index,
+      stage_index=stage_index,
+    )
     try:
       if stage_index is not None:
         self._metadata["current_obstacle_stage_index"] = stage_index
@@ -478,6 +485,60 @@ class BaseAlgorithm(ABC):
 
     return stage_index, stage_name
 
+  def _get_current_phase_index(self) -> int | None:
+    """Return the current training phase when available."""
+    phase = self._metadata.get("phase")
+    if isinstance(phase, (int, float)):
+      return int(phase)
+    return None
+
+  def _format_checkpoint_name(
+    self,
+    step: int,
+    phase_index: int | None,
+    stage_index: int | None,
+  ) -> str:
+    """Build a checkpoint filename with step, phase, and obstacle stage."""
+    parts = [f"model_{step:07d}"]
+    if phase_index is not None:
+      parts.append(f"phase{phase_index}")
+    if stage_index is not None:
+      parts.append(f"stage{stage_index}")
+    return "_".join(parts) + ".pt"
+
+  def _get_curriculum_progress_info(self) -> tuple[int | None, float | None]:
+    """Return current curriculum step and current obstacle-stage completion."""
+    common_step = getattr(self.env.unwrapped, "common_step_counter", None)
+    if common_step is None:
+      return None, None
+
+    curriculum_step = int(common_step)
+    curriculum_cfg = getattr(getattr(self.env, "cfg", None), "curriculum", None)
+    if not isinstance(curriculum_cfg, dict):
+      return curriculum_step, None
+
+    obstacle_term = curriculum_cfg.get("obstacle")
+    obstacle_params = getattr(obstacle_term, "params", None)
+    stages = obstacle_params.get("stages") if isinstance(obstacle_params, dict) else None
+    if not isinstance(stages, list) or not stages:
+      return curriculum_step, None
+
+    stage_index, _ = self._get_current_obstacle_stage_info()
+    if stage_index is None or stage_index < 0 or stage_index >= len(stages):
+      return curriculum_step, None
+
+    stage_start = int(stages[stage_index]["step"])
+    if stage_index + 1 >= len(stages):
+      return curriculum_step, 100.0
+
+    next_stage_start = int(stages[stage_index + 1]["step"])
+    if next_stage_start <= stage_start:
+      return curriculum_step, 100.0
+
+    progress_pct = 100.0 * (curriculum_step - stage_start) / (next_stage_start - stage_start)
+    progress_pct = float(np.clip(progress_pct, 0.0, 100.0))
+    return curriculum_step, progress_pct
+
   def _save_stage_checkpoint(
     self, step: int, stage_index: int, stage_name: str | None
   ) -> None:
@@ -487,7 +548,11 @@ class BaseAlgorithm(ABC):
 
     ckpt_dir = self._checkpoint_dir
     ckpt_dir.mkdir(parents=True, exist_ok=True)
-    ckpt_path = ckpt_dir / f"latest_stage_{stage_index}.pt"
+    phase_index = self._get_current_phase_index()
+    stage_parts = [f"latest_stage_{stage_index}"]
+    if phase_index is not None:
+      stage_parts.append(f"phase{phase_index}")
+    ckpt_path = ckpt_dir / ("_".join(stage_parts) + ".pt")
 
     try:
       self._metadata["current_obstacle_stage_index"] = stage_index

@@ -288,6 +288,8 @@ def log_training_step(
     loss_dict: dict[str, float],
     episode_metrics: dict[str, float] | None = None,
     phase: int | None = None,
+    curriculum_step: int | None = None,
+    obstacle_stage_progress_pct: float | None = None,
     collection_time: float = 0.0,
     learning_time: float = 0.0,
     elapsed_time: float = 0.0,
@@ -309,6 +311,8 @@ def log_training_step(
         loss_dict: Dictionary of training losses (averaged over log_interval)
         episode_metrics: Optional episode metrics from environment (already prefixed)
         phase: Optional training phase identifier (e.g. 1 or 2)
+        curriculum_step: Optional common_step_counter value used by curriculum
+        obstacle_stage_progress_pct: Optional completion percentage of current obstacle stage
         collection_time: Time spent collecting data since last log (seconds)
         learning_time: Time spent learning since last log (seconds)
         elapsed_time: Total time elapsed since training started (seconds)
@@ -370,6 +374,27 @@ def log_training_step(
             elapsed_str = f"{seconds:.1f}s"
         table.add_row("  Elapsed", elapsed_str, style="bold green")
 
+        # Training info
+        if (
+            phase is not None
+            or curriculum_step is not None
+            or obstacle_stage_name is not None
+            or obstacle_stage_progress_pct is not None
+        ):
+            table.add_row("", "")  # Spacer
+            table.add_row("Training Info", "", style="bold yellow")
+            if phase is not None:
+                table.add_row("  Training/phase", str(phase))
+            if curriculum_step is not None:
+                table.add_row("  Curriculum/step", f"{curriculum_step:,}")
+            if obstacle_stage_name is not None:
+                table.add_row("  Curriculum/obstacle_stage", obstacle_stage_name)
+            if obstacle_stage_progress_pct is not None:
+                table.add_row(
+                    "  Curriculum/obstacle_stage_progress",
+                    f"{obstacle_stage_progress_pct:.1f}%",
+                )
+
         # Training losses
         if loss_dict:
             table.add_row("", "")  # Spacer
@@ -381,10 +406,6 @@ def log_training_step(
         if episode_metrics:
             table.add_row("", "")  # Spacer
             table.add_row("Episode Metrics", "", style="bold yellow")
-            if phase is not None:
-                table.add_row("  Training/phase", str(phase))
-            if obstacle_stage_name is not None:
-                table.add_row("  Curriculum/obstacle_stage", obstacle_stage_name)
             for k, v in episode_metrics.items():
                 # Format based on magnitude
                 if abs(v) < 0.01:
@@ -419,6 +440,25 @@ def log_training_step(
             f"Performance: {fps:,.0f} steps/s | Collection: {collection_time:.3f}s | Learning: {learning_time:.3f}s"
         )
 
+        if (
+            phase is not None
+            or curriculum_step is not None
+            or obstacle_stage_name is not None
+            or obstacle_stage_progress_pct is not None
+        ):
+            lines.append("-" * 80)
+            lines.append("Training Info:")
+            if phase is not None:
+                lines.append(f"  {'Training/phase':.<30} {phase}")
+            if curriculum_step is not None:
+                lines.append(f"  {'Curriculum/step':.<30} {curriculum_step:,}")
+            if obstacle_stage_name is not None:
+                lines.append(f"  {'Curriculum/obstacle_stage':.<30} {obstacle_stage_name}")
+            if obstacle_stage_progress_pct is not None:
+                lines.append(
+                    f"  {'Curriculum/obstacle_stage_progress':.<30} {obstacle_stage_progress_pct:.1f}%"
+                )
+
         if loss_dict:
             lines.append("-" * 80)
             lines.append("Training Losses:")
@@ -428,10 +468,6 @@ def log_training_step(
         if episode_metrics:
             lines.append("-" * 80)
             lines.append("Episode Metrics:")
-            if phase is not None:
-                lines.append(f"  {'Training/phase':.<30} {phase}")
-            if obstacle_stage_name is not None:
-                lines.append(f"  {'Curriculum/obstacle_stage':.<30} {obstacle_stage_name}")
             for k, v in episode_metrics.items():
                 if abs(v) < 0.01:
                     formatted = f"{v:.6f}"
