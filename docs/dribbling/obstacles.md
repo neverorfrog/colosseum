@@ -541,14 +541,17 @@ The penalty is the sum of two bounded terms:
 1. collision term
 
 ```python
-collision_term = exp(-collision_sharpness * dist^2)
+progress = clamp((collision_far_distance - dist) / (collision_far_distance - collision_near_distance), 0, 1)
+collision_term = progress^2
 ```
 
 Properties:
 
-- range `(0, 1]`
-- large when obstacle is close to the robot
-- decays smoothly with distance
+- range `[0, 1]`
+- `0` when the obstacle is farther than `collision_far_distance`
+- `1` when the obstacle is at or closer than `collision_near_distance`
+- quadratic shaping in the middle
+- much less aggressive than the previous exponential close-range penalty
 
 2. direction term
 
@@ -605,21 +608,22 @@ penalty = visible * (
 Current defaults give a maximum of:
 
 ```python
-collision_weight + direction_weight = 0.4 + 1.0 = 1.4
+collision_weight + direction_weight = 0.2 + 1.0 = 1.2
 ```
 
 With reward weight `-3.0` in
 [reward_cfg.py](/home/valeriospagnoli/SPQR/colosseum/src/colosseum/tasks/dribbling/config/t1_23dof/reward_cfg.py:87),
-the worst-case obstacle contribution is approximately `-4.2`.
+the worst-case obstacle contribution is approximately `-3.6`.
 
 This was intentionally normalized so the obstacle term stays comparable to the
 other task rewards.
 
 Current default obstacle-reward parameters are:
 
-- `collision_sharpness = 2.0`
+- `collision_near_distance = 0.5`
+- `collision_far_distance = 1.5`
 - `direction_sharpness = 4.0`
-- `collision_weight = 0.4`
+- `collision_weight = 0.2`
 - `direction_weight = 1.0`
 - `min_cmd_speed = 0.05`
 - `cmd_speed_ref = 1.0`
