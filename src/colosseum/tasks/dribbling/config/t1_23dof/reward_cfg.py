@@ -58,32 +58,32 @@ rewards = {
     weight=4.0,
     params={"command_name": "ball_vel"},
   ),
-  # "robot_ball_distance": RewardTermCfg(
-  #   func=robot_ball_distance_gated,
-  #   weight=0.3,
-  #   params={
-  #     "command_name": "adversary",
-  #     "ball_vel_command_name": "ball_vel",
-  #     "sharpness_base": 0.5,
-  #     "sharpness_tight": 2.0,
-  #     "ball_far_loosening": 0.7,
-  #     "ball_far_threshold": 1.0,
-  #   },
-  # ),
+  "robot_ball_distance": RewardTermCfg(
+    func=robot_ball_distance_gated,
+    weight=0.3,
+    params={
+      "command_name": "adversary",
+      "ball_vel_command_name": "ball_vel",
+      "sharpness_base": 0.5,
+      "sharpness_tight": 2.0,
+      "ball_far_loosening": 0.7,
+      "ball_far_threshold": 1.0,
+    },
+  ),
   "robot_ball_yaw": RewardTermCfg(
     func=robot_ball_yaw_body,
     weight=4.0,
     params={"command_name": "ball_vel"},
   ),
-  # "robot_ball_approach_vel": RewardTermCfg(
-  #   func=robot_ball_approach_vel_gated,
-  #   weight=0.5,
-  #   params={
-  #     "command_name": "adversary",
-  #     "ball_vel_command_name": "ball_vel",
-  #     "ball_far_threshold": 1.0,
-  #   },
-  # ),
+  "robot_ball_approach_vel": RewardTermCfg(
+    func=robot_ball_approach_vel_gated,
+    weight=0.5,
+    params={
+      "command_name": "adversary",
+      "ball_vel_command_name": "ball_vel",
+      "ball_far_threshold": 1.0,
+    },
+  ),
   "obstacle_avoidance": RewardTermCfg(
     func=obstacle_avoidance,
     weight=-3.0,
@@ -97,17 +97,18 @@ rewards = {
       "direction_weight": 1.0,
       "min_cmd_speed": 0.05,
       "cmd_speed_ref": 1.0,
+      "ball_engagement_radius": 1.0,
     },
   ),
-  # "ball_protection": RewardTermCfg(
-  #   func=ball_protection_gated,
-  #   weight=1.0,
-  #   params={
-  #     "command_name": "adversary",
-  #     "ball_vel_command_name": "ball_vel",
-  #     "activation_radius": 3.0,
-  #   },
-  # ),
+  "ball_protection": RewardTermCfg(
+    func=ball_protection_gated,
+    weight=1.0,
+    params={
+      "command_name": "adversary",
+      "ball_vel_command_name": "ball_vel",
+      "activation_radius": 3.0,
+    },
+  ),
   # ------------------------------------------------------------------ #
   # Locomotion regularization                                            #
   # ------------------------------------------------------------------ #

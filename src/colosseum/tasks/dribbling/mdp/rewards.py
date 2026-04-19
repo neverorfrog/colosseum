@@ -509,6 +509,7 @@ def obstacle_avoidance(
   direction_weight: float = 1.0,
   min_cmd_speed: float = 0.05,
   cmd_speed_ref: float = 1.0,
+  ball_engagement_radius: float = 1.0,
 ) -> torch.Tensor:
   """Visible-obstacle penalty with collision and kick-direction terms.
 
@@ -524,6 +525,9 @@ def obstacle_avoidance(
   discourages commanding ball motion toward the obstacle, is weighted more
   heavily by default, and scales with the requested ball speed so fast
   commands into the obstacle are penalized more strongly than slow ones.
+  The full obstacle penalty is also down-weighted when the robot is far from
+  the ball, so obstacle shaping mainly acts during actual dribbling
+  interactions instead of rewarding the robot for abandoning the ball.
   """
   term: ObstacleCommand = env.command_manager.get_term(command_name)
   if term.cfg.num_active == 0:
@@ -537,6 +541,7 @@ def obstacle_avoidance(
   collision_term = torch.exp(-collision_sharpness * min_dist.pow(2))
 
   ball_xy = env.scene["ball"].data.root_link_pos_w[:, :2]
+  robot_xy = env.scene["robot"].data.root_link_pos_w[:, :2]
   cmd_xy = env.command_manager.get_command(ball_vel_command_name)[:, :2]
   cmd_speed = cmd_xy.norm(dim=-1)
   cmd_dir = cmd_xy / cmd_speed.unsqueeze(-1).clamp(min=1e-6)
@@ -551,9 +556,11 @@ def obstacle_avoidance(
   direction_term = direction_term * (cmd_speed > min_cmd_speed).float()
   cmd_speed_scale = (cmd_speed / max(cmd_speed_ref, 1e-6)).clamp(min=0.0, max=1.0)
   direction_term = direction_term * cmd_speed_scale
+  ball_dist = (ball_xy - robot_xy).norm(dim=-1)
+  ball_engagement = torch.exp(-((ball_dist / max(ball_engagement_radius, 1e-6)) ** 2))
 
   penalty = collision_weight * collision_term + direction_weight * direction_term
-  return visible.float() * penalty
+  return visible.float() * ball_engagement * penalty
 
 
 def ball_protection(
@@ -682,6 +689,7 @@ def obstacle_avoidance_gated(
   direction_weight: float = 1.0,
   min_cmd_speed: float = 0.05,
   cmd_speed_ref: float = 1.0,
+  ball_engagement_radius: float = 1.0,
 ) -> torch.Tensor:
   """obstacle_avoidance weighted by the danger tube gate."""
   danger, _ = _compute_gates(
@@ -699,6 +707,7 @@ def obstacle_avoidance_gated(
     direction_weight=direction_weight,
     min_cmd_speed=min_cmd_speed,
     cmd_speed_ref=cmd_speed_ref,
+    ball_engagement_radius=ball_engagement_radius,
   )
 
 
