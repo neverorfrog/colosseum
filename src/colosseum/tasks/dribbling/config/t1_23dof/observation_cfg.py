@@ -16,14 +16,18 @@ from mjlab.tasks.velocity.mdp.observations import (
 from mjlab.utils.noise import UniformNoiseCfg as Unoise
 
 from colosseum.assets.ball.ball_spec import BALL_FRICTION, BALL_MASS
+from colosseum.tasks.dribbling.obstacle_spec import NUM_OBSTACLES
 from colosseum.tasks.dribbling.mdp.observations import (
   ball_friction,
   ball_mass,
   ball_position,
+  ball_vel_command_body,
   ball_velocity,
   ball_velocity_xy,
   base_height,
   foot_ball_contact_force,
+  obstacle_positions_b,
+  obstacle_velocities_b,
 )
 
 # ---------------------------------------------------------------------------
@@ -55,12 +59,8 @@ actor_terms = {
     params={"command_name": "gait_phase"},
   ),
   "command": ObservationTermCfg(
-    func=generated_commands,
+    func=ball_vel_command_body,
     params={"command_name": "ball_vel"},
-  ),
-  "foot_ball_contact_force": ObservationTermCfg(
-    func=foot_ball_contact_force,
-    params={"sensor_name": "foot_ball_contact"},
   ),
 }
 
@@ -75,17 +75,40 @@ privileged_ball_terms = {
 }
 
 # ---------------------------------------------------------------------------
-# Critic: actor + privileged ball + remaining GT terms + foot extras.
+# Privileged obstacles: encoder input, num_obstacles*4 D
+# = XY body-frame position (2) + XY body-frame velocity (2) per obstacle.
+# Inactive obstacles are parked far away (not underground), so they appear
+# at large body-frame distances with zero velocity — naturally near-zero danger.
+# ---------------------------------------------------------------------------
+
+privileged_obstacle_terms = {
+  "obstacle_pos": ObservationTermCfg(
+    func=obstacle_positions_b,
+    params={"num_obstacles": NUM_OBSTACLES},
+  ),
+  "obstacle_vel": ObservationTermCfg(
+    func=obstacle_velocities_b,
+    params={"num_obstacles": NUM_OBSTACLES},
+  ),
+}
+
+# ---------------------------------------------------------------------------
+# Critic: actor + privileged ball + privileged obstacles + GT terms + foot extras.
 # Asymmetric actor-critic: critic sees everything, actor sees only proprio.
 # ---------------------------------------------------------------------------
 
 critic_terms = {
   **actor_terms,
   **privileged_ball_terms,
+  **privileged_obstacle_terms,
   "base_height": ObservationTermCfg(func=base_height),
   "ball_mass": ObservationTermCfg(
     func=ball_mass,
     params={"ball_mass": BALL_MASS},
+  ),
+  "foot_ball_contact_force": ObservationTermCfg(
+    func=foot_ball_contact_force,
+    params={"sensor_name": "foot_ball_contact"},
   ),
   "ball_friction": ObservationTermCfg(
     func=ball_friction,
@@ -131,6 +154,11 @@ observations = {
   ),
   "privileged_ball": ObservationGroupCfg(
     terms=privileged_ball_terms,
+    concatenate_terms=True,
+    enable_corruption=False,
+  ),
+  "privileged_obstacles": ObservationGroupCfg(
+    terms=privileged_obstacle_terms,
     concatenate_terms=True,
     enable_corruption=False,
   ),

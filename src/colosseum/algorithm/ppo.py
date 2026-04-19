@@ -277,7 +277,10 @@ class PPO(BaseAlgorithm):
 
         # Step environment (action clipping handled by vecenv_wrapper)
         obs_dict, rewards, terminated, truncated, infos = self.env.step(actions)
-        dones = (terminated | truncated).float()
+        if terminated.is_floating_point():
+          dones = torch.clamp(terminated + truncated.float(), 0.0, 1.0)
+        else:
+          dones = (terminated | truncated).float()
 
         # Extract next observations
         next_actor_obs = self.get_actor_obs(obs_dict)
@@ -303,20 +306,21 @@ class PPO(BaseAlgorithm):
             truncated_values = self.value_net(norm_next_critic).squeeze(-1)
             rewards = rewards + self.config.gamma * truncated_values * truncated_mask
         self.episode_length_buf += 1
-        done_ids = dones.nonzero(as_tuple=False).squeeze(-1)
-        if len(done_ids) > 0:
-          self.rewbuffer.extend(self.cur_reward_sum[done_ids].cpu().numpy().tolist())
-          self.cur_reward_sum[done_ids] = 0.0
+        episode_done_ids = (dones >= 1.0).nonzero(as_tuple=False).squeeze(-1)
+        if len(episode_done_ids) > 0:
+          self.rewbuffer.extend(self.cur_reward_sum[episode_done_ids].cpu().numpy().tolist())
+          self.cur_reward_sum[episode_done_ids] = 0.0
           self.episode_lengths.extend(
-            self.episode_length_buf[done_ids].cpu().numpy().tolist()
+            self.episode_length_buf[episode_done_ids].cpu().numpy().tolist()
           )
-          self.episode_length_buf[done_ids] = 0
+          self.episode_length_buf[episode_done_ids] = 0
 
         # Update episode tracking
-        self.update_episode_counts(terminated, truncated)
+        hard_terminated = terminated >= 1.0 if terminated.is_floating_point() else terminated
+        self.update_episode_counts(hard_terminated, truncated)
 
         # Only update episode metrics when episodes actually ended
-        if "log" in infos and dones.any():
+        if "log" in infos and (dones >= 1.0).any():
           self.latest_episode_metrics = extract_episode_metrics(infos["log"])
 
         # Store RAW observations in buffer (RSL-RL pattern)
@@ -405,7 +409,7 @@ class PPO(BaseAlgorithm):
           - 0.5,
           dim=-1,
         )
-        kl_mean = kl.mean().item()
+        kl_mean = self._distributed_mean_scalar(float(kl.mean().item()))
 
       # Adaptive KL LR scheduling (RSL-RL pattern: single LR)
       if self.config.schedule == "adaptive" and self.config.desired_kl is not None:
@@ -448,6 +452,7 @@ class PPO(BaseAlgorithm):
       # --- Gradient step (single optimizer, RSL-RL style) ---
       self.optimizer.zero_grad()
       loss.backward()
+      self._distributed_average_optimizer_grads(self.optimizer)
       torch.nn.utils.clip_grad_norm_(
         self.actor.parameters(), max_norm=self.config.max_grad_norm
       )
@@ -462,6 +467,19 @@ class PPO(BaseAlgorithm):
       total_entropy += entropy.mean().item()
       total_kl += kl_mean
       num_updates += 1
+
+    if self.is_distributed:
+      totals = self._distributed_sum_vector(
+        [
+          total_surrogate_loss,
+          total_value_loss,
+          total_entropy,
+          total_kl,
+          float(num_updates),
+        ]
+      )
+      total_surrogate_loss, total_value_loss, total_entropy, total_kl = totals[:4]
+      num_updates = int(totals[4])
 
     self.rollout_buffer.clear()
 

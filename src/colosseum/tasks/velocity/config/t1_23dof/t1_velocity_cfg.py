@@ -1,11 +1,3 @@
-"""Booster T1 dribbling environment configurations.
-
-The dribbling task builds on the flat velocity task but replaces random
-velocity commands with a BallApproachCommand that points the robot toward
-a soccer ball.  The ball is a free-floating entity added to the scene and
-is respawned at a random position (1–3 m from the robot) on every episode.
-"""
-
 from dataclasses import dataclass, field
 
 from mjlab.envs import ManagerBasedRlEnvCfg
@@ -34,7 +26,12 @@ def scene_cfg(play: bool = False) -> SceneCfg:
   return SceneCfg(
     terrain=TerrainEntityCfg(),
     entities={"robot": get_robot_cfg()},
-    sensors=(FEET_GROUND_CONTACT_SENSOR, FOOT_HEIGHT_SCAN, NONFOOT_GROUND_CONTACT_SENSOR, SELF_COLLISION_SENSOR),
+    sensors=(
+      FEET_GROUND_CONTACT_SENSOR,
+      FOOT_HEIGHT_SCAN,
+      NONFOOT_GROUND_CONTACT_SENSOR,
+      SELF_COLLISION_SENSOR,
+    ),
     num_envs=1,
     extent=10.0,
   )
@@ -70,7 +67,6 @@ def booster_t1_velocity_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
 
   Starts from the flat velocity config and:
   - Adds a soccer ball as a free-floating scene entity.
-  - Replaces the random velocity command with BallApproachCommand.
   - Adds a reset event that respawns the ball at a random position each episode.
   """
   cfg = ManagerBasedRlEnvCfg(

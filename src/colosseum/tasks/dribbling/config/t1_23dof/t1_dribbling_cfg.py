@@ -10,7 +10,7 @@ from mjlab.viewer import ViewerConfig
 
 from colosseum.assets.ball.ball_spec import get_ball_cfg
 from colosseum.config.types.task import TaskConfig, register_task
-from colosseum.envs.rma_based_env import RmaBasedEnvCfg
+from colosseum.envs.constraint_rma_env import ConstraintRmaEnvCfg
 from colosseum.robots.t1_23dof.constants import BASE_BODY_NAME, get_robot_cfg
 from colosseum.robots.t1_23dof.sensors import (
   FEET_GROUND_CONTACT_SENSOR,
@@ -23,17 +23,24 @@ from colosseum.robots.t1_23dof.sensors import (
   NONFOOT_GROUND_CONTACT_SENSOR,
   SELF_COLLISION_SENSOR,
 )
-from colosseum.tasks.dribbling.mdp.rma_terms import BallRmaTermCfg
+from colosseum.tasks.dribbling.mdp.obstacle_commands import ObstacleCommandCfg
+from colosseum.tasks.dribbling.mdp.rma_terms import DribblingRmaTermCfg
+from colosseum.tasks.dribbling.obstacle_spec import NUM_OBSTACLES, get_obstacle_cfg
 from colosseum.tasks.dribbling.viz import DribblingViz
 
 from .algo_cfg import booster_t1_dribbling_ppo_cfg
 from .cact_cfg import actions, commands, curriculum, terminations
+from .constraint_cfg import dribbling_constraints
 from .event_cfg import events
 from .observation_cfg import observations
 from .reward_cfg import rewards
 
 
-def scene_cfg(play: bool = False, use_depth_camera: bool = False) -> SceneCfg:
+def scene_cfg(
+  play: bool = False,
+  use_depth_camera: bool = False,
+  num_obstacles: int = NUM_OBSTACLES,
+) -> SceneCfg:
   sensors = [
     FEET_GROUND_CONTACT_SENSOR,
     FOOT_HEIGHT_SCAN,
@@ -47,12 +54,32 @@ def scene_cfg(play: bool = False, use_depth_camera: bool = False) -> SceneCfg:
     # Play mode uses full-res RGBD for visualisation; training uses the
     # low-res depth-only sensor to keep GPU memory manageable at scale.
     sensors.append(HEAD_RGBD_SENSOR if play else HEAD_DEPTH_SENSOR_TRAIN)
+
+  obstacle_entities = {
+    f"obstacle_{k}": get_obstacle_cfg(k) for k in range(num_obstacles)
+  }
+
+  # Warp Texture2D requires power-of-2 dimensions; the default 300×300 checker
+  # crashes create_render_context whenever a camera sensor is present.
+  base_terrain = TerrainEntityCfg()
+  terrain = (
+    replace(
+      base_terrain,
+      textures=tuple(
+        replace(t, width=256, height=256) for t in base_terrain.textures
+      ),
+    )
+    if use_depth_camera
+    else base_terrain
+  )
+
   return SceneCfg(
-    terrain=TerrainEntityCfg(),
+    terrain=terrain,
     sensors=tuple(sensors),
     entities={
       "ball": get_ball_cfg(),
       "robot": get_robot_cfg(foot_self_collision=True, with_head_camera=True),
+      **obstacle_entities,
     },
     num_envs=1,
   )
@@ -84,10 +111,15 @@ def sim_cfg() -> SimulationCfg:
 
 
 def booster_t1_dribbling_env_cfg(
-  play: bool = False, use_depth_camera: bool = False, show_depth: bool = False
-) -> RmaBasedEnvCfg:
-  cfg = RmaBasedEnvCfg(
-    scene=scene_cfg(play, use_depth_camera=use_depth_camera),
+  play: bool = False,
+  use_depth_camera: bool = False,
+  show_depth: bool = False,
+  num_obstacles: int = NUM_OBSTACLES,
+) -> ConstraintRmaEnvCfg:
+  cfg = ConstraintRmaEnvCfg(
+    scene=scene_cfg(
+      play, use_depth_camera=use_depth_camera, num_obstacles=num_obstacles
+    ),
     use_depth_camera=use_depth_camera,
     observations=observations,
     actions=actions,
@@ -101,11 +133,13 @@ def booster_t1_dribbling_env_cfg(
     sim=sim_cfg(),
     decimation=4,
     episode_length_s=20.0,
+    constraints=dribbling_constraints,
     encoders={
-      "ball": BallRmaTermCfg(
+      "dribbling": DribblingRmaTermCfg(
         privileged_obs_group="privileged_ball",
+        obstacle_privileged_obs_group="privileged_obstacles",
         adaptation_obs_group="depth_frames" if use_depth_camera else None,
-        latent_dim=8,
+        num_obstacles=num_obstacles,
       ),
     },
     viz_callbacks=[("camera_ball", partial(DribblingViz, show_depth=show_depth))],
@@ -119,6 +153,17 @@ def booster_t1_dribbling_env_cfg(
     cfg.observations["actor"].enable_corruption = False
     cfg.events.pop("push_robot", None)
     cfg.curriculum = {}
+
+    # Curriculum is disabled in play mode, so activate all obstacles directly
+    # by replacing the command config with a fresh one (avoid mutating the
+    # shared module-level dict from cact_cfg).
+    cfg.commands = dict(cfg.commands)
+    cfg.commands["adversary"] = ObstacleCommandCfg(
+      num_obstacles=num_obstacles,
+      num_active=num_obstacles,
+      distance_range=(2.0, 3.5),
+      max_speed=0.1,
+    )
 
     if cfg.scene.terrain is not None:
       if cfg.scene.terrain.terrain_generator is not None:
@@ -134,7 +179,7 @@ def booster_t1_dribbling_env_cfg(
 @dataclass(frozen=True)
 class T1DribblingTask(TaskConfig):
   name: str = "t1-dribbling"
-  env: RmaBasedEnvCfg = field(default_factory=booster_t1_dribbling_env_cfg)
+  env: ConstraintRmaEnvCfg = field(default_factory=booster_t1_dribbling_env_cfg)
   use_depth_camera: bool = False
   show_depth: bool = False
   """Show a cv2 filmstrip of the encoder's depth buffer during play (--show-depth)."""

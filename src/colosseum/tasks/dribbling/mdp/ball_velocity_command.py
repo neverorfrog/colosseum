@@ -92,6 +92,15 @@ class BallVelocityCommand(CommandTerm):
       label=f"ball_cmd |v|={vel_2d.norm():.2f}",
     )
 
+    real_vel_2d = self._env.scene[self.cfg.ball_entity].data.root_link_lin_vel_w[batch, :2]
+    real_vel_3d = torch.cat([real_vel_2d, torch.zeros(1, device=real_vel_2d.device)])
+    visualizer.add_arrow(
+      start=ball_pos.cpu().numpy(),
+      end=(ball_pos + real_vel_3d * 2.0).cpu().numpy(),
+      color=(0.8, 0.2, 0.2, 0.9),
+      label=f"ball_vel |v|={real_vel_2d.norm():.2f}",
+    )
+
 
 @dataclass(kw_only=True)
 class BallVelocityCommandCfg(CommandTermCfg):

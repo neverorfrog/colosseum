@@ -5,3 +5,8 @@ from colosseum.managers.abstraction_manager import (
   AbstractionTermCfg,
   NullAbstractionManager,
 )
+from colosseum.managers.constraint_manager import (
+  CaT,
+  ConstraintManager,
+  ConstraintTermCfg,
+)

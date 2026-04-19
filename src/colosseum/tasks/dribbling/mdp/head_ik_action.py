@@ -40,7 +40,7 @@ class HeadIKActionCfg(ActionTermCfg):
   # the joint-limit penalty reward term).
   yaw_limit: float = 1.5    # joint range ±1.57 rad
   pitch_min: float = -0.30  # joint min −0.35 rad
-  pitch_max: float = 1.15   # joint max  1.22 rad
+  pitch_max: float = 1.02  # joint max  1.22 rad
 
   def build(self, env: ManagerBasedRlEnv) -> HeadIKAction:
     return HeadIKAction(self, env)
