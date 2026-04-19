@@ -42,9 +42,9 @@ commands: Dict[str, CommandTermCfg] = {
   "ball_vel": BallVelocityCommandCfg(
     robot_entity="robot",
     ball_entity="ball",
-    speed_range=(0.1, 1.5),
-    heading_range=math.pi / 2,  # ±90° from forward
-    resampling_time_range=(3.0, 8.0),
+    speed_range=(0.25, 1.0),
+    heading_range=math.pi / 4,  # ±90° from forward
+    resampling_time_range=(5.0, 15.0),
     debug_vis=True,
   ),
   "gait_phase": GaitPhaseCommandCfg(),
