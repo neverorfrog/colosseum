@@ -798,6 +798,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/88/39/799be3f2f0f38cc727ee3b4f1445fe6d5e4133064ec2e4115069418a5bb6/cloudpickle-3.1.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/6d/c1/e419ef3723a074172b68aaa89c9f3de486ed4c2399e2dbd8113a4fdcaf9e/colorlog-6.10.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/60/97/891a0971e1e4a8c5d2b20bbe0e524dc04548d2307fee33cdeba148fd4fc7/comm-0.2.3-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/56/67/01bf8795064d2132d7244341908f75bb2ea87dc114364cd8c5b20c606a8f/configspace-1.2.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/5f/4b/6157f24ca425b89fe2eb7e7be642375711ab671135be21e6faa100f7448c/contourpy-1.3.3-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/34/71/1ea5a7352ae516d5512d17babe7e1b87d9db5150b21f794b1377eac1edc0/cryptography-46.0.6-cp311-abi3-manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/e7/05/c19819d5e3d95294a6f5947fb9b9629efb316b96de511b418c53d245aae6/cycler-0.12.1-py3-none-any.whl
@@ -848,6 +849,7 @@ environments:
       - pypi: git+https://github.com/neverorfrog/mjlab.git?branch=main#121b41f95e663f2488adb611952cefec4aabd4dd
       - pypi: https://files.pythonhosted.org/packages/71/da/116ec59e1de628fbd6330e21d05452d6755f5ab0b55c55a2b37c81ec0868/mjviser-0.0.11-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/a9/80/19189ea605017473660e43762dc853d2797984b3c7bf30ce656099add30c/ml_dtypes-0.5.4-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/cb/98/6af411189d9413534c3eb691182bff1f5c6d44ed2f93f2edfe52a1bbceb8/more_itertools-11.0.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/6b/96/5c095b940de3aa6b43a71ec76275ac3537b21bd45c7499b5a17a429110fa/msgspec-0.20.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://py.mujoco.org/mujoco/mujoco-3.7.0.dev892927987-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: git+https://github.com/google-deepmind/mujoco_warp#875c4caf06d71b12b2036c327e7a07ce08a78b9a
@@ -908,6 +910,8 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/91/88/b55b3117287a8540b76dbdd87733808d4d01c8067a3b339408c250bb3600/typeguard-4.5.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/dc/9b/47798a6c91d8bdb567fe2698fe81e0c6b7cb7ef4d13da4114b41d239f65d/typing_inspection-0.4.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8d/8e/fa21200c7fcebdbc5a1f7ebe2d437d69b0723bfaeea843c846b99248b2ba/tyro-1.0.12-py3-none-any.whl
+      - pypi: git+https://github.com/speckdavid/unified-planning?branch=master#d1861577fa0bb0d3dcb06eeb60afc3f5f42cb7bf
+      - pypi: https://files.pythonhosted.org/packages/0b/a8/a0078d5f886636772c2bb822093680f65ed2cfc64c977cdb3ff4d48d710d/up_symk-1.4.2-py3-none-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/39/08/aaaad47bc4e9dc8c725e68f9d04865dbcb2052843ff09c97b08904852d84/urllib3-2.6.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/a6/f1/464c761dbe24f58d6fc354bf51729342981fb7a621e170e0d3512fadbec8/vhacdx-0.0.10-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/91/f7/762a2d5fab509d0c632b271e21e634462397cc02cca649771c3e9d2e0bcc/viser-1.0.26-py3-none-any.whl
@@ -1240,7 +1244,7 @@ packages:
 - pypi: ./
   name: colosseum
   version: 0.1.0
-  sha256: cc2fadab5871234c2e07eeecc4995fc55c6eb654e9eb5fa5092fbb2de54cd706
+  sha256: d9d46dcf74995a342f07e0542242b420248ec78b8d5ed172867b2ab14bcd89ba
   requires_dist:
   - ty>=0.0.1a34,<0.0.1a35
   - pydantic>=2.12.5,<3
@@ -1258,6 +1262,37 @@ packages:
   requires_dist:
   - pytest ; extra == 'test'
   requires_python: '>=3.8'
+- pypi: https://files.pythonhosted.org/packages/56/67/01bf8795064d2132d7244341908f75bb2ea87dc114364cd8c5b20c606a8f/configspace-1.2.2-py3-none-any.whl
+  name: configspace
+  version: 1.2.2
+  sha256: 9dd5090fab08fbfc0fa8a66affb53e991e9df65ae20959fcee8e544bb3c0a09d
+  requires_dist:
+  - numpy
+  - pyparsing
+  - scipy
+  - typing-extensions
+  - more-itertools
+  - configspace[docs,test,tooling] ; extra == 'dev'
+  - pytest>=7 ; extra == 'test'
+  - pytest-cov ; extra == 'test'
+  - pytest-cases ; extra == 'test'
+  - mypy ; extra == 'tooling'
+  - pre-commit ; extra == 'tooling'
+  - ruff ; extra == 'tooling'
+  - types-pyyaml ; extra == 'tooling'
+  - mkdocs ; extra == 'docs'
+  - mkdocs-material ; extra == 'docs'
+  - mkdocs-autorefs ; extra == 'docs'
+  - mkdocs-gen-files ; extra == 'docs'
+  - mkdocs-literate-nav ; extra == 'docs'
+  - mkdocs-glightbox ; extra == 'docs'
+  - mkdocstrings[python] ; extra == 'docs'
+  - markdown-exec[ansi] ; extra == 'docs'
+  - mike ; extra == 'docs'
+  - pillow ; extra == 'docs'
+  - cairosvg ; extra == 'docs'
+  - black ; extra == 'docs'
+  requires_python: '>=3.9'
 - pypi: https://files.pythonhosted.org/packages/5f/4b/6157f24ca425b89fe2eb7e7be642375711ab671135be21e6faa100f7448c/contourpy-1.3.3-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
   name: contourpy
   version: 1.3.3
@@ -3826,6 +3861,11 @@ packages:
   - pylint>=2.6.0 ; extra == 'dev'
   - pyink ; extra == 'dev'
   requires_python: '>=3.9'
+- pypi: https://files.pythonhosted.org/packages/cb/98/6af411189d9413534c3eb691182bff1f5c6d44ed2f93f2edfe52a1bbceb8/more_itertools-11.0.2-py3-none-any.whl
+  name: more-itertools
+  version: 11.0.2
+  sha256: 6e35b35f818b01f691643c6c611bc0902f2e92b46c18fffa77ae1e7c46e912e4
+  requires_python: '>=3.10'
 - conda: https://conda.anaconda.org/conda-forge/linux-64/mpc-1.4.0-he0a73b1_0.conda
   sha256: c1fdeebc9f8e4f51df265efca4ea20c7a13911193cc255db73cccb6e422ae486
   md5: 770d00bf57b5599c4544d61b61d8c6c6
@@ -6095,6 +6135,52 @@ packages:
   purls: []
   size: 119135
   timestamp: 1767016325805
+- pypi: git+https://github.com/speckdavid/unified-planning?branch=master#d1861577fa0bb0d3dcb06eeb60afc3f5f42cb7bf
+  name: unified-planning
+  version: 0.6.0.382.dev1
+  requires_dist:
+  - pyparsing
+  - networkx
+  - configspace
+  - tarski[arithmetic] ; extra == 'dev'
+  - pytest ; extra == 'dev'
+  - pytest-cov ; extra == 'dev'
+  - mypy ; extra == 'dev'
+  - grpcio ; extra == 'grpc'
+  - grpcio-tools ; extra == 'grpc'
+  - grpc-stubs ; extra == 'grpc'
+  - tarski[arithmetic] ; extra == 'tarski'
+  - up-pyperplan==1.0.0 ; extra == 'pyperplan'
+  - up-tamer==1.0.0 ; extra == 'tamer'
+  - up-enhsp==0.0.19 ; extra == 'enhsp'
+  - up-fast-downward==0.3.1 ; extra == 'fast-downward'
+  - up-lpg==0.0.7 ; extra == 'lpg'
+  - up-fmap==0.0.7 ; extra == 'fmap'
+  - up-aries>=0.0.8 ; extra == 'aries'
+  - up-symk>=1.0.0 ; extra == 'symk'
+  - tarski[arithmetic] ; extra == 'engines'
+  - up-pyperplan==1.0.0.1.dev1 ; extra == 'engines'
+  - up-tamer==1.0.0.1.dev1 ; extra == 'engines'
+  - up-enhsp==0.0.19 ; extra == 'engines'
+  - up-fast-downward==0.3.1 ; extra == 'engines'
+  - up-lpg==0.0.7 ; extra == 'engines'
+  - up-fmap==0.0.7 ; extra == 'engines'
+  - up-aries>=0.0.8 ; extra == 'engines'
+  - up-symk>=1.0.0 ; extra == 'engines'
+  - plotly ; extra == 'plot'
+  - matplotlib==3.7.3 ; extra == 'plot'
+  - kaleido ; extra == 'plot'
+  - pygraphviz ; extra == 'plot'
+  - graphviz ; extra == 'plot'
+  - pandas ; extra == 'plot'
+  requires_python: '>=3.8'
+- pypi: https://files.pythonhosted.org/packages/0b/a8/a0078d5f886636772c2bb822093680f65ed2cfc64c977cdb3ff4d48d710d/up_symk-1.4.2-py3-none-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl
+  name: up-symk
+  version: 1.4.2
+  sha256: 45d572d711ca9a85d3e4f3e47ef6d9e057d265bdc1db2033c29e8d014664227a
+  requires_dist:
+  - setuptools>=59.6.0
+  requires_python: '>=3.9'
 - pypi: https://files.pythonhosted.org/packages/39/08/aaaad47bc4e9dc8c725e68f9d04865dbcb2052843ff09c97b08904852d84/urllib3-2.6.3-py3-none-any.whl
   name: urllib3
   version: 2.6.3
