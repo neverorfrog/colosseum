@@ -86,7 +86,7 @@ rewards = {
   ),
   "obstacle_avoidance": RewardTermCfg(
     func=obstacle_avoidance,
-    weight=-3.0,
+    weight=-1.0,
     params={
       "command_name": "adversary",
       "ball_vel_command_name": "ball_vel",

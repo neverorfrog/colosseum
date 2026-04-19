@@ -628,6 +628,114 @@ Current default obstacle-reward parameters are:
 - `min_cmd_speed = 0.05`
 - `cmd_speed_ref = 1.0`
 
+## Context Gates
+
+Several obstacle-aware shaping terms use `_compute_gates(...)` from
+[rewards.py](/home/valeriospagnoli/SPQR/colosseum/src/colosseum/tasks/dribbling/mdp/rewards.py:635).
+
+It returns two smooth scalars in `[0, 1]`:
+
+- `danger`
+- `ball_far`
+
+### `danger`
+
+`danger` is a soft score for whether the nearest obstacle lies inside a tube
+that extends forward from the ball along the commanded ball direction.
+
+The computation is:
+
+- `cmd_dir`: unit direction of the commanded ball velocity
+- `ball_to_obs`: vector from ball to nearest obstacle
+- `proj`: projection of `ball_to_obs` onto `cmd_dir`
+- `d_perp`: perpendicular distance from the obstacle to the commanded path
+
+Then:
+
+```python
+r = r_base + k_speed * obstacle_speed
+inside_tube = sigmoid(gate_sharpness * (r - d_perp))
+in_front = sigmoid(gate_sharpness * proj)
+in_range = sigmoid(gate_sharpness * (lookahead - proj))
+danger = inside_tube * in_front * in_range
+```
+
+Interpretation:
+
+- high `danger` means the nearest obstacle is near the intended ball path
+- low `danger` means it is behind the ball, too far laterally, or too far ahead
+
+### `ball_far`
+
+`ball_far` is a soft gate that increases when the ball is far from the robot:
+
+```python
+ball_far = sigmoid(gate_sharpness * (robot_ball_distance - ball_far_threshold))
+```
+
+Interpretation:
+
+- low `ball_far` means the robot is already near the ball
+- high `ball_far` means the robot should receive stronger recovery pressure
+
+## Active Gated Rewards
+
+The current reward set uses the obstacle context gates in two important ways.
+
+### `robot_ball_distance_gated`
+
+This term is still active and rewards staying near the ball:
+
+```python
+reward = exp(-effective_sharpness * robot_ball_distance^2)
+```
+
+where:
+
+```python
+effective_sharpness =
+  (sharpness_base + (sharpness_tight - sharpness_base) * danger)
+  * (1 - ball_far_loosening * ball_far)
+```
+
+Purpose:
+
+- keep the robot near the ball in normal dribbling
+- tighten ball attachment under obstacle danger
+- loosen the penalty somewhat when the ball is already far away
+
+Important note:
+
+- this term can encourage hovering near the ball if it is made too tight under
+  danger
+- it should be monitored together with `obstacle_avoidance`, because those two
+  terms jointly decide whether the robot commits to a bypass or just circles
+  near the ball
+
+### `robot_ball_approach_vel_gated`
+
+This term is also active and rewards moving toward the ball when the ball is
+far:
+
+```python
+reward = ball_far * robot_ball_approach_vel(...)
+```
+
+This is an intentional design choice.
+
+The recovery signal toward the ball must remain active even when an obstacle is
+dangerous. Earlier versions also multiplied by `(1 - danger)`, but that made
+the robot lose its “go back to the ball” incentive under obstacle pressure and
+encouraged orbiting / hovering failure modes.
+
+### `ball_protection`
+
+`ball_protection` is currently disabled in the main reward config.
+
+That is intentional. While it can be useful in some setups, it also makes it
+easier for the robot to learn “shield and hover” behaviors instead of decisive
+dribbling around the obstacle.
+
 ## Frame Conventions
 
 Obstacle math uses a mix of world frame and body frame, but it is internally
@@ -690,6 +798,8 @@ The current obstacle system is designed around these principles:
 - early curriculum stages are simple and gait-friendly
 - later stages create ball-centric pressure, not just robot-body pressure
 - obstacle reward is bounded and aligned with the ball-control objective
+- obstacle danger is allowed to change dribbling behavior, but it should not
+  remove the robot's incentive to recover the ball
 - obstacle stages can now be pinned from the CLI for debugging and checkpointing
 
 In short:
