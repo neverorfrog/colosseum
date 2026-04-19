@@ -101,15 +101,15 @@ rewards = {
       "ball_engagement_radius": 1.0,
     },
   ),
-  "ball_protection": RewardTermCfg(
-    func=ball_protection_gated,
-    weight=1.0,
-    params={
-      "command_name": "adversary",
-      "ball_vel_command_name": "ball_vel",
-      "activation_radius": 3.0,
-    },
-  ),
+  # "ball_protection": RewardTermCfg(
+  #   func=ball_protection_gated,
+  #   weight=1.0,
+  #   params={
+  #     "command_name": "adversary",
+  #     "ball_vel_command_name": "ball_vel",
+  #     "activation_radius": 3.0,
+  #   },
+  # ),
   # ------------------------------------------------------------------ #
   # Locomotion regularization                                            #
   # ------------------------------------------------------------------ #

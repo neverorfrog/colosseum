@@ -783,9 +783,14 @@ def robot_ball_approach_vel_gated(
   k_speed: float = 0.5,
   gate_sharpness: float = 5.0,
 ) -> torch.Tensor:
-  """robot_ball_approach_vel gated by ball_far * (1 - danger)."""
-  danger, ball_far = _compute_gates(
+  """robot_ball_approach_vel gated only by ball_far.
+
+  The recovery signal toward the ball must remain active even when obstacle
+  danger is high; otherwise the policy can learn to hover near the ball or
+  orbit around it instead of re-engaging it.
+  """
+  _, ball_far = _compute_gates(
     env, command_name, ball_vel_command_name, ball_far_threshold,
     lookahead, r_base, k_speed, gate_sharpness,
   )
-  return ball_far * (1.0 - danger) * robot_ball_approach_vel(env, ball_vel_command_name)
+  return ball_far * robot_ball_approach_vel(env, ball_vel_command_name)
