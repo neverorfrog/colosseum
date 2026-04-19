@@ -566,6 +566,8 @@ Then:
 ```python
 direction_term = exp(direction_sharpness * toward_obstacle) - 1
 direction_term /= exp(direction_sharpness) - 1
+direction_term *= 1[cmd_speed > min_cmd_speed]
+direction_term *= clamp(cmd_speed / cmd_speed_ref, 0, 1)
 ```
 
 Properties:
@@ -573,6 +575,23 @@ Properties:
 - range `[0, 1]`
 - near 0 if the commanded ball direction is not toward the obstacle
 - near 1 if the command points directly at the obstacle
+- additionally scaled by commanded ball speed
+- low-speed commands into the obstacle are penalized less than high-speed ones
+
+This speed scaling is important in practice:
+
+- without it, the obstacle direction penalty was almost independent of the
+  requested ball speed
+- that could create a stall point where “go forward” and “avoid obstacle”
+  approximately balanced each other
+- at higher requested speeds, the main ball-tracking rewards could then
+  overpower obstacle avoidance and push the robot directly into the obstacle
+
+The `cmd_speed_ref` parameter controls when the speed scaling saturates:
+
+- if `cmd_speed = cmd_speed_ref`, the scaling factor is `1.0`
+- if `cmd_speed < cmd_speed_ref`, the scaling factor is smaller than `1.0`
+- if `cmd_speed > cmd_speed_ref`, the factor is clipped at `1.0`
 
 ### Final Penalty
 
@@ -589,12 +608,21 @@ Current defaults give a maximum of:
 collision_weight + direction_weight = 0.4 + 1.0 = 1.4
 ```
 
-With reward weight `-1.0` in
+With reward weight `-3.0` in
 [reward_cfg.py](/home/valeriospagnoli/SPQR/colosseum/src/colosseum/tasks/dribbling/config/t1_23dof/reward_cfg.py:87),
-the worst-case obstacle contribution is approximately `-1.4`.
+the worst-case obstacle contribution is approximately `-4.2`.
 
 This was intentionally normalized so the obstacle term stays comparable to the
 other task rewards.
+
+Current default obstacle-reward parameters are:
+
+- `collision_sharpness = 2.0`
+- `direction_sharpness = 4.0`
+- `collision_weight = 0.4`
+- `direction_weight = 1.0`
+- `min_cmd_speed = 0.05`
+- `cmd_speed_ref = 1.0`
 
 ## Frame Conventions
 

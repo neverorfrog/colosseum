@@ -508,6 +508,7 @@ def obstacle_avoidance(
   collision_weight: float = 0.4,
   direction_weight: float = 1.0,
   min_cmd_speed: float = 0.05,
+  cmd_speed_ref: float = 1.0,
 ) -> torch.Tensor:
   """Visible-obstacle penalty with collision and kick-direction terms.
 
@@ -520,8 +521,9 @@ def obstacle_avoidance(
     2. direction term:   exp(direction_sharpness * max(0, cos(cmd, ball->obs))) - 1
 
   The first discourages direct collision with the obstacle. The second
-  discourages commanding ball motion toward the obstacle, and is weighted more
-  heavily by default.
+  discourages commanding ball motion toward the obstacle, is weighted more
+  heavily by default, and scales with the requested ball speed so fast
+  commands into the obstacle are penalized more strongly than slow ones.
   """
   term: ObstacleCommand = env.command_manager.get_term(command_name)
   if term.cfg.num_active == 0:
@@ -547,6 +549,8 @@ def obstacle_avoidance(
   direction_term = torch.exp(direction_sharpness * toward_obstacle) - 1.0
   direction_term = direction_term / (math.exp(direction_sharpness) - 1.0)
   direction_term = direction_term * (cmd_speed > min_cmd_speed).float()
+  cmd_speed_scale = (cmd_speed / max(cmd_speed_ref, 1e-6)).clamp(min=0.0, max=1.0)
+  direction_term = direction_term * cmd_speed_scale
 
   penalty = collision_weight * collision_term + direction_weight * direction_term
   return visible.float() * penalty
@@ -677,6 +681,7 @@ def obstacle_avoidance_gated(
   collision_weight: float = 0.4,
   direction_weight: float = 1.0,
   min_cmd_speed: float = 0.05,
+  cmd_speed_ref: float = 1.0,
 ) -> torch.Tensor:
   """obstacle_avoidance weighted by the danger tube gate."""
   danger, _ = _compute_gates(
@@ -693,6 +698,7 @@ def obstacle_avoidance_gated(
     collision_weight=collision_weight,
     direction_weight=direction_weight,
     min_cmd_speed=min_cmd_speed,
+    cmd_speed_ref=cmd_speed_ref,
   )
 
 

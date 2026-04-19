@@ -96,6 +96,7 @@ rewards = {
       "collision_weight": 0.4,
       "direction_weight": 1.0,
       "min_cmd_speed": 0.05,
+      "cmd_speed_ref": 1.0,
     },
   ),
   # "ball_protection": RewardTermCfg(
