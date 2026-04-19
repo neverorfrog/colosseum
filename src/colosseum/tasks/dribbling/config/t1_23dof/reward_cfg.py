@@ -58,35 +58,35 @@ rewards = {
     weight=4.0,
     params={"command_name": "ball_vel"},
   ),
-  "robot_ball_distance": RewardTermCfg(
-    func=robot_ball_distance_gated,
-    weight=0.3,
-    params={
-      "command_name": "adversary",
-      "ball_vel_command_name": "ball_vel",
-      "sharpness_base": 0.5,
-      "sharpness_tight": 2.0,
-      "ball_far_loosening": 0.7,
-      "ball_far_threshold": 1.0,
-    },
-  ),
+  # "robot_ball_distance": RewardTermCfg(
+  #   func=robot_ball_distance_gated,
+  #   weight=0.3,
+  #   params={
+  #     "command_name": "adversary",
+  #     "ball_vel_command_name": "ball_vel",
+  #     "sharpness_base": 0.5,
+  #     "sharpness_tight": 2.0,
+  #     "ball_far_loosening": 0.7,
+  #     "ball_far_threshold": 1.0,
+  #   },
+  # ),
   "robot_ball_yaw": RewardTermCfg(
     func=robot_ball_yaw_body,
     weight=4.0,
     params={"command_name": "ball_vel"},
   ),
-  "robot_ball_approach_vel": RewardTermCfg(
-    func=robot_ball_approach_vel_gated,
-    weight=0.5,
-    params={
-      "command_name": "adversary",
-      "ball_vel_command_name": "ball_vel",
-      "ball_far_threshold": 1.0,
-    },
-  ),
+  # "robot_ball_approach_vel": RewardTermCfg(
+  #   func=robot_ball_approach_vel_gated,
+  #   weight=0.5,
+  #   params={
+  #     "command_name": "adversary",
+  #     "ball_vel_command_name": "ball_vel",
+  #     "ball_far_threshold": 1.0,
+  #   },
+  # ),
   "obstacle_avoidance": RewardTermCfg(
     func=obstacle_avoidance,
-    weight=-1.0,
+    weight=-3.0,
     params={
       "command_name": "adversary",
       "ball_vel_command_name": "ball_vel",
@@ -157,7 +157,7 @@ rewards = {
   ),
   "feet_distance": RewardTermCfg(
     func=feet_distance_penalty,
-    weight=-5.0,
+    weight=-4.0,
     params={
       "asset_cfg": SceneEntityCfg("robot", site_names=FOOT_SITE_NAMES),
       "min_dist": 0.15,
@@ -165,7 +165,7 @@ rewards = {
   ),
   "foot_foot_contact": RewardTermCfg(
     func=self_collision_cost,
-    weight=-5.0,
+    weight=-3.0,
     params={"sensor_name": FOOT_FOOT_CONTACT_SENSOR.name, "force_threshold": 1.0},
   ),
   "nonfoot_ball_contact": RewardTermCfg(
