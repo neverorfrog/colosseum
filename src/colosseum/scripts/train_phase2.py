@@ -214,7 +214,6 @@ def main() -> None:
 
     logger_cfg = config.logger
     if logger_cfg.group is None:
-      from dataclasses import replace
       logger_cfg = replace(logger_cfg, group=config.task.name)
 
     try:

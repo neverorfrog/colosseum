@@ -185,7 +185,6 @@ def main() -> None:
         )
 
         if config.logger.group is None:
-            from dataclasses import replace
             config = replace(config, logger=replace(config.logger, group=config.task.name))
 
         try:
