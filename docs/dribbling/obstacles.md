@@ -219,7 +219,8 @@ This reduces jerky motion and makes the dynamic obstacles easier to learn from.
 - speed target is zero
 - actual velocity is zero
 
-So the obstacle stays fixed after spawn.
+So the obstacle stays fixed after spawn, but it can still respawn once the
+robot has passed it or it is otherwise no longer relevant.
 
 #### `lateral_blocker`
 
@@ -294,6 +295,8 @@ For each obstacle:
   - park it far away
 - if parked but should be active:
   - respawn it
+- if active but no longer relevant to the current encounter:
+  - respawn it in a new random stage-consistent location
 - update resample timer
 - if timer expired:
   - resample motion state
@@ -302,6 +305,46 @@ For each obstacle:
 - integrate position:
   `position += velocity * dt`
 - write pose to MuJoCo mocap body
+
+### Respawn On Irrelevance
+
+Obstacles are not meant to appear once and then remain irrelevant until the
+episode ends.
+
+This is handled by `_needs_respawn()` in
+[obstacle_commands.py](/home/valeriospagnoli/SPQR/colosseum/src/colosseum/tasks/dribbling/mdp/obstacle_commands.py:289).
+
+For each active obstacle, the command term checks whether the current obstacle
+encounter is effectively over. If it is, the obstacle is respawned
+immediately with the same stage behavior but a new random spawn position.
+
+The relevance checks use:
+
+- the obstacle position in robot body frame
+- the robot-obstacle distance
+- the ball-obstacle distance
+
+Current respawn criteria:
+
+- `behind`: obstacle body-frame `x < respawn_behind_x_threshold`
+- `far_from_robot`: robot-obstacle distance exceeds `respawn_robot_distance`
+- `far_from_ball`: ball-obstacle distance exceeds `respawn_ball_distance`
+
+Role-specific rule:
+
+- `static_blocker`, `lateral_blocker`, `distractor`
+  - respawn when `behind OR far_from_robot`
+- `ball_attacker`
+  - respawn when `behind OR far_from_ball`
+
+This means:
+
+- a static blocker stays static while it is still a meaningful blocker
+- once the robot has passed it, or it drifts too far away, it respawns
+- dynamic obstacles also keep generating repeated encounters within one episode
+
+So obstacle training is denser within an episode and does not depend only on
+episode resets.
 
 ## Parking Inactive Obstacles
 
@@ -393,6 +436,10 @@ Behavior:
   - `-1` -> keep obstacle curriculum active during play
   - `>= 0` -> pin one stage
 
+Pinning a stage does not freeze one single obstacle instance forever. It only
+freezes the stage behavior. Obstacles can still respawn within the episode
+according to the relevance rules above.
+
 ## Obstacle Observations
 
 Obstacle observations are computed in
@@ -400,8 +447,8 @@ Obstacle observations are computed in
 
 Two observation functions exist:
 
-- `obstacle_positions_b(env)` -> nearest obstacle position in robot body frame
-- `obstacle_velocities_b(env)` -> nearest obstacle velocity in robot body frame
+- `obstacle_position_b(env)` -> nearest obstacle position in robot body frame
+- `obstacle_velocity_b(env)` -> nearest obstacle velocity in robot body frame
 
 Important points:
 
@@ -423,9 +470,9 @@ Nearest-obstacle selection in observations works as follows:
 
 This is implemented in:
 
-- `obstacle_positions_b()`:
+- `obstacle_position_b()`:
   [observations.py](/home/valeriospagnoli/SPQR/colosseum/src/colosseum/tasks/dribbling/mdp/observations.py:83)
-- `obstacle_velocities_b()`:
+- `obstacle_velocity_b()`:
   [observations.py](/home/valeriospagnoli/SPQR/colosseum/src/colosseum/tasks/dribbling/mdp/observations.py:114)
 
 ## Encoder Usage: Phase 1 And Phase 2

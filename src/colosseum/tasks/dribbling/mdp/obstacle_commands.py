@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 
 import torch
 from mjlab.managers import CommandTerm, CommandTermCfg
+from mjlab.utils.lab_api.math import quat_apply
 
 if TYPE_CHECKING:
   from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv
@@ -108,6 +109,13 @@ class ObstacleCommand(CommandTerm):
       parked = self._is_parked(k)
       if parked.any():
         ids = parked.nonzero(as_tuple=False).flatten()
+        self._positions_w[ids, k] = self._sample_spawn_positions(ids, k)
+        self._resample_motion_state(ids, k)
+        self._velocities_w[ids, k] = self._compute_velocity_target(ids, k)
+
+      needs_respawn = self._needs_respawn(all_ids, k)
+      if needs_respawn.any():
+        ids = needs_respawn.nonzero(as_tuple=False).flatten()
         self._positions_w[ids, k] = self._sample_spawn_positions(ids, k)
         self._resample_motion_state(ids, k)
         self._velocities_w[ids, k] = self._compute_velocity_target(ids, k)
@@ -275,6 +283,44 @@ class ObstacleCommand(CommandTerm):
     offset = (self._positions_w[:, obstacle_idx] - env_origin_xy).abs().max(dim=-1).values
     return offset > (_PARK_FAR / 2.0)
 
+  def _obstacle_pos_body(
+    self,
+    env_ids: torch.Tensor,
+    obstacle_idx: int,
+  ) -> torch.Tensor:
+    robot = self._env.scene["robot"]
+    quat_w = robot.data.root_link_quat_w[env_ids]
+    quat_conj = torch.cat([quat_w[:, :1], -quat_w[:, 1:]], dim=-1)
+    robot_xy = robot.data.root_link_pos_w[env_ids, :2]
+    rel_xy = self._positions_w[env_ids, obstacle_idx] - robot_xy
+    rel_3d = torch.cat([rel_xy, torch.zeros(len(env_ids), 1, device=self._env.device)], dim=-1)
+    return quat_apply(quat_conj, rel_3d)[:, :2]
+
+  def _needs_respawn(
+    self,
+    env_ids: torch.Tensor,
+    obstacle_idx: int,
+  ) -> torch.Tensor:
+    role = self._role_for_obstacle(obstacle_idx)
+    if role == "none":
+      return torch.zeros(len(env_ids), dtype=torch.bool, device=self._env.device)
+
+    robot_xy = self._env.scene["robot"].data.root_link_pos_w[env_ids, :2]
+    ball_xy = self._env.scene["ball"].data.root_link_pos_w[env_ids, :2]
+    obs_xy = self._positions_w[env_ids, obstacle_idx]
+    obs_pos_b = self._obstacle_pos_body(env_ids, obstacle_idx)
+
+    robot_dist = (obs_xy - robot_xy).norm(dim=-1)
+    ball_dist = (obs_xy - ball_xy).norm(dim=-1)
+    behind = obs_pos_b[:, 0] < self.cfg.respawn_behind_x_threshold
+    far_from_robot = robot_dist > self.cfg.respawn_robot_distance
+    far_from_ball = ball_dist > self.cfg.respawn_ball_distance
+
+    if role == "ball_attacker":
+      return behind | far_from_ball
+
+    return behind | far_from_robot
+
   def _park_obstacle(self, obstacle_idx: int, env_ids: torch.Tensor) -> None:
     env_origin_xy = self._env.scene.env_origins[env_ids, :2]
     self._positions_w[env_ids, obstacle_idx, 0] = env_origin_xy[:, 0] + _PARK_FAR
@@ -338,6 +384,12 @@ class ObstacleCommandCfg(CommandTermCfg):
 
   # Tangential heading bias for ball attackers; 0 = straight to ball.
   attack_tangent_range: tuple[float, float] = (-0.35, 0.35)
+
+  # Respawn an obstacle after the encounter is over instead of waiting
+  # for the episode to terminate.
+  respawn_behind_x_threshold: float = -0.2
+  respawn_robot_distance: float = 4.0
+  respawn_ball_distance: float = 3.0
 
   def build(self, env: ManagerBasedRlEnv) -> ObstacleCommand:
     return ObstacleCommand(self, env)
