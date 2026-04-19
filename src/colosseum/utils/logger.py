@@ -324,7 +324,11 @@ def log_training_step(
 
     obstacle_stage_name = None
     if episode_metrics is not None:
-        obstacle_stage_idx = episode_metrics.get("Curriculum/obstacle_stage_index")
+        obstacle_stage_idx = episode_metrics.get(
+            "Curriculum/obstacle/obstacle_stage_index"
+        )
+        if obstacle_stage_idx is None:
+            obstacle_stage_idx = episode_metrics.get("Curriculum/obstacle_stage_index")
         if obstacle_stage_idx is not None:
             obstacle_stage_name = {
                 0: "none",
