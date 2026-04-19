@@ -30,6 +30,7 @@ from colosseum.tasks.dribbling.mdp.rewards import (
   ball_vel_norm,
   ball_vel_tracking_body,
   feet_distance_penalty,
+  obstacle_danger_reduction,
   obstacle_avoidance,
   pose_deviation,
   robot_ball_approach_vel_gated,
@@ -65,7 +66,6 @@ rewards = {
       "command_name": "adversary",
       "ball_vel_command_name": "ball_vel",
       "sharpness_base": 0.5,
-      "sharpness_tight": 2.0,
       "ball_far_loosening": 0.7,
       "ball_far_threshold": 1.0,
     },
@@ -99,6 +99,15 @@ rewards = {
       "min_cmd_speed": 0.05,
       "cmd_speed_ref": 1.0,
       "ball_engagement_radius": 1.0,
+    },
+  ),
+  "obstacle_progress": RewardTermCfg(
+    func=obstacle_danger_reduction,
+    weight=2.0,
+    params={
+      "command_name": "adversary",
+      "ball_vel_command_name": "ball_vel",
+      "ball_far_threshold": 1.0,
     },
   ),
   # "ball_protection": RewardTermCfg(

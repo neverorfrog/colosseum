@@ -683,6 +683,41 @@ def _compute_gates(
   return danger, ball_far
 
 
+def obstacle_danger_reduction(
+  env: ManagerBasedRlEnv,
+  command_name: str = "adversary",
+  ball_vel_command_name: str = "ball_vel",
+  ball_far_threshold: float = 1.0,
+  lookahead: float = 3.5,
+  r_base: float = 0.5,
+  k_speed: float = 0.5,
+  gate_sharpness: float = 5.0,
+) -> torch.Tensor:
+  """Reward positive step-to-step reduction in obstacle danger.
+
+  This gives the policy explicit credit for moving the ball-obstacle geometry
+  toward a safer state instead of stalling and waiting for the command to
+  change.
+  """
+  danger, _ = _compute_gates(
+    env, command_name, ball_vel_command_name, ball_far_threshold,
+    lookahead, r_base, k_speed, gate_sharpness,
+  )
+
+  term: ObstacleCommand = env.command_manager.get_term(command_name)
+  prev_danger = getattr(term, "_prev_danger_reward", None)
+  if prev_danger is None or prev_danger.shape != danger.shape:
+    prev_danger = danger.detach().clone()
+
+  if hasattr(env, "episode_length_buf"):
+    reset_mask = env.episode_length_buf <= 1
+    prev_danger = torch.where(reset_mask, danger.detach(), prev_danger)
+
+  reward = (prev_danger - danger).clamp(min=0.0)
+  term._prev_danger_reward = danger.detach().clone()
+  return reward
+
+
 def obstacle_avoidance_gated(
   env: ManagerBasedRlEnv,
   command_name: str = "adversary",
@@ -747,7 +782,6 @@ def robot_ball_distance_gated(
   command_name: str = "adversary",
   ball_vel_command_name: str = "ball_vel",
   sharpness_base: float = 0.5,
-  sharpness_tight: float = 2.0,
   ball_far_loosening: float = 0.7,
   ball_far_threshold: float = 1.0,
   lookahead: float = 3.5,
@@ -755,17 +789,16 @@ def robot_ball_distance_gated(
   k_speed: float = 0.5,
   gate_sharpness: float = 5.0,
 ) -> torch.Tensor:
-  """robot_ball_distance with sharpness tight under danger, loose when ball_far.
+  """robot_ball_distance with constant sharpness, loosened when ball_far.
 
-  effective_sharpness = (base + (tight - base) * danger) * (1 - loosening * ball_far)
+  Obstacles should change how the robot resolves the dribble, not tighten the
+  ball-closeness term so much that hovering near the ball becomes attractive.
   """
-  danger, ball_far = _compute_gates(
+  _, ball_far = _compute_gates(
     env, command_name, ball_vel_command_name, ball_far_threshold,
     lookahead, r_base, k_speed, gate_sharpness,
   )
-  effective_sharpness = (
-    sharpness_base + (sharpness_tight - sharpness_base) * danger
-  ) * (1.0 - ball_far_loosening * ball_far)
+  effective_sharpness = sharpness_base * (1.0 - ball_far_loosening * ball_far)
   effective_sharpness = effective_sharpness.clamp(min=0.05)
   robot_pos = env.scene["robot"].data.root_link_pos_w[:, :2]
   ball_pos = env.scene["ball"].data.root_link_pos_w[:, :2]

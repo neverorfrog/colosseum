@@ -611,9 +611,9 @@ Current defaults give a maximum of:
 collision_weight + direction_weight = 0.2 + 1.0 = 1.2
 ```
 
-With reward weight `-3.0` in
+With reward weight `-1.0` in
 [reward_cfg.py](/home/valeriospagnoli/SPQR/colosseum/src/colosseum/tasks/dribbling/config/t1_23dof/reward_cfg.py:87),
-the worst-case obstacle contribution is approximately `-3.6`.
+the worst-case obstacle contribution is approximately `-1.2`.
 
 This was intentionally normalized so the obstacle term stays comparable to the
 other task rewards.
@@ -693,24 +693,19 @@ reward = exp(-effective_sharpness * robot_ball_distance^2)
 where:
 
 ```python
-effective_sharpness =
-  (sharpness_base + (sharpness_tight - sharpness_base) * danger)
-  * (1 - ball_far_loosening * ball_far)
+effective_sharpness = sharpness_base * (1 - ball_far_loosening * ball_far)
 ```
 
 Purpose:
 
 - keep the robot near the ball in normal dribbling
-- tighten ball attachment under obstacle danger
 - loosen the penalty somewhat when the ball is already far away
 
 Important note:
 
-- this term can encourage hovering near the ball if it is made too tight under
-  danger
-- it should be monitored together with `obstacle_avoidance`, because those two
-  terms jointly decide whether the robot commits to a bypass or just circles
-  near the ball
+- this term is now intentionally obstacle-neutral
+- obstacle danger should affect how the robot resolves the dribble, not force a
+  tighter attachment that can make hovering near the ball attractive
 
 ### `robot_ball_approach_vel_gated`
 
@@ -727,6 +722,26 @@ The recovery signal toward the ball must remain active even when an obstacle is
 dangerous. Earlier versions also multiplied by `(1 - danger)`, but that made
 the robot lose its “go back to the ball” incentive under obstacle pressure and
 encouraged orbiting / hovering failure modes.
+
+### `obstacle_progress`
+
+This term is active and rewards making the obstacle situation safer over time:
+
+```python
+reward = clamp(prev_danger - current_danger, min=0)
+```
+
+Purpose:
+
+- give explicit credit for reducing obstacle threat
+- break the local optimum of freezing near the ball until the command changes
+- reward actual progress around the obstacle rather than just safe stalling
+
+Implementation note:
+
+- the reward stores the previous danger value inside the obstacle command term
+- on episode resets, the stored danger is aligned to the current value so reset
+  transitions do not create spurious reward spikes
 
 ### `ball_protection`
 
