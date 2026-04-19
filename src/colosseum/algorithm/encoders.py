@@ -185,24 +185,14 @@ class BallHead(nn.Module):
 
 
 class ObstacleHead(nn.Module):
-  """Task head predicting body-frame [x, y, vx, vy] per obstacle from shared latent.
+  """Task head predicting body-frame [x, y, vx, vy] for the tracked obstacle."""
 
-  Symmetric with BallHead: predicts normalised body-frame positions and velocities
-  for each obstacle.  The output is used both as the actor's obstacle slot (Phase 2)
-  and as a supervised regression target.
-
-  Args:
-    latent_dim:    Dimension of the shared DepthEncoder output.
-    num_obstacles: Number of obstacles to track simultaneously.
-  """
-
-  def __init__(self, latent_dim: int = 64, num_obstacles: int = 1) -> None:
+  def __init__(self, latent_dim: int = 64) -> None:
     super().__init__()
-    output_dim = num_obstacles * 4  # [x, y, vx, vy] per obstacle
     self.net = nn.Sequential(
       nn.Linear(latent_dim, 32),
       nn.ReLU(),
-      nn.Linear(32, output_dim),
+      nn.Linear(32, 4),
     )
 
   def forward(self, z: Tensor) -> Tensor:
@@ -212,6 +202,6 @@ class ObstacleHead(nn.Module):
       z: (..., latent_dim)
 
     Returns:
-      (..., num_obstacles * 4) tensor ordered as [x0, y0, vx0, vy0, ...]
+      (..., 4) tensor ordered as [x, y, vx, vy]
     """
     return self.net(z)

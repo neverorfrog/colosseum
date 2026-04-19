@@ -465,31 +465,91 @@ def _get_min_robot_obstacle_dist(
   return min_dist, nearest
 
 
+def _get_closest_robot_obstacle(
+  env: ManagerBasedRlEnv,
+  command_name: str,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+  """Return distance, position, and velocity of the nearest active obstacle."""
+  robot = env.scene["robot"]
+  term: ObstacleCommand = env.command_manager.get_term(command_name)
+  robot_xy = robot.data.root_link_pos_w[:, :2]  # (N, 2)
+  obs_xy = term.obstacle_positions_w[:, : term.cfg.num_active]  # (N, Ka, 2)
+  obs_vel = term.obstacle_velocities_w[:, : term.cfg.num_active]  # (N, Ka, 2)
+
+  dist = (obs_xy - robot_xy.unsqueeze(1)).norm(dim=-1)  # (N, Ka)
+  min_dist, idx = dist.min(dim=-1)
+  batch_idx = torch.arange(env.num_envs, device=env.device)
+  nearest_xy = obs_xy[batch_idx, idx]
+  nearest_vel = obs_vel[batch_idx, idx]
+  return min_dist, nearest_xy, nearest_vel
+
+
+def _world_xy_to_body_xy(
+  env: ManagerBasedRlEnv,
+  world_xy: torch.Tensor,
+) -> torch.Tensor:
+  """Rotate world-frame XY points into the robot body frame."""
+  robot = env.scene["robot"]
+  quat_w = robot.data.root_link_quat_w
+  quat_conj = torch.cat([quat_w[:, :1], -quat_w[:, 1:]], dim=-1)
+  robot_xy = robot.data.root_link_pos_w[:, :2]
+  zeros = torch.zeros(env.num_envs, 1, device=env.device)
+  rel_3d = torch.cat([world_xy - robot_xy, zeros], dim=-1)
+  return quat_apply(quat_conj, rel_3d)[:, :2]
+
+
 def obstacle_avoidance(
   env: ManagerBasedRlEnv,
   command_name: str = "adversary",
-  safe_radius: float = 0.5,
-  contact_radius: float = 0.1,
+  ball_vel_command_name: str = "ball_vel",
   detection_range: float = 3.0,
+  collision_sharpness: float = 2.0,
+  direction_sharpness: float = 4.0,
+  collision_weight: float = 0.4,
+  direction_weight: float = 1.0,
+  min_cmd_speed: float = 0.05,
 ) -> torch.Tensor:
-  """Repulsive potential penalty based on proximity to the nearest detected obstacle.
+  """Visible-obstacle penalty with collision and kick-direction terms.
 
-  An obstacle is considered detected only when it is within *detection_range*.
-  For detected obstacles uses a 1/r^2 potential normalised to safe_radius:
-    - penalty = 1.0  at dist == safe_radius
-    - penalty > 1.0  inside  safe_radius  (grows sharply toward contact)
-    - penalty < 1.0  outside safe_radius  (decays toward zero)
+  The nearest active obstacle contributes only when it is:
+    - within ``detection_range`` from the robot, and
+    - in front of the robot in body frame (local x > 0).
 
-  Returns shape (N,), values >= 0.  Zero when no obstacles are active or detected.
+  The penalty is the sum of:
+    1. collision term:   exp(-collision_sharpness * ||robot - obstacle||^2)
+    2. direction term:   exp(direction_sharpness * max(0, cos(cmd, ball->obs))) - 1
+
+  The first discourages direct collision with the obstacle. The second
+  discourages commanding ball motion toward the obstacle, and is weighted more
+  heavily by default.
   """
   term: ObstacleCommand = env.command_manager.get_term(command_name)
   if term.cfg.num_active == 0:
     return torch.zeros(env.num_envs, device=env.device)
 
-  min_dist, _ = _get_min_robot_obstacle_dist(env, command_name)
-  detected = min_dist < detection_range
-  penalty = (safe_radius / min_dist.clamp(min=contact_radius)).pow(2)
-  return detected.float() * penalty
+  min_dist, nearest_obs_xy, _ = _get_closest_robot_obstacle(env, command_name)
+  nearest_obs_b = _world_xy_to_body_xy(env, nearest_obs_xy)
+
+  visible = (min_dist < detection_range) & (nearest_obs_b[:, 0] > 0.0)
+
+  collision_term = torch.exp(-collision_sharpness * min_dist.pow(2))
+
+  ball_xy = env.scene["ball"].data.root_link_pos_w[:, :2]
+  cmd_xy = env.command_manager.get_command(ball_vel_command_name)[:, :2]
+  cmd_speed = cmd_xy.norm(dim=-1)
+  cmd_dir = cmd_xy / cmd_speed.unsqueeze(-1).clamp(min=1e-6)
+
+  ball_to_obs = nearest_obs_xy - ball_xy
+  ball_to_obs_dir = ball_to_obs / ball_to_obs.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+
+  alignment = (cmd_dir * ball_to_obs_dir).sum(dim=-1).clamp(-1.0, 1.0)
+  toward_obstacle = alignment.clamp(min=0.0)
+  direction_term = torch.exp(direction_sharpness * toward_obstacle) - 1.0
+  direction_term = direction_term / (math.exp(direction_sharpness) - 1.0)
+  direction_term = direction_term * (cmd_speed > min_cmd_speed).float()
+
+  penalty = collision_weight * collision_term + direction_weight * direction_term
+  return visible.float() * penalty
 
 
 def ball_protection(
@@ -563,7 +623,7 @@ def _compute_gates(
 ) -> tuple[torch.Tensor, torch.Tensor]:
   """Smooth per-env gate scalars in [0, 1].
 
-  danger : max tube-intersection score over all active obstacles.
+  danger : tube-intersection score for the nearest active obstacle.
     Tube runs along the commanded ball-velocity direction from the ball;
     radius = r_base + k_speed * obstacle_speed; capped at lookahead distance.
   ball_far : sigmoid gate that rises as robot–ball XY distance exceeds
@@ -584,18 +644,20 @@ def _compute_gates(
   ball_vel_cmd = env.command_manager.get_command(ball_vel_command_name)[:, :2]
   cmd_dir = ball_vel_cmd / ball_vel_cmd.norm(dim=-1, keepdim=True).clamp(min=1e-3)
 
-  obs_xy = term.obstacle_positions_w  # (N, K, 2)
-  obs_speed = term.obstacle_velocities_w.norm(dim=-1)  # (N, K)
+  _, nearest_obs_xy, nearest_obs_vel = _get_closest_robot_obstacle(
+    env, adversary_command_name
+  )
+  obs_speed = nearest_obs_vel.norm(dim=-1)  # (N,)
 
-  ball_to_obs = obs_xy - ball_xy.unsqueeze(1)  # (N, K, 2)
-  proj = (ball_to_obs * cmd_dir.unsqueeze(1)).sum(dim=-1)  # (N, K)
-  d_perp = (ball_to_obs - proj.unsqueeze(-1) * cmd_dir.unsqueeze(1)).norm(dim=-1)  # (N, K)
+  ball_to_obs = nearest_obs_xy - ball_xy  # (N, 2)
+  proj = (ball_to_obs * cmd_dir).sum(dim=-1)  # (N,)
+  d_perp = (ball_to_obs - proj.unsqueeze(-1) * cmd_dir).norm(dim=-1)  # (N,)
 
-  r = r_base + k_speed * obs_speed  # (N, K)
+  r = r_base + k_speed * obs_speed  # (N,)
   inside_tube = torch.sigmoid(gate_sharpness * (r - d_perp))
   in_front = torch.sigmoid(gate_sharpness * proj)
   in_range = torch.sigmoid(gate_sharpness * (lookahead - proj))
-  danger = (inside_tube * in_front * in_range).max(dim=-1).values
+  danger = inside_tube * in_front * in_range
 
   return danger, ball_far
 
@@ -604,20 +666,34 @@ def obstacle_avoidance_gated(
   env: ManagerBasedRlEnv,
   command_name: str = "adversary",
   ball_vel_command_name: str = "ball_vel",
-  safe_radius: float = 0.6,
-  sharpness: float = 5.0,
   ball_far_threshold: float = 1.0,
   lookahead: float = 3.5,
   r_base: float = 0.5,
   k_speed: float = 0.5,
   gate_sharpness: float = 5.0,
+  detection_range: float = 3.0,
+  collision_sharpness: float = 2.0,
+  direction_sharpness: float = 4.0,
+  collision_weight: float = 0.4,
+  direction_weight: float = 1.0,
+  min_cmd_speed: float = 0.05,
 ) -> torch.Tensor:
   """obstacle_avoidance weighted by the danger tube gate."""
   danger, _ = _compute_gates(
     env, command_name, ball_vel_command_name,
     ball_far_threshold, lookahead, r_base, k_speed, gate_sharpness,
   )
-  return danger * obstacle_avoidance(env, command_name, safe_radius, sharpness)
+  return danger * obstacle_avoidance(
+    env,
+    command_name=command_name,
+    ball_vel_command_name=ball_vel_command_name,
+    detection_range=detection_range,
+    collision_sharpness=collision_sharpness,
+    direction_sharpness=direction_sharpness,
+    collision_weight=collision_weight,
+    direction_weight=direction_weight,
+    min_cmd_speed=min_cmd_speed,
+  )
 
 
 def ball_protection_gated(

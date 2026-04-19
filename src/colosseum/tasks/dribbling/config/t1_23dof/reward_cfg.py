@@ -89,9 +89,13 @@ rewards = {
     weight=-1.0,
     params={
       "command_name": "adversary",
-      "safe_radius": 0.5,
-      "contact_radius": 0.1,
+      "ball_vel_command_name": "ball_vel",
       "detection_range": 3.0,
+      "collision_sharpness": 2.0,
+      "direction_sharpness": 4.0,
+      "collision_weight": 0.4,
+      "direction_weight": 1.0,
+      "min_cmd_speed": 0.05,
     },
   ),
   # "ball_protection": RewardTermCfg(

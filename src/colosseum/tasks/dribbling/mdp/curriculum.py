@@ -115,29 +115,7 @@ class push_ball_curriculum:
 
 
 class obstacle_curriculum:
-  """Curriculum term: progressively enable and tighten obstacle difficulty.
-
-  obstacle_curriculum controls three knobs on the ObstacleCommandCfg:
-      - ``num_active``     : how many obstacles are placed in the scene
-      - ``distance_range`` : how close to the robot they can spawn
-      - ``max_speed``      : obstacle patrol speed (0 = static)
-
-  Example stages (in cact_cfg.py)::
-
-      CurriculumTermCfg(
-      func=obstacle_curriculum,
-      params={
-          "command_name": "adversary",
-          "stages": [
-          {"step":      0, "num_active": 0, "distance_range": (3.0, 5.0), "max_speed": 0.0},
-          {"step":  10000, "num_active": 1, "distance_range": (2.5, 4.0), "max_speed": 0.0},
-          {"step":  25000, "num_active": 2, "distance_range": (2.0, 4.0), "max_speed": 0.0},
-          {"step":  50000, "num_active": 2, "distance_range": (1.5, 3.5), "max_speed": 0.3},
-          {"step": 100000, "num_active": 2, "distance_range": (1.0, 3.0), "max_speed": 0.6},
-          ],
-      },
-      )
-  """
+  """Curriculum term for staged obstacle behaviors."""
 
   def __init__(self, cfg: CurriculumTermCfg, env: ManagerBasedRlEnv) -> None:
     command_name: str = cfg.params["command_name"]
@@ -159,22 +137,48 @@ class obstacle_curriculum:
     stages: list[dict],
   ) -> dict[str, torch.Tensor]:
     step = env.common_step_counter
-    # Walk through stages, keeping the last one whose step threshold is met.
+    stage_index = 0
     num_active = 0
-    distance_range = (3.0, 5.0)
+    behavior = "none"
+    distance_range = (1.5, 3.0)
+    lateral_offset_range = (-0.8, 0.8)
+    min_speed = 0.0
     max_speed = 0.0
-    for stage in stages:
+    velocity_resample_time_range = (0.5, 1.0)
+    for idx, stage in enumerate(stages):
       if step >= stage["step"]:
+        stage_index = idx
         num_active = stage.get("num_active", num_active)
+        behavior = stage.get("behavior", behavior)
         distance_range = stage.get("distance_range", distance_range)
+        lateral_offset_range = stage.get("lateral_offset_range", lateral_offset_range)
+        min_speed = stage.get("min_speed", min_speed)
         max_speed = stage.get("max_speed", max_speed)
+        velocity_resample_time_range = stage.get(
+          "velocity_resample_time_range", velocity_resample_time_range
+        )
 
     self._term.cfg.num_active = num_active
+    self._term.cfg.behavior = behavior
     self._term.cfg.distance_range = distance_range
+    self._term.cfg.lateral_offset_range = lateral_offset_range
+    self._term.cfg.min_speed = min_speed
     self._term.cfg.max_speed = max_speed
+    self._term.cfg.velocity_resample_time_range = velocity_resample_time_range
+
+    behavior_to_id = {
+      "none": 0.0,
+      "static_blocker": 1.0,
+      "lateral_blocker": 2.0,
+      "ball_attacker": 3.0,
+      "mixed_attackers": 4.0,
+    }
 
     return {
+      "obstacle_stage_index": torch.tensor(float(stage_index)),
+      "obstacle_behavior_id": torch.tensor(behavior_to_id.get(behavior, -1.0)),
       "num_active_obstacles": torch.tensor(float(num_active)),
       "obstacle_min_dist_m": torch.tensor(float(distance_range[0])),
+      "obstacle_min_speed": torch.tensor(float(min_speed)),
       "obstacle_max_speed": torch.tensor(float(max_speed)),
     }

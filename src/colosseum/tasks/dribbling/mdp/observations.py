@@ -3,6 +3,11 @@ from mjlab.envs import ManagerBasedRlEnv
 from mjlab.sensor import ContactSensor
 from mjlab.utils.lab_api.math import quat_apply
 
+from colosseum.tasks.dribbling.mdp.obstacle_commands import ObstacleCommand
+
+
+_PARK_FAR: float = 1000.0
+
 
 def ball_position(env: ManagerBasedRlEnv) -> torch.Tensor:
   """Ball position relative to robot base in robot body frame. Shape (N, 2)."""
@@ -75,15 +80,13 @@ def foot_ball_contact_force(env: ManagerBasedRlEnv, sensor_name: str) -> torch.T
   return force.norm(dim=-1, keepdim=True)
 
 
-def obstacle_positions_b(
+def obstacle_position_b(
   env: ManagerBasedRlEnv,
-  num_obstacles: int = 1,
 ) -> torch.Tensor:
-  """Obstacle XY positions in robot body frame, read directly from MuJoCo.
+  """Closest obstacle XY positions in robot body frame.
 
-  Returns a flat (N, num_obstacles * 2) tensor ordered as [x0, y0, x1, y1, ...].
-  Inactive obstacles are parked far away so they appear hundreds of metres away —
-  naturally near-zero danger in the encoder gate.
+  Returns a flat (N, 2) tensor ordered as [x, y].
+  If no obstacle is active, a far-away sentinel is returned.
   """
   robot = env.scene["robot"]
   N = env.num_envs
@@ -92,25 +95,27 @@ def obstacle_positions_b(
   quat_conj = torch.cat([quat_w[:, :1], -quat_w[:, 1:]], dim=-1)
   robot_pos_w = robot.data.root_link_pos_w[:, :2]  # (N, 2)
   zeros = torch.zeros(N, 1, device=quat_w.device)
+  term: ObstacleCommand = env.command_manager.get_term("adversary")
 
-  parts: list[torch.Tensor] = []
-  for k in range(num_obstacles):
-    obs_pos_w = env.scene[f"obstacle_{k}"].data.root_link_pos_w[:, :2]  # (N, 2)
-    rel_xy = obs_pos_w - robot_pos_w
-    rel_3d = torch.cat([rel_xy, zeros], dim=-1)
-    parts.append(quat_apply(quat_conj, rel_3d)[:, :2])  # (N, 2)
+  if term.cfg.num_active == 0:
+    nearest_xy = torch.full((N, 2), _PARK_FAR, device=quat_w.device)
+  else:
+    active_xy = term.obstacle_positions_w[:, : term.cfg.num_active]  # (N, Ka, 2)
+    dist = (active_xy - robot_pos_w.unsqueeze(1)).norm(dim=-1)  # (N, Ka)
+    idx = dist.argmin(dim=-1)
+    nearest_xy = active_xy[torch.arange(N, device=env.device), idx]  # (N, 2)
 
-  return torch.cat(parts, dim=-1)  # (N, num_obstacles*2)
+  rel_xy = nearest_xy - robot_pos_w
+  rel_3d = torch.cat([rel_xy, zeros], dim=-1)
+  return quat_apply(quat_conj, rel_3d)[:, :2]  # (N, 2)
 
 
-def obstacle_velocities_b(
+def obstacle_velocity_b(
   env: ManagerBasedRlEnv,
-  num_obstacles: int = 1,
 ) -> torch.Tensor:
-  """Obstacle XY velocities in robot body frame, read directly from MuJoCo.
+  """Closest obstacle XY velocities in robot body frame.
 
-  Returns a flat (N, num_obstacles * 2) tensor ordered as [vx0, vy0, vx1, vy1, ...].
-  Velocity is a pure rotation from world into body frame (no translation).
+  Returns a flat (N, 2) tensor ordered as [vx, vy].
   """
   robot = env.scene["robot"]
   N = env.num_envs
@@ -118,11 +123,18 @@ def obstacle_velocities_b(
   quat_w = robot.data.root_link_quat_w  # (N, 4)
   quat_conj = torch.cat([quat_w[:, :1], -quat_w[:, 1:]], dim=-1)
   zeros = torch.zeros(N, 1, device=quat_w.device)
+  term: ObstacleCommand = env.command_manager.get_term("adversary")
 
-  parts: list[torch.Tensor] = []
-  for k in range(num_obstacles):
-    vel_w = env.scene[f"obstacle_{k}"].data.root_link_lin_vel_w[:, :2]  # (N, 2)
-    vel_3d = torch.cat([vel_w, zeros], dim=-1)
-    parts.append(quat_apply(quat_conj, vel_3d)[:, :2])  # (N, 2)
+  if term.cfg.num_active == 0:
+    nearest_vel_w = torch.zeros((N, 2), device=quat_w.device)
+  else:
+    robot_pos_w = robot.data.root_link_pos_w[:, :2]  # (N, 2)
+    active_xy = term.obstacle_positions_w[:, : term.cfg.num_active]  # (N, Ka, 2)
+    dist = (active_xy - robot_pos_w.unsqueeze(1)).norm(dim=-1)  # (N, Ka)
+    idx = dist.argmin(dim=-1)
+    nearest_vel_w = term.obstacle_velocities_w[
+      torch.arange(N, device=env.device), idx
+    ]  # (N, 2)
 
-  return torch.cat(parts, dim=-1)  # (N, num_obstacles*2)
+  vel_3d = torch.cat([nearest_vel_w, zeros], dim=-1)
+  return quat_apply(quat_conj, vel_3d)[:, :2]  # (N, 2)

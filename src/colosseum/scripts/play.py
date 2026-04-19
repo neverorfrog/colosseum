@@ -150,6 +150,11 @@ def create_agent(config: PlayConfig, env: ManagerBasedRlEnv, device: torch.devic
 
 def main() -> None:
     config = tyro.cli(PlayConfig, config=(tyro.conf.CascadeSubcommandArgs,))
+    if hasattr(config.task, "obstacle_stage_index"):
+        config = replace(
+            config,
+            task=replace(config.task, obstacle_stage_index=config.obstacle_stage_index),
+        )
 
     device_id = _parse_single_cuda_device(config.cuda)
 

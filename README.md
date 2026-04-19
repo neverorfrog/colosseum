@@ -14,6 +14,11 @@ pixi run -e train train task:t1-dribbling
 # Phase 2
 pixi run -e train train-phase2 task:t1-dribbling --task.use-depth-camera
 
+# Force a fixed obstacle stage (-1 = use curriculum)
+pixi run -e train train task:t1-dribbling --obstacle-stage-index 0
+pixi run -e train train task:t1-dribbling --obstacle-stage-index 3
+pixi run -e train play task:t1-dribbling --checkpoint ./logs/<run-dir>/checkpoints/latest.pt --obstacle-stage-index 4
+
 # disable logging
 pixi run -e train train task:t1-dribbling logger:disabled
 ```
@@ -103,6 +108,9 @@ Evaluate a trained policy in simulation:
 ```bash
 # Play with a trained checkpoint
 pixi run -e train play task:t1-dribbling --checkpoint ./logs/<run-dir>/checkpoints/latest.pt
+
+# Play a fixed obstacle stage (-1 = use obstacle curriculum)
+pixi run -e train play task:t1-dribbling --checkpoint ./logs/<run-dir>/checkpoints/latest.pt --obstacle-stage-index 2
 ```
 Play mode uses the task's `num_envs` by default. Override with `--num-envs 1` to run a single environment.
 

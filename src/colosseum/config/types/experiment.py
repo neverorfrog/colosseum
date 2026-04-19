@@ -22,6 +22,7 @@ class BaseExperimentConfig:
     use_cuda: bool = True
     cuda: str = "0"
     checkpoint: str | None = None
+    obstacle_stage_index: int = -1
 
     task: Annotated[
         TaskConfig,
