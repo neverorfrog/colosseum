@@ -6,7 +6,7 @@ from colosseum.config.types.networks import PpoActorConfig, PpoCriticConfig
 
 def booster_t1_dribbling_ppo_cfg() -> RmaPPOConfig:
   return RmaPPOConfig(
-    learning_steps=500_000_000,
+    learning_steps=2_000_000_000,
     num_steps_per_env=24,
     gamma=0.99,
     lam=0.95,
