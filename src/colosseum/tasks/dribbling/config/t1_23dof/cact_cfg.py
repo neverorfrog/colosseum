@@ -79,10 +79,10 @@ curriculum = {
       "event_name": "reset_base",
       "stages": [
         {"step": 0, "half_range": 0.0},  # always forward
-        {"step": 2000, "half_range": math.pi / 6},  # ±30°
-        {"step": 6000, "half_range": math.pi / 3},  # ±60°
-        {"step": 12000, "half_range": math.pi / 2},  # ±90°
-        {"step": 20000, "half_range": math.pi},  # ±180° (full)
+        {"step": 16_000, "half_range": math.pi / 6},  # ±30°
+        {"step": 48_000, "half_range": math.pi / 3},  # ±60°
+        {"step": 96_000, "half_range": math.pi / 2},  # ±90°
+        {"step": 144_000, "half_range": math.pi},  # ±180° (full)
       ],
     },
   ),
@@ -92,8 +92,8 @@ curriculum = {
       "event_name": "push_ball",
       "stages": [
         {"step": 0, "max_speed": 0.3},
-        {"step": 5000, "max_speed": 0.6},
-        {"step": 12000, "max_speed": 1.0},
+        {"step": 48_000, "max_speed": 0.6},
+        {"step": 112_000, "max_speed": 1.0},
       ],
     },
   ),
@@ -101,6 +101,26 @@ curriculum = {
     func=obstacle_curriculum,
     params={
       "command_name": "adversary",
+      # Thresholds are stretched for a long 2B-step run with the current
+      # distributed setup. Curriculum uses common_step_counter, i.e.
+      #   curriculum_step = global_step / num_envs_per_rank
+      # With 10,240 envs per rank:
+      # - 500M global steps  -> ~48.8k curriculum steps
+      # - 2B   global steps  -> ~195.3k curriculum steps
+      # so the 2B schedule is exactly 4x longer than the 500M one.
+      #
+      # The harder stages get more room on purpose:
+      # - `static_blocker` is the first real obstacle-avoidance stage and
+      #   needs a long window to preserve the no-obstacle dribbling behavior.
+      # - `ball_attacker` is the hardest single-obstacle stage and also gets
+      #   extra time before moving to the cluttered multi-obstacle setting.
+      #
+      # Approximate stage durations:
+      # - none:            19.5k curriculum steps
+      # - static_blocker:  48.9k
+      # - lateral_blocker: 29.3k
+      # - ball_attacker:   52.7k
+      # - mixed_attackers: 44.9k
       "stages": [
         {
           "step": 0,
@@ -110,7 +130,7 @@ curriculum = {
           "max_speed": 0.0,
         },
         {
-          "step": 4_000,
+          "step": 19_500,
           "num_active": 1,
           "behavior": "static_blocker",
           "distance_range": (1.0, 1.8),
@@ -118,7 +138,7 @@ curriculum = {
           "max_speed": 0.0,
         },
         {
-          "step": 10_000,
+          "step": 68_400,
           "num_active": 1,
           "behavior": "lateral_blocker",
           "distance_range": (1.0, 1.8),
@@ -128,7 +148,7 @@ curriculum = {
           "velocity_resample_time_range": (0.6, 1.2),
         },
         {
-          "step": 18_000,
+          "step": 97_700,
           "num_active": 1,
           "behavior": "ball_attacker",
           "distance_range": (1.4, 2.4),
@@ -138,7 +158,7 @@ curriculum = {
           "velocity_resample_time_range": (0.4, 0.9),
         },
         {
-          "step": 28_000,
+          "step": 150_400,
           "num_active": 3,
           "behavior": "mixed_attackers",
           "distance_range": (1.2, 2.5),
