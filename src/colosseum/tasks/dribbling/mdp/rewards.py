@@ -272,16 +272,19 @@ def robot_ball_distance(
   close_distance: float = 0.3,
   behind_close_penalty: float = 2.0,
   far_sharpness: float = 3.0,
+  between_feet_forward_distance: float = 0.1,
+  between_feet_penalty: float = 2.0,
 ) -> torch.Tensor:
   """Front/back-aware robot-ball proximity reward.
 
   Desired behavior:
     - ball close and in front (distance <= close_distance, x_body >= 0): reward 1.0
+    - ball directly under the robot (|x_body| < between_feet_forward_distance
+      AND distance <= close_distance): constant low reward — the ball has
+      rolled into the support polygon between the feet, which makes dribbling
+      impossible.
     - ball close but behind (distance <= close_distance, x_body < 0): constant low reward
     - ball farther than close_distance: exponential decay with distance
-
-  This avoids over-encouraging the robot to keep the ball glued to its body
-  regardless of whether the ball has already slipped behind the support polygon.
   """
   robot = env.scene["robot"]
   ball_pos_w = env.scene["ball"].data.root_link_pos_w[:, :3]
@@ -293,17 +296,25 @@ def robot_ball_distance(
   ball_b = quat_apply(quat_conj, relative_w)[:, :2]
   dist = ball_b.norm(dim=-1)
 
-  front_close = (dist <= close_distance) & (ball_b[:, 0] >= 0.0)
-  behind_close = (dist <= close_distance) & ~front_close
+  between_feet = (dist <= close_distance) & (
+    ball_b[:, 0].abs() < between_feet_forward_distance
+  )
+  front_close = (dist <= close_distance) & (ball_b[:, 0] >= 0.0) & ~between_feet
+  behind_close = (dist <= close_distance) & (ball_b[:, 0] < 0.0) & ~between_feet
 
   far_excess = (dist - close_distance).clamp(min=0.0)
   far_reward = torch.exp(-far_sharpness * far_excess.pow(2))
   behind_close_reward = torch.full_like(dist, math.exp(-behind_close_penalty))
+  between_feet_reward = torch.full_like(dist, math.exp(-between_feet_penalty))
 
   return torch.where(
-    front_close,
-    torch.ones_like(dist),
-    torch.where(behind_close, behind_close_reward, far_reward),
+    between_feet,
+    between_feet_reward,
+    torch.where(
+      front_close,
+      torch.ones_like(dist),
+      torch.where(behind_close, behind_close_reward, far_reward),
+    ),
   )
 
 

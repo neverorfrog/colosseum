@@ -42,10 +42,10 @@ commands: Dict[str, CommandTermCfg] = {
   "ball_vel": BallVelocityCommandCfg(
     robot_entity="robot",
     ball_entity="ball",
-    speed_range=(0.25, 1.0),
+    speed_range=(0.2, 1.0),
     target_distance_range=(1.5, 4.0),
     speed_gain=1.0,
-    target_reached_threshold=0.25,
+    target_reached_threshold=0.5,
     heading_range=math.pi / 4,  # ±45° around the robot forward direction
     resampling_time_range=(5.0, 10.0),
     debug_vis=True,

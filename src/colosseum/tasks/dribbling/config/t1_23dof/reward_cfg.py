@@ -73,6 +73,8 @@ rewards = {
       "close_distance": 0.3,  # Ball within 0.3 m and in front is considered fully controlled.
       "behind_close_penalty": 0.5,  # Constant penalty level when the ball is close but behind.
       "far_sharpness": 3.0,  # Larger -> stronger exponential decay once the ball is farther than 0.3 m.
+      "between_feet_forward_distance": 0.1,  # |x_body| below this flags the ball as between the feet.
+      "between_feet_penalty": 2.0,  # Larger -> stronger penalty when the ball ends up under the robot.
     },
   ),
   "robot_ball_yaw": RewardTermCfg(  # Keep the ball in front of the robot along the command.
