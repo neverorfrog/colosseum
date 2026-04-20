@@ -61,7 +61,7 @@ rewards = {
   ),
   "ball_vel_norm": RewardTermCfg(  # Match the commanded ball-speed magnitude, but relax locally near a blocking obstacle.
     func=ball_vel_norm_relaxed,
-    weight=3.0,
+    weight=2.0,
     params={
       "command_name": "ball_vel",  # Which ball-speed command to match.
       "sharpness": 1.5,  # Larger -> tighter speed matching.
@@ -75,7 +75,7 @@ rewards = {
   ),
   "ball_vel_angle": RewardTermCfg(  # Align ball-motion direction with the command, but relax locally near a blocking obstacle.
     func=ball_vel_angle_relaxed,
-    weight=3.0,
+    weight=2.0,
     params={
       "command_name": "ball_vel",  # Which ball-direction command to align with.
       "obstacle_command_name": "adversary",  # Obstacle term used to detect when nominal tracking should be relaxed.
@@ -86,17 +86,17 @@ rewards = {
       "relax_min_scale": 0.05,  # Minimum retained directional tracking strength in the fully blocked case.
     },
   ),
-  "robot_ball_distance": RewardTermCfg(  # Keep the robot reasonably close to the ball.
-    func=robot_ball_distance,
-    weight=1.0,
-    params={
-      "close_distance": 0.3,  # Ball within 0.3 m and in front is considered fully controlled.
-      "behind_close_penalty": 0.5,  # Constant penalty level when the ball is close but behind.
-      "far_sharpness": 3.0,  # Larger -> stronger exponential decay once the ball is farther than 0.3 m.
-      "between_feet_forward_distance": 0.1,  # |x_body| below this flags the ball as between the feet.
-      "between_feet_penalty": 2.0,  # Larger -> stronger penalty when the ball ends up under the robot.
-    },
-  ),
+  # "robot_ball_distance": RewardTermCfg(  # Keep the robot reasonably close to the ball.
+  #   func=robot_ball_distance,
+  #   weight=1.0,
+  #   params={
+  #     "close_distance": 0.3,  # Ball within 0.3 m and in front is considered fully controlled.
+  #     "behind_close_penalty": 0.5,  # Constant penalty level when the ball is close but behind.
+  #     "far_sharpness": 3.0,  # Larger -> stronger exponential decay once the ball is farther than 0.3 m.
+  #     "between_feet_forward_distance": 0.1,  # |x_body| below this flags the ball as between the feet.
+  #     "between_feet_penalty": 2.0,  # Larger -> stronger penalty when the ball ends up under the robot.
+  #   },
+  # ),
   "robot_ball_yaw": RewardTermCfg(  # Keep the ball in front of the robot along the command.
     func=robot_ball_yaw_body,
     weight=2.0,
@@ -104,13 +104,13 @@ rewards = {
       "command_name": "ball_vel"
     },  # Which command defines the preferred facing direction.
   ),
-  "robot_ball_approach_vel": RewardTermCfg(  # Reward base motion that closes distance to the ball.
-    func=robot_ball_approach_vel,
-    weight=2.0,
-    params={
-      "command_name": "ball_vel"
-    },  # Command whose speed sets the desired approach urgency.
-  ),
+  # "robot_ball_approach_vel": RewardTermCfg(  # Reward base motion that closes distance to the ball.
+  #   func=robot_ball_approach_vel,
+  #   weight=2.0,
+  #   params={
+  #     "command_name": "ball_vel"
+  #   },  # Command whose speed sets the desired approach urgency.
+  # ),
   "ball_target_progress": RewardTermCfg(  # Reward moving the ball along the current ball-to-target direction.
     func=ball_target_progress,
     weight=1.0,
@@ -128,7 +128,7 @@ rewards = {
   ),
   "robot_obstacle_collision": RewardTermCfg(  # Local robot-obstacle safety term.
     func=robot_obstacle_collision,
-    weight=-5.0,
+    weight=-2.0,
     params={
       "command_name": "adversary",  # Obstacle command term providing obstacle positions/velocities.
       "collision_detection_range": 1.5,  # Collision penalty only inside this robot-obstacle distance.
@@ -136,19 +136,19 @@ rewards = {
       "collision_far_distance": 1.5,  # Collision penalty fades to zero at or above this distance.
     },
   ),
-  "ball_obstacle_collision": RewardTermCfg(  # Replaced by ball_obstacle_proximity constraint (CaT).
-    func=ball_obstacle_collision,
-    weight=-10.0,
-    params={
-      "command_name": "adversary",
-      "collision_detection_range": 1.0,
-      "collision_near_distance": 0.15,
-      "collision_far_distance": 0.6,
-    },
-  ),
+  # "ball_obstacle_collision": RewardTermCfg(  # Replaced by ball_obstacle_proximity constraint (CaT).
+  #   func=ball_obstacle_collision,
+  #   weight=-10.0,
+  #   params={
+  #     "command_name": "adversary",
+  #     "collision_detection_range": 1.0,
+  #     "collision_near_distance": 0.15,
+  #     "collision_far_distance": 0.6,
+  #   },
+  # ),
   "obstacle_direction": RewardTermCfg(  # Penalize the ball actually moving toward an obstacle on the target path.
     func=obstacle_direction,
-    weight=-7.0,
+    weight=-10.0,
     params={
       "command_name": "adversary",  # Obstacle command term providing obstacle positions/velocities.
       "ball_vel_command_name": "ball_vel",  # Ball command term providing the persistent target.
