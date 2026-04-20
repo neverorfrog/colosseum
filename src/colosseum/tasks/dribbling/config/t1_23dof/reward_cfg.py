@@ -112,7 +112,7 @@ rewards = {
   ),
   "ball_obstacle_collision": RewardTermCfg(  # Penalize the ball physically touching an obstacle.
     func=ball_obstacle_collision,
-    weight=-3.0,
+    weight=-4.0,
     params={
       "command_name": "adversary",  # Obstacle command term providing obstacle positions/velocities.
       "collision_detection_range": 1.0,  # Ball-obstacle distance beyond which the penalty is zero.
@@ -122,7 +122,7 @@ rewards = {
   ),
   "obstacle_direction": RewardTermCfg(  # Penalize the ball actually moving toward an obstacle on the target path.
     func=obstacle_direction,
-    weight=-2.5,
+    weight=-4.0,
     params={
       "command_name": "adversary",  # Obstacle command term providing obstacle positions/velocities.
       "ball_vel_command_name": "ball_vel",  # Ball command term providing the persistent target.
@@ -184,7 +184,7 @@ rewards = {
   ),
   "feet_distance": RewardTermCfg(
     func=feet_distance_penalty,
-    weight=-4.0,
+    weight=-6.0,
     params={
       "asset_cfg": SceneEntityCfg("robot", site_names=FOOT_SITE_NAMES),
       "min_dist": 0.15,
@@ -192,7 +192,7 @@ rewards = {
   ),
   "foot_foot_contact": RewardTermCfg(
     func=self_collision_cost,
-    weight=-3.0,
+    weight=-5.0,
     params={"sensor_name": FOOT_FOOT_CONTACT_SENSOR.name, "force_threshold": 1.0},
   ),
   "nonfoot_ball_contact": RewardTermCfg(

@@ -145,6 +145,15 @@ class BallVelocityCommand(CommandTerm):
     reached_env_ids = torch.where(target_distance <= self.cfg.target_reached_threshold)[0]
     if len(reached_env_ids) > 0:
       self._resample(reached_env_ids)
+      target_distance = (self.target_position - ball_pos).norm(dim=-1)
+
+    robot_pos = self._env.scene[self.cfg.robot_entity].data.root_link_pos_w[:, :2]
+    robot_target_distance = (self.target_position - robot_pos).norm(dim=-1)
+    robot_reached_env_ids = torch.where(
+      robot_target_distance <= self.cfg.robot_target_reached_threshold
+    )[0]
+    if len(robot_reached_env_ids) > 0:
+      self._resample(robot_reached_env_ids)
 
   def _update_metrics(self) -> None:
     robot_pos = self._env.scene[self.cfg.robot_entity].data.root_link_pos_w[:, :2]
@@ -224,6 +233,10 @@ class BallVelocityCommandCfg(CommandTermCfg):
 
   # Resample immediately when the ball is this close to the target.
   target_reached_threshold: float = 0.25
+
+  # Also resample when the robot base enters this radius around the target —
+  # keeps the robot from parking next to a target it cannot commit to.
+  robot_target_reached_threshold: float = 0.5
 
   # Half-width of the heading range around the robot forward direction.
   heading_range: float = math.pi / 8

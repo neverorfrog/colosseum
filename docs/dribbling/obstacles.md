@@ -74,6 +74,8 @@ At resample time:
 - a target heading is sampled around the robot forward direction
 - a target distance is sampled from `target_distance_range`
 - a world-frame target position is created relative to the current robot position
+- if enabled, the obstacle command is also forced to resample for the same envs
+  so obstacle placement stays synchronized with the new target
 
 At every step:
 
@@ -86,6 +88,11 @@ ball_vel_cmd = dir * speed
 
 If the ball gets within `target_reached_threshold` of the target, a new target
 is sampled immediately.
+
+When `resample_obstacles_on_target_reset=True`, target resampling also calls the
+adversary command's public `resample_for_env_ids(...)` hook. This keeps the
+obstacle scene aligned with the current ball-to-target corridor not only at
+episode reset, but also at timed command resamples and target-reached events.
 
 This is implemented in
 [ball_velocity_command.py](/home/valeriospagnoli/SPQR/colosseum/src/colosseum/tasks/dribbling/mdp/ball_velocity_command.py:22).
@@ -191,36 +198,53 @@ Obstacle positions are generated in `_sample_spawn_positions()`:
 The main reference quantities are:
 
 - `ball_xy`: current ball position in world XY
-- `cmd_dir`: normalized commanded ball direction
-- `side_dir`: perpendicular to `cmd_dir`
+- `target_xy`: current persistent ball target in world XY
+- `seg_dir`: normalized ball-to-target segment direction
+- `seg_side`: perpendicular to `seg_dir`
 
-These are computed by `_cmd_and_side_dirs()`:
-[obstacle_commands.py](/home/valeriospagnoli/SPQR/colosseum/src/colosseum/tasks/dribbling/mdp/obstacle_commands.py:150).
-
-Because `cmd_dir` now comes from the target-driven `ball_vel` command, obstacle
-spawn generation is effectively aligned with the current ball-to-target path.
+So obstacle spawn generation is explicitly aligned with the current
+ball-to-target path, not just with a locally sampled velocity heading.
 
 ### Static Blocker / Lateral Blocker / Ball Attacker
 
-These all spawn with the same geometric template:
+These all spawn with the same corridor-coupled template.
+
+The command term first computes the current ball-to-target segment:
 
 ```python
-position = ball_xy + forward_dist * cmd_dir + lateral_offset * side_dir
+seg = target_xy - ball_xy
+seg_len = ||seg||
+seg_dir = normalize(seg)
+seg_side = perp(seg_dir)
+```
+
+Then the obstacle is sampled as:
+
+```python
+position = ball_xy + forward_fraction * seg_len * seg_dir + lateral_offset * seg_side
 ```
 
 where:
 
-- `forward_dist` is sampled from `distance_range`
+- `forward_fraction` is sampled from `forward_fraction_range`
 - `lateral_offset` is sampled from `lateral_offset_range`
 
-This means the obstacle is placed **ahead of the ball-to-target path**, not just at a
-random angle around the robot.
+So blockers and attackers are not spawned at an arbitrary metric distance ahead
+of the ball anymore. They are spawned at a controlled fraction of the current
+ball-to-target segment, typically inside the middle part of that segment.
 
-That design is intentional:
+Current defaults are:
 
-- it creates a meaningful blocker for dribbling
-- it avoids teaching only generic body collision avoidance
-- it aligns obstacle pressure with the ball-control task
+- `forward_fraction_range = (0.35, 0.75)`
+- `lateral_offset_range = (-0.3, 0.3)`
+- `lateral_offset_range = (-0.3, 0.3)`
+
+This is intentional:
+
+- the obstacle is guaranteed to lie on a meaningful part of the current path
+- the lateral spread is narrow enough to keep the obstacle inside the reward's
+  direction tube (`direction_tube_radius = 0.5` in the current reward config)
+- target resampling and obstacle resampling stay geometrically consistent
 
 ### Distractor
 
@@ -386,21 +410,24 @@ The relevance checks use:
 Current respawn criteria:
 
 - `behind`: obstacle body-frame `x < respawn_behind_x_threshold`
-- `far_from_robot`: robot-obstacle distance exceeds `respawn_robot_distance`
 - `far_from_ball`: ball-obstacle distance exceeds `respawn_ball_distance`
 
 Role-specific rule:
 
 - `static_blocker`, `lateral_blocker`, `distractor`
-  - respawn when `behind OR far_from_robot`
+  - respawn when `behind`
 - `ball_attacker`
   - respawn when `behind OR far_from_ball`
 
 This means:
 
-- a static blocker stays static while it is still a meaningful blocker
-- once the robot has passed it, or it drifts too far away, it respawns
+- a static blocker stays fixed on the sampled corridor until the encounter is
+  genuinely over or the target changes
+- blockers are no longer removed just because the robot is far away
 - dynamic obstacles also keep generating repeated encounters within one episode
+
+Because target resampling now also triggers obstacle resampling, blockers also
+get refreshed automatically whenever the target changes.
 
 So obstacle training is denser within an episode and does not depend only on
 episode resets.
@@ -432,6 +459,7 @@ It sets:
 - `behavior`
 - `distance_range`
 - `lateral_offset_range`
+- `forward_fraction_range`
 - `min_speed`
 - `max_speed`
 - `velocity_resample_time_range`
@@ -447,15 +475,24 @@ Stages:
 2. stage 1
    - `behavior = static_blocker`
    - `num_active = 1`
+   - `lateral_offset_range = (-0.3, 0.3)`
+   - `forward_fraction_range = (0.35, 0.75)`
 3. stage 2
    - `behavior = lateral_blocker`
    - `num_active = 1`
+   - `lateral_offset_range = (-0.3, 0.3)`
+   - `forward_fraction_range = (0.35, 0.75)`
 4. stage 3
    - `behavior = ball_attacker`
    - `num_active = 1`
+   - `lateral_offset_range = (-0.3, 0.3)`
+   - `forward_fraction_range = (0.35, 0.75)`
 5. stage 4
    - `behavior = mixed_attackers`
    - `num_active = 3`
+   - blockers/attackers use `lateral_offset_range = (-0.3, 0.3)`
+   - blockers/attackers use `forward_fraction_range = (0.35, 0.75)`
+   - distractors still use `distance_range` for random-angle spawn
 
 Curriculum metrics that are logged:
 
@@ -696,7 +733,7 @@ Properties:
 Current default parameters:
 
 - `direction_detection_range = 3.0`
-- `direction_tube_radius = 1.0`
+- `direction_tube_radius = 0.5`
 - `direction_sharpness = 3.0`
 - `ball_engagement_near_distance = 0.3`
 - `ball_engagement_far_distance = 0.75`
@@ -727,8 +764,8 @@ directly into a blocked target neighborhood.
 
 Current default parameters:
 
-- `target_near_distance = 0.4`
-- `target_far_distance = 1.0`
+- `target_near_distance = 0.15`
+- `target_far_distance = 0.5`
 - `target_obstacle_near_distance = 0.3`
 - `target_obstacle_far_distance = 0.8`
 - `speed_ref = 1.0`
