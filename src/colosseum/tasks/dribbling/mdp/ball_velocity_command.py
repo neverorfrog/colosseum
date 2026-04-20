@@ -41,6 +41,13 @@ class BallVelocityCommand(CommandTerm):
     self.metrics["cmd_ball_vel_error"] = torch.zeros(env.num_envs, device=env.device)
     self.metrics["target_distance"] = torch.zeros(env.num_envs, device=env.device)
 
+    # Commands must be valid from the very first reset/step. Otherwise some
+    # envs would keep the zero target at the global origin, which is disastrous
+    # in a tiled multi-env world because target_distance becomes tens of meters.
+    all_env_ids = torch.arange(self.num_envs, device=self.device)
+    self.resample(all_env_ids)
+    self._sample_target_resample_time(all_env_ids)
+
   # ------------------------------------------------------------------
   # CommandTerm interface
   # ------------------------------------------------------------------
@@ -118,6 +125,15 @@ class BallVelocityCommand(CommandTerm):
 
     ball_pos = self._env.scene[self.cfg.ball_entity].data.root_link_pos_w[:, :2]
     target_distance = (self.target_position - ball_pos).norm(dim=-1)
+    invalid_env_ids = torch.where(
+      (~torch.isfinite(target_distance))
+      | (target_distance > self.cfg.target_distance_range[1] * 3.0)
+    )[0]
+    if len(invalid_env_ids) > 0:
+      self._resample_command(invalid_env_ids)
+      self._sample_target_resample_time(invalid_env_ids)
+      target_distance = (self.target_position - ball_pos).norm(dim=-1)
+
     reached_env_ids = torch.where(target_distance <= self.cfg.target_reached_threshold)[0]
     if len(reached_env_ids) > 0:
       self._resample_command(reached_env_ids)
