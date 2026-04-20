@@ -182,10 +182,10 @@ terminations = {
     func=bad_orientation,
     params={"limit_angle": math.radians(70.0)},
   ),
-  "ball_captured": TerminationTermCfg(
-    func=ball_captured,
-    params={"command_name": "adversary", "capture_radius": 0.25},
-  ),
+  # "ball_captured": TerminationTermCfg(
+  #   func=ball_captured,
+  #   params={"command_name": "adversary", "capture_radius": 0.25},
+  # ),
   "ball_lost": TerminationTermCfg(
     func=ball_lost,
     params={"max_robot_ball_distance": 2.0},

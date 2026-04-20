@@ -47,7 +47,7 @@ rewards = {
   # ------------------------------------------------------------------ #
   "ball_vel_tracking": RewardTermCfg(  # Match the commanded ball-velocity vector, but relax locally near a blocking obstacle.
     func=ball_vel_tracking_relaxed,
-    weight=4.0,
+    weight=3.0,
     params={
       "command_name": "ball_vel",  # Which ball-velocity command to track.
       "sharpness": 1.5,  # Larger -> penalize vector tracking error more strongly.
@@ -61,7 +61,7 @@ rewards = {
   ),
   "ball_vel_norm": RewardTermCfg(  # Match the commanded ball-speed magnitude, but relax locally near a blocking obstacle.
     func=ball_vel_norm_relaxed,
-    weight=4.0,
+    weight=3.0,
     params={
       "command_name": "ball_vel",  # Which ball-speed command to match.
       "sharpness": 1.5,  # Larger -> tighter speed matching.
@@ -75,7 +75,7 @@ rewards = {
   ),
   "ball_vel_angle": RewardTermCfg(  # Align ball-motion direction with the command, but relax locally near a blocking obstacle.
     func=ball_vel_angle_relaxed,
-    weight=4.0,
+    weight=3.0,
     params={
       "command_name": "ball_vel",  # Which ball-direction command to align with.
       "obstacle_command_name": "adversary",  # Obstacle term used to detect when nominal tracking should be relaxed.
@@ -136,16 +136,16 @@ rewards = {
       "collision_far_distance": 1.5,  # Collision penalty fades to zero at or above this distance.
     },
   ),
-  # "ball_obstacle_collision": RewardTermCfg(  # Replaced by ball_obstacle_proximity constraint (CaT).
-  #   func=ball_obstacle_collision,
-  #   weight=-10.0,
-  #   params={
-  #     "command_name": "adversary",
-  #     "collision_detection_range": 1.0,
-  #     "collision_near_distance": 0.15,
-  #     "collision_far_distance": 0.6,
-  #   },
-  # ),
+  "ball_obstacle_collision": RewardTermCfg(  # Replaced by ball_obstacle_proximity constraint (CaT).
+    func=ball_obstacle_collision,
+    weight=-10.0,
+    params={
+      "command_name": "adversary",
+      "collision_detection_range": 1.0,
+      "collision_near_distance": 0.15,
+      "collision_far_distance": 0.6,
+    },
+  ),
   "obstacle_direction": RewardTermCfg(  # Penalize the ball actually moving toward an obstacle on the target path.
     func=obstacle_direction,
     weight=-7.0,
