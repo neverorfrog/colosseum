@@ -473,6 +473,8 @@ def ball_target_progress(
   target_obstacle_near_distance: float = 0.6,
   target_obstacle_far_distance: float = 1.2,
   speed_ref: float = 1.0,
+  distance_scale_ref: float = 2.0,
+  distance_scale_max: float = 1.5,
 ) -> torch.Tensor:
   """Reward ball velocity toward the persistent target, gated off near the target.
 
@@ -481,6 +483,11 @@ def ball_target_progress(
   reward when the target is already very close, or when the target lies very
   close to the nearest obstacle, to avoid over-constraining the policy near the
   end of the episode or pushing it into blocked target geometries.
+
+  A distance-aware scale grows linearly with remaining target distance up to
+  ``distance_scale_max`` (saturating at ``distance_scale_ref`` metres), so
+  making progress toward a far target is worth more than progress on a near
+  target — this prevents the shaping signal from vanishing on long paths.
   """
   cmd_term = env.command_manager.get_term(command_name)
   ball_xy = env.scene["ball"].data.root_link_pos_w[:, :2]
@@ -499,6 +506,10 @@ def ball_target_progress(
     (target_dist - target_near_distance) / gate_span
   ).clamp(min=0.0, max=1.0)
 
+  distance_scale = 1.0 + (distance_scale_max - 1.0) * (
+    target_dist / max(distance_scale_ref, 1e-6)
+  ).clamp(min=0.0, max=1.0)
+
   obstacle_gate = torch.ones(env.num_envs, device=env.device)
   try:
     term: ObstacleCommand = env.command_manager.get_term(obstacle_command_name)
@@ -515,7 +526,7 @@ def ball_target_progress(
   except Exception:
     pass
 
-  return target_gate * obstacle_gate * progress_reward
+  return target_gate * obstacle_gate * distance_scale * progress_reward
 
 
 # ---------------------------------------------------------------------------
@@ -640,17 +651,21 @@ def obstacle_direction(
   env: ManagerBasedRlEnv,
   command_name: str = "adversary",
   ball_vel_command_name: str = "ball_vel",
-  direction_detection_range: float = 3.0,
-  direction_tube_radius: float = 1.0,
+  direction_detection_range: float = 1.5,
+  direction_tube_radius: float = 0.5,
   direction_sharpness: float = 3.0,
+  min_ball_speed: float = 0.1,
   ball_engagement_near_distance: float = 0.3,
   ball_engagement_far_distance: float = 0.75,
 ) -> torch.Tensor:
-  """Penalty for commanding the ball toward an obstacle on the ball-target segment.
+  """Penalty for the ball actually moving toward an obstacle on the ball-target segment.
 
-  Unlike obstacle_collision, this term is active only when the nearest obstacle
-  lies between the current ball position and the current target, inside a
-  lateral path tube.
+  Penalizes the alignment of the **actual** ball velocity with the direction
+  from ball to the nearest obstacle, gated by:
+    - obstacle lying on the forward half of the ball-target segment,
+    - obstacle lying within a narrow lateral tube around that segment,
+    - ball-speed above a minimum (so a near-stationary ball is not penalized),
+    - ball under close control of the robot (engagement gate).
   """
   term: ObstacleCommand = env.command_manager.get_term(command_name)
   if term.cfg.num_active == 0:
@@ -658,6 +673,7 @@ def obstacle_direction(
 
   _, nearest_obs_xy, _ = _get_closest_robot_obstacle(env, command_name)
   ball_xy = env.scene["ball"].data.root_link_pos_w[:, :2]
+  ball_vel_xy = env.scene["ball"].data.root_link_lin_vel_w[:, :2]
   cmd_term = env.command_manager.get_term(ball_vel_command_name)
   target_xy = cmd_term.target_position[:, :2]
   target_vec = target_xy - ball_xy
@@ -670,19 +686,19 @@ def obstacle_direction(
     ball_to_obs - obs_forward.unsqueeze(-1) * target_dir
   ).norm(dim=-1)
 
+  ball_speed = ball_vel_xy.norm(dim=-1)
   direction_relevant = (
     (target_dist > 1e-6)
     & (obs_forward > 0.0)
     & (obs_forward < target_dist)
     & (obs_forward <= direction_detection_range)
     & (obs_lateral <= direction_tube_radius)
+    & (ball_speed > min_ball_speed)
   )
 
-  cmd_xy = env.command_manager.get_command(ball_vel_command_name)[:, :2]
-  cmd_speed = cmd_xy.norm(dim=-1)
-  cmd_dir = cmd_xy / cmd_speed.unsqueeze(-1).clamp(min=1e-6)
+  ball_vel_dir = ball_vel_xy / ball_speed.unsqueeze(-1).clamp(min=1e-6)
   ball_to_obs_dir = ball_to_obs / ball_to_obs.norm(dim=-1, keepdim=True).clamp(min=1e-6)
-  alignment = (cmd_dir * ball_to_obs_dir).sum(dim=-1).clamp(-1.0, 1.0)
+  alignment = (ball_vel_dir * ball_to_obs_dir).sum(dim=-1).clamp(-1.0, 1.0)
   toward_obstacle = alignment.clamp(min=0.0)
   direction_term = toward_obstacle.pow(2)
   if direction_sharpness != 2.0:

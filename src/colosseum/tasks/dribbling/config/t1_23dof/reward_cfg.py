@@ -87,7 +87,7 @@ rewards = {
   ),
   "ball_target_progress": RewardTermCfg(  # Reward moving the ball along the current ball-to-target direction.
     func=ball_target_progress,
-    weight=2.0,
+    weight=1.0,
     params={
       "command_name": "ball_vel",  # Ball command term providing the persistent world-frame target.
       "obstacle_command_name": "adversary",  # Obstacle command term used to detect blocked target neighborhoods.
@@ -96,6 +96,8 @@ rewards = {
       "target_obstacle_near_distance": 0.3,  # Progress reward is fully off when the target is this close to the nearest obstacle.
       "target_obstacle_far_distance": 0.8,  # Progress reward ramps back to full strength once the target is sufficiently far from obstacles.
       "speed_ref": 1.0,  # Ball speed toward the target that saturates the normalized progress reward.
+      "distance_scale_ref": 2.0,  # Target distance at which the distance-aware bonus saturates.
+      "distance_scale_max": 1.5,  # Maximum multiplicative bonus applied to progress on far targets.
     },
   ),
   "robot_obstacle_collision": RewardTermCfg(  # Local robot-obstacle safety term.
@@ -118,15 +120,16 @@ rewards = {
       "collision_far_distance": 0.6,  # Penalty fades to zero at or above this ball-obstacle distance.
     },
   ),
-  "obstacle_direction": RewardTermCfg(  # Penalize commanding the ball toward an obstacle that blocks the target path.
+  "obstacle_direction": RewardTermCfg(  # Penalize the ball actually moving toward an obstacle on the target path.
     func=obstacle_direction,
     weight=-2.5,
     params={
       "command_name": "adversary",  # Obstacle command term providing obstacle positions/velocities.
       "ball_vel_command_name": "ball_vel",  # Ball command term providing the persistent target.
-      "direction_detection_range": 3.0,  # Only obstacles within this forward target-segment range affect direction.
-      "direction_tube_radius": 1.0,  # Direction term only if the obstacle lies close to the ball-target segment.
-      "direction_sharpness": 3.0,  # Larger -> sharper bounded penalty for commanding the ball toward the obstacle.
+      "direction_detection_range": 1.5,  # Only obstacles within this forward target-segment range affect direction.
+      "direction_tube_radius": 0.5,  # Direction term only if the obstacle lies close to the ball-target segment.
+      "direction_sharpness": 3.0,  # Larger -> sharper bounded penalty for pushing the ball toward the obstacle.
+      "min_ball_speed": 0.1,  # Below this ball speed the direction penalty is suppressed.
       "ball_engagement_near_distance": 0.3,  # Full obstacle pressure only when the ball is under close control.
       "ball_engagement_far_distance": 0.75,  # Obstacle pressure fades out when the ball is not engaged.
     },

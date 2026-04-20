@@ -576,25 +576,33 @@ The supervision path is in
 So phase 2 is trained against the same nearest-obstacle body-frame target used
 in phase 1.
 
-## Obstacle Reward
+## Reward Structure Around Obstacles
 
-Obstacle reward logic lives in
-[rewards.py](/home/valeriospagnoli/SPQR/colosseum/src/colosseum/tasks/dribbling/mdp/rewards.py:501).
+Reward logic lives in
+[rewards.py](/home/valeriospagnoli/SPQR/colosseum/src/colosseum/tasks/dribbling/mdp/rewards.py:445)
+and the active weights/parameters are configured in
+[reward_cfg.py](/home/valeriospagnoli/SPQR/colosseum/src/colosseum/tasks/dribbling/config/t1_23dof/reward_cfg.py:1).
 
-The active obstacle handling is now split into two separate reward terms:
+The current obstacle-aware task shaping is built from four complementary terms:
 
-1. `obstacle_collision(...)`
-2. `obstacle_direction(...)`
+1. `robot_obstacle_collision(...)`
+2. `ball_obstacle_collision(...)`
+3. `obstacle_direction(...)`
+4. `ball_target_progress(...)`
 
-They use the same nearest obstacle, but they represent different behaviors.
+The first three are obstacle-related directly. The fourth is not an obstacle
+penalty by itself, but it is explicitly gated by target-obstacle proximity, so
+it is part of the obstacle-handling logic.
 
-### `obstacle_collision`
+### `robot_obstacle_collision`
 
-This is a **local safety** term.
+This is the **robot-body safety** term.
 
-It depends only on robot-obstacle distance and stays active whenever the robot
-is physically close enough to risk contact, even if the obstacle is no longer
-between the ball and the target.
+It uses the nearest active obstacle and depends only on robot-obstacle
+distance. It does not care whether the obstacle is still between the ball and
+the target. If the robot body is close to an obstacle, this penalty stays on.
+
+The shaping is quadratic:
 
 ```python
 progress = clamp((collision_far_distance - dist) / (collision_far_distance - collision_near_distance), 0, 1)
@@ -604,23 +612,52 @@ collision_term = progress^2
 Properties:
 
 - range `[0, 1]`
-- `0` when the obstacle is farther than `collision_far_distance`
-- `1` when the obstacle is at or closer than `collision_near_distance`
-- quadratic shaping in the middle
-- much less aggressive than the previous exponential close-range penalty
-- independent of whether the obstacle lies on the ball-target segment
+- `0` when the nearest obstacle is beyond `collision_detection_range`
+- `1` when the robot is at or inside `collision_near_distance`
+- quadratic growth between `collision_far_distance` and `collision_near_distance`
+- unconditional with respect to ball engagement
 
-The full term is additionally multiplied by a robot-ball engagement gate so
-obstacle pressure is reduced when the robot is not really controlling the ball.
+Current default parameters:
+
+- `collision_detection_range = 1.5`
+- `collision_near_distance = 0.5`
+- `collision_far_distance = 1.5`
+- reward weight `= -5.0`
+
+### `ball_obstacle_collision`
+
+This is the **ball safety** term.
+
+It penalizes the ball getting too close to any active obstacle, again using the
+minimum ball-obstacle distance over the active set.
+
+The shaping is the same quadratic form:
+
+```python
+progress = clamp((collision_far_distance - dist) / (collision_far_distance - collision_near_distance), 0, 1)
+collision_term = progress^2
+```
+
+Properties:
+
+- range `[0, 1]`
+- active even if the robot body itself is safe
+- intended to discourage trapping, scraping, or kicking the ball into the obstacle
+- unconditional with respect to ball engagement
+
+Current default parameters:
+
+- `collision_detection_range = 1.0`
+- `collision_near_distance = 0.15`
+- `collision_far_distance = 0.6`
+- reward weight `= -3.0`
 
 ### `obstacle_direction`
 
-This is a **path-blocking** term.
+This is the **path-blocking direction** term.
 
-It is active only when the nearest obstacle lies between the current ball
-position and the current target, inside a lateral path tube.
-
-For the nearest obstacle the reward computes:
+It is active only when the nearest obstacle lies on the current ball-to-target
+corridor. For the nearest obstacle it computes:
 
 - `target_vec = target_xy - ball_xy`
 - `target_dist = ||target_vec||`
@@ -629,70 +666,109 @@ For the nearest obstacle the reward computes:
 - `obs_forward = dot(ball_to_obs, target_dir)`
 - `obs_lateral = ||ball_to_obs - obs_forward * target_dir||`
 
-Then the obstacle is direction-relevant only if:
+The obstacle is direction-relevant only if:
 
 - `0 < obs_forward < target_dist`
 - `obs_forward <= direction_detection_range`
 - `obs_lateral <= direction_tube_radius`
 
-So if the obstacle is no longer between the ball and the target, the direction
-term turns off even if the obstacle is still laterally close to the robot.
+So this term turns off once the obstacle is no longer between the ball and the
+target, even if the obstacle is still nearby in a purely local sense.
 
-Its magnitude is:
+Its magnitude is based on how much the commanded ball direction points toward
+the obstacle:
 
 ```python
 toward_obstacle = max(0, dot(cmd_dir, normalize(ball_to_obs)))
 direction_term = toward_obstacle^p
 ```
 
-where `p = direction_sharpness / 2` in the current implementation.
+with `p = direction_sharpness / 2`.
 
 Properties:
 
 - range `[0, 1]`
-- near 0 if the commanded ball direction is not toward the obstacle
-- near 1 if the command points directly at the obstacle
-- only active when the obstacle is still on the ball-target corridor
+- near `0` if the command is not directed toward the obstacle
+- near `1` if the command points directly at the obstacle
+- multiplied by a ball-engagement gate, so it matters most when the robot is
+  actually controlling the ball
 
-Current default obstacle-reward parameters are:
+Current default parameters:
 
-- collision term:
-- `collision_near_distance = 0.5`
-- `collision_far_distance = 1.5`
-- `collision_detection_range = 1.5`
-- `ball_engagement_near_distance = 0.3`
-- `ball_engagement_far_distance = 0.75`
-
-- direction term:
 - `direction_detection_range = 3.0`
 - `direction_tube_radius = 1.0`
 - `direction_sharpness = 3.0`
 - `ball_engagement_near_distance = 0.3`
 - `ball_engagement_far_distance = 0.75`
+- reward weight `= -2.5`
 
-## Active Minimal Reward Setup
+### `ball_target_progress`
 
-The active task reward setup is intentionally simple:
+This is the **anti-stall progress** term.
+
+It rewards positive ball velocity along the current ball-to-target direction:
+
+```python
+progress_speed = max(0, dot(ball_vel, target_dir))
+progress_reward = clamp(progress_speed / speed_ref, 0, 1)
+```
+
+However, it is not always active. It is multiplied by two gates:
+
+1. a **near-target gate**
+2. a **target-obstacle gate**
+
+The near-target gate smoothly disables the reward when the ball is already very
+close to the target, so the policy is not over-constrained near completion.
+
+The target-obstacle gate smoothly disables the reward when the target itself is
+too close to the nearest obstacle, so the policy is not forced to keep pushing
+directly into a blocked target neighborhood.
+
+Current default parameters:
+
+- `target_near_distance = 0.4`
+- `target_far_distance = 1.0`
+- `target_obstacle_near_distance = 0.3`
+- `target_obstacle_far_distance = 0.8`
+- `speed_ref = 1.0`
+- reward weight `= 2.0`
+
+## Active Task Reward Setup
+
+The current task-level shaping around obstacles is:
 
 - `ball_vel_tracking`
 - `ball_vel_norm`
 - `ball_vel_angle`
 - `robot_ball_distance`
-- `robot_ball_approach_vel`
 - `robot_ball_yaw`
-- `obstacle_collision`
+- `robot_ball_approach_vel`
+- `ball_target_progress`
+- `robot_obstacle_collision`
+- `ball_obstacle_collision`
 - `obstacle_direction`
 
 In this setup:
 
-- the robot always keeps the standard no-obstacle ball-carrying incentives
-- obstacles affect behavior through two separate terms:
-  local collision safety and path-blocking direction shaping
-- there is no active danger-based tightening, progress reward, or protection reward
+- baseline dribbling behavior is still driven by ball tracking, ball control,
+  and robot-ball geometry
+- the robot body is discouraged from colliding with obstacles
+- the ball is discouraged from colliding with obstacles
+- the command is discouraged from pointing through an obstacle that actually
+  blocks the current ball-to-target corridor
+- forward progress toward the target is rewarded, but this progress pressure is
+  removed when the target is already effectively reached or when the target is
+  too close to an obstacle
 
-This is meant to preserve the baseline dribbling behavior and only relax the
-desired motion locally when the closest obstacle is still on the current
-ball-to-target path corridor.
+This is the current intended behavior:
+
+- if the obstacle is irrelevant, the robot should keep dribbling toward the target
+- if the obstacle is locally dangerous, local collision terms should protect both robot and ball
+- if the obstacle blocks the ball-target corridor, the direction term should
+  encourage a detour
+- if the target itself is effectively blocked by an obstacle, the pure progress
+  term should back off instead of forcing a bad push straight into the blocker
 
 ## Frame Conventions
 
