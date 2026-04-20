@@ -91,8 +91,8 @@ rewards = {
     params={
       "command_name": "ball_vel",  # Ball command term providing the persistent world-frame target.
       "obstacle_command_name": "adversary",  # Obstacle command term used to detect blocked target neighborhoods.
-      "target_near_distance": 0.4,  # Progress reward is fully off when the ball is already this close to the target.
-      "target_far_distance": 1.0,  # Progress reward ramps to full strength by this target distance.
+      "target_near_distance": 0.15,  # Progress reward is fully off when the ball is already this close to the target.
+      "target_far_distance": 0.5,  # Progress reward ramps to full strength by this target distance.
       "target_obstacle_near_distance": 0.3,  # Progress reward is fully off when the target is this close to the nearest obstacle.
       "target_obstacle_far_distance": 0.8,  # Progress reward ramps back to full strength once the target is sufficiently far from obstacles.
       "speed_ref": 1.0,  # Ball speed toward the target that saturates the normalized progress reward.

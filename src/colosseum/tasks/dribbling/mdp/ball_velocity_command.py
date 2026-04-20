@@ -112,6 +112,21 @@ class BallVelocityCommand(CommandTerm):
       robot_pos[:, 1] + torch.sin(target_heading) * target_distances
     )
     self._recompute_velocity_command(env_ids)
+    self._resample_obstacles(env_ids)
+
+  def _resample_obstacles(self, env_ids: torch.Tensor) -> None:
+    """Force the adversary command to resample obstacles for the given envs
+    so obstacle placement stays consistent with the freshly sampled target."""
+    if not self.cfg.resample_obstacles_on_target_reset:
+      return
+    try:
+      term = self._env.command_manager.get_term(self.cfg.obstacle_command_name)
+    except Exception:
+      return
+    resample_fn = getattr(term, "resample_for_env_ids", None)
+    if resample_fn is None:
+      return
+    resample_fn(env_ids)
 
   def _update_command(self) -> None:
     all_env_ids = torch.arange(self.num_envs, device=self.device)
@@ -212,6 +227,11 @@ class BallVelocityCommandCfg(CommandTermCfg):
 
   # Half-width of the heading range around the robot forward direction.
   heading_range: float = math.pi / 8
+
+  # When the target resamples, also force the adversary command term to
+  # resample obstacles so obstacles stay on the new ball→target corridor.
+  resample_obstacles_on_target_reset: bool = True
+  obstacle_command_name: str = "adversary"
 
   def build(self, env: ManagerBasedRlEnv) -> BallVelocityCommand:
     return BallVelocityCommand(self, env)
