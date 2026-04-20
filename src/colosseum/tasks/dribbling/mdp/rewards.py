@@ -269,18 +269,42 @@ def feet_distance_penalty(
 
 def robot_ball_distance(
   env: ManagerBasedRlEnv,
-  sharpness: float = 2.0,
+  close_distance: float = 0.3,
+  behind_close_penalty: float = 2.0,
+  far_sharpness: float = 3.0,
 ) -> torch.Tensor:
-  """exp(-sharpness * ||robot_xy - ball_xy||²).
+  """Front/back-aware robot-ball proximity reward.
 
-  Low sharpness (0.5) → half-max at ~1.2m so the robot can play the ball
-  forward into free areas without being penalized.  High sharpness (2.0)
-  keeps the ball at feet (~0.6m half-max), suitable for tight dribbling.
+  Desired behavior:
+    - ball close and in front (distance <= close_distance, x_body >= 0): reward 1.0
+    - ball close but behind (distance <= close_distance, x_body < 0): constant low reward
+    - ball farther than close_distance: exponential decay with distance
+
+  This avoids over-encouraging the robot to keep the ball glued to its body
+  regardless of whether the ball has already slipped behind the support polygon.
   """
-  robot_pos = env.scene["robot"].data.root_link_pos_w[:, :2]
-  ball_pos = env.scene["ball"].data.root_link_pos_w[:, :2]
-  dist_sq = ((ball_pos - robot_pos) ** 2).sum(dim=-1)
-  return torch.exp(-sharpness * dist_sq)
+  robot = env.scene["robot"]
+  ball_pos_w = env.scene["ball"].data.root_link_pos_w[:, :3]
+  robot_pos_w = robot.data.root_link_pos_w[:, :3]
+
+  relative_w = ball_pos_w - robot_pos_w
+  quat_w = robot.data.root_link_quat_w
+  quat_conj = torch.cat([quat_w[:, :1], -quat_w[:, 1:]], dim=-1)
+  ball_b = quat_apply(quat_conj, relative_w)[:, :2]
+  dist = ball_b.norm(dim=-1)
+
+  front_close = (dist <= close_distance) & (ball_b[:, 0] >= 0.0)
+  behind_close = (dist <= close_distance) & ~front_close
+
+  far_excess = (dist - close_distance).clamp(min=0.0)
+  far_reward = torch.exp(-far_sharpness * far_excess.pow(2))
+  behind_close_reward = torch.full_like(dist, math.exp(-behind_close_penalty))
+
+  return torch.where(
+    front_close,
+    torch.ones_like(dist),
+    torch.where(behind_close, behind_close_reward, far_reward),
+  )
 
 
 def robot_ball_yaw(
@@ -488,6 +512,8 @@ def obstacle_avoidance(
   direction_sharpness: float = 4.0,
   collision_weight: float = 0.2,
   direction_weight: float = 1.0,
+  ball_engagement_near_distance: float = 0.3,
+  ball_engagement_far_distance: float = 0.75,
 ) -> torch.Tensor:
   """Nearest-obstacle penalty with a simple front-distance gate.
 
@@ -497,16 +523,17 @@ def obstacle_avoidance(
 
   The penalty is the sum of:
     1. collision term:   clipped quadratic on robot-obstacle distance
-    2. direction term:   exp(direction_sharpness * max(0, cos(cmd, ball->obs))) - 1
+    2. direction term:   bounded quadratic on max(0, cos(cmd, ball->obs))
 
   The first discourages direct collision with the obstacle:
     - 0.0 when distance >= collision_far_distance
     - 1.0 when distance <= collision_near_distance
     - quadratic interpolation in between
 
-  The second discourages commanding ball motion toward the obstacle. This
-  implementation is intentionally simple: when the obstacle is not near and in
-  front, it has no effect; otherwise it only adds local avoidance pressure.
+  The second discourages commanding ball motion toward the obstacle. The whole
+  penalty is additionally gated by robot-ball engagement: when the ball is not
+  under control, obstacle avoidance pressure is relaxed so the policy first
+  recovers the ball instead of freezing near an obstacle.
   """
   term: ObstacleCommand = env.command_manager.get_term(command_name)
   if term.cfg.num_active == 0:
@@ -534,10 +561,21 @@ def obstacle_avoidance(
 
   alignment = (cmd_dir * ball_to_obs_dir).sum(dim=-1).clamp(-1.0, 1.0)
   toward_obstacle = alignment.clamp(min=0.0)
-  direction_term = torch.exp(direction_sharpness * toward_obstacle) - 1.0
-  direction_term = direction_term / (math.exp(direction_sharpness) - 1.0)
+  direction_term = toward_obstacle.pow(2)
+  if direction_sharpness != 2.0:
+    direction_term = direction_term.pow(direction_sharpness / 2.0)
 
-  penalty = (
+  robot_xy = env.scene["robot"].data.root_link_pos_w[:, :2]
+  ball_dist = (ball_xy - robot_xy).norm(dim=-1)
+  engagement_span = max(
+    ball_engagement_far_distance - ball_engagement_near_distance,
+    1e-6,
+  )
+  engagement = (
+    (ball_engagement_far_distance - ball_dist) / engagement_span
+  ).clamp(min=0.0, max=1.0)
+
+  penalty = engagement * (
     collision_weight * collision_near.float() * collision_term
     + direction_weight * direction_near.float() * direction_term
   )

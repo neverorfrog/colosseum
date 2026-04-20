@@ -18,7 +18,7 @@ from colosseum.tasks.dribbling.mdp.curriculum import (
 from colosseum.tasks.dribbling.mdp.gait_phase_command import GaitPhaseCommandCfg
 from colosseum.tasks.dribbling.mdp.head_ik_action import HeadIKActionCfg
 from colosseum.tasks.dribbling.mdp.obstacle_commands import ObstacleCommandCfg
-from colosseum.tasks.dribbling.mdp.terminations import ball_captured
+from colosseum.tasks.dribbling.mdp.terminations import ball_captured, ball_lost
 from colosseum.tasks.dribbling.obstacle_spec import NUM_OBSTACLES
 
 _ARM_JOINTS = {
@@ -184,5 +184,9 @@ terminations = {
   "ball_captured": TerminationTermCfg(
     func=ball_captured,
     params={"command_name": "adversary", "capture_radius": 0.3},
+  ),
+  "ball_lost": TerminationTermCfg(
+    func=ball_lost,
+    params={"max_robot_ball_distance": 2.0},
   ),
 }

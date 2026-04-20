@@ -66,7 +66,11 @@ rewards = {
   "robot_ball_distance": RewardTermCfg(  # Keep the robot reasonably close to the ball.
     func=robot_ball_distance,
     weight=1.5,
-    params={"sharpness": 1.0},  # Larger -> reward drops faster as robot-ball distance grows.
+    params={
+      "close_distance": 0.3,  # Ball within 0.3 m and in front is considered fully controlled.
+      "behind_close_penalty": 3.0,  # Constant penalty level when the ball is close but behind.
+      "far_sharpness": 3.0,  # Larger -> stronger exponential decay once the ball is farther than 0.3 m.
+    },
   ),
   "robot_ball_yaw": RewardTermCfg(  # Keep the ball in front of the robot along the command.
     func=robot_ball_yaw_body,
@@ -88,9 +92,11 @@ rewards = {
       "direction_detection_range": 3.0,  # Kick-direction penalty only inside this robot-obstacle distance.
       "collision_near_distance": 0.5,  # Maximum collision penalty at or below this distance.
       "collision_far_distance": 1.5,  # Collision penalty fades to zero at or above this distance.
-      "direction_sharpness": 5.0,  # Larger -> stronger penalty for commanding the ball toward the obstacle.
+      "direction_sharpness": 3.0,  # Larger -> sharper bounded penalty for commanding the ball toward the obstacle.
       "collision_weight": 0.5,  # Relative weight of body-obstacle proximity.
       "direction_weight": 1.5,  # Relative weight of "do not kick toward obstacle".
+      "ball_engagement_near_distance": 0.3,  # Full obstacle pressure only when the ball is under close control.
+      "ball_engagement_far_distance": 0.75,  # Obstacle pressure fades out when the ball is not engaged.
     },
   ),
   # ------------------------------------------------------------------ #
