@@ -10,10 +10,10 @@ from colosseum.tasks.dribbling.mdp.rewards import feet_distance_penalty
 dribbling_constraints: dict[str, ConstraintTermCfg] = {
   "ball_obstacle_proximity": ConstraintTermCfg(
     func=constraints.ball_obstacle_proximity,
-    max_p=0.75,
+    max_p=1.0,
     params={
       "command_name": "adversary",
-      "threshold": 0.6,  # Violation starts 0.6 m from the obstacle; grows to maximum at contact.
+      "threshold": 0.25,  # Violation starts only when the ball is nearly touching the obstacle.
     },
   ),
   # ------------------------------------------------------------------ #
