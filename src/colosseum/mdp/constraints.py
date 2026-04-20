@@ -15,6 +15,8 @@ from mjlab.managers.scene_entity_config import SceneEntityCfg
 if TYPE_CHECKING:
   from mjlab.envs import ManagerBasedRlEnv
 
+from colosseum.tasks.dribbling.mdp.obstacle_commands import ObstacleCommand
+
 
 def joint_torque(
   env: ManagerBasedRlEnv,
@@ -79,7 +81,10 @@ def joint_range(
   """
   data = env.scene[asset_cfg.name].data
   return (
-    torch.abs(data.joint_pos[:, asset_cfg.joint_ids] - data.default_joint_pos[:, asset_cfg.joint_ids])
+    torch.abs(
+      data.joint_pos[:, asset_cfg.joint_ids]
+      - data.default_joint_pos[:, asset_cfg.joint_ids]
+    )
     - limit
   )
 
@@ -178,9 +183,7 @@ def air_time(
   sensor = env.scene[asset_cfg.name]
   touchdown = sensor.compute_first_contact(env.step_dt)[:, asset_cfg.body_ids]
   last_air_time = sensor.data.last_air_time[:, asset_cfg.body_ids]
-  cmd_norm = torch.norm(
-    env.command_manager.get_command("base_velocity")[:, :3], dim=1
-  )
+  cmd_norm = torch.norm(env.command_manager.get_command("base_velocity")[:, :3], dim=1)
   moving = (cmd_norm > velocity_deadzone).float().unsqueeze(1)
   return (limit - last_air_time) * touchdown.float() * moving
 
@@ -254,3 +257,28 @@ def pose_deviation_cstr(
   adaptive_limit = base_limit * (1.0 + 2.0 * speed)
 
   return deviation - adaptive_limit
+
+
+def ball_obstacle_proximity(
+  env: ManagerBasedRlEnv,
+  command_name: str,
+  threshold: float,
+) -> torch.Tensor:
+  """Violation when the ball is closer than threshold to any obstacle.
+
+  Violation magnitude = threshold - min_ball_obstacle_dist, so it grows
+  linearly as the ball approaches an obstacle and reaches its maximum at contact.
+
+  Returns: [num_envs]
+  """
+
+  term: ObstacleCommand = env.command_manager.get_term(command_name)
+  if term.cfg.num_active == 0:
+    return torch.zeros(env.num_envs, device=env.device)
+
+  ball_xy = env.scene["ball"].data.root_link_pos_w[:, :2]
+  obs_xy = term.obstacle_positions_w[:, : term.cfg.num_active]
+  dist = (obs_xy - ball_xy.unsqueeze(1)).norm(dim=-1)
+  min_dist = dist.min(dim=-1).values
+
+  return threshold - min_dist
