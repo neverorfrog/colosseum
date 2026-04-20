@@ -25,16 +25,18 @@ from colosseum.robots.t1_23dof.sensors import (
   SELF_COLLISION_SENSOR,
 )
 from colosseum.tasks.dribbling.mdp.rewards import (
+  ball_obstacle_collision,
+  ball_target_progress,
   robot_ball_approach_vel,
   robot_ball_distance,
   ball_vel_angle_body,
   ball_vel_norm,
   ball_vel_tracking_body,
   feet_distance_penalty,
-  obstacle_collision,
   obstacle_direction,
   pose_deviation,
   robot_ball_yaw_body,
+  robot_obstacle_collision,
   stance_phase_schedule,
   swing_phase_schedule,
 )
@@ -53,7 +55,7 @@ rewards = {
   ),
   "ball_vel_norm": RewardTermCfg(  # Match the commanded ball-speed magnitude.
     func=ball_vel_norm,
-    weight=4.0,
+    weight=2.0,
     params={
       "command_name": "ball_vel",  # Which ball-speed command to match.
       "sharpness": 1.5,  # Larger -> tighter speed matching.
@@ -61,7 +63,7 @@ rewards = {
   ),
   "ball_vel_angle": RewardTermCfg(  # Align ball-motion direction with the command.
     func=ball_vel_angle_body,
-    weight=4.0,
+    weight=2.0,
     params={"command_name": "ball_vel"},  # Which ball-direction command to align with.
   ),
   "robot_ball_distance": RewardTermCfg(  # Keep the robot reasonably close to the ball.
@@ -69,7 +71,7 @@ rewards = {
     weight=1.5,
     params={
       "close_distance": 0.3,  # Ball within 0.3 m and in front is considered fully controlled.
-      "behind_close_penalty": 3.0,  # Constant penalty level when the ball is close but behind.
+      "behind_close_penalty": 0.5,  # Constant penalty level when the ball is close but behind.
       "far_sharpness": 3.0,  # Larger -> stronger exponential decay once the ball is farther than 0.3 m.
     },
   ),
@@ -80,19 +82,40 @@ rewards = {
   ),
   "robot_ball_approach_vel": RewardTermCfg(  # Reward base motion that closes distance to the ball.
     func=robot_ball_approach_vel,
-    weight=2.0,
+    weight=1.0,
     params={"command_name": "ball_vel"},  # Command whose speed sets the desired approach urgency.
   ),
-  "obstacle_collision": RewardTermCfg(  # Local body-obstacle safety term.
-    func=obstacle_collision,
-    weight=-1.5,
+  "ball_target_progress": RewardTermCfg(  # Reward moving the ball along the current ball-to-target direction.
+    func=ball_target_progress,
+    weight=2.0,
+    params={
+      "command_name": "ball_vel",  # Ball command term providing the persistent world-frame target.
+      "obstacle_command_name": "adversary",  # Obstacle command term used to detect blocked target neighborhoods.
+      "target_near_distance": 0.4,  # Progress reward is fully off when the ball is already this close to the target.
+      "target_far_distance": 1.0,  # Progress reward ramps to full strength by this target distance.
+      "target_obstacle_near_distance": 0.3,  # Progress reward is fully off when the target is this close to the nearest obstacle.
+      "target_obstacle_far_distance": 0.8,  # Progress reward ramps back to full strength once the target is sufficiently far from obstacles.
+      "speed_ref": 1.0,  # Ball speed toward the target that saturates the normalized progress reward.
+    },
+  ),
+  "robot_obstacle_collision": RewardTermCfg(  # Local robot-obstacle safety term.
+    func=robot_obstacle_collision,
+    weight=-5.0,
     params={
       "command_name": "adversary",  # Obstacle command term providing obstacle positions/velocities.
       "collision_detection_range": 1.5,  # Collision penalty only inside this robot-obstacle distance.
       "collision_near_distance": 0.5,  # Maximum collision penalty at or below this distance.
       "collision_far_distance": 1.5,  # Collision penalty fades to zero at or above this distance.
-      "ball_engagement_near_distance": 0.3,  # Full obstacle pressure only when the ball is under close control.
-      "ball_engagement_far_distance": 0.75,  # Obstacle pressure fades out when the ball is not engaged.
+    },
+  ),
+  "ball_obstacle_collision": RewardTermCfg(  # Penalize the ball physically touching an obstacle.
+    func=ball_obstacle_collision,
+    weight=-3.0,
+    params={
+      "command_name": "adversary",  # Obstacle command term providing obstacle positions/velocities.
+      "collision_detection_range": 1.0,  # Ball-obstacle distance beyond which the penalty is zero.
+      "collision_near_distance": 0.15,  # Maximum penalty at or below this ball-obstacle distance (≈ ball radius + obstacle radius).
+      "collision_far_distance": 0.6,  # Penalty fades to zero at or above this ball-obstacle distance.
     },
   ),
   "obstacle_direction": RewardTermCfg(  # Penalize commanding the ball toward an obstacle that blocks the target path.

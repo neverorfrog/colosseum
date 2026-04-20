@@ -464,6 +464,60 @@ def robot_ball_approach_vel(
   return torch.exp(-(deficit**2))
 
 
+def ball_target_progress(
+  env: ManagerBasedRlEnv,
+  command_name: str = "ball_vel",
+  obstacle_command_name: str = "adversary",
+  target_near_distance: float = 0.4,
+  target_far_distance: float = 1.0,
+  target_obstacle_near_distance: float = 0.6,
+  target_obstacle_far_distance: float = 1.2,
+  speed_ref: float = 1.0,
+) -> torch.Tensor:
+  """Reward ball velocity toward the persistent target, gated off near the target.
+
+  The reward is based on the positive projection of the current ball velocity
+  onto the current ball-to-target direction. A smooth gate deactivates the
+  reward when the target is already very close, or when the target lies very
+  close to the nearest obstacle, to avoid over-constraining the policy near the
+  end of the episode or pushing it into blocked target geometries.
+  """
+  cmd_term = env.command_manager.get_term(command_name)
+  ball_xy = env.scene["ball"].data.root_link_pos_w[:, :2]
+  ball_vel_xy = env.scene["ball"].data.root_link_lin_vel_w[:, :2]
+  target_xy = cmd_term.target_position[:, :2]
+
+  target_vec = target_xy - ball_xy
+  target_dist = target_vec.norm(dim=-1)
+  target_dir = target_vec / target_dist.unsqueeze(-1).clamp(min=1e-6)
+
+  progress_speed = (ball_vel_xy * target_dir).sum(dim=-1).clamp(min=0.0)
+  progress_reward = (progress_speed / max(speed_ref, 1e-6)).clamp(min=0.0, max=1.0)
+
+  gate_span = max(target_far_distance - target_near_distance, 1e-6)
+  target_gate = (
+    (target_dist - target_near_distance) / gate_span
+  ).clamp(min=0.0, max=1.0)
+
+  obstacle_gate = torch.ones(env.num_envs, device=env.device)
+  try:
+    term: ObstacleCommand = env.command_manager.get_term(obstacle_command_name)
+    if term.cfg.num_active > 0:
+      obs_xy = term.obstacle_positions_w[:, : term.cfg.num_active]
+      target_obs_dist = (obs_xy - target_xy.unsqueeze(1)).norm(dim=-1).min(dim=-1).values
+      obstacle_gate_span = max(
+        target_obstacle_far_distance - target_obstacle_near_distance,
+        1e-6,
+      )
+      obstacle_gate = (
+        (target_obs_dist - target_obstacle_near_distance) / obstacle_gate_span
+      ).clamp(min=0.0, max=1.0)
+  except Exception:
+    pass
+
+  return target_gate * obstacle_gate * progress_reward
+
+
 # ---------------------------------------------------------------------------
 # Obstacles
 # ---------------------------------------------------------------------------
@@ -520,20 +574,19 @@ def _ball_engagement_gate(
   return ball_dist, engagement
 
 
-def obstacle_collision(
+def robot_obstacle_collision(
   env: ManagerBasedRlEnv,
   command_name: str = "adversary",
   collision_detection_range: float = 2.0,
   collision_near_distance: float = 0.5,
   collision_far_distance: float = 1.5,
-  ball_engagement_near_distance: float = 0.3,
-  ball_engagement_far_distance: float = 0.75,
 ) -> torch.Tensor:
   """Local body-obstacle collision penalty.
 
   This term is intentionally local and does not depend on whether the obstacle
   lies between the ball and the target. If the robot is physically close to an
-  obstacle, collision pressure stays active.
+  obstacle, collision pressure stays active unconditionally — safety must not
+  be gated by ball engagement.
   """
   term: ObstacleCommand = env.command_manager.get_term(command_name)
   if term.cfg.num_active == 0:
@@ -549,10 +602,38 @@ def obstacle_collision(
   collision_term = collision_progress.pow(2)
   collision_relevant = min_dist <= collision_detection_range
 
-  _, engagement = _ball_engagement_gate(
-    env, ball_engagement_near_distance, ball_engagement_far_distance
-  )
-  return engagement * collision_relevant.float() * collision_term
+  return collision_relevant.float() * collision_term
+
+
+def ball_obstacle_collision(
+  env: ManagerBasedRlEnv,
+  command_name: str = "adversary",
+  collision_detection_range: float = 1.0,
+  collision_near_distance: float = 0.15,
+  collision_far_distance: float = 0.6,
+) -> torch.Tensor:
+  """Ball-obstacle proximity penalty.
+
+  Penalizes the ball getting physically close to (or touching) an obstacle.
+  Unconditional — the ball colliding with an obstacle is always undesirable.
+  """
+  term: ObstacleCommand = env.command_manager.get_term(command_name)
+  if term.cfg.num_active == 0:
+    return torch.zeros(env.num_envs, device=env.device)
+
+  ball_xy = env.scene["ball"].data.root_link_pos_w[:, :2]
+  obs_xy = term.obstacle_positions_w[:, : term.cfg.num_active]
+  dist = (obs_xy - ball_xy.unsqueeze(1)).norm(dim=-1)
+  min_dist = dist.min(dim=-1).values
+
+  collision_span = max(collision_far_distance - collision_near_distance, 1e-6)
+  collision_progress = (
+    (collision_far_distance - min_dist) / collision_span
+  ).clamp(min=0.0, max=1.0)
+  collision_term = collision_progress.pow(2)
+  collision_relevant = min_dist <= collision_detection_range
+
+  return collision_relevant.float() * collision_term
 
 
 def obstacle_direction(

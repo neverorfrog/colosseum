@@ -94,6 +94,36 @@ def _draw_fov_frustum(
     )
 
 
+def _draw_circle_xy(
+  vis: DebugVisualizer,
+  center_xy: np.ndarray,
+  radius: float,
+  color: tuple,
+  *,
+  z: float = 0.03,
+  line_radius: float = 0.0025,
+  num_segments: int = 48,
+) -> None:
+  """Draw a horizontal circle using short cylinders."""
+  if radius <= 1e-6:
+    return
+
+  angles = np.linspace(0.0, 2.0 * math.pi, num_segments + 1)
+  points = np.stack([
+    center_xy[0] + radius * np.cos(angles),
+    center_xy[1] + radius * np.sin(angles),
+    np.full_like(angles, z),
+  ], axis=-1)
+
+  for idx in range(num_segments):
+    vis.add_cylinder(
+      start=points[idx],
+      end=points[idx + 1],
+      radius=line_radius,
+      color=color,
+    )
+
+
 def draw_camera_ball_overlay(env, vis: DebugVisualizer) -> None:
   """Draw head camera FOV frustum and line-to-ball in the mjlab viewer.
 
@@ -228,7 +258,7 @@ def draw_obstacle_reward_overlay(env, vis: DebugVisualizer) -> None:
 
   Draws:
     - commanded path centerline from the ball
-    - collision tube (narrower)
+    - collision circle around the nearest obstacle
     - direction tube (wider)
     - nearest obstacle marker
     - orthogonal projection of the obstacle onto the commanded path
@@ -243,6 +273,7 @@ def draw_obstacle_reward_overlay(env, vis: DebugVisualizer) -> None:
   command_name = params.get("command_name", "adversary")
   ball_vel_command_name = params.get("ball_vel_command_name", "ball_vel")
   collision_detection_range = float(params.get("collision_detection_range", 1.5))
+  collision_far_distance = float(params.get("collision_far_distance", collision_detection_range))
   direction_detection_range = float(params.get("direction_detection_range", 3.0))
   direction_tube_radius = float(params.get("direction_tube_radius", 1.0))
 
@@ -338,6 +369,17 @@ def draw_obstacle_reward_overlay(env, vis: DebugVisualizer) -> None:
     end=obs_3d,
     radius=0.003,
     color=obs_color,
+  )
+
+  # Collision activation circle around the nearest obstacle.
+  collision_circle_radius = max(collision_detection_range, collision_far_distance)
+  _draw_circle_xy(
+    vis,
+    obs_xy,
+    collision_circle_radius,
+    obs_color,
+    z=0.03,
+    line_radius=0.0025,
   )
 
   vis.add_sphere(
