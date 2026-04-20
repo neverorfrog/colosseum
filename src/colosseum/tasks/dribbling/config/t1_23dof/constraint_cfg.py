@@ -8,14 +8,14 @@ from colosseum.robots.t1_23dof.constants import FOOT_SITE_NAMES
 from colosseum.tasks.dribbling.mdp.rewards import feet_distance_penalty
 
 dribbling_constraints: dict[str, ConstraintTermCfg] = {
-  # "ball_obstacle_proximity": ConstraintTermCfg(
-  #   func=constraints.ball_obstacle_proximity,
-  #   max_p=1.0,
-  #   params={
-  #     "command_name": "adversary",
-  #     "threshold": 0.25,  # Violation starts only when the ball is nearly touching the obstacle.
-  #   },
-  # ),
+  "ball_obstacle_proximity": ConstraintTermCfg(
+    func=constraints.ball_obstacle_proximity,
+    max_p=1.0,
+    params={
+      "command_name": "adversary",
+      "threshold": 0.25,  # Violation starts only when the ball is nearly touching the obstacle.
+    },
+  ),
   # ------------------------------------------------------------------ #
   # Hard constraints (max_p = 1.0) — immediate termination on violation #
   # ------------------------------------------------------------------ #
