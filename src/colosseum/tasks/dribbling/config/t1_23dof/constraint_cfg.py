@@ -13,7 +13,7 @@ dribbling_constraints: dict[str, ConstraintTermCfg] = {
     max_p=1.0,
     params={
       "command_name": "adversary",
-      "threshold": 0.25,  # Violation starts only when the ball is nearly touching the obstacle.
+      "threshold": 0.5,  # Violation starts only when the ball is nearly touching the obstacle.
     },
   ),
   # ------------------------------------------------------------------ #
