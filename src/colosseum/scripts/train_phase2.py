@@ -22,6 +22,7 @@ import os
 import signal
 import subprocess
 import sys
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
@@ -130,6 +131,11 @@ def main() -> None:
     Phase2Config,
     config=(tyro.conf.CascadeSubcommandArgs,),
   )
+  if hasattr(config.task, "obstacle_stage_index"):
+    config = replace(
+      config,
+      task=replace(config.task, obstacle_stage_index=config.obstacle_stage_index),
+    )
 
   cuda_devices = _parse_cuda_devices(config.cuda)
 
@@ -208,7 +214,6 @@ def main() -> None:
 
     logger_cfg = config.logger
     if logger_cfg.group is None:
-      from dataclasses import replace
       logger_cfg = replace(logger_cfg, group=config.task.name)
 
     try:
@@ -307,6 +312,7 @@ def main() -> None:
       world_size=world_size,
       phase=2,
       phase1_checkpoint=str(checkpoint_path),
+      obstacle_stage_index=config.obstacle_stage_index,
     )
 
     if is_main_process and run_dir is not None and config.save_interval > 0:

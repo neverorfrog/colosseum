@@ -1,32 +1,18 @@
 """Command term: obstacle positions and velocities for adversarial dribbling.
 
-ObstacleCommand holds the world-frame XY position and velocity of every
-obstacle.  It is the single source of truth for where obstacles live and how
-fast they are moving.  It is responsible for:
+ObstacleCommand controls obstacle placement and motion in the simulator.
+The obstacles are curriculum-driven and can switch between several behaviors:
 
-  1. Sampling new positions around the robot at every episode reset
-     (``_resample_command``).
-  2. Writing those positions to the MuJoCo mocap bodies so the collision
-     geometry matches (``_write_obstacle_to_sim``).
-  3. Stepping moving obstacles each environment tick (``_update_command``),
-     enabled in later curriculum stages via ``max_speed > 0``.
+  - ``none``            : no active obstacle
+  - ``static_blocker``  : static blocker in front of the commanded ball path
+  - ``lateral_blocker`` : blocker near the ball path with lateral motion
+  - ``ball_attacker``   : obstacle moves toward the ball with smoothly changing
+                          random speed and heading bias
+  - ``mixed_attackers`` : three-obstacle scene with one ball attacker, one
+                          blocker, and one distractor
 
-Each active obstacle gets its own approach direction sampled at reset (or on
-ball-velocity direction change).  The approach direction is a unit vector
-pointing FROM the robot TOWARD the initial obstacle position, drawn from a
-random angle relative to the commanded ball-velocity direction within
-``approach_angle_range``.  The obstacle then drifts in the opposite direction
-(toward the robot) at ``max_speed``.
-
-Inactive obstacles (``k >= num_active``) are parked at ground level (z=0)
-but at a large world-frame XY offset (_PARK_FAR) so they appear very far away
-in any body-frame observation and register near-zero danger regardless of the
-gate function used.  Parking underground is avoided because it corrupts the
-viewer.
-
-Velocity is set analytically (not finite-differenced), so it is exact and
-noise-free.  Velocity is zeroed on teleport events (episode reset or
-ball-velocity direction change) to avoid spurious high-danger readings.
+Positions and velocities are maintained in world frame, then written to the
+MuJoCo mocap bodies every step.
 """
 
 from __future__ import annotations
@@ -37,6 +23,7 @@ from typing import TYPE_CHECKING
 
 import torch
 from mjlab.managers import CommandTerm, CommandTermCfg
+from mjlab.utils.lab_api.math import quat_apply
 
 if TYPE_CHECKING:
   from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv
@@ -49,17 +36,7 @@ _PARK_FAR: float = 1000.0
 
 
 class ObstacleCommand(CommandTerm):
-  """World-frame obstacle position+velocity command.
-
-  At each episode reset, active obstacles are placed at a random distance from
-  the robot along a randomly sampled approach direction.  The approach direction
-  is drawn from a uniform angle offset relative to the commanded ball-velocity
-  direction, within ``cfg.approach_angle_range``.
-
-  The command tensor is the flat (N, num_obstacles*2) array of world-frame
-  XY positions.  Observation terms read positions via ``obstacle_positions_w``
-  and velocities via ``obstacle_velocities_w``.
-  """
+  """World-frame obstacle position+velocity command."""
 
   cfg: ObstacleCommandCfg
 
@@ -70,14 +47,14 @@ class ObstacleCommand(CommandTerm):
     # World-frame XY positions, shape (N, K, 2).
     self._positions_w = torch.zeros((N, K, 2), device=env.device)
     # World-frame XY velocities, shape (N, K, 2).
-    # Set analytically; zeroed on teleport.
     self._velocities_w = torch.zeros((N, K, 2), device=env.device)
-    # Per-obstacle approach unit vectors: obstacle drifts in -approach_dir.
-    # Shape (N, K, 2); initialized to forward direction.
-    self._approach_dirs = torch.zeros((N, K, 2), device=env.device)
-    self._approach_dirs[:, :, 0] = 1.0  # default: forward (+x)
-    # Last seen ball velocity direction; NaN forces resample on first tick.
-    self._last_cmd_dir = torch.full((N, 2), float("nan"), device=env.device)
+    # Motion state for smooth stochastic obstacle behavior.
+    self._speed_targets = torch.zeros((N, K), device=env.device)
+    self._lateral_signs = torch.ones((N, K), device=env.device)
+    self._tangent_mix = torch.zeros((N, K), device=env.device)
+    self._random_dirs = torch.zeros((N, K, 2), device=env.device)
+    self._random_dirs[:, :, 0] = 1.0
+    self._resample_timers = torch.zeros((N, K), device=env.device)
 
   # ------------------------------------------------------------------
   # CommandTerm interface
@@ -100,108 +77,62 @@ class ObstacleCommand(CommandTerm):
 
   def _resample_command(self, env_ids: torch.Tensor) -> None:
     device = self._env.device
-    n = len(env_ids)
     K = self.cfg.num_obstacles
     num_active = self.cfg.num_active
-    d_lo, d_hi = self.cfg.distance_range
-
-    # Invalidate stored direction so the next _update_command tick resamples.
-    self._last_cmd_dir[env_ids] = float("nan")
-
-    # Zero all velocities at episode start (teleport, not drift).
     self._velocities_w[env_ids] = 0.0
-
-    # Robot position is valid at reset time (events run before commands).
-    robot = self._env.scene["robot"]
-    robot_xy = robot.data.root_link_pos_w[env_ids, :2]  # (n, 2)
-
-    ball_vel_cmd = self._env.command_manager.get_command("ball_vel")[env_ids, :2]
-    cmd_speed = ball_vel_cmd.norm(dim=-1, keepdim=True).clamp(min=1e-3)
-    cmd_dir = ball_vel_cmd / cmd_speed  # (n, 2)
-    base_angle = torch.atan2(cmd_dir[:, 1], cmd_dir[:, 0])  # (n,)
-
-    lo, hi = self.cfg.approach_angle_range
+    self._speed_targets[env_ids] = 0.0
+    self._tangent_mix[env_ids] = 0.0
+    self._lateral_signs[env_ids] = 1.0
+    self._resample_timers[env_ids] = 0.0
 
     for k in range(K):
       if k < num_active:
-        # Sample random approach direction relative to ball-velocity command.
-        offsets = torch.rand(n, device=device) * (hi - lo) + lo
-        angle_k = base_angle + offsets
-        approach_dir = torch.stack([torch.cos(angle_k), torch.sin(angle_k)], dim=-1)
-        self._approach_dirs[env_ids, k] = approach_dir
-
-        distances = torch.rand(n, device=device) * (d_hi - d_lo) + d_lo
-        self._positions_w[env_ids, k] = robot_xy + distances.unsqueeze(-1) * approach_dir
+        self._positions_w[env_ids, k] = self._sample_spawn_positions(env_ids, k)
+        self._resample_motion_state(env_ids, k)
+        vel_target = self._compute_velocity_target(env_ids, k)
+        self._velocities_w[env_ids, k] = vel_target
         self._write_obstacle_to_sim(k, env_ids, z=0.0)
       else:
-        # Park far away at ground level so the body-frame distance is always
-        # >> any detection_range, without going underground (viewer-safe).
-        env_origin_xy = self._env.scene.env_origins[env_ids, :2]
-        self._positions_w[env_ids, k, 0] = env_origin_xy[:, 0] + _PARK_FAR
-        self._positions_w[env_ids, k, 1] = env_origin_xy[:, 1] + _PARK_FAR
-        self._write_obstacle_to_sim(k, env_ids, z=0.0)
+        self._park_obstacle(k, env_ids)
 
   def _update_command(self) -> None:
-    """Reposition active obstacles every env tick.
-
-    On a ball-velocity direction change the obstacle is teleported to a fresh
-    random position and its approach direction re-sampled.  Between resamples
-    the obstacle drifts toward the robot at ``max_speed`` along its stored
-    approach direction (``-approach_dir``).
-    """
-    if self.cfg.num_active == 0:
-      return
-
     device = self._env.device
     N = self._env.num_envs
     all_ids = torch.arange(N, device=device)
-    d_lo, d_hi = self.cfg.distance_range
+    dt = self._env.step_dt
 
-    ball_vel_cmd = self._env.command_manager.get_command("ball_vel")[:, :2]  # (N, 2)
-    cmd_speed = ball_vel_cmd.norm(dim=-1, keepdim=True).clamp(min=1e-3)
-    cmd_dir = ball_vel_cmd / cmd_speed  # (N, 2)
+    for k in range(self.cfg.num_obstacles):
+      if k >= self.cfg.num_active:
+        self._park_obstacle(k, all_ids)
+        continue
 
-    robot = self._env.scene["robot"]
-    robot_xy = robot.data.root_link_pos_w[:, :2]  # (N, 2)
+      parked = self._is_parked(k)
+      if parked.any():
+        ids = parked.nonzero(as_tuple=False).flatten()
+        self._positions_w[ids, k] = self._sample_spawn_positions(ids, k)
+        self._resample_motion_state(ids, k)
+        self._velocities_w[ids, k] = self._compute_velocity_target(ids, k)
 
-    # Detect ball_vel direction change (dot < 0.95 ≈ ≥18° turn).
-    # NaN < 0.95 is False in PyTorch, so ~(NaN >= 0.95) = True — the first
-    # tick always resamples because _last_cmd_dir is initialised to NaN.
-    dot = (cmd_dir * self._last_cmd_dir).sum(dim=-1)  # (N,)
-    dir_changed = ~(dot >= 0.95)
+      needs_respawn = self._needs_respawn(all_ids, k)
+      if needs_respawn.any():
+        ids = needs_respawn.nonzero(as_tuple=False).flatten()
+        self._positions_w[ids, k] = self._sample_spawn_positions(ids, k)
+        self._resample_motion_state(ids, k)
+        self._velocities_w[ids, k] = self._compute_velocity_target(ids, k)
 
-    lo, hi = self.cfg.approach_angle_range
-    base_angle = torch.atan2(cmd_dir[:, 1], cmd_dir[:, 0])  # (N,)
+      self._resample_timers[:, k] -= dt
+      expired = self._resample_timers[:, k] <= 0.0
+      if expired.any():
+        ids = expired.nonzero(as_tuple=False).flatten()
+        self._resample_motion_state(ids, k)
 
-    for k in range(self.cfg.num_active):
-      # --- Teleport + re-sample approach direction on ball-vel direction change ---
-      if dir_changed.any():
-        ids = dir_changed.nonzero(as_tuple=False).flatten()
-        n = len(ids)
-        offsets = torch.rand(n, device=device) * (hi - lo) + lo
-        angle_k = base_angle[ids] + offsets
-        approach_dir = torch.stack([torch.cos(angle_k), torch.sin(angle_k)], dim=-1)
-        self._approach_dirs[ids, k] = approach_dir
-
-        distances = torch.rand(n, device=device) * (d_hi - d_lo) + d_lo
-        self._positions_w[ids, k] = robot_xy[ids] + distances.unsqueeze(-1) * approach_dir
-        # Teleport → zero velocity.
-        self._velocities_w[ids, k] = 0.0
-
-      # --- Continuous drift along stored approach direction ---
-      if self.cfg.max_speed > 0:
-        drifting = ~dir_changed  # (N,)
-        dt = self._env.step_dt
-        approach_k = self._approach_dirs[:, k]  # (N, 2)
-        self._positions_w[:, k] -= approach_k * self.cfg.max_speed * dt
-        self._velocities_w[drifting, k] = -approach_k[drifting] * self.cfg.max_speed
-      else:
-        non_teleported = ~dir_changed
-        self._velocities_w[non_teleported, k] = 0.0
-
+      vel_target = self._compute_velocity_target(all_ids, k)
+      alpha = self.cfg.velocity_smoothing
+      self._velocities_w[:, k] = (
+        (1.0 - alpha) * self._velocities_w[:, k] + alpha * vel_target
+      )
+      self._positions_w[:, k] += self._velocities_w[:, k] * dt
       self._write_obstacle_to_sim(k, all_ids, z=0.0)
-
-    self._last_cmd_dir = cmd_dir
 
   def _update_metrics(self) -> None:
     pass
@@ -223,6 +154,181 @@ class ObstacleCommand(CommandTerm):
   # ------------------------------------------------------------------
   # Internal helpers
   # ------------------------------------------------------------------
+
+  def _cmd_and_side_dirs(self, env_ids: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    ball_vel_cmd = self._env.command_manager.get_command("ball_vel")[env_ids, :2]
+    cmd_speed = ball_vel_cmd.norm(dim=-1, keepdim=True)
+    default_dir = torch.zeros_like(ball_vel_cmd)
+    default_dir[:, 0] = 1.0
+    cmd_dir = torch.where(
+      cmd_speed > 1e-3,
+      ball_vel_cmd / cmd_speed.clamp(min=1e-3),
+      default_dir,
+    )
+    side_dir = torch.stack([-cmd_dir[:, 1], cmd_dir[:, 0]], dim=-1)
+    return cmd_dir, side_dir
+
+  def _role_for_obstacle(self, obstacle_idx: int) -> str:
+    behavior = self.cfg.behavior
+    if behavior == "mixed_attackers":
+      if obstacle_idx == 0:
+        return "ball_attacker"
+      if obstacle_idx == 1:
+        return "lateral_blocker"
+      return "distractor"
+    return behavior
+
+  def _sample_spawn_positions(
+    self,
+    env_ids: torch.Tensor,
+    obstacle_idx: int,
+  ) -> torch.Tensor:
+    role = self._role_for_obstacle(obstacle_idx)
+    n = len(env_ids)
+    device = self._env.device
+    ball_xy = self._env.scene["ball"].data.root_link_pos_w[env_ids, :2]
+    cmd_dir, side_dir = self._cmd_and_side_dirs(env_ids)
+    d_lo, d_hi = self.cfg.distance_range
+    l_lo, l_hi = self.cfg.lateral_offset_range
+
+    if role in {"static_blocker", "lateral_blocker", "ball_attacker"}:
+      forward = torch.rand(n, device=device) * (d_hi - d_lo) + d_lo
+      lateral = torch.rand(n, device=device) * (l_hi - l_lo) + l_lo
+      return ball_xy + forward.unsqueeze(-1) * cmd_dir + lateral.unsqueeze(-1) * side_dir
+
+    if role == "distractor":
+      angles = torch.rand(n, device=device) * 2.0 * math.pi - math.pi
+      radius = torch.rand(n, device=device) * (d_hi - d_lo) + d_lo
+      random_dir = torch.stack([torch.cos(angles), torch.sin(angles)], dim=-1)
+      self._random_dirs[env_ids, obstacle_idx] = random_dir
+      return ball_xy + radius.unsqueeze(-1) * random_dir
+
+    return ball_xy
+
+  def _sample_speed(self, env_ids: torch.Tensor) -> torch.Tensor:
+    lo = self.cfg.min_speed
+    hi = self.cfg.max_speed
+    if hi <= lo:
+      return torch.full((len(env_ids),), lo, device=self._env.device)
+    return torch.rand(len(env_ids), device=self._env.device) * (hi - lo) + lo
+
+  def _sample_timer(self, env_ids: torch.Tensor) -> torch.Tensor:
+    lo, hi = self.cfg.velocity_resample_time_range
+    if hi <= lo:
+      return torch.full((len(env_ids),), lo, device=self._env.device)
+    return torch.rand(len(env_ids), device=self._env.device) * (hi - lo) + lo
+
+  def _resample_motion_state(self, env_ids: torch.Tensor, obstacle_idx: int) -> None:
+    role = self._role_for_obstacle(obstacle_idx)
+    if role in {"none", "static_blocker"}:
+      self._speed_targets[env_ids, obstacle_idx] = 0.0
+      self._tangent_mix[env_ids, obstacle_idx] = 0.0
+      self._lateral_signs[env_ids, obstacle_idx] = 1.0
+      self._resample_timers[env_ids, obstacle_idx] = 1e9
+      return
+
+    self._speed_targets[env_ids, obstacle_idx] = self._sample_speed(env_ids)
+    self._resample_timers[env_ids, obstacle_idx] = self._sample_timer(env_ids)
+
+    if role == "lateral_blocker":
+      sign = torch.randint(0, 2, (len(env_ids),), device=self._env.device, dtype=torch.int64)
+      self._lateral_signs[env_ids, obstacle_idx] = sign.float() * 2.0 - 1.0
+      self._tangent_mix[env_ids, obstacle_idx] = 0.0
+    elif role == "ball_attacker":
+      lo, hi = self.cfg.attack_tangent_range
+      self._tangent_mix[env_ids, obstacle_idx] = (
+        torch.rand(len(env_ids), device=self._env.device) * (hi - lo) + lo
+      )
+    elif role == "distractor":
+      angles = torch.rand(len(env_ids), device=self._env.device) * 2.0 * math.pi - math.pi
+      self._random_dirs[env_ids, obstacle_idx] = torch.stack(
+        [torch.cos(angles), torch.sin(angles)], dim=-1
+      )
+
+  def _compute_velocity_target(
+    self,
+    env_ids: torch.Tensor,
+    obstacle_idx: int,
+  ) -> torch.Tensor:
+    role = self._role_for_obstacle(obstacle_idx)
+    n = len(env_ids)
+    if role in {"none", "static_blocker"}:
+      return torch.zeros((n, 2), device=self._env.device)
+
+    speed = self._speed_targets[env_ids, obstacle_idx].unsqueeze(-1)
+    _, side_dir = self._cmd_and_side_dirs(env_ids)
+
+    if role == "lateral_blocker":
+      sign = self._lateral_signs[env_ids, obstacle_idx].unsqueeze(-1)
+      return sign * side_dir * speed
+
+    if role == "ball_attacker":
+      ball_xy = self._env.scene["ball"].data.root_link_pos_w[env_ids, :2]
+      obs_xy = self._positions_w[env_ids, obstacle_idx]
+      to_ball = ball_xy - obs_xy
+      to_ball_dir = to_ball / to_ball.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+      tangent_dir = torch.stack([-to_ball_dir[:, 1], to_ball_dir[:, 0]], dim=-1)
+      mix = self._tangent_mix[env_ids, obstacle_idx].unsqueeze(-1)
+      attack_dir = to_ball_dir + mix * tangent_dir
+      attack_dir = attack_dir / attack_dir.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+      return attack_dir * speed
+
+    if role == "distractor":
+      return self._random_dirs[env_ids, obstacle_idx] * speed
+
+    return torch.zeros((n, 2), device=self._env.device)
+
+  def _is_parked(self, obstacle_idx: int) -> torch.Tensor:
+    env_origin_xy = self._env.scene.env_origins[:, :2]
+    offset = (self._positions_w[:, obstacle_idx] - env_origin_xy).abs().max(dim=-1).values
+    return offset > (_PARK_FAR / 2.0)
+
+  def _obstacle_pos_body(
+    self,
+    env_ids: torch.Tensor,
+    obstacle_idx: int,
+  ) -> torch.Tensor:
+    robot = self._env.scene["robot"]
+    quat_w = robot.data.root_link_quat_w[env_ids]
+    quat_conj = torch.cat([quat_w[:, :1], -quat_w[:, 1:]], dim=-1)
+    robot_xy = robot.data.root_link_pos_w[env_ids, :2]
+    rel_xy = self._positions_w[env_ids, obstacle_idx] - robot_xy
+    rel_3d = torch.cat([rel_xy, torch.zeros(len(env_ids), 1, device=self._env.device)], dim=-1)
+    return quat_apply(quat_conj, rel_3d)[:, :2]
+
+  def _needs_respawn(
+    self,
+    env_ids: torch.Tensor,
+    obstacle_idx: int,
+  ) -> torch.Tensor:
+    role = self._role_for_obstacle(obstacle_idx)
+    if role == "none":
+      return torch.zeros(len(env_ids), dtype=torch.bool, device=self._env.device)
+
+    robot_xy = self._env.scene["robot"].data.root_link_pos_w[env_ids, :2]
+    ball_xy = self._env.scene["ball"].data.root_link_pos_w[env_ids, :2]
+    obs_xy = self._positions_w[env_ids, obstacle_idx]
+    obs_pos_b = self._obstacle_pos_body(env_ids, obstacle_idx)
+
+    robot_dist = (obs_xy - robot_xy).norm(dim=-1)
+    ball_dist = (obs_xy - ball_xy).norm(dim=-1)
+    behind = obs_pos_b[:, 0] < self.cfg.respawn_behind_x_threshold
+    far_from_robot = robot_dist > self.cfg.respawn_robot_distance
+    far_from_ball = ball_dist > self.cfg.respawn_ball_distance
+
+    if role == "ball_attacker":
+      return behind | far_from_ball
+
+    return behind | far_from_robot
+
+  def _park_obstacle(self, obstacle_idx: int, env_ids: torch.Tensor) -> None:
+    env_origin_xy = self._env.scene.env_origins[env_ids, :2]
+    self._positions_w[env_ids, obstacle_idx, 0] = env_origin_xy[:, 0] + _PARK_FAR
+    self._positions_w[env_ids, obstacle_idx, 1] = env_origin_xy[:, 1] + _PARK_FAR
+    self._velocities_w[env_ids, obstacle_idx] = 0.0
+    self._speed_targets[env_ids, obstacle_idx] = 0.0
+    self._resample_timers[env_ids, obstacle_idx] = 0.0
+    self._write_obstacle_to_sim(obstacle_idx, env_ids, z=0.0)
 
   def _write_obstacle_to_sim(
     self,
@@ -257,16 +363,33 @@ class ObstacleCommandCfg(CommandTermCfg):
   # Active obstacles at this curriculum stage (0 = none, ramps up).
   num_active: int = 0
 
-  # Sampling range for initial distance from the robot (metres).
-  distance_range: tuple[float, float] = (2.5, 4.0)
+  # Spawn distance in metres along the behavior-specific forward/radial direction.
+  distance_range: tuple[float, float] = (1.5, 3.0)
 
-  # Maximum approach speed in m/s (0 = static obstacles).
+  # Behavior mode for active obstacles.
+  behavior: str = "none"
+
+  # Speed range in m/s for moving obstacles.
+  min_speed: float = 0.0
   max_speed: float = 0.0
 
-  # Angular offset range (radians) relative to ball-velocity direction for
-  # sampling each obstacle's approach direction.  (-pi, pi) = fully random;
-  # (-pi/2, pi/2) = frontal half-space only.
-  approach_angle_range: tuple[float, float] = (-math.pi, math.pi)
+  # Spawn offset in metres perpendicular to the commanded ball direction.
+  lateral_offset_range: tuple[float, float] = (-0.8, 0.8)
+
+  # Resample target speed/bias every random interval in seconds.
+  velocity_resample_time_range: tuple[float, float] = (0.5, 1.0)
+
+  # First-order smoothing toward the resampled velocity target.
+  velocity_smoothing: float = 0.2
+
+  # Tangential heading bias for ball attackers; 0 = straight to ball.
+  attack_tangent_range: tuple[float, float] = (-0.35, 0.35)
+
+  # Respawn an obstacle after the encounter is over instead of waiting
+  # for the episode to terminate.
+  respawn_behind_x_threshold: float = -0.2
+  respawn_robot_distance: float = 4.0
+  respawn_ball_distance: float = 3.0
 
   def build(self, env: ManagerBasedRlEnv) -> ObstacleCommand:
     return ObstacleCommand(self, env)

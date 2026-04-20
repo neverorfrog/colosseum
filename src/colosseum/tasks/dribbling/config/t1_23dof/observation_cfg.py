@@ -16,7 +16,6 @@ from mjlab.tasks.velocity.mdp.observations import (
 from mjlab.utils.noise import UniformNoiseCfg as Unoise
 
 from colosseum.assets.ball.ball_spec import BALL_FRICTION, BALL_MASS
-from colosseum.tasks.dribbling.obstacle_spec import NUM_OBSTACLES
 from colosseum.tasks.dribbling.mdp.observations import (
   ball_friction,
   ball_mass,
@@ -26,8 +25,8 @@ from colosseum.tasks.dribbling.mdp.observations import (
   ball_velocity_xy,
   base_height,
   foot_ball_contact_force,
-  obstacle_positions_b,
-  obstacle_velocities_b,
+  obstacle_position_b,
+  obstacle_velocity_b,
 )
 
 # ---------------------------------------------------------------------------
@@ -75,21 +74,14 @@ privileged_ball_terms = {
 }
 
 # ---------------------------------------------------------------------------
-# Privileged obstacles: encoder input, num_obstacles*4 D
-# = XY body-frame position (2) + XY body-frame velocity (2) per obstacle.
-# Inactive obstacles are parked far away (not underground), so they appear
-# at large body-frame distances with zero velocity — naturally near-zero danger.
+# Privileged obstacles: encoder input, 4D
+# = XY body-frame position (2) + XY body-frame velocity (2) for the nearest
+# active obstacle only. If no obstacle is active, a far-away sentinel is used.
 # ---------------------------------------------------------------------------
 
 privileged_obstacle_terms = {
-  "obstacle_pos": ObservationTermCfg(
-    func=obstacle_positions_b,
-    params={"num_obstacles": NUM_OBSTACLES},
-  ),
-  "obstacle_vel": ObservationTermCfg(
-    func=obstacle_velocities_b,
-    params={"num_obstacles": NUM_OBSTACLES},
-  ),
+  "obstacle_pos": ObservationTermCfg(func=obstacle_position_b),
+  "obstacle_vel": ObservationTermCfg(func=obstacle_velocity_b),
 }
 
 # ---------------------------------------------------------------------------

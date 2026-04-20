@@ -1,6 +1,9 @@
 import math  # noqa: F401
 
-from mjlab.envs.mdp import action_rate_l2
+from mjlab.envs.mdp import (
+  action_rate_l2,
+  joint_pos_limits,
+)
 from mjlab.managers import RewardTermCfg
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.tasks.velocity.mdp import (
@@ -27,7 +30,7 @@ from colosseum.tasks.dribbling.mdp.rewards import (
   ball_vel_norm,
   ball_vel_tracking_body,
   feet_distance_penalty,
-  obstacle_avoidance_gated,
+  obstacle_avoidance,
   pose_deviation,
   robot_ball_approach_vel_gated,
   robot_ball_distance_gated,
@@ -42,7 +45,7 @@ rewards = {
   # ------------------------------------------------------------------ #
   "ball_vel_tracking": RewardTermCfg(
     func=ball_vel_tracking_body,
-    weight=4.0,
+    weight=2.0,
     params={"command_name": "ball_vel", "sharpness": 1.0},
   ),
   "ball_vel_norm": RewardTermCfg(
@@ -57,7 +60,7 @@ rewards = {
   ),
   "robot_ball_distance": RewardTermCfg(
     func=robot_ball_distance_gated,
-    weight=0.05,
+    weight=0.3,
     params={
       "command_name": "adversary",
       "ball_vel_command_name": "ball_vel",
@@ -69,12 +72,12 @@ rewards = {
   ),
   "robot_ball_yaw": RewardTermCfg(
     func=robot_ball_yaw_body,
-    weight=3.0,
+    weight=4.0,
     params={"command_name": "ball_vel"},
   ),
   "robot_ball_approach_vel": RewardTermCfg(
     func=robot_ball_approach_vel_gated,
-    weight=3.0,
+    weight=0.5,
     params={
       "command_name": "adversary",
       "ball_vel_command_name": "ball_vel",
@@ -82,24 +85,28 @@ rewards = {
     },
   ),
   "obstacle_avoidance": RewardTermCfg(
-    func=obstacle_avoidance_gated,
-    weight=-3.0,
+    func=obstacle_avoidance,
+    weight=-1.0,
     params={
       "command_name": "adversary",
       "ball_vel_command_name": "ball_vel",
-      "safe_radius": 0.7,
-      "sharpness": 2.0,
+      "detection_range": 3.0,
+      "collision_sharpness": 2.0,
+      "direction_sharpness": 4.0,
+      "collision_weight": 0.4,
+      "direction_weight": 1.0,
+      "min_cmd_speed": 0.05,
     },
   ),
-  "ball_protection": RewardTermCfg(
-    func=ball_protection_gated,
-    weight=1.0,
-    params={
-      "command_name": "adversary",
-      "ball_vel_command_name": "ball_vel",
-      "activation_radius": 3.0,
-    },
-  ),
+  # "ball_protection": RewardTermCfg(
+  #   func=ball_protection_gated,
+  #   weight=1.0,
+  #   params={
+  #     "command_name": "adversary",
+  #     "ball_vel_command_name": "ball_vel",
+  #     "activation_radius": 3.0,
+  #   },
+  # ),
   # ------------------------------------------------------------------ #
   # Locomotion regularization                                            #
   # ------------------------------------------------------------------ #
@@ -121,6 +128,7 @@ rewards = {
     weight=-0.5,
     params={"sensor_name": "robot/root_angmom"},
   ),
+  "dof_pos_limits": RewardTermCfg(func=joint_pos_limits, weight=-1.0),
   "action_rate_l2": RewardTermCfg(func=action_rate_l2, weight=-0.1),
   "foot_swing_height": RewardTermCfg(
     func=feet_swing_height,
@@ -147,17 +155,17 @@ rewards = {
     weight=-1.0,
     params={"sensor_name": SELF_COLLISION_SENSOR.name, "force_threshold": 10.0},
   ),
-  # "feet_distance": RewardTermCfg(
-  #   func=feet_distance_penalty,
-  #   weight=-6.0,
-  #   params={
-  #     "asset_cfg": SceneEntityCfg("robot", site_names=FOOT_SITE_NAMES),
-  #     "min_dist": 0.15,
-  #   },
-  # ),
+  "feet_distance": RewardTermCfg(
+    func=feet_distance_penalty,
+    weight=-5.0,
+    params={
+      "asset_cfg": SceneEntityCfg("robot", site_names=FOOT_SITE_NAMES),
+      "min_dist": 0.15,
+    },
+  ),
   "foot_foot_contact": RewardTermCfg(
     func=self_collision_cost,
-    weight=-10.0,
+    weight=-5.0,
     params={"sensor_name": FOOT_FOOT_CONTACT_SENSOR.name, "force_threshold": 1.0},
   ),
   "nonfoot_ball_contact": RewardTermCfg(
@@ -210,21 +218,10 @@ rewards = {
         joint_names=(
           r"(?i).*hip.*",
           r"(?i).*knee.*",
-          r"(?i).*ankle_pitch.*",
+          r"(?i).*ankle.*",
         ),
       ),
       "std": 0.3,
-    },
-  ),
-  "pose_ankle_roll": RewardTermCfg(
-    func=pose_deviation,
-    weight=2.0,
-    params={
-      "asset_cfg": SceneEntityCfg(
-        "robot",
-        joint_names=(r"(?i).*ankle_roll.*",),
-      ),
-      "std": 0.05,
     },
   ),
 }

@@ -7,21 +7,21 @@ DribblingRmaTerm follows the standard RMA two-phase paradigm:
   - The actor is frozen in Phase 2; only the depth encoder is trained.
 
 Phase 1 (privileged, GT inputs):
-    priv_encoder:  cat([ball_pos_vel (4D), obs_norm (K*4D)])  →  z  (latent_dim)
-    obs_norm:      body-frame obstacle pos+vel normalised by pos_scale / vel_scale,
-                   clipped to ±2 (so 1000 m parked obstacles → 2.0, a clear "far" sentinel)
+    priv_encoder:  cat([ball_pos_vel (4D), nearest_obs_norm (4D)])  →  z  (latent_dim)
+    nearest_obs:   body-frame pos+vel of the nearest active obstacle, normalised
+                   by pos_scale / vel_scale and clipped to ±2.
 
 Phase 2 (visual adaptation):
     DepthEncoder (CNN + GRU):  depth frame  →  z  (latent_dim)
     BallHead:     z  →  [x, y, vx, vy]             (supervision only, not actor input)
-    ObstacleHead: z  →  [x0,y0,vx0,vy0, ...]       (supervision only, not actor input)
+    ObstacleHead: z  →  [x,y,vx,vy]                (supervision only, not actor input)
 
 Training losses (Phase 2):
     latent_mse:   ||z_depth - z_priv||²                      (main alignment signal)
     ball_pos:     BallHead[:2]  vs  GT ball position          (auxiliary)
     ball_vel:     BallHead[2:]  vs  GT ball velocity          (auxiliary)
-    obstacle_pos: ObstacleHead[:K*2]  vs  GT obstacle pos     (auxiliary)
-    obstacle_vel: ObstacleHead[K*2:]  vs  GT obstacle vel     (auxiliary)
+    obstacle_pos: ObstacleHead[:2]   vs  GT nearest obstacle pos     (auxiliary)
+    obstacle_vel: ObstacleHead[2:]   vs  GT nearest obstacle vel     (auxiliary)
 """
 
 from __future__ import annotations
@@ -64,9 +64,6 @@ class DribblingRmaTermCfg(RmaTermCfg):
 
   # Single latent dimension shared by both phases.
   latent_dim: int = 64
-
-  # Number of obstacles — obstacle input to encoder = K*4 normalised values.
-  num_obstacles: int = 1
 
   # DepthEncoder / GRU settings.
   gru_hidden: int = 256
@@ -118,11 +115,11 @@ class DribblingRmaTerm(RmaTerm):
     super().__init__(cfg, env)
     N = env.num_envs
     device = env.device
-    K = cfg.num_obstacles
+    K = 1
 
     # ------------------------------------------------------------------
     # Phase 1: single privileged encoder over all GT info.
-    # Input: cat([ball_pos_vel (4), obs_norm (K*4)]) = 4 + K*4
+    # Input: cat([ball_pos_vel (4), obs_norm (4)]) in the current task setup.
     # ------------------------------------------------------------------
     self._priv_encoder = PrivilegedEncoder(
       input_dim=4 + K * 4,
@@ -140,10 +137,7 @@ class DribblingRmaTerm(RmaTerm):
 
     self._ball_head = BallHead(latent_dim=cfg.latent_dim).to(device)
 
-    self._obstacle_head = ObstacleHead(
-      latent_dim=cfg.latent_dim,
-      num_obstacles=K,
-    ).to(device)
+    self._obstacle_head = ObstacleHead(latent_dim=cfg.latent_dim).to(device)
 
     # ------------------------------------------------------------------
     # Runtime state
@@ -316,7 +310,7 @@ class DribblingRmaTerm(RmaTerm):
     mask: torch.Tensor | None = None,
   ) -> dict[str, torch.Tensor] | None:
     cfg: DribblingRmaTermCfg = self.cfg  # type: ignore[assignment]
-    K = cfg.num_obstacles
+    K = 1
 
     if cfg.adaptation_obs_group is None or cfg.adaptation_obs_group not in adaptation_obs:
       return None
@@ -436,12 +430,12 @@ class DribblingRmaTerm(RmaTerm):
   def _normalise_obs(self, obs_raw: torch.Tensor) -> torch.Tensor:
     """Normalise raw body-frame obstacle coordinates and clip to ±2.
 
-    Layout: [..., x0, y0, ..., xK, yK, vx0, vy0, ..., vxK, vyK]
+    Layout: [..., x, y, vx, vy]
     Positions divided by obs_pos_scale, velocities by obs_vel_scale.
     Inactive obstacles at 1000 m clip to 2.0 — a clear "far away" signal.
     """
     cfg: DribblingRmaTermCfg = self.cfg  # type: ignore[assignment]
-    K = cfg.num_obstacles
+    K = 1
     pos = obs_raw[..., : K * 2] / cfg.obs_pos_scale
     vel = obs_raw[..., K * 2 :] / cfg.obs_vel_scale
     return torch.cat([pos, vel], dim=-1).clamp(-2.0, 2.0)

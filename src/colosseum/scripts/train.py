@@ -112,6 +112,11 @@ def main() -> None:
         TrainConfig,
         config=(tyro.conf.CascadeSubcommandArgs,),
     )
+    if hasattr(config.task, "obstacle_stage_index"):
+        config = replace(
+            config,
+            task=replace(config.task, obstacle_stage_index=config.obstacle_stage_index),
+        )
 
     cuda_devices = _parse_cuda_devices(config.cuda)
 
@@ -180,7 +185,6 @@ def main() -> None:
         )
 
         if config.logger.group is None:
-            from dataclasses import replace
             config = replace(config, logger=replace(config.logger, group=config.task.name))
 
         try:
@@ -273,6 +277,8 @@ def main() -> None:
             rank=rank,
             local_rank=local_rank,
             world_size=world_size,
+            phase=1,
+            obstacle_stage_index=config.obstacle_stage_index,
         )
 
         if is_main_process and run_dir is not None and config.logger.save_interval > 0:
