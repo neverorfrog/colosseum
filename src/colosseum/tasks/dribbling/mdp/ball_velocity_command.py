@@ -46,8 +46,7 @@ class BallVelocityCommand(CommandTerm):
     # envs would keep the zero target at the global origin, which is disastrous
     # in a tiled multi-env world because target_distance becomes tens of meters.
     all_env_ids = torch.arange(self.num_envs, device=self.device)
-    self._resample_command(all_env_ids)
-    self._sample_target_resample_time(all_env_ids)
+    self._resample(all_env_ids)
 
   # ------------------------------------------------------------------
   # CommandTerm interface
@@ -61,12 +60,6 @@ class BallVelocityCommand(CommandTerm):
   def world_vel_cmd(self) -> torch.Tensor:
     """World-frame XY ball velocity target. Shape (N, 2)."""
     return self.velocity_command[:, :2]
-
-  def _sample_target_resample_time(self, env_ids: torch.Tensor) -> None:
-    if len(env_ids) == 0:
-      return
-    lo, hi = self.cfg.resampling_time_range
-    self._time_left[env_ids] = torch.rand(len(env_ids), device=self.device) * (hi - lo) + lo
 
   def _recompute_velocity_command(self, env_ids: torch.Tensor) -> None:
     if len(env_ids) == 0:
@@ -131,14 +124,12 @@ class BallVelocityCommand(CommandTerm):
       | (target_distance > self.cfg.target_distance_range[1] * 3.0)
     )[0]
     if len(invalid_env_ids) > 0:
-      self._resample_command(invalid_env_ids)
-      self._sample_target_resample_time(invalid_env_ids)
+      self._resample(invalid_env_ids)
       target_distance = (self.target_position - ball_pos).norm(dim=-1)
 
     reached_env_ids = torch.where(target_distance <= self.cfg.target_reached_threshold)[0]
     if len(reached_env_ids) > 0:
-      self._resample_command(reached_env_ids)
-      self._sample_target_resample_time(reached_env_ids)
+      self._resample(reached_env_ids)
 
   def _update_metrics(self) -> None:
     robot_pos = self._env.scene[self.cfg.robot_entity].data.root_link_pos_w[:, :2]
