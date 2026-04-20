@@ -92,6 +92,8 @@ rewards = {
       "direction_detection_range": 3.0,  # Kick-direction penalty only inside this robot-obstacle distance.
       "collision_near_distance": 0.5,  # Maximum collision penalty at or below this distance.
       "collision_far_distance": 1.5,  # Collision penalty fades to zero at or above this distance.
+      "collision_tube_radius": 0.75,  # Collision term only if the obstacle stays close to the commanded ball path.
+      "direction_tube_radius": 1.0,  # Direction term only if the obstacle lies within the wider path-relevance tube.
       "direction_sharpness": 3.0,  # Larger -> sharper bounded penalty for commanding the ball toward the obstacle.
       "collision_weight": 0.5,  # Relative weight of body-obstacle proximity.
       "direction_weight": 1.5,  # Relative weight of "do not kick toward obstacle".

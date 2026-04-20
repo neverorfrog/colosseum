@@ -73,7 +73,7 @@ At resample time:
 
 - a target heading is sampled around the robot forward direction
 - a target distance is sampled from `target_distance_range`
-- a world-frame target position is created relative to the current ball position
+- a world-frame target position is created relative to the current robot position
 
 At every step:
 
@@ -583,15 +583,34 @@ Obstacle reward logic lives in
 
 The active obstacle penalty is `obstacle_avoidance(...)`.
 
-It uses the nearest obstacle and applies a penalty only when the obstacle is:
+It uses the nearest obstacle, but it is no longer gated by the coarse rule
+"obstacle in front of the robot."
+
+Instead, the obstacle is considered relevant only if it is still close to the
+**commanded ball path toward the current target**.
+
+For the nearest obstacle the reward computes:
+
+- `ball_to_obs = obs_xy - ball_xy`
+- `cmd_dir = normalize(ball_vel_cmd)`
+- `obs_forward = dot(ball_to_obs, cmd_dir)`
+- `obs_lateral = ||ball_to_obs - obs_forward * cmd_dir||`
+
+Interpretation:
+
+- `obs_forward > 0` means the obstacle is still ahead of the ball along the
+  commanded target direction
+- `obs_lateral` measures how far the obstacle is from that commanded path
+
+So the obstacle contributes only if it is:
 
 - within the relevant collision or direction detection range
-- in front of the robot (`body-frame x > 0`)
+- ahead of the ball along the current command
+- inside a lateral path tube
 
-So the obstacle must be both:
-
-- close enough
-- in the frontal half-plane
+This is important because once the robot already moved around the obstacle,
+the obstacle should stop influencing the reward even if it is still close in
+Euclidean distance.
 
 ### Reward Terms
 
@@ -611,6 +630,7 @@ Properties:
 - `1` when the obstacle is at or closer than `collision_near_distance`
 - quadratic shaping in the middle
 - much less aggressive than the previous exponential close-range penalty
+- active only when the obstacle remains inside the **collision path tube**
 
 2. direction term
 
@@ -626,21 +646,23 @@ It computes:
 Then:
 
 ```python
-direction_term = exp(direction_sharpness * toward_obstacle) - 1
-direction_term /= exp(direction_sharpness) - 1
+direction_term = toward_obstacle^p
 ```
+
+where `p = direction_sharpness / 2` in the current implementation.
 
 Properties:
 
 - range `[0, 1]`
 - near 0 if the commanded ball direction is not toward the obstacle
 - near 1 if the command points directly at the obstacle
-- only active when the nearest obstacle is already near and in front of the robot
+- only active when the nearest obstacle is already near and still inside the
+  **direction path tube**
 
 ### Final Penalty
 
 ```python
-penalty = obstacle_near * (
+penalty = engagement * (
     collision_weight * collision_term +
     direction_weight * direction_term
 )
@@ -649,32 +671,52 @@ penalty = obstacle_near * (
 where:
 
 ```python
-collision_near = 1[min_dist <= collision_detection_range and obs_x_body > 0]
-direction_near = 1[min_dist <= direction_detection_range and obs_x_body > 0]
+collision_relevant = 1[
+    min_dist <= collision_detection_range and
+    obs_forward > 0 and
+    obs_lateral <= collision_tube_radius
+]
+
+direction_relevant = 1[
+    min_dist <= direction_detection_range and
+    obs_forward > 0 and
+    obs_lateral <= direction_tube_radius
+]
 ```
 
-Current defaults give a maximum of:
+and `engagement` decreases obstacle pressure when the robot is not really in
+control of the ball anymore.
+
+Current defaults give a maximum raw penalty of:
 
 ```python
-collision_weight + direction_weight = 0.2 + 1.0 = 1.2
+collision_weight + direction_weight = 0.5 + 1.5 = 2.0
 ```
 
-With reward weight `-1.5` in
+With reward weight `-3.0` in
 [reward_cfg.py](/home/valeriospagnoli/SPQR/colosseum/src/colosseum/tasks/dribbling/config/t1_23dof/reward_cfg.py:87),
-the worst-case obstacle contribution is approximately `-1.8`.
+the worst-case obstacle contribution is approximately `-6.0`, but only when:
 
-This was intentionally normalized so the obstacle term stays comparable to the
-other task rewards.
+- the obstacle is still close to the robot
+- the obstacle is still ahead on the current target path
+- the obstacle is inside the relevant path tube
+- and the ball is still closely engaged
+
+So the large weight is much more localized than before.
 
 Current default obstacle-reward parameters are:
 
 - `collision_near_distance = 0.5`
 - `collision_far_distance = 1.5`
 - `collision_detection_range = 1.5`
-- `direction_detection_range = 2.0`
-- `direction_sharpness = 4.0`
-- `collision_weight = 0.2`
-- `direction_weight = 1.0`
+- `direction_detection_range = 3.0`
+- `collision_tube_radius = 0.75`
+- `direction_tube_radius = 1.0`
+- `direction_sharpness = 3.0`
+- `collision_weight = 0.5`
+- `direction_weight = 1.5`
+- `ball_engagement_near_distance = 0.3`
+- `ball_engagement_far_distance = 0.75`
 
 ## Active Minimal Reward Setup
 
@@ -695,8 +737,8 @@ In this setup:
 - there is no active danger-based tightening, progress reward, or protection reward
 
 This is meant to preserve the baseline dribbling behavior and only relax the
-desired motion locally when the closest obstacle is within `2.0m` and in front
-of the robot.
+desired motion locally when the closest obstacle is still on the current
+ball-to-target path corridor.
 
 ## Frame Conventions
 
@@ -710,7 +752,6 @@ Used for:
 - policy obstacle observations
 - phase-1 privileged obstacle input
 - phase-2 obstacle supervision target
-- visibility check `x > 0`
 
 ### World frame
 
@@ -720,13 +761,15 @@ Used for:
 - robot-obstacle distance computations
 - ball-to-obstacle direction in the reward
 - command-direction alignment in the reward
+- forward/lateral projection of the obstacle onto the commanded path
 - target generation and ball-to-target velocity command computation
 
 This is mathematically consistent because:
 
 - distances are invariant to rotation
 - dot products are only taken between vectors expressed in the same frame
-- visibility checks use body frame, which is the correct frame for “in front”
+- path relevance is evaluated in world frame using the same commanded
+  ball-to-target direction used by the task itself
 
 The ball command follows the same rule:
 
@@ -770,7 +813,7 @@ The current obstacle system is designed around these principles:
 - early curriculum stages are simple and gait-friendly
 - later stages create ball-centric pressure, not just robot-body pressure
 - obstacle reward is bounded and only active when the nearest obstacle is near
-  and in front of the robot
+  and still lies inside the commanded path tube
 - the standard ball-carrying rewards remain active even in obstacle scenes
 - the desired ball velocity is always induced by a persistent world-frame target
 - obstacle stages can now be pinned from the CLI for debugging and checkpointing
@@ -780,4 +823,4 @@ In short:
 - command side: persistent target, target-driven world-frame ball velocity
 - simulator side: multi-obstacle staged behaviors
 - policy side: nearest-obstacle compact representation
-- reward side: nearest visible obstacle with bounded collision + direction penalty
+- reward side: nearest path-relevant obstacle with bounded collision + direction penalty

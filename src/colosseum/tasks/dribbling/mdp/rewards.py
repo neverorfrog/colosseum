@@ -509,17 +509,20 @@ def obstacle_avoidance(
   direction_detection_range: float = 2.0,
   collision_near_distance: float = 0.5,
   collision_far_distance: float = 1.5,
+  collision_tube_radius: float = 0.75,
+  direction_tube_radius: float = 1.0,
   direction_sharpness: float = 4.0,
   collision_weight: float = 0.2,
   direction_weight: float = 1.0,
   ball_engagement_near_distance: float = 0.3,
   ball_engagement_far_distance: float = 0.75,
 ) -> torch.Tensor:
-  """Nearest-obstacle penalty with a simple front-distance gate.
+  """Nearest-obstacle penalty gated by proximity to the commanded path tube.
 
   The nearest active obstacle contributes only when:
     - its robot distance is at most the relevant detection range, and
-    - it is in front of the robot in body frame (local x > 0).
+    - it lies ahead of the ball along the commanded ball direction, and
+    - its lateral distance from that commanded path is inside the relevant tube.
 
   The penalty is the sum of:
     1. collision term:   clipped quadratic on robot-obstacle distance
@@ -540,10 +543,27 @@ def obstacle_avoidance(
     return torch.zeros(env.num_envs, device=env.device)
 
   min_dist, nearest_obs_xy, _ = _get_closest_robot_obstacle(env, command_name)
-  nearest_obs_b = _world_xy_to_body_xy(env, nearest_obs_xy)
-  obstacle_in_front = nearest_obs_b[:, 0] > 0.0
-  collision_near = (min_dist <= collision_detection_range) & obstacle_in_front
-  direction_near = (min_dist <= direction_detection_range) & obstacle_in_front
+  ball_xy = env.scene["ball"].data.root_link_pos_w[:, :2]
+  cmd_xy = env.command_manager.get_command(ball_vel_command_name)[:, :2]
+  cmd_speed = cmd_xy.norm(dim=-1)
+  cmd_dir = cmd_xy / cmd_speed.unsqueeze(-1).clamp(min=1e-6)
+
+  ball_to_obs = nearest_obs_xy - ball_xy
+  obs_forward = (ball_to_obs * cmd_dir).sum(dim=-1)
+  obs_lateral = (
+    ball_to_obs - obs_forward.unsqueeze(-1) * cmd_dir
+  ).norm(dim=-1)
+
+  collision_relevant = (
+    (min_dist <= collision_detection_range)
+    & (obs_forward > 0.0)
+    & (obs_lateral <= collision_tube_radius)
+  )
+  direction_relevant = (
+    (min_dist <= direction_detection_range)
+    & (obs_forward > 0.0)
+    & (obs_lateral <= direction_tube_radius)
+  )
 
   collision_span = max(collision_far_distance - collision_near_distance, 1e-6)
   collision_progress = (
@@ -551,12 +571,6 @@ def obstacle_avoidance(
   ).clamp(min=0.0, max=1.0)
   collision_term = collision_progress.pow(2)
 
-  ball_xy = env.scene["ball"].data.root_link_pos_w[:, :2]
-  cmd_xy = env.command_manager.get_command(ball_vel_command_name)[:, :2]
-  cmd_speed = cmd_xy.norm(dim=-1)
-  cmd_dir = cmd_xy / cmd_speed.unsqueeze(-1).clamp(min=1e-6)
-
-  ball_to_obs = nearest_obs_xy - ball_xy
   ball_to_obs_dir = ball_to_obs / ball_to_obs.norm(dim=-1, keepdim=True).clamp(min=1e-6)
 
   alignment = (cmd_dir * ball_to_obs_dir).sum(dim=-1).clamp(-1.0, 1.0)
@@ -576,7 +590,7 @@ def obstacle_avoidance(
   ).clamp(min=0.0, max=1.0)
 
   penalty = engagement * (
-    collision_weight * collision_near.float() * collision_term
-    + direction_weight * direction_near.float() * direction_term
+    collision_weight * collision_relevant.float() * collision_term
+    + direction_weight * direction_relevant.float() * direction_term
   )
   return penalty
