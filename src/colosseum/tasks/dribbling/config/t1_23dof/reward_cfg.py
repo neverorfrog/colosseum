@@ -25,13 +25,13 @@ from colosseum.robots.t1_23dof.sensors import (
   SELF_COLLISION_SENSOR,
 )
 from colosseum.tasks.dribbling.mdp.rewards import (
+  ball_vel_angle_relaxed,
   ball_obstacle_collision,
   ball_target_progress,
+  ball_vel_norm_relaxed,
   robot_ball_approach_vel,
   robot_ball_distance,
-  ball_vel_angle_body,
-  ball_vel_norm,
-  ball_vel_tracking_body,
+  ball_vel_tracking_relaxed,
   feet_distance_penalty,
   obstacle_direction,
   pose_deviation,
@@ -45,26 +45,46 @@ rewards = {
   # ------------------------------------------------------------------ #
   # Task rewards                                                         #
   # ------------------------------------------------------------------ #
-  "ball_vel_tracking": RewardTermCfg(  # Match the full commanded ball-velocity vector.
-    func=ball_vel_tracking_body,
+  "ball_vel_tracking": RewardTermCfg(  # Match the commanded ball-velocity vector, but relax locally near a blocking obstacle.
+    func=ball_vel_tracking_relaxed,
     weight=3.0,
     params={
       "command_name": "ball_vel",  # Which ball-velocity command to track.
       "sharpness": 1.5,  # Larger -> penalize vector tracking error more strongly.
+      "obstacle_command_name": "adversary",  # Obstacle term used to detect when nominal tracking should be relaxed.
+      "direction_detection_range": 1.5,  # Relax only for obstacles close enough on the ball-target corridor.
+      "direction_tube_radius": 0.5,  # Relax only when the obstacle lies inside the blocking corridor tube.
+      "ball_engagement_near_distance": 0.3,  # Full relaxation only when the robot is still engaged with the ball.
+      "ball_engagement_far_distance": 0.75,  # Relaxation fades out when the ball is not under control.
+      "relax_min_scale": 0.2,  # Minimum retained tracking strength in the fully blocked case.
     },
   ),
-  "ball_vel_norm": RewardTermCfg(  # Match the commanded ball-speed magnitude.
-    func=ball_vel_norm,
+  "ball_vel_norm": RewardTermCfg(  # Match the commanded ball-speed magnitude, but relax locally near a blocking obstacle.
+    func=ball_vel_norm_relaxed,
     weight=2.0,
     params={
       "command_name": "ball_vel",  # Which ball-speed command to match.
       "sharpness": 1.5,  # Larger -> tighter speed matching.
+      "obstacle_command_name": "adversary",  # Obstacle term used to detect when nominal tracking should be relaxed.
+      "direction_detection_range": 1.5,  # Relax only for obstacles close enough on the ball-target corridor.
+      "direction_tube_radius": 0.5,  # Relax only when the obstacle lies inside the blocking corridor tube.
+      "ball_engagement_near_distance": 0.3,  # Full relaxation only when the robot is still engaged with the ball.
+      "ball_engagement_far_distance": 0.75,  # Relaxation fades out when the ball is not under control.
+      "relax_min_scale": 0.5,  # Keep more of the speed incentive than the strict direction/vector terms.
     },
   ),
-  "ball_vel_angle": RewardTermCfg(  # Align ball-motion direction with the command.
-    func=ball_vel_angle_body,
+  "ball_vel_angle": RewardTermCfg(  # Align ball-motion direction with the command, but relax locally near a blocking obstacle.
+    func=ball_vel_angle_relaxed,
     weight=2.0,
-    params={"command_name": "ball_vel"},  # Which ball-direction command to align with.
+    params={
+      "command_name": "ball_vel",  # Which ball-direction command to align with.
+      "obstacle_command_name": "adversary",  # Obstacle term used to detect when nominal tracking should be relaxed.
+      "direction_detection_range": 1.5,  # Relax only for obstacles close enough on the ball-target corridor.
+      "direction_tube_radius": 0.5,  # Relax only when the obstacle lies inside the blocking corridor tube.
+      "ball_engagement_near_distance": 0.3,  # Full relaxation only when the robot is still engaged with the ball.
+      "ball_engagement_far_distance": 0.75,  # Relaxation fades out when the ball is not under control.
+      "relax_min_scale": 0.2,  # Minimum retained directional tracking strength in the fully blocked case.
+    },
   ),
   "robot_ball_distance": RewardTermCfg(  # Keep the robot reasonably close to the ball.
     func=robot_ball_distance,

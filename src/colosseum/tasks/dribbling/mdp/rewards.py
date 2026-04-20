@@ -80,6 +80,133 @@ def ball_vel_angle_body(
   return 1.0 - (angle_err**2) / (math.pi**2)
 
 
+def _obstacle_relax_gate(
+  env: ManagerBasedRlEnv,
+  command_name: str = "adversary",
+  ball_vel_command_name: str = "ball_vel",
+  direction_detection_range: float = 1.5,
+  direction_tube_radius: float = 0.5,
+  ball_engagement_near_distance: float = 0.3,
+  ball_engagement_far_distance: float = 0.75,
+) -> torch.Tensor:
+  """Return a [0, 1] gate indicating when nominal tracking should be relaxed.
+
+  The gate is active when the nearest obstacle lies on the current ball-target
+  corridor and the robot is still engaged with the ball.
+  """
+  try:
+    term: ObstacleCommand = env.command_manager.get_term(command_name)
+  except Exception:
+    return torch.zeros(env.num_envs, device=env.device)
+
+  if term.cfg.num_active == 0:
+    return torch.zeros(env.num_envs, device=env.device)
+
+  _, nearest_obs_xy, _ = _get_closest_robot_obstacle(env, command_name)
+  ball_xy = env.scene["ball"].data.root_link_pos_w[:, :2]
+  cmd_term = env.command_manager.get_term(ball_vel_command_name)
+  target_xy = cmd_term.target_position[:, :2]
+  target_vec = target_xy - ball_xy
+  target_dist = target_vec.norm(dim=-1)
+  target_dir = target_vec / target_dist.unsqueeze(-1).clamp(min=1e-6)
+
+  ball_to_obs = nearest_obs_xy - ball_xy
+  obs_forward = (ball_to_obs * target_dir).sum(dim=-1)
+  obs_lateral = (
+    ball_to_obs - obs_forward.unsqueeze(-1) * target_dir
+  ).norm(dim=-1)
+
+  corridor_relevant = (
+    (target_dist > 1e-6)
+    & (obs_forward > 0.0)
+    & (obs_forward < target_dist)
+    & (obs_forward <= direction_detection_range)
+    & (obs_lateral <= direction_tube_radius)
+  )
+
+  _, engagement = _ball_engagement_gate(
+    env, ball_engagement_near_distance, ball_engagement_far_distance
+  )
+  return engagement * corridor_relevant.float()
+
+
+def ball_vel_tracking_relaxed(
+  env: ManagerBasedRlEnv,
+  command_name: str,
+  sharpness: float = 1.0,
+  obstacle_command_name: str = "adversary",
+  direction_detection_range: float = 1.5,
+  direction_tube_radius: float = 0.5,
+  ball_engagement_near_distance: float = 0.3,
+  ball_engagement_far_distance: float = 0.75,
+  relax_min_scale: float = 0.2,
+) -> torch.Tensor:
+  """Relax vector tracking only near a relevant blocking obstacle."""
+  base_reward = ball_vel_tracking_body(env, command_name, sharpness)
+  relax_gate = _obstacle_relax_gate(
+    env,
+    command_name=obstacle_command_name,
+    ball_vel_command_name=command_name,
+    direction_detection_range=direction_detection_range,
+    direction_tube_radius=direction_tube_radius,
+    ball_engagement_near_distance=ball_engagement_near_distance,
+    ball_engagement_far_distance=ball_engagement_far_distance,
+  )
+  scale = 1.0 - (1.0 - relax_min_scale) * relax_gate
+  return scale * base_reward
+
+
+def ball_vel_norm_relaxed(
+  env: ManagerBasedRlEnv,
+  command_name: str,
+  sharpness: float = 1.0,
+  obstacle_command_name: str = "adversary",
+  direction_detection_range: float = 1.5,
+  direction_tube_radius: float = 0.5,
+  ball_engagement_near_distance: float = 0.3,
+  ball_engagement_far_distance: float = 0.75,
+  relax_min_scale: float = 0.5,
+) -> torch.Tensor:
+  """Relax speed tracking only near a relevant blocking obstacle."""
+  base_reward = ball_vel_norm(env, command_name, sharpness)
+  relax_gate = _obstacle_relax_gate(
+    env,
+    command_name=obstacle_command_name,
+    ball_vel_command_name=command_name,
+    direction_detection_range=direction_detection_range,
+    direction_tube_radius=direction_tube_radius,
+    ball_engagement_near_distance=ball_engagement_near_distance,
+    ball_engagement_far_distance=ball_engagement_far_distance,
+  )
+  scale = 1.0 - (1.0 - relax_min_scale) * relax_gate
+  return scale * base_reward
+
+
+def ball_vel_angle_relaxed(
+  env: ManagerBasedRlEnv,
+  command_name: str,
+  obstacle_command_name: str = "adversary",
+  direction_detection_range: float = 1.5,
+  direction_tube_radius: float = 0.5,
+  ball_engagement_near_distance: float = 0.3,
+  ball_engagement_far_distance: float = 0.75,
+  relax_min_scale: float = 0.2,
+) -> torch.Tensor:
+  """Relax direction tracking only near a relevant blocking obstacle."""
+  base_reward = ball_vel_angle_body(env, command_name)
+  relax_gate = _obstacle_relax_gate(
+    env,
+    command_name=obstacle_command_name,
+    ball_vel_command_name=command_name,
+    direction_detection_range=direction_detection_range,
+    direction_tube_radius=direction_tube_radius,
+    ball_engagement_near_distance=ball_engagement_near_distance,
+    ball_engagement_far_distance=ball_engagement_far_distance,
+  )
+  scale = 1.0 - (1.0 - relax_min_scale) * relax_gate
+  return scale * base_reward
+
+
 def robot_ball_yaw_body(
   env: ManagerBasedRlEnv,
   command_name: str,
