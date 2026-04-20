@@ -1,6 +1,7 @@
 """Command term: target-driven ball velocity in world frame.
 
-At resampling time the term samples a persistent world-frame target for the ball.
+At resampling time the term samples a persistent world-frame target from the
+current robot position.
 At every step it recomputes the desired ball velocity from the current ball
 position toward that target:
 
@@ -45,7 +46,7 @@ class BallVelocityCommand(CommandTerm):
     # envs would keep the zero target at the global origin, which is disastrous
     # in a tiled multi-env world because target_distance becomes tens of meters.
     all_env_ids = torch.arange(self.num_envs, device=self.device)
-    self.resample(all_env_ids)
+    self._resample_command(all_env_ids)
     self._sample_target_resample_time(all_env_ids)
 
   # ------------------------------------------------------------------
@@ -110,12 +111,12 @@ class BallVelocityCommand(CommandTerm):
     )
     target_heading = robot_yaw + heading_offsets
 
-    ball_pos = self._env.scene[self.cfg.ball_entity].data.root_link_pos_w[env_ids, :2]
+    robot_pos = self._env.scene[self.cfg.robot_entity].data.root_link_pos_w[env_ids, :2]
     self.target_position[env_ids, 0] = (
-      ball_pos[:, 0] + torch.cos(target_heading) * target_distances
+      robot_pos[:, 0] + torch.cos(target_heading) * target_distances
     )
     self.target_position[env_ids, 1] = (
-      ball_pos[:, 1] + torch.sin(target_heading) * target_distances
+      robot_pos[:, 1] + torch.sin(target_heading) * target_distances
     )
     self._recompute_velocity_command(env_ids)
 
@@ -208,7 +209,8 @@ class BallVelocityCommandCfg(CommandTermCfg):
   # Command speed is recomputed every step and clipped to this range.
   speed_range: tuple[float, float] = (0.1, 0.1)
 
-  # Target distance sampled uniformly from this range at each reset/resample.
+  # Target distance sampled uniformly from the robot position at each
+  # reset/resample.
   target_distance_range: tuple[float, float] = (1.5, 4.0)
 
   # Gain mapping target distance -> desired speed before clipping.
