@@ -136,16 +136,16 @@ rewards = {
       "collision_far_distance": 1.5,  # Collision penalty fades to zero at or above this distance.
     },
   ),
-  # "ball_obstacle_collision": RewardTermCfg(  # Replaced by ball_obstacle_proximity constraint (CaT).
-  #   func=ball_obstacle_collision,
-  #   weight=-10.0,
-  #   params={
-  #     "command_name": "adversary",
-  #     "collision_detection_range": 1.0,
-  #     "collision_near_distance": 0.15,
-  #     "collision_far_distance": 0.6,
-  #   },
-  # ),
+  "ball_obstacle_collision": RewardTermCfg(  # Replaced by ball_obstacle_proximity constraint (CaT).
+    func=ball_obstacle_collision,
+    weight=-10.0,
+    params={
+      "command_name": "adversary",
+      "collision_detection_range": 1.0,
+      "collision_near_distance": 0.15,
+      "collision_far_distance": 0.6,
+    },
+  ),
   "obstacle_direction": RewardTermCfg(  # Penalize the ball actually moving toward an obstacle on the target path.
     func=obstacle_direction,
     weight=-7.0,
