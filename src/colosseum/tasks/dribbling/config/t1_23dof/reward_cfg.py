@@ -47,7 +47,7 @@ rewards = {
   # ------------------------------------------------------------------ #
   "ball_vel_tracking": RewardTermCfg(  # Match the commanded ball-velocity vector, but relax locally near a blocking obstacle.
     func=ball_vel_tracking_relaxed,
-    weight=3.0,
+    weight=4.0,
     params={
       "command_name": "ball_vel",  # Which ball-velocity command to track.
       "sharpness": 1.5,  # Larger -> penalize vector tracking error more strongly.
@@ -61,7 +61,7 @@ rewards = {
   ),
   "ball_vel_norm": RewardTermCfg(  # Match the commanded ball-speed magnitude, but relax locally near a blocking obstacle.
     func=ball_vel_norm_relaxed,
-    weight=2.0,
+    weight=4.0,
     params={
       "command_name": "ball_vel",  # Which ball-speed command to match.
       "sharpness": 1.5,  # Larger -> tighter speed matching.
@@ -75,7 +75,7 @@ rewards = {
   ),
   "ball_vel_angle": RewardTermCfg(  # Align ball-motion direction with the command, but relax locally near a blocking obstacle.
     func=ball_vel_angle_relaxed,
-    weight=2.0,
+    weight=4.0,
     params={
       "command_name": "ball_vel",  # Which ball-direction command to align with.
       "obstacle_command_name": "adversary",  # Obstacle term used to detect when nominal tracking should be relaxed.
@@ -88,7 +88,7 @@ rewards = {
   ),
   "robot_ball_distance": RewardTermCfg(  # Keep the robot reasonably close to the ball.
     func=robot_ball_distance,
-    weight=3.0,
+    weight=1.0,
     params={
       "close_distance": 0.3,  # Ball within 0.3 m and in front is considered fully controlled.
       "behind_close_penalty": 0.5,  # Constant penalty level when the ball is close but behind.

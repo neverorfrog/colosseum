@@ -184,7 +184,7 @@ terminations = {
   ),
   "ball_captured": TerminationTermCfg(
     func=ball_captured,
-    params={"command_name": "adversary", "capture_radius": 0.3},
+    params={"command_name": "adversary", "capture_radius": 0.25},
   ),
   "ball_lost": TerminationTermCfg(
     func=ball_lost,

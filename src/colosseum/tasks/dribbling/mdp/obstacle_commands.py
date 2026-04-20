@@ -135,9 +135,9 @@ class ObstacleCommand(CommandTerm):
 
       vel_target = self._compute_velocity_target(all_ids, k)
       alpha = self.cfg.velocity_smoothing
-      self._velocities_w[:, k] = (
-        (1.0 - alpha) * self._velocities_w[:, k] + alpha * vel_target
-      )
+      self._velocities_w[:, k] = (1.0 - alpha) * self._velocities_w[
+        :, k
+      ] + alpha * vel_target
       self._positions_w[:, k] += self._velocities_w[:, k] * dt
       self._write_obstacle_to_sim(k, all_ids, z=0.0)
 
@@ -162,7 +162,9 @@ class ObstacleCommand(CommandTerm):
   # Internal helpers
   # ------------------------------------------------------------------
 
-  def _cmd_and_side_dirs(self, env_ids: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+  def _cmd_and_side_dirs(
+    self, env_ids: torch.Tensor
+  ) -> tuple[torch.Tensor, torch.Tensor]:
     ball_vel_cmd = self._env.command_manager.get_command("ball_vel")[env_ids, :2]
     cmd_speed = ball_vel_cmd.norm(dim=-1, keepdim=True)
     default_dir = torch.zeros_like(ball_vel_cmd)
@@ -251,7 +253,9 @@ class ObstacleCommand(CommandTerm):
     self._resample_timers[env_ids, obstacle_idx] = self._sample_timer(env_ids)
 
     if role == "lateral_blocker":
-      sign = torch.randint(0, 2, (len(env_ids),), device=self._env.device, dtype=torch.int64)
+      sign = torch.randint(
+        0, 2, (len(env_ids),), device=self._env.device, dtype=torch.int64
+      )
       self._lateral_signs[env_ids, obstacle_idx] = sign.float() * 2.0 - 1.0
       self._tangent_mix[env_ids, obstacle_idx] = 0.0
     elif role == "ball_attacker":
@@ -260,7 +264,9 @@ class ObstacleCommand(CommandTerm):
         torch.rand(len(env_ids), device=self._env.device) * (hi - lo) + lo
       )
     elif role == "distractor":
-      angles = torch.rand(len(env_ids), device=self._env.device) * 2.0 * math.pi - math.pi
+      angles = (
+        torch.rand(len(env_ids), device=self._env.device) * 2.0 * math.pi - math.pi
+      )
       self._random_dirs[env_ids, obstacle_idx] = torch.stack(
         [torch.cos(angles), torch.sin(angles)], dim=-1
       )
@@ -300,7 +306,9 @@ class ObstacleCommand(CommandTerm):
 
   def _is_parked(self, obstacle_idx: int) -> torch.Tensor:
     env_origin_xy = self._env.scene.env_origins[:, :2]
-    offset = (self._positions_w[:, obstacle_idx] - env_origin_xy).abs().max(dim=-1).values
+    offset = (
+      (self._positions_w[:, obstacle_idx] - env_origin_xy).abs().max(dim=-1).values
+    )
     return offset > (_PARK_FAR / 2.0)
 
   def _obstacle_pos_body(
@@ -313,7 +321,9 @@ class ObstacleCommand(CommandTerm):
     quat_conj = torch.cat([quat_w[:, :1], -quat_w[:, 1:]], dim=-1)
     robot_xy = robot.data.root_link_pos_w[env_ids, :2]
     rel_xy = self._positions_w[env_ids, obstacle_idx] - robot_xy
-    rel_3d = torch.cat([rel_xy, torch.zeros(len(env_ids), 1, device=self._env.device)], dim=-1)
+    rel_3d = torch.cat(
+      [rel_xy, torch.zeros(len(env_ids), 1, device=self._env.device)], dim=-1
+    )
     return quat_apply(quat_conj, rel_3d)[:, :2]
 
   def _needs_respawn(
@@ -325,17 +335,25 @@ class ObstacleCommand(CommandTerm):
     if role == "none":
       return torch.zeros(len(env_ids), dtype=torch.bool, device=self._env.device)
 
+    ball_xy = self._env.scene["ball"].data.root_link_pos_w[env_ids, :2]
+    obs_xy = self._positions_w[env_ids, obstacle_idx]
+    cmd_dir, _ = self._cmd_and_side_dirs(env_ids)
+    # Positive when the ball has moved past the obstacle along the path.
+    along = ((ball_xy - obs_xy) * cmd_dir).sum(dim=-1)
+    ball_passed = along > self.cfg.respawn_passed_threshold
+
     # Blockers and distractors stay put until the target is resampled. Only
     # the ball_attacker — which actively chases — may need a mid-episode
     # respawn when it drifts far from the ball.
     if role == "ball_attacker":
-      ball_xy = self._env.scene["ball"].data.root_link_pos_w[env_ids, :2]
-      obs_xy = self._positions_w[env_ids, obstacle_idx]
       obs_pos_b = self._obstacle_pos_body(env_ids, obstacle_idx)
       ball_dist = (obs_xy - ball_xy).norm(dim=-1)
       behind = obs_pos_b[:, 0] < self.cfg.respawn_behind_x_threshold
       far_from_ball = ball_dist > self.cfg.respawn_ball_distance
-      return behind | far_from_ball
+      return (behind | far_from_ball) & ball_passed
+
+    if role in {"static_blocker", "lateral_blocker", "distractor"}:
+      return ball_passed
 
     return torch.zeros(len(env_ids), dtype=torch.bool, device=self._env.device)
 
@@ -414,6 +432,9 @@ class ObstacleCommandCfg(CommandTermCfg):
   respawn_behind_x_threshold: float = -0.2
   respawn_robot_distance: float = 4.0
   respawn_ball_distance: float = 3.0
+  # Minimum distance the ball must travel past the obstacle (along the
+  # ball→target direction) before a respawn is allowed.
+  respawn_passed_threshold: float = 0.5
 
   def build(self, env: ManagerBasedRlEnv) -> ObstacleCommand:
     return ObstacleCommand(self, env)
