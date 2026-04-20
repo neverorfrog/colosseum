@@ -52,11 +52,11 @@ rewards = {
       "command_name": "ball_vel",  # Which ball-velocity command to track.
       "sharpness": 1.5,  # Larger -> penalize vector tracking error more strongly.
       "obstacle_command_name": "adversary",  # Obstacle term used to detect when nominal tracking should be relaxed.
-      "direction_detection_range": 1.5,  # Relax only for obstacles close enough on the ball-target corridor.
-      "direction_tube_radius": 0.5,  # Relax only when the obstacle lies inside the blocking corridor tube.
+      "direction_detection_range": 2.0,  # Relax only for obstacles close enough on the ball-target corridor.
+      "direction_tube_radius": 0.75,  # Relax only when the obstacle lies inside the blocking corridor tube.
       "ball_engagement_near_distance": 0.3,  # Full relaxation only when the robot is still engaged with the ball.
       "ball_engagement_far_distance": 0.75,  # Relaxation fades out when the ball is not under control.
-      "relax_min_scale": 0.2,  # Minimum retained tracking strength in the fully blocked case.
+      "relax_min_scale": 0.05,  # Minimum retained tracking strength in the fully blocked case.
     },
   ),
   "ball_vel_norm": RewardTermCfg(  # Match the commanded ball-speed magnitude, but relax locally near a blocking obstacle.
@@ -66,11 +66,11 @@ rewards = {
       "command_name": "ball_vel",  # Which ball-speed command to match.
       "sharpness": 1.5,  # Larger -> tighter speed matching.
       "obstacle_command_name": "adversary",  # Obstacle term used to detect when nominal tracking should be relaxed.
-      "direction_detection_range": 1.5,  # Relax only for obstacles close enough on the ball-target corridor.
-      "direction_tube_radius": 0.5,  # Relax only when the obstacle lies inside the blocking corridor tube.
+      "direction_detection_range": 2.0,  # Relax only for obstacles close enough on the ball-target corridor.
+      "direction_tube_radius": 0.75,  # Relax only when the obstacle lies inside the blocking corridor tube.
       "ball_engagement_near_distance": 0.3,  # Full relaxation only when the robot is still engaged with the ball.
       "ball_engagement_far_distance": 0.75,  # Relaxation fades out when the ball is not under control.
-      "relax_min_scale": 0.5,  # Keep more of the speed incentive than the strict direction/vector terms.
+      "relax_min_scale": 0.3,  # Keep more of the speed incentive than the strict direction/vector terms.
     },
   ),
   "ball_vel_angle": RewardTermCfg(  # Align ball-motion direction with the command, but relax locally near a blocking obstacle.
@@ -79,11 +79,11 @@ rewards = {
     params={
       "command_name": "ball_vel",  # Which ball-direction command to align with.
       "obstacle_command_name": "adversary",  # Obstacle term used to detect when nominal tracking should be relaxed.
-      "direction_detection_range": 1.5,  # Relax only for obstacles close enough on the ball-target corridor.
-      "direction_tube_radius": 0.5,  # Relax only when the obstacle lies inside the blocking corridor tube.
+      "direction_detection_range": 2.0,  # Relax only for obstacles close enough on the ball-target corridor.
+      "direction_tube_radius": 0.75,  # Relax only when the obstacle lies inside the blocking corridor tube.
       "ball_engagement_near_distance": 0.3,  # Full relaxation only when the robot is still engaged with the ball.
       "ball_engagement_far_distance": 0.75,  # Relaxation fades out when the ball is not under control.
-      "relax_min_scale": 0.2,  # Minimum retained directional tracking strength in the fully blocked case.
+      "relax_min_scale": 0.05,  # Minimum retained directional tracking strength in the fully blocked case.
     },
   ),
   "robot_ball_distance": RewardTermCfg(  # Keep the robot reasonably close to the ball.
@@ -144,7 +144,7 @@ rewards = {
   ),
   "obstacle_direction": RewardTermCfg(  # Penalize the ball actually moving toward an obstacle on the target path.
     func=obstacle_direction,
-    weight=-5.0,
+    weight=-7.0,
     params={
       "command_name": "adversary",  # Obstacle command term providing obstacle positions/velocities.
       "ball_vel_command_name": "ball_vel",  # Ball command term providing the persistent target.
