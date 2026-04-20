@@ -68,7 +68,7 @@ rewards = {
   ),
   "robot_ball_distance": RewardTermCfg(  # Keep the robot reasonably close to the ball.
     func=robot_ball_distance,
-    weight=1.5,
+    weight=3.0,
     params={
       "close_distance": 0.3,  # Ball within 0.3 m and in front is considered fully controlled.
       "behind_close_penalty": 0.5,  # Constant penalty level when the ball is close but behind.
@@ -82,7 +82,7 @@ rewards = {
   ),
   "robot_ball_approach_vel": RewardTermCfg(  # Reward base motion that closes distance to the ball.
     func=robot_ball_approach_vel,
-    weight=1.0,
+    weight=2.0,
     params={"command_name": "ball_vel"},  # Command whose speed sets the desired approach urgency.
   ),
   "ball_target_progress": RewardTermCfg(  # Reward moving the ball along the current ball-to-target direction.
@@ -102,7 +102,7 @@ rewards = {
   ),
   "robot_obstacle_collision": RewardTermCfg(  # Local robot-obstacle safety term.
     func=robot_obstacle_collision,
-    weight=-5.0,
+    weight=-2.0,
     params={
       "command_name": "adversary",  # Obstacle command term providing obstacle positions/velocities.
       "collision_detection_range": 1.5,  # Collision penalty only inside this robot-obstacle distance.
@@ -112,7 +112,7 @@ rewards = {
   ),
   "ball_obstacle_collision": RewardTermCfg(  # Penalize the ball physically touching an obstacle.
     func=ball_obstacle_collision,
-    weight=-4.0,
+    weight=-5.0,
     params={
       "command_name": "adversary",  # Obstacle command term providing obstacle positions/velocities.
       "collision_detection_range": 1.0,  # Ball-obstacle distance beyond which the penalty is zero.
@@ -122,7 +122,7 @@ rewards = {
   ),
   "obstacle_direction": RewardTermCfg(  # Penalize the ball actually moving toward an obstacle on the target path.
     func=obstacle_direction,
-    weight=-4.0,
+    weight=-5.0,
     params={
       "command_name": "adversary",  # Obstacle command term providing obstacle positions/velocities.
       "ball_vel_command_name": "ball_vel",  # Ball command term providing the persistent target.

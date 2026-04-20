@@ -54,6 +54,6 @@ def booster_t1_dribbling_dagger_ppo_cfg(
     teacher_obs_start_idx=0,  # Dribbling teacher and student share the same actor obs layout.
     teacher_actor_hidden_layers=(512, 256, 128),
     teacher_actor_activation="elu",
-    imitation_coef=0.2,
+    imitation_coef=0.35,
     imitation_annealing_steps=400_000_000,
   )
