@@ -55,9 +55,11 @@ class ConstraintBasedEnv(ManagerBasedRlEnv):
       )
 
   def _reset_idx(self, env_ids: torch.Tensor | None = None) -> None:
+    # Snapshot before super() zeros episode_length_buf[env_ids].
+    ep_lens = self.episode_length_buf[env_ids].clone() if env_ids is not None else self.episode_length_buf.clone()
     super()._reset_idx(env_ids)
     if hasattr(self, "constraint_manager"):
-      info = self.constraint_manager.reset(env_ids)
+      info = self.constraint_manager.reset(env_ids, ep_lens)
       self.extras["log"].update(info)
 
   def step(self, action: torch.Tensor) -> VecEnvStepReturn:
