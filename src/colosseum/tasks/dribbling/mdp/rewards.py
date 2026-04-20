@@ -61,23 +61,28 @@ def ball_vel_tracking_body(
   env: ManagerBasedRlEnv,
   command_name: str,
   sharpness: float = 1.0,
+  min_speed: float = 0.05,
 ) -> torch.Tensor:
-  """exp(-sharpness * |v_ball_b - v_cmd_b|²). Body-frame variant."""
-  error_sq = ((_ball_vel_body(env) - _cmd_body(env, command_name)) ** 2).sum(dim=-1)
-  return torch.exp(-sharpness * error_sq)
+  """exp(-sharpness * |v_ball_b - v_cmd_b|²). Body-frame variant. Zero when ball is stationary."""
+  ball_vel_b = _ball_vel_body(env)
+  error_sq = ((ball_vel_b - _cmd_body(env, command_name)) ** 2).sum(dim=-1)
+  reward = torch.exp(-sharpness * error_sq)
+  return reward * (ball_vel_b.norm(dim=-1) > min_speed).float()
 
 
 def ball_vel_angle_body(
   env: ManagerBasedRlEnv,
   command_name: str,
+  min_speed: float = 0.05,
 ) -> torch.Tensor:
-  """Direction match 1 - (ψ_ball - ψ_cmd)²/π². Body-frame variant."""
+  """Direction match 1 - (ψ_ball - ψ_cmd)²/π². Body-frame variant. Zero when ball is stationary."""
   ball_vel_b = _ball_vel_body(env)
   cmd_b = _cmd_body(env, command_name)
   psi_ball = torch.atan2(ball_vel_b[:, 1], ball_vel_b[:, 0])
   psi_cmd = torch.atan2(cmd_b[:, 1], cmd_b[:, 0])
   angle_err = (psi_ball - psi_cmd + math.pi) % (2 * math.pi) - math.pi
-  return 1.0 - (angle_err**2) / (math.pi**2)
+  reward = 1.0 - (angle_err**2) / (math.pi**2)
+  return reward * (ball_vel_b.norm(dim=-1) > min_speed).float()
 
 
 def _obstacle_relax_gate(
@@ -140,9 +145,10 @@ def ball_vel_tracking_relaxed(
   ball_engagement_near_distance: float = 0.3,
   ball_engagement_far_distance: float = 0.75,
   relax_min_scale: float = 0.2,
+  min_speed: float = 0.05,
 ) -> torch.Tensor:
   """Relax vector tracking only near a relevant blocking obstacle."""
-  base_reward = ball_vel_tracking_body(env, command_name, sharpness)
+  base_reward = ball_vel_tracking_body(env, command_name, sharpness, min_speed)
   relax_gate = _obstacle_relax_gate(
     env,
     command_name=obstacle_command_name,
@@ -166,9 +172,10 @@ def ball_vel_norm_relaxed(
   ball_engagement_near_distance: float = 0.3,
   ball_engagement_far_distance: float = 0.75,
   relax_min_scale: float = 0.5,
+  min_speed: float = 0.05,
 ) -> torch.Tensor:
   """Relax speed tracking only near a relevant blocking obstacle."""
-  base_reward = ball_vel_norm(env, command_name, sharpness)
+  base_reward = ball_vel_norm(env, command_name, sharpness, min_speed)
   relax_gate = _obstacle_relax_gate(
     env,
     command_name=obstacle_command_name,
@@ -191,9 +198,10 @@ def ball_vel_angle_relaxed(
   ball_engagement_near_distance: float = 0.3,
   ball_engagement_far_distance: float = 0.75,
   relax_min_scale: float = 0.2,
+  min_speed: float = 0.05,
 ) -> torch.Tensor:
   """Relax direction tracking only near a relevant blocking obstacle."""
-  base_reward = ball_vel_angle_body(env, command_name)
+  base_reward = ball_vel_angle_body(env, command_name, min_speed)
   relax_gate = _obstacle_relax_gate(
     env,
     command_name=obstacle_command_name,
@@ -265,8 +273,9 @@ def ball_vel_norm(
   env: ManagerBasedRlEnv,
   command_name: str,
   sharpness: float = 1.0,
+  min_speed: float = 0.05,
 ) -> torch.Tensor:
-  """Speed matching: exp(-sharpness * (|v^cmd| - |v^b|)²).
+  """Speed matching: exp(-sharpness * (|v^cmd| - |v^b|)²). Zero when ball is stationary.
 
   Rewards matching commanded speed regardless of direction.
   Prevents exploitation of direction-only rewards by kicking too hard.
@@ -274,14 +283,16 @@ def ball_vel_norm(
   ball_vel = env.scene["ball"].data.root_link_lin_vel_w[:, :2]
   target_vel = env.command_manager.get_command(command_name)[:, :2]  # type: ignore
   speed_err = (target_vel.norm(dim=-1) - ball_vel.norm(dim=-1)) ** 2
-  return torch.exp(-sharpness * speed_err)
+  reward = torch.exp(-sharpness * speed_err)
+  return reward * (ball_vel.norm(dim=-1) > min_speed).float()
 
 
 def ball_vel_angle(
   env: ManagerBasedRlEnv,
   command_name: str,
+  min_speed: float = 0.05,
 ) -> torch.Tensor:
-  """Direction match: 1 - (ψ_b - ψ_cmd)²/π².
+  """Direction match: 1 - (ψ_b - ψ_cmd)²/π². Zero when ball is stationary.
 
   Ranges from 1.0 (perfect alignment) to 0.0 (opposite direction).
   Gives partial credit for near-correct directions.
@@ -291,7 +302,8 @@ def ball_vel_angle(
   psi_b = torch.atan2(ball_vel[:, 1], ball_vel[:, 0])
   psi_cmd = torch.atan2(target_vel[:, 1], target_vel[:, 0])
   angle_err = (psi_b - psi_cmd + math.pi) % (2 * math.pi) - math.pi
-  return 1.0 - (angle_err**2) / (math.pi**2)
+  reward = 1.0 - (angle_err**2) / (math.pi**2)
+  return reward * (ball_vel.norm(dim=-1) > min_speed).float()
 
 
 # ------------------------------------------------------------------
