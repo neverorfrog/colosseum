@@ -4,6 +4,7 @@ This document explains how obstacles are currently handled in the dribbling task
 
 It covers:
 
+- how the ball command is generated from a persistent target
 - how obstacle entities are created in the simulator
 - how obstacle positions and velocities are generated at runtime
 - how obstacle difficulty is controlled by the curriculum
@@ -28,10 +29,18 @@ So there are two distinct layers:
 1. physical obstacle scene in simulation
 2. reduced obstacle signal used by learning
 
+There is also one important task-design choice shared by all stages:
+
+- the command exposed as `ball_vel` is still a world-frame ball velocity
+- but that velocity is now recomputed every step from a persistent world-frame target
+- so the task is "bring the ball toward this target" rather than "track a free velocity until resample"
+
 ## Files Involved
 
 Main files:
 
+- ball target / command generation:
+  [src/colosseum/tasks/dribbling/mdp/ball_velocity_command.py](/home/valeriospagnoli/SPQR/colosseum/src/colosseum/tasks/dribbling/mdp/ball_velocity_command.py:1)
 - obstacle scene definition:
   [src/colosseum/tasks/dribbling/obstacle_spec.py](/home/valeriospagnoli/SPQR/colosseum/src/colosseum/tasks/dribbling/obstacle_spec.py:1)
 - obstacle runtime command and motion:
@@ -52,6 +61,53 @@ Main files:
   [src/colosseum/tasks/dribbling/mdp/rma_terms.py](/home/valeriospagnoli/SPQR/colosseum/src/colosseum/tasks/dribbling/mdp/rma_terms.py:1)
 - phase-2 obstacle head:
   [src/colosseum/algorithm/encoders.py](/home/valeriospagnoli/SPQR/colosseum/src/colosseum/algorithm/encoders.py:187)
+
+## Ball Command And Target
+
+The dribbling task still uses a `ball_vel` command, but it is no longer sampled
+as a free local velocity. Instead, `BallVelocityCommand` now samples a
+persistent world-frame target for the ball and recomputes the desired velocity
+from the current ball position toward that target.
+
+At resample time:
+
+- a target heading is sampled around the robot forward direction
+- a target distance is sampled from `target_distance_range`
+- a world-frame target position is created relative to the current ball position
+
+At every step:
+
+```python
+target_delta = target_position - ball_position
+dir = normalize(target_delta)
+speed = clip(speed_gain * ||target_delta||, min_speed, max_speed)
+ball_vel_cmd = dir * speed
+```
+
+If the ball gets within `target_reached_threshold` of the target, a new target
+is sampled immediately.
+
+This is implemented in
+[ball_velocity_command.py](/home/valeriospagnoli/SPQR/colosseum/src/colosseum/tasks/dribbling/mdp/ball_velocity_command.py:22).
+
+This design is especially important for obstacle avoidance:
+
+- the desired velocity always points toward a meaningful long-horizon target
+- temporary detours remain consistent with the task objective
+- obstacle spawning, obstacle rewards, and velocity tracking all stay aligned
+  with the same ball-to-target path
+
+### Viewer visualization
+
+The viewer now shows:
+
+- green arrow: desired ball velocity command
+- red arrow: actual ball velocity
+- blue sphere: current global target for the ball
+- blue arrow: direction from the ball to the target
+
+So you can directly see whether the robot is making progress toward the target
+or getting stuck while the target remains unchanged.
 
 ## Obstacle Entities In The Simulator
 
@@ -141,6 +197,9 @@ The main reference quantities are:
 These are computed by `_cmd_and_side_dirs()`:
 [obstacle_commands.py](/home/valeriospagnoli/SPQR/colosseum/src/colosseum/tasks/dribbling/mdp/obstacle_commands.py:150).
 
+Because `cmd_dir` now comes from the target-driven `ball_vel` command, obstacle
+spawn generation is effectively aligned with the current ball-to-target path.
+
 ### Static Blocker / Lateral Blocker / Ball Attacker
 
 These all spawn with the same geometric template:
@@ -154,7 +213,7 @@ where:
 - `forward_dist` is sampled from `distance_range`
 - `lateral_offset` is sampled from `lateral_offset_range`
 
-This means the obstacle is placed **ahead of the ball path**, not just at a
+This means the obstacle is placed **ahead of the ball-to-target path**, not just at a
 random angle around the robot.
 
 That design is intentional:
@@ -661,12 +720,22 @@ Used for:
 - robot-obstacle distance computations
 - ball-to-obstacle direction in the reward
 - command-direction alignment in the reward
+- target generation and ball-to-target velocity command computation
 
 This is mathematically consistent because:
 
 - distances are invariant to rotation
 - dot products are only taken between vectors expressed in the same frame
 - visibility checks use body frame, which is the correct frame for “in front”
+
+The ball command follows the same rule:
+
+- command generation happens in world frame from `ball -> target`
+- actor observations use `ball_vel_command_body()` to rotate that command into body frame
+- rewards use the same underlying command in whichever frame is appropriate for the term
+
+So the target-based command changes the task semantics, but it does not
+introduce a frame mismatch.
 
 ## Training / Evaluation Semantics
 
@@ -703,10 +772,12 @@ The current obstacle system is designed around these principles:
 - obstacle reward is bounded and only active when the nearest obstacle is near
   and in front of the robot
 - the standard ball-carrying rewards remain active even in obstacle scenes
+- the desired ball velocity is always induced by a persistent world-frame target
 - obstacle stages can now be pinned from the CLI for debugging and checkpointing
 
 In short:
 
+- command side: persistent target, target-driven world-frame ball velocity
 - simulator side: multi-obstacle staged behaviors
 - policy side: nearest-obstacle compact representation
 - reward side: nearest visible obstacle with bounded collision + direction penalty

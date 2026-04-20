@@ -45,6 +45,15 @@ pixi run -e train train task:t1-dribbling logger:disabled
 
 Training logs and checkpoints are saved under `./logs/`. Metrics are logged to W&B.
 
+For the dribbling task, the `ball_vel` command is now target-driven:
+
+- a persistent world-frame target is sampled for the ball
+- the desired ball velocity is recomputed every step from `ball -> target`
+- the viewer shows this target during play/debug visualization
+
+This makes obstacle avoidance more consistent because temporary detours are
+still evaluated against a stable long-horizon objective.
+
 ### Notes to train on two 4090 (GIN setup)
 GIN has two RTX 4090 GPUs, each with 24 GB of VRAM.
 

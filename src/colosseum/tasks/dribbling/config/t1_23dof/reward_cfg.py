@@ -80,17 +80,17 @@ rewards = {
   ),
   "obstacle_avoidance": RewardTermCfg(  # Local obstacle penalty when the nearest obstacle is near and in front.
     func=obstacle_avoidance,
-    weight=-1.5,
+    weight=-3.0,
     params={
       "command_name": "adversary",  # Obstacle command term providing obstacle positions/velocities.
       "ball_vel_command_name": "ball_vel",  # Ball command used for the kick-direction penalty.
-      "collision_detection_range": 1.2,  # Body-obstacle penalty only inside this robot-obstacle distance.
-      "direction_detection_range": 2.0,  # Kick-direction penalty only inside this robot-obstacle distance.
+      "collision_detection_range": 1.5,  # Body-obstacle penalty only inside this robot-obstacle distance.
+      "direction_detection_range": 3.0,  # Kick-direction penalty only inside this robot-obstacle distance.
       "collision_near_distance": 0.5,  # Maximum collision penalty at or below this distance.
-      "collision_far_distance": 1.2,  # Collision penalty fades to zero at or above this distance.
-      "direction_sharpness": 4.0,  # Larger -> stronger penalty for commanding the ball toward the obstacle.
-      "collision_weight": 0.35,  # Relative weight of body-obstacle proximity.
-      "direction_weight": 1.0,  # Relative weight of "do not kick toward obstacle".
+      "collision_far_distance": 1.5,  # Collision penalty fades to zero at or above this distance.
+      "direction_sharpness": 5.0,  # Larger -> stronger penalty for commanding the ball toward the obstacle.
+      "collision_weight": 0.5,  # Relative weight of body-obstacle proximity.
+      "direction_weight": 1.5,  # Relative weight of "do not kick toward obstacle".
     },
   ),
   # ------------------------------------------------------------------ #
