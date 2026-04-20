@@ -29,7 +29,10 @@ from colosseum.tasks.dribbling.mdp.rma_terms import DribblingRmaTermCfg
 from colosseum.tasks.dribbling.obstacle_spec import NUM_OBSTACLES, get_obstacle_cfg
 from colosseum.tasks.dribbling.viz import DribblingViz
 
-from .algo_cfg import booster_t1_dribbling_ppo_cfg
+from .algo_cfg import (
+  booster_t1_dribbling_dagger_ppo_cfg,
+  booster_t1_dribbling_ppo_cfg,
+)
 from .cact_cfg import actions, commands, curriculum, terminations
 from .constraint_cfg import dribbling_constraints
 from .event_cfg import events
@@ -212,6 +215,8 @@ class T1DribblingTask(TaskConfig):
   use_depth_camera: bool = False
   show_depth: bool = False
   obstacle_stage_index: int = -1
+  use_dagger: bool = False
+  teacher_checkpoint: str = ""
   """Show a cv2 filmstrip of the encoder's depth buffer during play (--show-depth)."""
 
   @property
@@ -233,4 +238,12 @@ class T1DribblingTask(TaskConfig):
 
   @property
   def algo_cfg(self):
+    if self.use_dagger:
+      if not self.teacher_checkpoint:
+        raise ValueError(
+          "teacher_checkpoint must be set when use_dagger=True."
+        )
+      return booster_t1_dribbling_dagger_ppo_cfg(
+        teacher_checkpoint=self.teacher_checkpoint
+      )
     return booster_t1_dribbling_ppo_cfg()
