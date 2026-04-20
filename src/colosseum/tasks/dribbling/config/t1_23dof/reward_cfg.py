@@ -231,7 +231,7 @@ rewards = {
   # ------------------------------------------------------------------ #
   "swing_phase": RewardTermCfg(
     func=swing_phase_schedule,
-    weight=4.0,
+    weight=1.0,
     params={
       "phase_command_name": "gait_phase",
       "sensor_name": "feet_ground_contact",
@@ -239,7 +239,7 @@ rewards = {
   ),
   "stance_phase": RewardTermCfg(
     func=stance_phase_schedule,
-    weight=4.0,
+    weight=1.0,
     params={
       "phase_command_name": "gait_phase",
       "asset_cfg": SceneEntityCfg("robot", site_names=FOOT_SITE_NAMES),
