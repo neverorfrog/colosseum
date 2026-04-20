@@ -3,13 +3,32 @@
 from __future__ import annotations
 
 import math
-
 import numpy as np
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
   from mjlab.envs import ManagerBasedRlEnv
   from mjlab.viewer.debug_visualizer import DebugVisualizer
+
+
+def _get_obstacle_reward_params(env) -> dict:
+  """Return split obstacle reward params if available, else defaults."""
+  try:
+    collision_cfg = env.cfg.rewards["obstacle_collision"]
+    direction_cfg = env.cfg.rewards["obstacle_direction"]
+    return {
+      **dict(collision_cfg.params),
+      **dict(direction_cfg.params),
+    }
+  except Exception:
+    return {
+      "command_name": "adversary",
+      "ball_vel_command_name": "ball_vel",
+      "collision_detection_range": 1.5,
+      "direction_detection_range": 3.0,
+      "collision_tube_radius": 0.75,
+      "direction_tube_radius": 1.0,
+    }
 
 
 def _get_ball_term(env):
@@ -204,6 +223,131 @@ def draw_ball_prediction_overlay(env, vis: DebugVisualizer) -> None:
     pass
 
 
+def draw_obstacle_reward_overlay(env, vis: DebugVisualizer) -> None:
+  """Visualize the commanded path tube and nearest-obstacle relevance test.
+
+  Draws:
+    - commanded path centerline from the ball
+    - collision tube (narrower)
+    - direction tube (wider)
+    - nearest obstacle marker
+    - orthogonal projection of the obstacle onto the commanded path
+    - lateral segment from path to obstacle
+
+  Colors:
+    - green: irrelevant
+    - yellow: direction-relevant only
+    - red: collision-relevant
+  """
+  params = _get_obstacle_reward_params(env)
+  command_name = params.get("command_name", "adversary")
+  ball_vel_command_name = params.get("ball_vel_command_name", "ball_vel")
+  collision_detection_range = float(params.get("collision_detection_range", 1.5))
+  direction_detection_range = float(params.get("direction_detection_range", 3.0))
+  direction_tube_radius = float(params.get("direction_tube_radius", 1.0))
+
+  try:
+    term = env.command_manager.get_term(command_name)
+    cmd_term = env.command_manager.get_term(ball_vel_command_name)
+    if term.cfg.num_active == 0:
+      return
+    env_idx = vis.env_idx
+    if env_idx >= env.num_envs:
+      return
+  except Exception:
+    return
+
+  ball_xy = env.scene["ball"].data.root_link_pos_w[env_idx, :2].cpu().numpy()
+  cmd_xy = env.command_manager.get_command(ball_vel_command_name)[env_idx, :2].cpu().numpy()
+  cmd_speed = np.linalg.norm(cmd_xy)
+  if cmd_speed < 1e-6:
+    return
+  cmd_dir = cmd_xy / max(cmd_speed, 1e-6)
+  side_dir = np.array([-cmd_dir[1], cmd_dir[0]], dtype=np.float32)
+  target_xy = cmd_term.target_position[env_idx, :2].cpu().numpy()
+  target_vec = target_xy - ball_xy
+  target_dist = float(np.linalg.norm(target_vec))
+  target_dir = target_vec / max(target_dist, 1e-6)
+
+  obs_xy_all = term.obstacle_positions_w[env_idx, : term.cfg.num_active].cpu().numpy()
+  robot_xy = env.scene["robot"].data.root_link_pos_w[env_idx, :2].cpu().numpy()
+  dists = np.linalg.norm(obs_xy_all - robot_xy[None, :], axis=-1)
+  nearest_idx = int(np.argmin(dists))
+  min_dist = float(dists[nearest_idx])
+  obs_xy = obs_xy_all[nearest_idx]
+
+  ball_to_obs = obs_xy - ball_xy
+  obs_forward = float(np.dot(ball_to_obs, target_dir))
+  proj_xy = ball_xy + np.clip(obs_forward, 0.0, max(target_dist, 0.0)) * target_dir
+  obs_lateral = float(np.linalg.norm(obs_xy - proj_xy))
+
+  collision_relevant = min_dist <= collision_detection_range
+  direction_relevant = (
+    (target_dist > 1e-6)
+    and (obs_forward > 0.0)
+    and (obs_forward < target_dist)
+    and (obs_forward <= direction_detection_range)
+    and (obs_lateral <= direction_tube_radius)
+  )
+
+  line_len = max(target_dist, direction_detection_range, 1.0)
+  start_center = np.array([ball_xy[0], ball_xy[1], 0.04], dtype=np.float32)
+  end_center = np.array(
+    [ball_xy[0] + target_dir[0] * line_len, ball_xy[1] + target_dir[1] * line_len, 0.04],
+    dtype=np.float32,
+  )
+
+  # Centerline of the commanded ball-to-target path.
+  vis.add_cylinder(
+    start=start_center,
+    end=end_center,
+    radius=0.005,
+    color=(0.2, 0.9, 0.2, 0.5),
+  )
+
+  # Wider direction tube.
+  for sign in (-1.0, 1.0):
+    offset = side_dir * direction_tube_radius * sign
+    vis.add_cylinder(
+      start=np.array([start_center[0] + offset[0], start_center[1] + offset[1], 0.03]),
+      end=np.array([end_center[0] + offset[0], end_center[1] + offset[1], 0.03]),
+      radius=0.003,
+      color=(0.2, 0.6, 1.0, 0.35),
+    )
+
+  if collision_relevant:
+    obs_color = (1.0, 0.2, 0.2, 0.85)
+    obs_label = "nearest_obs collision-relevant"
+  elif direction_relevant:
+    obs_color = (1.0, 0.9, 0.1, 0.8)
+    obs_label = "nearest_obs direction-relevant"
+  else:
+    obs_color = (0.2, 1.0, 0.2, 0.75)
+    obs_label = "nearest_obs irrelevant"
+
+  proj_3d = np.array([proj_xy[0], proj_xy[1], 0.08], dtype=np.float32)
+  obs_3d = np.array([obs_xy[0], obs_xy[1], 0.12], dtype=np.float32)
+  vis.add_sphere(
+    center=proj_3d,
+    radius=0.03,
+    color=obs_color,
+    label=f"path_proj s={obs_forward:.2f} / target={target_dist:.2f} d_perp={obs_lateral:.2f}",
+  )
+  vis.add_cylinder(
+    start=proj_3d,
+    end=obs_3d,
+    radius=0.003,
+    color=obs_color,
+  )
+
+  vis.add_sphere(
+    center=obs_3d,
+    radius=0.06,
+    color=obs_color,
+    label=obs_label,
+  )
+
+
 def draw_depth_window(env, env_idx: int) -> None:
   """Show the encoder's current preprocessed depth frame in a cv2 window.
 
@@ -237,7 +381,7 @@ def draw_depth_window(env, env_idx: int) -> None:
 
 
 class DribblingViz:
-  """Viz callback: draws head camera FOV frustum + line to ball + ball prediction.
+  """Viz callback: draws camera, prediction, and obstacle-path debug overlays.
 
   3-D overlay (in MuJoCo viewer):
     Green  → depth encoder active (ball in FOV, buffer warm).
@@ -245,6 +389,8 @@ class DribblingViz:
     Yellow → no FOV tracking (Phase 1 or play without depth camera).
     Blue sphere → ball position predicted by depth encoder's ball head.
     Cyan line   → connects predicted position to GT (shows prediction error).
+    Green path line / blue-orange tube → commanded path and obstacle tubes.
+    Green/yellow/red obstacle marker  → irrelevant / direction-relevant / collision-relevant.
 
   Optional cv2 depth window (set show_depth=True to enable):
     Current preprocessed depth frame fed to the encoder.
@@ -260,6 +406,7 @@ class DribblingViz:
   def debug_vis(self, vis) -> None:
     draw_camera_ball_overlay(self._env, vis)
     draw_ball_prediction_overlay(self._env, vis)
+    draw_obstacle_reward_overlay(self._env, vis)
     self._print_ball_estimate(vis.env_idx)
     if self._show_depth:
       draw_depth_window(self._env, vis.env_idx)

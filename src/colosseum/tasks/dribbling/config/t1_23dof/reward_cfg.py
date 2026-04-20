@@ -31,7 +31,8 @@ from colosseum.tasks.dribbling.mdp.rewards import (
   ball_vel_norm,
   ball_vel_tracking_body,
   feet_distance_penalty,
-  obstacle_avoidance,
+  obstacle_collision,
+  obstacle_direction,
   pose_deviation,
   robot_ball_yaw_body,
   stance_phase_schedule,
@@ -82,21 +83,27 @@ rewards = {
     weight=2.0,
     params={"command_name": "ball_vel"},  # Command whose speed sets the desired approach urgency.
   ),
-  "obstacle_avoidance": RewardTermCfg(  # Local obstacle penalty when the nearest obstacle is near and in front.
-    func=obstacle_avoidance,
-    weight=-3.0,
+  "obstacle_collision": RewardTermCfg(  # Local body-obstacle safety term.
+    func=obstacle_collision,
+    weight=-1.5,
     params={
       "command_name": "adversary",  # Obstacle command term providing obstacle positions/velocities.
-      "ball_vel_command_name": "ball_vel",  # Ball command used for the kick-direction penalty.
-      "collision_detection_range": 1.5,  # Body-obstacle penalty only inside this robot-obstacle distance.
-      "direction_detection_range": 3.0,  # Kick-direction penalty only inside this robot-obstacle distance.
+      "collision_detection_range": 1.5,  # Collision penalty only inside this robot-obstacle distance.
       "collision_near_distance": 0.5,  # Maximum collision penalty at or below this distance.
       "collision_far_distance": 1.5,  # Collision penalty fades to zero at or above this distance.
-      "collision_tube_radius": 0.75,  # Collision term only if the obstacle stays close to the commanded ball path.
-      "direction_tube_radius": 1.0,  # Direction term only if the obstacle lies within the wider path-relevance tube.
+      "ball_engagement_near_distance": 0.3,  # Full obstacle pressure only when the ball is under close control.
+      "ball_engagement_far_distance": 0.75,  # Obstacle pressure fades out when the ball is not engaged.
+    },
+  ),
+  "obstacle_direction": RewardTermCfg(  # Penalize commanding the ball toward an obstacle that blocks the target path.
+    func=obstacle_direction,
+    weight=-2.5,
+    params={
+      "command_name": "adversary",  # Obstacle command term providing obstacle positions/velocities.
+      "ball_vel_command_name": "ball_vel",  # Ball command term providing the persistent target.
+      "direction_detection_range": 3.0,  # Only obstacles within this forward target-segment range affect direction.
+      "direction_tube_radius": 1.0,  # Direction term only if the obstacle lies close to the ball-target segment.
       "direction_sharpness": 3.0,  # Larger -> sharper bounded penalty for commanding the ball toward the obstacle.
-      "collision_weight": 0.5,  # Relative weight of body-obstacle proximity.
-      "direction_weight": 1.5,  # Relative weight of "do not kick toward obstacle".
       "ball_engagement_near_distance": 0.3,  # Full obstacle pressure only when the ball is under close control.
       "ball_engagement_far_distance": 0.75,  # Obstacle pressure fades out when the ball is not engaged.
     },
