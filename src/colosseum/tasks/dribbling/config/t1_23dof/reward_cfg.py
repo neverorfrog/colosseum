@@ -86,17 +86,17 @@ rewards = {
       "relax_min_scale": 0.05,  # Minimum retained directional tracking strength in the fully blocked case.
     },
   ),
-  # "robot_ball_distance": RewardTermCfg(  # Keep the robot reasonably close to the ball.
-  #   func=robot_ball_distance,
-  #   weight=1.0,
-  #   params={
-  #     "close_distance": 0.3,  # Ball within 0.3 m and in front is considered fully controlled.
-  #     "behind_close_penalty": 0.5,  # Constant penalty level when the ball is close but behind.
-  #     "far_sharpness": 3.0,  # Larger -> stronger exponential decay once the ball is farther than 0.3 m.
-  #     "between_feet_forward_distance": 0.1,  # |x_body| below this flags the ball as between the feet.
-  #     "between_feet_penalty": 2.0,  # Larger -> stronger penalty when the ball ends up under the robot.
-  #   },
-  # ),
+  "robot_ball_distance": RewardTermCfg(  # Keep the robot reasonably close to the ball.
+    func=robot_ball_distance,
+    weight=0.05,
+    params={
+      "close_distance": 0.3,  # Ball within 0.3 m and in front is considered fully controlled.
+      "behind_close_penalty": 0.5,  # Constant penalty level when the ball is close but behind.
+      "far_sharpness": 3.0,  # Larger -> stronger exponential decay once the ball is farther than 0.3 m.
+      "between_feet_forward_distance": 0.1,  # |x_body| below this flags the ball as between the feet.
+      "between_feet_penalty": 2.0,  # Larger -> stronger penalty when the ball ends up under the robot.
+    },
+  ),
   "robot_ball_yaw": RewardTermCfg(  # Keep the ball in front of the robot along the command.
     func=robot_ball_yaw_body,
     weight=2.0,
