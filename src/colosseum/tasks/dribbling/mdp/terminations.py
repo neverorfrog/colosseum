@@ -24,3 +24,13 @@ def ball_captured(
 
   dist = (obs_xy - ball_xy.unsqueeze(1)).norm(dim=-1)  # (N, K_active)
   return dist.min(dim=-1).values < capture_radius  # (N,)
+
+
+def ball_lost(
+  env: ManagerBasedRlEnv,
+  max_robot_ball_distance: float = 2.0,
+) -> torch.Tensor:
+  """Terminate when the robot loses the ball by more than max_robot_ball_distance."""
+  robot_xy = env.scene["robot"].data.root_link_pos_w[:, :2]
+  ball_xy = env.scene["ball"].data.root_link_pos_w[:, :2]
+  return (ball_xy - robot_xy).norm(dim=-1) > max_robot_ball_distance

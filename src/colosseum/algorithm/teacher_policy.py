@@ -45,12 +45,15 @@ class TeacherPolicy(nn.Module):
   ) -> None:
     super().__init__()
     self.obs_start_idx = obs_start_idx
-
-    self.actor = PpoActor(obs_dim, action_dim, actor_cfg)
-
     checkpoint = torch.load(
       Path(checkpoint_path), map_location="cpu", weights_only=False
     )
+
+    if obs_dim <= 0:
+      first_linear_weight = checkpoint["actor_state_dict"]["backbone.0.weight"]
+      obs_dim = int(first_linear_weight.shape[1])
+
+    self.actor = PpoActor(obs_dim, action_dim, actor_cfg)
     self.actor.load_state_dict(checkpoint["actor_state_dict"])
 
     self.normalizer = EmpiricalNormalization(obs_dim)

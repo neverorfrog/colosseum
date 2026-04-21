@@ -201,15 +201,23 @@ class ConstraintManager(ManagerBase):
 
     return cstr_prob
 
-  def reset(self, env_ids: torch.Tensor) -> dict[str, Any]:
+  def reset(self, env_ids: torch.Tensor, ep_lens: torch.Tensor | None = None) -> dict[str, Any]:
     """Log per-episode constraint statistics and clear buffers for env_ids.
+
+    Args:
+      env_ids: Indices of environments being reset.
+      ep_lens: Episode lengths snapshot taken *before* the base env zeroed
+        ``episode_length_buf``. If None, reads from the env (may already be 0).
 
     Returns:
       Dict with keys ``Episode_Constraint_violation/<name>`` (% of steps violated)
       and ``Episode_Constraint_probability/<name>`` (mean termination probability).
     """
     extras: dict[str, Any] = {}
-    ep_len = self._env.episode_length_buf[env_ids].float().clamp(min=1.0)
+    if ep_lens is not None:
+      ep_len = ep_lens.float().clamp(min=1.0)
+    else:
+      ep_len = self._env.episode_length_buf[env_ids].float().clamp(min=1.0)
 
     for name in self._term_names:
       violation_rate = (self._episode_violation_sums[name][env_ids] / ep_len).mean()

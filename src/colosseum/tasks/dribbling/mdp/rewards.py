@@ -61,23 +61,158 @@ def ball_vel_tracking_body(
   env: ManagerBasedRlEnv,
   command_name: str,
   sharpness: float = 1.0,
+  min_speed: float = 0.05,
 ) -> torch.Tensor:
-  """exp(-sharpness * |v_ball_b - v_cmd_b|²). Body-frame variant."""
-  error_sq = ((_ball_vel_body(env) - _cmd_body(env, command_name)) ** 2).sum(dim=-1)
-  return torch.exp(-sharpness * error_sq)
+  """exp(-sharpness * |v_ball_b - v_cmd_b|²). Body-frame variant. Zero when ball is stationary."""
+  ball_vel_b = _ball_vel_body(env)
+  error_sq = ((ball_vel_b - _cmd_body(env, command_name)) ** 2).sum(dim=-1)
+  reward = torch.exp(-sharpness * error_sq)
+  return reward * (ball_vel_b.norm(dim=-1) > min_speed).float()
 
 
 def ball_vel_angle_body(
   env: ManagerBasedRlEnv,
   command_name: str,
+  min_speed: float = 0.05,
 ) -> torch.Tensor:
-  """Direction match 1 - (ψ_ball - ψ_cmd)²/π². Body-frame variant."""
+  """Direction match 1 - (ψ_ball - ψ_cmd)²/π². Body-frame variant. Zero when ball is stationary."""
   ball_vel_b = _ball_vel_body(env)
   cmd_b = _cmd_body(env, command_name)
   psi_ball = torch.atan2(ball_vel_b[:, 1], ball_vel_b[:, 0])
   psi_cmd = torch.atan2(cmd_b[:, 1], cmd_b[:, 0])
   angle_err = (psi_ball - psi_cmd + math.pi) % (2 * math.pi) - math.pi
-  return 1.0 - (angle_err**2) / (math.pi**2)
+  reward = 1.0 - (angle_err**2) / (math.pi**2)
+  return reward * (ball_vel_b.norm(dim=-1) > min_speed).float()
+
+
+def _obstacle_relax_gate(
+  env: ManagerBasedRlEnv,
+  command_name: str = "adversary",
+  ball_vel_command_name: str = "ball_vel",
+  direction_detection_range: float = 1.5,
+  direction_tube_radius: float = 0.5,
+  ball_engagement_near_distance: float = 0.3,
+  ball_engagement_far_distance: float = 0.75,
+) -> torch.Tensor:
+  """Return a [0, 1] gate indicating when nominal tracking should be relaxed.
+
+  The gate is active when the nearest obstacle lies on the current ball-target
+  corridor and the robot is still engaged with the ball.
+  """
+  try:
+    term: ObstacleCommand = env.command_manager.get_term(command_name)
+  except Exception:
+    return torch.zeros(env.num_envs, device=env.device)
+
+  if term.cfg.num_active == 0:
+    return torch.zeros(env.num_envs, device=env.device)
+
+  _, nearest_obs_xy, _ = _get_closest_robot_obstacle(env, command_name)
+  ball_xy = env.scene["ball"].data.root_link_pos_w[:, :2]
+  cmd_term = env.command_manager.get_term(ball_vel_command_name)
+  target_xy = cmd_term.target_position[:, :2]
+  target_vec = target_xy - ball_xy
+  target_dist = target_vec.norm(dim=-1)
+  target_dir = target_vec / target_dist.unsqueeze(-1).clamp(min=1e-6)
+
+  ball_to_obs = nearest_obs_xy - ball_xy
+  obs_forward = (ball_to_obs * target_dir).sum(dim=-1)
+  obs_lateral = (
+    ball_to_obs - obs_forward.unsqueeze(-1) * target_dir
+  ).norm(dim=-1)
+
+  corridor_relevant = (
+    (target_dist > 1e-6)
+    & (obs_forward > 0.0)
+    & (obs_forward < target_dist)
+    & (obs_forward <= direction_detection_range)
+    & (obs_lateral <= direction_tube_radius)
+  )
+
+  _, engagement = _ball_engagement_gate(
+    env, ball_engagement_near_distance, ball_engagement_far_distance
+  )
+  return engagement * corridor_relevant.float()
+
+
+def ball_vel_tracking_relaxed(
+  env: ManagerBasedRlEnv,
+  command_name: str,
+  sharpness: float = 1.0,
+  obstacle_command_name: str = "adversary",
+  direction_detection_range: float = 1.5,
+  direction_tube_radius: float = 0.5,
+  ball_engagement_near_distance: float = 0.3,
+  ball_engagement_far_distance: float = 0.75,
+  relax_min_scale: float = 0.2,
+  min_speed: float = 0.05,
+) -> torch.Tensor:
+  """Relax vector tracking only near a relevant blocking obstacle."""
+  base_reward = ball_vel_tracking_body(env, command_name, sharpness, min_speed)
+  relax_gate = _obstacle_relax_gate(
+    env,
+    command_name=obstacle_command_name,
+    ball_vel_command_name=command_name,
+    direction_detection_range=direction_detection_range,
+    direction_tube_radius=direction_tube_radius,
+    ball_engagement_near_distance=ball_engagement_near_distance,
+    ball_engagement_far_distance=ball_engagement_far_distance,
+  )
+  scale = 1.0 - (1.0 - relax_min_scale) * relax_gate
+  return scale * base_reward
+
+
+def ball_vel_norm_relaxed(
+  env: ManagerBasedRlEnv,
+  command_name: str,
+  sharpness: float = 1.0,
+  obstacle_command_name: str = "adversary",
+  direction_detection_range: float = 1.5,
+  direction_tube_radius: float = 0.5,
+  ball_engagement_near_distance: float = 0.3,
+  ball_engagement_far_distance: float = 0.75,
+  relax_min_scale: float = 0.5,
+  min_speed: float = 0.05,
+) -> torch.Tensor:
+  """Relax speed tracking only near a relevant blocking obstacle."""
+  base_reward = ball_vel_norm(env, command_name, sharpness, min_speed)
+  relax_gate = _obstacle_relax_gate(
+    env,
+    command_name=obstacle_command_name,
+    ball_vel_command_name=command_name,
+    direction_detection_range=direction_detection_range,
+    direction_tube_radius=direction_tube_radius,
+    ball_engagement_near_distance=ball_engagement_near_distance,
+    ball_engagement_far_distance=ball_engagement_far_distance,
+  )
+  scale = 1.0 - (1.0 - relax_min_scale) * relax_gate
+  return scale * base_reward
+
+
+def ball_vel_angle_relaxed(
+  env: ManagerBasedRlEnv,
+  command_name: str,
+  obstacle_command_name: str = "adversary",
+  direction_detection_range: float = 1.5,
+  direction_tube_radius: float = 0.5,
+  ball_engagement_near_distance: float = 0.3,
+  ball_engagement_far_distance: float = 0.75,
+  relax_min_scale: float = 0.2,
+  min_speed: float = 0.05,
+) -> torch.Tensor:
+  """Relax direction tracking only near a relevant blocking obstacle."""
+  base_reward = ball_vel_angle_body(env, command_name, min_speed)
+  relax_gate = _obstacle_relax_gate(
+    env,
+    command_name=obstacle_command_name,
+    ball_vel_command_name=command_name,
+    direction_detection_range=direction_detection_range,
+    direction_tube_radius=direction_tube_radius,
+    ball_engagement_near_distance=ball_engagement_near_distance,
+    ball_engagement_far_distance=ball_engagement_far_distance,
+  )
+  scale = 1.0 - (1.0 - relax_min_scale) * relax_gate
+  return scale * base_reward
 
 
 def robot_ball_yaw_body(
@@ -138,8 +273,9 @@ def ball_vel_norm(
   env: ManagerBasedRlEnv,
   command_name: str,
   sharpness: float = 1.0,
+  min_speed: float = 0.05,
 ) -> torch.Tensor:
-  """Speed matching: exp(-sharpness * (|v^cmd| - |v^b|)²).
+  """Speed matching: exp(-sharpness * (|v^cmd| - |v^b|)²). Zero when ball is stationary.
 
   Rewards matching commanded speed regardless of direction.
   Prevents exploitation of direction-only rewards by kicking too hard.
@@ -147,14 +283,16 @@ def ball_vel_norm(
   ball_vel = env.scene["ball"].data.root_link_lin_vel_w[:, :2]
   target_vel = env.command_manager.get_command(command_name)[:, :2]  # type: ignore
   speed_err = (target_vel.norm(dim=-1) - ball_vel.norm(dim=-1)) ** 2
-  return torch.exp(-sharpness * speed_err)
+  reward = torch.exp(-sharpness * speed_err)
+  return reward * (ball_vel.norm(dim=-1) > min_speed).float()
 
 
 def ball_vel_angle(
   env: ManagerBasedRlEnv,
   command_name: str,
+  min_speed: float = 0.05,
 ) -> torch.Tensor:
-  """Direction match: 1 - (ψ_b - ψ_cmd)²/π².
+  """Direction match: 1 - (ψ_b - ψ_cmd)²/π². Zero when ball is stationary.
 
   Ranges from 1.0 (perfect alignment) to 0.0 (opposite direction).
   Gives partial credit for near-correct directions.
@@ -164,7 +302,8 @@ def ball_vel_angle(
   psi_b = torch.atan2(ball_vel[:, 1], ball_vel[:, 0])
   psi_cmd = torch.atan2(target_vel[:, 1], target_vel[:, 0])
   angle_err = (psi_b - psi_cmd + math.pi) % (2 * math.pi) - math.pi
-  return 1.0 - (angle_err**2) / (math.pi**2)
+  reward = 1.0 - (angle_err**2) / (math.pi**2)
+  return reward * (ball_vel.norm(dim=-1) > min_speed).float()
 
 
 # ------------------------------------------------------------------
@@ -269,18 +408,53 @@ def feet_distance_penalty(
 
 def robot_ball_distance(
   env: ManagerBasedRlEnv,
-  sharpness: float = 2.0,
+  close_distance: float = 0.3,
+  behind_close_penalty: float = 2.0,
+  far_sharpness: float = 3.0,
+  between_feet_forward_distance: float = 0.1,
+  between_feet_penalty: float = 2.0,
 ) -> torch.Tensor:
-  """exp(-sharpness * ||robot_xy - ball_xy||²).
+  """Front/back-aware robot-ball proximity reward.
 
-  Low sharpness (0.5) → half-max at ~1.2m so the robot can play the ball
-  forward into free areas without being penalized.  High sharpness (2.0)
-  keeps the ball at feet (~0.6m half-max), suitable for tight dribbling.
+  Desired behavior:
+    - ball close and in front (distance <= close_distance, x_body >= 0): reward 1.0
+    - ball directly under the robot (|x_body| < between_feet_forward_distance
+      AND distance <= close_distance): constant low reward — the ball has
+      rolled into the support polygon between the feet, which makes dribbling
+      impossible.
+    - ball close but behind (distance <= close_distance, x_body < 0): constant low reward
+    - ball farther than close_distance: exponential decay with distance
   """
-  robot_pos = env.scene["robot"].data.root_link_pos_w[:, :2]
-  ball_pos = env.scene["ball"].data.root_link_pos_w[:, :2]
-  dist_sq = ((ball_pos - robot_pos) ** 2).sum(dim=-1)
-  return torch.exp(-sharpness * dist_sq)
+  robot = env.scene["robot"]
+  ball_pos_w = env.scene["ball"].data.root_link_pos_w[:, :3]
+  robot_pos_w = robot.data.root_link_pos_w[:, :3]
+
+  relative_w = ball_pos_w - robot_pos_w
+  quat_w = robot.data.root_link_quat_w
+  quat_conj = torch.cat([quat_w[:, :1], -quat_w[:, 1:]], dim=-1)
+  ball_b = quat_apply(quat_conj, relative_w)[:, :2]
+  dist = ball_b.norm(dim=-1)
+
+  between_feet = (dist <= close_distance) & (
+    ball_b[:, 0].abs() < between_feet_forward_distance
+  )
+  front_close = (dist <= close_distance) & (ball_b[:, 0] >= 0.0) & ~between_feet
+  behind_close = (dist <= close_distance) & (ball_b[:, 0] < 0.0) & ~between_feet
+
+  far_excess = (dist - close_distance).clamp(min=0.0)
+  far_reward = torch.exp(-far_sharpness * far_excess.pow(2))
+  behind_close_reward = torch.full_like(dist, math.exp(-behind_close_penalty))
+  between_feet_reward = torch.full_like(dist, math.exp(-between_feet_penalty))
+
+  return torch.where(
+    between_feet,
+    between_feet_reward,
+    torch.where(
+      front_close,
+      torch.ones_like(dist),
+      torch.where(behind_close, behind_close_reward, far_reward),
+    ),
+  )
 
 
 def robot_ball_yaw(
@@ -440,30 +614,89 @@ def robot_ball_approach_vel(
   return torch.exp(-(deficit**2))
 
 
+def ball_target_reached(
+  env: ManagerBasedRlEnv,
+  command_name: str = "ball_vel",
+) -> torch.Tensor:
+  """Discrete bonus fired exactly once when the ball crosses the target threshold.
+
+  Reads the ``target_reached_mask`` set by BallVelocityCommand in the same step
+  that the target resamples, so the spike is guaranteed to fire for one step.
+  """
+  from colosseum.tasks.dribbling.mdp.ball_velocity_command import BallVelocityCommand
+
+  term: BallVelocityCommand = env.command_manager.get_term(command_name)
+  return term.target_reached_mask.float()
+
+
+def ball_target_progress(
+  env: ManagerBasedRlEnv,
+  command_name: str = "ball_vel",
+  obstacle_command_name: str = "adversary",
+  target_near_distance: float = 0.4,
+  target_far_distance: float = 1.0,
+  target_obstacle_near_distance: float = 0.6,
+  target_obstacle_far_distance: float = 1.2,
+  speed_ref: float = 1.0,
+  distance_scale_ref: float = 2.0,
+  distance_scale_max: float = 1.5,
+) -> torch.Tensor:
+  """Reward ball velocity toward the persistent target, gated off near the target.
+
+  The reward is based on the positive projection of the current ball velocity
+  onto the current ball-to-target direction. A smooth gate deactivates the
+  reward when the target is already very close, or when the target lies very
+  close to the nearest obstacle, to avoid over-constraining the policy near the
+  end of the episode or pushing it into blocked target geometries.
+
+  A distance-aware scale grows linearly with remaining target distance up to
+  ``distance_scale_max`` (saturating at ``distance_scale_ref`` metres), so
+  making progress toward a far target is worth more than progress on a near
+  target — this prevents the shaping signal from vanishing on long paths.
+  """
+  cmd_term = env.command_manager.get_term(command_name)
+  ball_xy = env.scene["ball"].data.root_link_pos_w[:, :2]
+  ball_vel_xy = env.scene["ball"].data.root_link_lin_vel_w[:, :2]
+  target_xy = cmd_term.target_position[:, :2]
+
+  target_vec = target_xy - ball_xy
+  target_dist = target_vec.norm(dim=-1)
+  target_dir = target_vec / target_dist.unsqueeze(-1).clamp(min=1e-6)
+
+  progress_speed = (ball_vel_xy * target_dir).sum(dim=-1).clamp(min=0.0)
+  progress_reward = (progress_speed / max(speed_ref, 1e-6)).clamp(min=0.0, max=1.0)
+
+  gate_span = max(target_far_distance - target_near_distance, 1e-6)
+  target_gate = (
+    (target_dist - target_near_distance) / gate_span
+  ).clamp(min=0.0, max=1.0)
+
+  distance_scale = 1.0 + (distance_scale_max - 1.0) * (
+    target_dist / max(distance_scale_ref, 1e-6)
+  ).clamp(min=0.0, max=1.0)
+
+  obstacle_gate = torch.ones(env.num_envs, device=env.device)
+  try:
+    term: ObstacleCommand = env.command_manager.get_term(obstacle_command_name)
+    if term.cfg.num_active > 0:
+      obs_xy = term.obstacle_positions_w[:, : term.cfg.num_active]
+      target_obs_dist = (obs_xy - target_xy.unsqueeze(1)).norm(dim=-1).min(dim=-1).values
+      obstacle_gate_span = max(
+        target_obstacle_far_distance - target_obstacle_near_distance,
+        1e-6,
+      )
+      obstacle_gate = (
+        (target_obs_dist - target_obstacle_near_distance) / obstacle_gate_span
+      ).clamp(min=0.0, max=1.0)
+  except Exception:
+    pass
+
+  return target_gate * obstacle_gate * distance_scale * progress_reward
+
+
 # ---------------------------------------------------------------------------
 # Obstacles
 # ---------------------------------------------------------------------------
-
-
-def _get_min_robot_obstacle_dist(
-  env: ManagerBasedRlEnv,
-  command_name: str,
-) -> tuple[torch.Tensor, torch.Tensor]:
-  """Return (min_dist, nearest_obs_xy) for each env.
-
-  min_dist  : (N,)    minimum XY distance from robot to any active obstacle.
-  nearest   : (N, 2)  world-frame XY position of the nearest obstacle.
-  """
-  robot = env.scene["robot"]
-  term: ObstacleCommand = env.command_manager.get_term(command_name)
-  robot_xy = robot.data.root_link_pos_w[:, :2]  # (N, 2)
-  obs_xy = term.obstacle_positions_w  # (N, K, 2)
-
-  dist = (obs_xy - robot_xy.unsqueeze(1)).norm(dim=-1)  # (N, K)
-  min_dist, idx = dist.min(dim=-1)  # (N,)
-  nearest = obs_xy[torch.arange(env.num_envs, device=env.device), idx]  # (N, 2)
-  return min_dist, nearest
-
 
 def _get_closest_robot_obstacle(
   env: ManagerBasedRlEnv,
@@ -498,267 +731,145 @@ def _world_xy_to_body_xy(
   return quat_apply(quat_conj, rel_3d)[:, :2]
 
 
-def obstacle_avoidance(
+def _ball_engagement_gate(
+  env: ManagerBasedRlEnv,
+  ball_engagement_near_distance: float,
+  ball_engagement_far_distance: float,
+) -> tuple[torch.Tensor, torch.Tensor]:
+  """Return robot-ball distance and a [0, 1] engagement gate."""
+  robot_xy = env.scene["robot"].data.root_link_pos_w[:, :2]
+  ball_xy = env.scene["ball"].data.root_link_pos_w[:, :2]
+  ball_dist = (ball_xy - robot_xy).norm(dim=-1)
+  engagement_span = max(
+    ball_engagement_far_distance - ball_engagement_near_distance,
+    1e-6,
+  )
+  engagement = (
+    (ball_engagement_far_distance - ball_dist) / engagement_span
+  ).clamp(min=0.0, max=1.0)
+  return ball_dist, engagement
+
+
+def robot_obstacle_collision(
   env: ManagerBasedRlEnv,
   command_name: str = "adversary",
-  ball_vel_command_name: str = "ball_vel",
-  detection_range: float = 3.0,
-  collision_sharpness: float = 2.0,
-  direction_sharpness: float = 4.0,
-  collision_weight: float = 0.4,
-  direction_weight: float = 1.0,
-  min_cmd_speed: float = 0.05,
+  collision_detection_range: float = 2.0,
+  collision_near_distance: float = 0.5,
+  collision_far_distance: float = 1.5,
 ) -> torch.Tensor:
-  """Visible-obstacle penalty with collision and kick-direction terms.
+  """Local body-obstacle collision penalty.
 
-  The nearest active obstacle contributes only when it is:
-    - within ``detection_range`` from the robot, and
-    - in front of the robot in body frame (local x > 0).
-
-  The penalty is the sum of:
-    1. collision term:   exp(-collision_sharpness * ||robot - obstacle||^2)
-    2. direction term:   exp(direction_sharpness * max(0, cos(cmd, ball->obs))) - 1
-
-  The first discourages direct collision with the obstacle. The second
-  discourages commanding ball motion toward the obstacle, and is weighted more
-  heavily by default.
+  This term is intentionally local and does not depend on whether the obstacle
+  lies between the ball and the target. If the robot is physically close to an
+  obstacle, collision pressure stays active unconditionally — safety must not
+  be gated by ball engagement.
   """
   term: ObstacleCommand = env.command_manager.get_term(command_name)
   if term.cfg.num_active == 0:
     return torch.zeros(env.num_envs, device=env.device)
 
   min_dist, nearest_obs_xy, _ = _get_closest_robot_obstacle(env, command_name)
-  nearest_obs_b = _world_xy_to_body_xy(env, nearest_obs_xy)
+  del nearest_obs_xy
 
-  visible = (min_dist < detection_range) & (nearest_obs_b[:, 0] > 0.0)
+  collision_span = max(collision_far_distance - collision_near_distance, 1e-6)
+  collision_progress = (
+    (collision_far_distance - min_dist) / collision_span
+  ).clamp(min=0.0, max=1.0)
+  collision_term = collision_progress.pow(2)
+  collision_relevant = min_dist <= collision_detection_range
 
-  collision_term = torch.exp(-collision_sharpness * min_dist.pow(2))
-
-  ball_xy = env.scene["ball"].data.root_link_pos_w[:, :2]
-  cmd_xy = env.command_manager.get_command(ball_vel_command_name)[:, :2]
-  cmd_speed = cmd_xy.norm(dim=-1)
-  cmd_dir = cmd_xy / cmd_speed.unsqueeze(-1).clamp(min=1e-6)
-
-  ball_to_obs = nearest_obs_xy - ball_xy
-  ball_to_obs_dir = ball_to_obs / ball_to_obs.norm(dim=-1, keepdim=True).clamp(min=1e-6)
-
-  alignment = (cmd_dir * ball_to_obs_dir).sum(dim=-1).clamp(-1.0, 1.0)
-  toward_obstacle = alignment.clamp(min=0.0)
-  direction_term = torch.exp(direction_sharpness * toward_obstacle) - 1.0
-  direction_term = direction_term / (math.exp(direction_sharpness) - 1.0)
-  direction_term = direction_term * (cmd_speed > min_cmd_speed).float()
-
-  penalty = collision_weight * collision_term + direction_weight * direction_term
-  return visible.float() * penalty
+  return collision_relevant.float() * collision_term
 
 
-def ball_protection(
+def ball_obstacle_collision(
   env: ManagerBasedRlEnv,
   command_name: str = "adversary",
-  activation_radius: float = 3.0,
+  collision_detection_range: float = 1.0,
+  collision_near_distance: float = 0.15,
+  collision_far_distance: float = 0.6,
 ) -> torch.Tensor:
-  """Reward the robot for shielding the ball from the nearest obstacle.
+  """Ball-obstacle proximity penalty.
 
-  When the nearest obstacle is within *activation_radius*:
-    - Computes the unit vector from the ball toward the nearest obstacle.
-    - Computes the unit vector from the ball toward the robot.
-    - Reward = activation_weight * (1 + cosine_similarity) / 2
-
-  A score of 1.0 means the robot is perfectly interposed between the ball
-  and the obstacle; 0.0 means it is on the opposite side.
-
-  Returns shape (N,), values in [0, 1].
+  Penalizes the ball getting physically close to (or touching) an obstacle.
+  Unconditional — the ball colliding with an obstacle is always undesirable.
   """
   term: ObstacleCommand = env.command_manager.get_term(command_name)
   if term.cfg.num_active == 0:
     return torch.zeros(env.num_envs, device=env.device)
 
-  robot = env.scene["robot"]
-  ball = env.scene["ball"]
-
-  robot_xy = robot.data.root_link_pos_w[:, :2]  # (N, 2)
-  ball_xy = ball.data.root_link_pos_w[:, :2]  # (N, 2)
-
-  _, nearest_obs_xy = _get_min_robot_obstacle_dist(env, command_name)
-  dist_to_nearest = (nearest_obs_xy - robot_xy).norm(dim=-1)  # (N,)
-
-  # Smooth activation: 1 at r=0, ~0.37 at r=activation_radius.
-  sigma = activation_radius / 3.0
-  activation = torch.exp(-(dist_to_nearest / sigma).pow(2))
-
-  # Direction from ball toward obstacle.
-  ball_to_obs = nearest_obs_xy - ball_xy  # (N, 2)
-  ball_to_obs_norm = ball_to_obs / ball_to_obs.norm(dim=-1, keepdim=True).clamp(min=0.1)
-
-  # Direction from ball toward robot.
-  ball_to_robot = robot_xy - ball_xy  # (N, 2)
-  ball_to_robot_norm = ball_to_robot / ball_to_robot.norm(dim=-1, keepdim=True).clamp(
-    min=0.1
-  )
-
-  # Cosine similarity: +1 when robot is between ball and obstacle, -1 opposite.
-  cos = (ball_to_robot_norm * ball_to_obs_norm).sum(dim=-1).clamp(-1.0, 1.0)
-
-  # Also weight by how close the robot is to the ball (want robot near ball).
-  ball_dist = ball_to_robot.norm(dim=-1).clamp(max=2.0)
-  closeness = torch.exp(-ball_dist / 0.5)
-
-  return activation * (1.0 + cos) / 2.0 * closeness
-
-
-# ---------------------------------------------------------------------------
-# Context-aware gating
-# ---------------------------------------------------------------------------
-
-
-def _compute_gates(
-  env: ManagerBasedRlEnv,
-  adversary_command_name: str = "adversary",
-  ball_vel_command_name: str = "ball_vel",
-  ball_far_threshold: float = 1.0,
-  lookahead: float = 3.5,
-  r_base: float = 0.5,
-  k_speed: float = 0.5,
-  gate_sharpness: float = 5.0,
-) -> tuple[torch.Tensor, torch.Tensor]:
-  """Smooth per-env gate scalars in [0, 1].
-
-  danger : tube-intersection score for the nearest active obstacle.
-    Tube runs along the commanded ball-velocity direction from the ball;
-    radius = r_base + k_speed * obstacle_speed; capped at lookahead distance.
-  ball_far : sigmoid gate that rises as robot–ball XY distance exceeds
-    ball_far_threshold.
-  """
-  device = env.device
-  N = env.num_envs
-
-  robot_xy = env.scene["robot"].data.root_link_pos_w[:, :2]
   ball_xy = env.scene["ball"].data.root_link_pos_w[:, :2]
-  dist = (ball_xy - robot_xy).norm(dim=-1)
-  ball_far = torch.sigmoid(gate_sharpness * (dist - ball_far_threshold))
+  obs_xy = term.obstacle_positions_w[:, : term.cfg.num_active]
+  dist = (obs_xy - ball_xy.unsqueeze(1)).norm(dim=-1)
+  min_dist = dist.min(dim=-1).values
 
-  term: ObstacleCommand = env.command_manager.get_term(adversary_command_name)
-  if term.cfg.num_active == 0:
-    return torch.zeros(N, device=device), ball_far
+  collision_span = max(collision_far_distance - collision_near_distance, 1e-6)
+  collision_progress = (
+    (collision_far_distance - min_dist) / collision_span
+  ).clamp(min=0.0, max=1.0)
+  collision_term = collision_progress.pow(2)
+  collision_relevant = min_dist <= collision_detection_range
 
-  ball_vel_cmd = env.command_manager.get_command(ball_vel_command_name)[:, :2]
-  cmd_dir = ball_vel_cmd / ball_vel_cmd.norm(dim=-1, keepdim=True).clamp(min=1e-3)
-
-  _, nearest_obs_xy, nearest_obs_vel = _get_closest_robot_obstacle(
-    env, adversary_command_name
-  )
-  obs_speed = nearest_obs_vel.norm(dim=-1)  # (N,)
-
-  ball_to_obs = nearest_obs_xy - ball_xy  # (N, 2)
-  proj = (ball_to_obs * cmd_dir).sum(dim=-1)  # (N,)
-  d_perp = (ball_to_obs - proj.unsqueeze(-1) * cmd_dir).norm(dim=-1)  # (N,)
-
-  r = r_base + k_speed * obs_speed  # (N,)
-  inside_tube = torch.sigmoid(gate_sharpness * (r - d_perp))
-  in_front = torch.sigmoid(gate_sharpness * proj)
-  in_range = torch.sigmoid(gate_sharpness * (lookahead - proj))
-  danger = inside_tube * in_front * in_range
-
-  return danger, ball_far
+  return collision_relevant.float() * collision_term
 
 
-def obstacle_avoidance_gated(
+def obstacle_direction(
   env: ManagerBasedRlEnv,
   command_name: str = "adversary",
   ball_vel_command_name: str = "ball_vel",
-  ball_far_threshold: float = 1.0,
-  lookahead: float = 3.5,
-  r_base: float = 0.5,
-  k_speed: float = 0.5,
-  gate_sharpness: float = 5.0,
-  detection_range: float = 3.0,
-  collision_sharpness: float = 2.0,
-  direction_sharpness: float = 4.0,
-  collision_weight: float = 0.4,
-  direction_weight: float = 1.0,
-  min_cmd_speed: float = 0.05,
+  direction_detection_range: float = 1.5,
+  direction_tube_radius: float = 0.5,
+  direction_sharpness: float = 3.0,
+  min_ball_speed: float = 0.1,
+  ball_engagement_near_distance: float = 0.3,
+  ball_engagement_far_distance: float = 0.75,
 ) -> torch.Tensor:
-  """obstacle_avoidance weighted by the danger tube gate."""
-  danger, _ = _compute_gates(
-    env, command_name, ball_vel_command_name,
-    ball_far_threshold, lookahead, r_base, k_speed, gate_sharpness,
-  )
-  return danger * obstacle_avoidance(
-    env,
-    command_name=command_name,
-    ball_vel_command_name=ball_vel_command_name,
-    detection_range=detection_range,
-    collision_sharpness=collision_sharpness,
-    direction_sharpness=direction_sharpness,
-    collision_weight=collision_weight,
-    direction_weight=direction_weight,
-    min_cmd_speed=min_cmd_speed,
-  )
+  """Penalty for the ball actually moving toward an obstacle on the ball-target segment.
 
-
-def ball_protection_gated(
-  env: ManagerBasedRlEnv,
-  command_name: str = "adversary",
-  ball_vel_command_name: str = "ball_vel",
-  activation_radius: float = 3.0,
-  ball_far_threshold: float = 1.0,
-  lookahead: float = 3.5,
-  r_base: float = 0.5,
-  k_speed: float = 0.5,
-  gate_sharpness: float = 5.0,
-) -> torch.Tensor:
-  """ball_protection weighted by the danger tube gate."""
-  danger, _ = _compute_gates(
-    env, command_name, ball_vel_command_name,
-    ball_far_threshold, lookahead, r_base, k_speed, gate_sharpness,
-  )
-  return danger * ball_protection(env, command_name, activation_radius)
-
-
-def robot_ball_distance_gated(
-  env: ManagerBasedRlEnv,
-  command_name: str = "adversary",
-  ball_vel_command_name: str = "ball_vel",
-  sharpness_base: float = 0.5,
-  sharpness_tight: float = 2.0,
-  ball_far_loosening: float = 0.7,
-  ball_far_threshold: float = 1.0,
-  lookahead: float = 3.5,
-  r_base: float = 0.5,
-  k_speed: float = 0.5,
-  gate_sharpness: float = 5.0,
-) -> torch.Tensor:
-  """robot_ball_distance with sharpness tight under danger, loose when ball_far.
-
-  effective_sharpness = (base + (tight - base) * danger) * (1 - loosening * ball_far)
+  Penalizes the alignment of the **actual** ball velocity with the direction
+  from ball to the nearest obstacle, gated by:
+    - obstacle lying on the forward half of the ball-target segment,
+    - obstacle lying within a narrow lateral tube around that segment,
+    - ball-speed above a minimum (so a near-stationary ball is not penalized),
+    - ball under close control of the robot (engagement gate).
   """
-  danger, ball_far = _compute_gates(
-    env, command_name, ball_vel_command_name, ball_far_threshold,
-    lookahead, r_base, k_speed, gate_sharpness,
-  )
-  effective_sharpness = (
-    sharpness_base + (sharpness_tight - sharpness_base) * danger
-  ) * (1.0 - ball_far_loosening * ball_far)
-  effective_sharpness = effective_sharpness.clamp(min=0.05)
-  robot_pos = env.scene["robot"].data.root_link_pos_w[:, :2]
-  ball_pos = env.scene["ball"].data.root_link_pos_w[:, :2]
-  dist_sq = ((ball_pos - robot_pos) ** 2).sum(dim=-1)
-  return torch.exp(-effective_sharpness * dist_sq)
+  term: ObstacleCommand = env.command_manager.get_term(command_name)
+  if term.cfg.num_active == 0:
+    return torch.zeros(env.num_envs, device=env.device)
 
+  _, nearest_obs_xy, _ = _get_closest_robot_obstacle(env, command_name)
+  ball_xy = env.scene["ball"].data.root_link_pos_w[:, :2]
+  ball_vel_xy = env.scene["ball"].data.root_link_lin_vel_w[:, :2]
+  cmd_term = env.command_manager.get_term(ball_vel_command_name)
+  target_xy = cmd_term.target_position[:, :2]
+  target_vec = target_xy - ball_xy
+  target_dist = target_vec.norm(dim=-1)
+  target_dir = target_vec / target_dist.unsqueeze(-1).clamp(min=1e-6)
 
-def robot_ball_approach_vel_gated(
-  env: ManagerBasedRlEnv,
-  command_name: str = "adversary",
-  ball_vel_command_name: str = "ball_vel",
-  ball_far_threshold: float = 1.0,
-  lookahead: float = 3.5,
-  r_base: float = 0.5,
-  k_speed: float = 0.5,
-  gate_sharpness: float = 5.0,
-) -> torch.Tensor:
-  """robot_ball_approach_vel gated by ball_far * (1 - danger)."""
-  danger, ball_far = _compute_gates(
-    env, command_name, ball_vel_command_name, ball_far_threshold,
-    lookahead, r_base, k_speed, gate_sharpness,
+  ball_to_obs = nearest_obs_xy - ball_xy
+  obs_forward = (ball_to_obs * target_dir).sum(dim=-1)
+  obs_lateral = (
+    ball_to_obs - obs_forward.unsqueeze(-1) * target_dir
+  ).norm(dim=-1)
+
+  ball_speed = ball_vel_xy.norm(dim=-1)
+  direction_relevant = (
+    (target_dist > 1e-6)
+    & (obs_forward > 0.0)
+    & (obs_forward < target_dist)
+    & (obs_forward <= direction_detection_range)
+    & (obs_lateral <= direction_tube_radius)
+    & (ball_speed > min_ball_speed)
   )
-  return ball_far * (1.0 - danger) * robot_ball_approach_vel(env, ball_vel_command_name)
+
+  ball_vel_dir = ball_vel_xy / ball_speed.unsqueeze(-1).clamp(min=1e-6)
+  ball_to_obs_dir = ball_to_obs / ball_to_obs.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+  alignment = (ball_vel_dir * ball_to_obs_dir).sum(dim=-1).clamp(-1.0, 1.0)
+  toward_obstacle = alignment.clamp(min=0.0)
+  direction_term = toward_obstacle.pow(2)
+  if direction_sharpness != 2.0:
+    direction_term = direction_term.pow(direction_sharpness / 2.0)
+
+  _, engagement = _ball_engagement_gate(
+    env, ball_engagement_near_distance, ball_engagement_far_distance
+  )
+  return engagement * direction_relevant.float() * direction_term

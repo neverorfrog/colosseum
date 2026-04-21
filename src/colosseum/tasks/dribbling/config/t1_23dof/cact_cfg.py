@@ -18,7 +18,7 @@ from colosseum.tasks.dribbling.mdp.curriculum import (
 from colosseum.tasks.dribbling.mdp.gait_phase_command import GaitPhaseCommandCfg
 from colosseum.tasks.dribbling.mdp.head_ik_action import HeadIKActionCfg
 from colosseum.tasks.dribbling.mdp.obstacle_commands import ObstacleCommandCfg
-from colosseum.tasks.dribbling.mdp.terminations import ball_captured
+from colosseum.tasks.dribbling.mdp.terminations import ball_captured, ball_lost
 from colosseum.tasks.dribbling.obstacle_spec import NUM_OBSTACLES
 
 _ARM_JOINTS = {
@@ -42,12 +42,15 @@ commands: Dict[str, CommandTermCfg] = {
   "ball_vel": BallVelocityCommandCfg(
     robot_entity="robot",
     ball_entity="ball",
-    speed_range=(0.1, 1.5),
-    heading_range=math.pi / 2,  # ±90° from forward
-    resampling_time_range=(3.0, 8.0),
+    speed_range=(0.2, 1.0),
+    target_distance_range=(2.0, 3.0),
+    speed_gain=1.0,
+    target_reached_threshold=0.5,
+    heading_range=math.pi / 4,  # ±45° around the robot forward direction
+    resampling_time_range=(5.0, 10.0),
     debug_vis=True,
   ),
-  "gait_phase": GaitPhaseCommandCfg(),
+  "gait_phase": GaitPhaseCommandCfg(gait_freq_range=(1.5, 2.5)),
   # Obstacle command: starts with 0 active obstacles (unlocked by curriculum).
   "adversary": ObstacleCommandCfg(
     num_obstacles=NUM_OBSTACLES,
@@ -79,10 +82,10 @@ curriculum = {
       "event_name": "reset_base",
       "stages": [
         {"step": 0, "half_range": 0.0},  # always forward
-        {"step": 2000, "half_range": math.pi / 6},  # ±30°
-        {"step": 6000, "half_range": math.pi / 3},  # ±60°
-        {"step": 12000, "half_range": math.pi / 2},  # ±90°
-        {"step": 20000, "half_range": math.pi},  # ±180° (full)
+        {"step": 16_000, "half_range": math.pi / 6},  # ±30°
+        {"step": 48_000, "half_range": math.pi / 3},  # ±60°
+        {"step": 96_000, "half_range": math.pi / 2},  # ±90°
+        {"step": 144_000, "half_range": math.pi},  # ±180° (full)
       ],
     },
   ),
@@ -92,8 +95,8 @@ curriculum = {
       "event_name": "push_ball",
       "stages": [
         {"step": 0, "max_speed": 0.3},
-        {"step": 5000, "max_speed": 0.6},
-        {"step": 12000, "max_speed": 1.0},
+        {"step": 48_000, "max_speed": 0.6},
+        {"step": 112_000, "max_speed": 1.0},
       ],
     },
   ),
@@ -101,48 +104,69 @@ curriculum = {
     func=obstacle_curriculum,
     params={
       "command_name": "adversary",
+      # Thresholds are stretched for a long 2B-step run with the current
+      # distributed setup. Curriculum uses common_step_counter, i.e.
+      #   curriculum_step = global_step / num_envs_per_rank
+      # With 10,240 envs per rank:
+      # - 500M global steps  -> ~48.8k curriculum steps
+      # - 2B   global steps  -> ~195.3k curriculum steps
+      # so the 2B schedule is exactly 4x longer than the 500M one.
+      #
+      # The harder stages get more room on purpose:
+      # - `static_blocker` is the first real obstacle-avoidance stage and
+      #   needs a long window to preserve the no-obstacle dribbling behavior.
+      # - `ball_attacker` is the hardest single-obstacle stage and also gets
+      #   extra time before moving to the cluttered multi-obstacle setting.
+      #
+      # Approximate stage durations:
+      # - none:            19.5k curriculum steps
+      # - static_blocker:  48.9k
+      # - lateral_blocker: 29.3k
+      # - ball_attacker:   52.7k
+      # - mixed_attackers: 44.9k
       "stages": [
         {
           "step": 0,
           "num_active": 0,
           "behavior": "none",
-          "distance_range": (1.5, 3.0),
           "max_speed": 0.0,
         },
         {
-          "step": 4_000,
+          "step": 19_500,
           "num_active": 1,
           "behavior": "static_blocker",
-          "distance_range": (1.0, 1.8),
-          "lateral_offset_range": (-0.6, 0.6),
+          "lateral_offset_range": (-0.3, 0.3),
+          "forward_fraction_range": (0.35, 0.75),
           "max_speed": 0.0,
         },
         {
-          "step": 10_000,
+          "step": 68_400,
           "num_active": 1,
           "behavior": "lateral_blocker",
-          "distance_range": (1.0, 1.8),
-          "lateral_offset_range": (-0.7, 0.7),
+          "lateral_offset_range": (-0.3, 0.3),
+          "forward_fraction_range": (0.35, 0.75),
           "min_speed": 0.05,
           "max_speed": 0.15,
           "velocity_resample_time_range": (0.6, 1.2),
         },
         {
-          "step": 18_000,
+          "step": 97_700,
           "num_active": 1,
           "behavior": "ball_attacker",
-          "distance_range": (1.4, 2.4),
-          "lateral_offset_range": (-1.0, 1.0),
+          "lateral_offset_range": (-0.3, 0.3),
+          "forward_fraction_range": (0.35, 0.75),
           "min_speed": 0.08,
           "max_speed": 0.22,
           "velocity_resample_time_range": (0.4, 0.9),
         },
         {
-          "step": 28_000,
+          "step": 150_400,
           "num_active": 3,
           "behavior": "mixed_attackers",
-          "distance_range": (1.2, 2.5),
-          "lateral_offset_range": (-1.0, 1.0),
+          # Distractors still use distance_range for their random-angle spawn.
+          "distance_range": (2.0, 3.0),
+          "lateral_offset_range": (-0.3, 0.3),
+          "forward_fraction_range": (0.35, 0.75),
           "min_speed": 0.05,
           "max_speed": 0.22,
           "velocity_resample_time_range": (0.4, 1.0),
@@ -158,8 +182,12 @@ terminations = {
     func=bad_orientation,
     params={"limit_angle": math.radians(70.0)},
   ),
-  "ball_captured": TerminationTermCfg(
-    func=ball_captured,
-    params={"command_name": "adversary", "capture_radius": 0.3},
+  # "ball_captured": TerminationTermCfg(
+  #   func=ball_captured,
+  #   params={"command_name": "adversary", "capture_radius": 0.25},
+  # ),
+  "ball_lost": TerminationTermCfg(
+    func=ball_lost,
+    params={"max_robot_ball_distance": 2.0},
   ),
 }

@@ -11,6 +11,9 @@ All commands use the `train` pixi environment.
 # Phase 1
 pixi run -e train train task:t1-dribbling
 
+# Phase 1 with DAgger-regularized PPO (teacher = previously trained Stage-0 checkpoint)
+pixi run -e train train task:t1-dribbling --task.use-dagger --task.teacher-checkpoint ./logs/<stage0-run>/checkpoints/latest.pt
+
 # Phase 2
 pixi run -e train train-phase2 task:t1-dribbling --task.use-depth-camera
 
@@ -41,9 +44,53 @@ pixi run -e train train task:t1-dribbling logger:disabled
 
 # Resume from a checkpoint
 --checkpoint ./logs/<run-dir>/checkpoints/latest.pt
+
+# Use DAgger-regularized PPO instead of plain PPO
+--task.use-dagger
+
+# Teacher checkpoint used by DAgger (typically the Stage-0 PPO checkpoint)
+--task.teacher-checkpoint ./logs/<stage0-run>/checkpoints/latest.pt
 ```
 
 Training logs and checkpoints are saved under `./logs/`. Metrics are logged to W&B.
+
+For the dribbling task, the `ball_vel` command is now target-driven:
+
+- a persistent world-frame target is sampled for the ball
+- the desired ball velocity is recomputed every step from `ball -> target`
+- the viewer shows this target during play/debug visualization
+
+This makes obstacle avoidance more consistent because temporary detours are
+still evaluated against a stable long-horizon objective.
+
+For obstacle curriculum training, you can optionally switch from plain PPO to
+DAgger-regularized PPO:
+
+- `phase 1, stage 0` is typically trained with standard PPO to learn nominal dribbling without obstacles
+- `phase 1, stages 1--4` can then be trained with `--task.use-dagger`
+- when DAgger is enabled, `--task.teacher-checkpoint` should point to the Stage-0 PPO checkpoint
+
+This uses the Stage-0 policy as a teacher so the obstacle-stage student policy
+keeps the nominal dribbling gait while learning obstacle avoidance.
+
+Typical workflow:
+
+```bash
+# 1) Train nominal dribbling (Phase 1, Stage 0) with PPO
+pixi run -e train train task:t1-dribbling --obstacle-stage-index 0
+
+# 2) Train obstacle stages with DAgger-regularized PPO from the Stage-0 teacher
+pixi run -e train train task:t1-dribbling \
+  --task.use-dagger \
+  --task.teacher-checkpoint ./logs/<stage0-run>/checkpoints/latest.pt \
+  --obstacle-stage-index 1
+
+# 3) Or keep obstacle curriculum enabled while using the same teacher
+pixi run -e train train task:t1-dribbling \
+  --task.use-dagger \
+  --task.teacher-checkpoint ./logs/<stage0-run>/checkpoints/latest.pt \
+  --obstacle-stage-index -1
+```
 
 ### Notes to train on two 4090 (GIN setup)
 GIN has two RTX 4090 GPUs, each with 24 GB of VRAM.

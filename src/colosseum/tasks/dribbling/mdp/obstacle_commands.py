@@ -95,6 +95,13 @@ class ObstacleCommand(CommandTerm):
       else:
         self._park_obstacle(k, env_ids)
 
+  def resample_for_env_ids(self, env_ids: torch.Tensor) -> None:
+    """Public hook to force obstacle resampling — used when the ball target
+    resamples so obstacles always stay consistent with the current path."""
+    if len(env_ids) == 0:
+      return
+    self._resample_command(env_ids)
+
   def _update_command(self) -> None:
     device = self._env.device
     N = self._env.num_envs
@@ -128,9 +135,9 @@ class ObstacleCommand(CommandTerm):
 
       vel_target = self._compute_velocity_target(all_ids, k)
       alpha = self.cfg.velocity_smoothing
-      self._velocities_w[:, k] = (
-        (1.0 - alpha) * self._velocities_w[:, k] + alpha * vel_target
-      )
+      self._velocities_w[:, k] = (1.0 - alpha) * self._velocities_w[
+        :, k
+      ] + alpha * vel_target
       self._positions_w[:, k] += self._velocities_w[:, k] * dt
       self._write_obstacle_to_sim(k, all_ids, z=0.0)
 
@@ -155,7 +162,9 @@ class ObstacleCommand(CommandTerm):
   # Internal helpers
   # ------------------------------------------------------------------
 
-  def _cmd_and_side_dirs(self, env_ids: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+  def _cmd_and_side_dirs(
+    self, env_ids: torch.Tensor
+  ) -> tuple[torch.Tensor, torch.Tensor]:
     ball_vel_cmd = self._env.command_manager.get_command("ball_vel")[env_ids, :2]
     cmd_speed = ball_vel_cmd.norm(dim=-1, keepdim=True)
     default_dir = torch.zeros_like(ball_vel_cmd)
@@ -187,16 +196,29 @@ class ObstacleCommand(CommandTerm):
     n = len(env_ids)
     device = self._env.device
     ball_xy = self._env.scene["ball"].data.root_link_pos_w[env_ids, :2]
-    cmd_dir, side_dir = self._cmd_and_side_dirs(env_ids)
-    d_lo, d_hi = self.cfg.distance_range
-    l_lo, l_hi = self.cfg.lateral_offset_range
 
     if role in {"static_blocker", "lateral_blocker", "ball_attacker"}:
-      forward = torch.rand(n, device=device) * (d_hi - d_lo) + d_lo
+      # Sample inside the ball→target corridor so the obstacle is always a
+      # relevant blocker for the current path. Forward position is a fraction
+      # of the segment length; lateral position is narrow so the obstacle is
+      # guaranteed to lie inside the reward's direction tube.
+      ball_vel_term = self._env.command_manager.get_term("ball_vel")
+      target_xy = ball_vel_term.target_position[env_ids, :2]
+      seg = target_xy - ball_xy
+      seg_len = seg.norm(dim=-1, keepdim=True).clamp(min=1e-3)
+      seg_dir = seg / seg_len
+      seg_side = torch.stack([-seg_dir[:, 1], seg_dir[:, 0]], dim=-1)
+
+      f_lo, f_hi = self.cfg.forward_fraction_range
+      forward_frac = torch.rand(n, device=device) * (f_hi - f_lo) + f_lo
+      forward = forward_frac.unsqueeze(-1) * seg_len
+
+      l_lo, l_hi = self.cfg.lateral_offset_range
       lateral = torch.rand(n, device=device) * (l_hi - l_lo) + l_lo
-      return ball_xy + forward.unsqueeze(-1) * cmd_dir + lateral.unsqueeze(-1) * side_dir
+      return ball_xy + forward * seg_dir + lateral.unsqueeze(-1) * seg_side
 
     if role == "distractor":
+      d_lo, d_hi = self.cfg.distance_range
       angles = torch.rand(n, device=device) * 2.0 * math.pi - math.pi
       radius = torch.rand(n, device=device) * (d_hi - d_lo) + d_lo
       random_dir = torch.stack([torch.cos(angles), torch.sin(angles)], dim=-1)
@@ -231,7 +253,9 @@ class ObstacleCommand(CommandTerm):
     self._resample_timers[env_ids, obstacle_idx] = self._sample_timer(env_ids)
 
     if role == "lateral_blocker":
-      sign = torch.randint(0, 2, (len(env_ids),), device=self._env.device, dtype=torch.int64)
+      sign = torch.randint(
+        0, 2, (len(env_ids),), device=self._env.device, dtype=torch.int64
+      )
       self._lateral_signs[env_ids, obstacle_idx] = sign.float() * 2.0 - 1.0
       self._tangent_mix[env_ids, obstacle_idx] = 0.0
     elif role == "ball_attacker":
@@ -240,7 +264,9 @@ class ObstacleCommand(CommandTerm):
         torch.rand(len(env_ids), device=self._env.device) * (hi - lo) + lo
       )
     elif role == "distractor":
-      angles = torch.rand(len(env_ids), device=self._env.device) * 2.0 * math.pi - math.pi
+      angles = (
+        torch.rand(len(env_ids), device=self._env.device) * 2.0 * math.pi - math.pi
+      )
       self._random_dirs[env_ids, obstacle_idx] = torch.stack(
         [torch.cos(angles), torch.sin(angles)], dim=-1
       )
@@ -280,7 +306,9 @@ class ObstacleCommand(CommandTerm):
 
   def _is_parked(self, obstacle_idx: int) -> torch.Tensor:
     env_origin_xy = self._env.scene.env_origins[:, :2]
-    offset = (self._positions_w[:, obstacle_idx] - env_origin_xy).abs().max(dim=-1).values
+    offset = (
+      (self._positions_w[:, obstacle_idx] - env_origin_xy).abs().max(dim=-1).values
+    )
     return offset > (_PARK_FAR / 2.0)
 
   def _obstacle_pos_body(
@@ -293,7 +321,9 @@ class ObstacleCommand(CommandTerm):
     quat_conj = torch.cat([quat_w[:, :1], -quat_w[:, 1:]], dim=-1)
     robot_xy = robot.data.root_link_pos_w[env_ids, :2]
     rel_xy = self._positions_w[env_ids, obstacle_idx] - robot_xy
-    rel_3d = torch.cat([rel_xy, torch.zeros(len(env_ids), 1, device=self._env.device)], dim=-1)
+    rel_3d = torch.cat(
+      [rel_xy, torch.zeros(len(env_ids), 1, device=self._env.device)], dim=-1
+    )
     return quat_apply(quat_conj, rel_3d)[:, :2]
 
   def _needs_respawn(
@@ -305,21 +335,27 @@ class ObstacleCommand(CommandTerm):
     if role == "none":
       return torch.zeros(len(env_ids), dtype=torch.bool, device=self._env.device)
 
-    robot_xy = self._env.scene["robot"].data.root_link_pos_w[env_ids, :2]
     ball_xy = self._env.scene["ball"].data.root_link_pos_w[env_ids, :2]
     obs_xy = self._positions_w[env_ids, obstacle_idx]
-    obs_pos_b = self._obstacle_pos_body(env_ids, obstacle_idx)
+    cmd_dir, _ = self._cmd_and_side_dirs(env_ids)
+    # Positive when the ball has moved past the obstacle along the path.
+    along = ((ball_xy - obs_xy) * cmd_dir).sum(dim=-1)
+    ball_passed = along > self.cfg.respawn_passed_threshold
 
-    robot_dist = (obs_xy - robot_xy).norm(dim=-1)
-    ball_dist = (obs_xy - ball_xy).norm(dim=-1)
-    behind = obs_pos_b[:, 0] < self.cfg.respawn_behind_x_threshold
-    far_from_robot = robot_dist > self.cfg.respawn_robot_distance
-    far_from_ball = ball_dist > self.cfg.respawn_ball_distance
-
+    # Blockers and distractors stay put until the target is resampled. Only
+    # the ball_attacker — which actively chases — may need a mid-episode
+    # respawn when it drifts far from the ball.
     if role == "ball_attacker":
-      return behind | far_from_ball
+      obs_pos_b = self._obstacle_pos_body(env_ids, obstacle_idx)
+      ball_dist = (obs_xy - ball_xy).norm(dim=-1)
+      behind = obs_pos_b[:, 0] < self.cfg.respawn_behind_x_threshold
+      far_from_ball = ball_dist > self.cfg.respawn_ball_distance
+      return (behind | far_from_ball) & ball_passed
 
-    return behind | far_from_robot
+    if role in {"static_blocker", "lateral_blocker", "distractor"}:
+      return ball_passed
+
+    return torch.zeros(len(env_ids), dtype=torch.bool, device=self._env.device)
 
   def _park_obstacle(self, obstacle_idx: int, env_ids: torch.Tensor) -> None:
     env_origin_xy = self._env.scene.env_origins[env_ids, :2]
@@ -373,8 +409,14 @@ class ObstacleCommandCfg(CommandTermCfg):
   min_speed: float = 0.0
   max_speed: float = 0.0
 
-  # Spawn offset in metres perpendicular to the commanded ball direction.
-  lateral_offset_range: tuple[float, float] = (-0.8, 0.8)
+  # Spawn offset in metres perpendicular to the ball→target segment. Narrow
+  # by design so blockers always lie inside the reward's direction tube.
+  lateral_offset_range: tuple[float, float] = (-0.3, 0.3)
+
+  # Spawn position along the ball→target segment as a fraction of segment
+  # length. 0.0 is at the ball, 1.0 is at the target. Blockers therefore sit
+  # in the middle portion of the path.
+  forward_fraction_range: tuple[float, float] = (0.35, 0.75)
 
   # Resample target speed/bias every random interval in seconds.
   velocity_resample_time_range: tuple[float, float] = (0.5, 1.0)
@@ -390,6 +432,9 @@ class ObstacleCommandCfg(CommandTermCfg):
   respawn_behind_x_threshold: float = -0.2
   respawn_robot_distance: float = 4.0
   respawn_ball_distance: float = 3.0
+  # Minimum distance the ball must travel past the obstacle (along the
+  # ball→target direction) before a respawn is allowed.
+  respawn_passed_threshold: float = 0.5
 
   def build(self, env: ManagerBasedRlEnv) -> ObstacleCommand:
     return ObstacleCommand(self, env)

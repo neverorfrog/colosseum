@@ -141,7 +141,8 @@ class obstacle_curriculum:
     num_active = 0
     behavior = "none"
     distance_range = (1.5, 3.0)
-    lateral_offset_range = (-0.8, 0.8)
+    lateral_offset_range = (-0.3, 0.3)
+    forward_fraction_range = (0.35, 0.75)
     min_speed = 0.0
     max_speed = 0.0
     velocity_resample_time_range = (0.5, 1.0)
@@ -152,6 +153,9 @@ class obstacle_curriculum:
         behavior = stage.get("behavior", behavior)
         distance_range = stage.get("distance_range", distance_range)
         lateral_offset_range = stage.get("lateral_offset_range", lateral_offset_range)
+        forward_fraction_range = stage.get(
+          "forward_fraction_range", forward_fraction_range
+        )
         min_speed = stage.get("min_speed", min_speed)
         max_speed = stage.get("max_speed", max_speed)
         velocity_resample_time_range = stage.get(
@@ -162,6 +166,7 @@ class obstacle_curriculum:
     self._term.cfg.behavior = behavior
     self._term.cfg.distance_range = distance_range
     self._term.cfg.lateral_offset_range = lateral_offset_range
+    self._term.cfg.forward_fraction_range = forward_fraction_range
     self._term.cfg.min_speed = min_speed
     self._term.cfg.max_speed = max_speed
     self._term.cfg.velocity_resample_time_range = velocity_resample_time_range

@@ -103,6 +103,7 @@ class BaseAlgorithm(ABC):
     self._checkpoint_dir: Path | None = None
     self._save_interval: int | None = None
     self._last_save_step: int = -1
+    self._last_saved_obstacle_stage_index: int | None = None
 
     # Optional evaluation configuration (set by training script)
     self._eval_env: ManagerBasedRlEnv | None = None
@@ -267,6 +268,7 @@ class BaseAlgorithm(ABC):
 
     # Prepare episode metrics for display
     episode_metrics_for_display = None
+    curriculum_step, obstacle_stage_progress_pct = self._get_curriculum_progress_info()
     if self.latest_episode_metrics is not None:
       episode_metrics_for_display = self.latest_episode_metrics.copy()
 
@@ -327,6 +329,9 @@ class BaseAlgorithm(ABC):
       total_steps=total_timesteps,
       loss_dict=avg_losses,
       episode_metrics=episode_metrics_for_display,
+      phase=self._metadata.get("phase"),
+      curriculum_step=curriculum_step,
+      obstacle_stage_progress_pct=obstacle_stage_progress_pct,
       collection_time=collection_time,
       learning_time=learning_time,
       elapsed_time=elapsed_time,
@@ -364,14 +369,26 @@ class BaseAlgorithm(ABC):
     else:
       self._save_interval = int(save_interval)
     self._last_save_step = 0
+    self._last_saved_obstacle_stage_index = None
 
   def _maybe_save_checkpoint(self, step: int) -> None:
-    """Save a checkpoint if configured and due at this step."""
+    """Save periodic checkpoints and stage-transition checkpoints when due."""
+    if self._checkpoint_dir is None:
+      return
+
+    stage_index, stage_name = self._get_current_obstacle_stage_info()
+
+    if self._last_saved_obstacle_stage_index is None:
+      self._last_saved_obstacle_stage_index = stage_index
+
     if (
-      self._checkpoint_dir is None
-      or self._save_interval is None
-      or self._save_interval <= 0
+      stage_index is not None
+      and stage_index != self._last_saved_obstacle_stage_index
     ):
+      self._save_stage_checkpoint(step, stage_index, stage_name)
+      self._last_saved_obstacle_stage_index = stage_index
+
+    if self._save_interval is None or self._save_interval <= 0:
       return
 
     due = (step - self._last_save_step) >= self._save_interval
@@ -381,10 +398,23 @@ class BaseAlgorithm(ABC):
     ckpt_dir = self._checkpoint_dir
     ckpt_dir.mkdir(parents=True, exist_ok=True)
 
-    # File name includes zero-padded step count
-    ckpt_path = ckpt_dir / f"model_{step:07d}.pt"
+    phase_index = self._get_current_phase_index()
+    ckpt_path = ckpt_dir / self._format_checkpoint_name(
+      step=step,
+      phase_index=phase_index,
+      stage_index=stage_index,
+    )
     try:
-      self.save(ckpt_path, global_step=step)
+      if stage_index is not None:
+        self._metadata["current_obstacle_stage_index"] = stage_index
+      if stage_name is not None:
+        self._metadata["current_obstacle_stage_name"] = stage_name
+      self.save(
+        ckpt_path,
+        global_step=step,
+        obstacle_stage_index=stage_index,
+        obstacle_stage_name=stage_name,
+      )
       self._last_save_step = step
 
       # Maintain a 'latest.pt' symlink for easy discovery
@@ -412,6 +442,144 @@ class BaseAlgorithm(ABC):
         pass
     except Exception as e:
       logger.error(f"Failed to save checkpoint at step {step}: {e}")
+
+  def _get_current_obstacle_stage_info(self) -> tuple[int | None, str | None]:
+    """Resolve the currently active obstacle stage from pinning or curriculum."""
+    stage_index: int | None = None
+    stage_name: str | None = None
+
+    forced_stage = self._metadata.get("obstacle_stage_index")
+    if isinstance(forced_stage, (int, float)) and int(forced_stage) >= 0:
+      stage_index = int(forced_stage)
+
+    if stage_index is None:
+      curriculum_cfg = getattr(getattr(self.env, "cfg", None), "curriculum", None)
+      if isinstance(curriculum_cfg, dict):
+        obstacle_term = curriculum_cfg.get("obstacle")
+        obstacle_params = getattr(obstacle_term, "params", None)
+        stages = obstacle_params.get("stages") if isinstance(obstacle_params, dict) else None
+        if isinstance(stages, list) and stages:
+          common_step = int(getattr(self.env.unwrapped, "common_step_counter", 0))
+          stage_index = 0
+          for idx, stage in enumerate(stages):
+            if common_step >= stage["step"]:
+              stage_index = idx
+              stage_name = stage.get("behavior")
+
+    if stage_index is None and self.latest_episode_metrics is not None:
+      metric_stage = self.latest_episode_metrics.get("Curriculum/obstacle_stage_index")
+      if metric_stage is not None:
+        stage_index = int(round(metric_stage))
+
+    if stage_index is None:
+      return None, None
+
+    if stage_name is None:
+      stage_name = {
+        0: "none",
+        1: "static_blocker",
+        2: "lateral_blocker",
+        3: "ball_attacker",
+        4: "mixed_attackers",
+      }.get(stage_index, "unknown")
+
+    return stage_index, stage_name
+
+  def _get_current_phase_index(self) -> int | None:
+    """Return the current training phase when available."""
+    phase = self._metadata.get("phase")
+    if isinstance(phase, (int, float)):
+      return int(phase)
+    return None
+
+  def _format_checkpoint_name(
+    self,
+    step: int,
+    phase_index: int | None,
+    stage_index: int | None,
+  ) -> str:
+    """Build a checkpoint filename with step, phase, and obstacle stage."""
+    parts = [f"model_{step:07d}"]
+    if phase_index is not None:
+      parts.append(f"phase{phase_index}")
+    if stage_index is not None:
+      parts.append(f"stage{stage_index}")
+    return "_".join(parts) + ".pt"
+
+  def _get_curriculum_progress_info(self) -> tuple[int | None, float | None]:
+    """Return current curriculum step and current obstacle-stage completion."""
+    common_step = getattr(self.env.unwrapped, "common_step_counter", None)
+    if common_step is None:
+      return None, None
+
+    curriculum_step = int(common_step)
+    curriculum_cfg = getattr(getattr(self.env, "cfg", None), "curriculum", None)
+    if not isinstance(curriculum_cfg, dict):
+      return curriculum_step, None
+
+    obstacle_term = curriculum_cfg.get("obstacle")
+    obstacle_params = getattr(obstacle_term, "params", None)
+    stages = obstacle_params.get("stages") if isinstance(obstacle_params, dict) else None
+    if not isinstance(stages, list) or not stages:
+      return curriculum_step, None
+
+    stage_index, _ = self._get_current_obstacle_stage_info()
+    if stage_index is None or stage_index < 0 or stage_index >= len(stages):
+      return curriculum_step, None
+
+    stage_start = int(stages[stage_index]["step"])
+    if stage_index + 1 >= len(stages):
+      return curriculum_step, 100.0
+
+    next_stage_start = int(stages[stage_index + 1]["step"])
+    if next_stage_start <= stage_start:
+      return curriculum_step, 100.0
+
+    progress_pct = 100.0 * (curriculum_step - stage_start) / (next_stage_start - stage_start)
+    progress_pct = float(np.clip(progress_pct, 0.0, 100.0))
+    return curriculum_step, progress_pct
+
+  def _save_stage_checkpoint(
+    self, step: int, stage_index: int, stage_name: str | None
+  ) -> None:
+    """Save/update the per-stage checkpoint when entering a new obstacle stage."""
+    if self._checkpoint_dir is None:
+      return
+
+    ckpt_dir = self._checkpoint_dir
+    ckpt_dir.mkdir(parents=True, exist_ok=True)
+    phase_index = self._get_current_phase_index()
+    stage_parts = [f"latest_stage_{stage_index}"]
+    if phase_index is not None:
+      stage_parts.append(f"phase{phase_index}")
+    ckpt_path = ckpt_dir / ("_".join(stage_parts) + ".pt")
+
+    try:
+      self._metadata["current_obstacle_stage_index"] = stage_index
+      if stage_name is not None:
+        self._metadata["current_obstacle_stage_name"] = stage_name
+      self.save(
+        ckpt_path,
+        global_step=step,
+        obstacle_stage_index=stage_index,
+        obstacle_stage_name=stage_name,
+      )
+
+      try:
+        import wandb  # type: ignore
+
+        if getattr(wandb, "run", None) is not None:
+          wandb.save(str(ckpt_path), policy="now")
+      except Exception:
+        pass
+      logger.info(
+        f"Saved stage-transition checkpoint: {ckpt_path.name} "
+        f"(stage {stage_index}: {stage_name}, step {step})"
+      )
+    except Exception as e:
+      logger.error(
+        f"Failed to save stage checkpoint for obstacle stage {stage_index} at step {step}: {e}"
+      )
 
   # --- Evaluation helpers configured by the training driver ---
   def configure_evaluation(
@@ -575,6 +743,12 @@ class BaseAlgorithm(ABC):
     """
     common_step = self.global_step // self.env.num_envs
     self.env.unwrapped.common_step_counter = common_step
+    stage_index, stage_name = self._get_current_obstacle_stage_info()
+    self._last_saved_obstacle_stage_index = stage_index
+    if stage_index is not None:
+      self._metadata["current_obstacle_stage_index"] = stage_index
+    if stage_name is not None:
+      self._metadata["current_obstacle_stage_name"] = stage_name
     logger.info(
       f"Restored common_step_counter={common_step} from global_step={self.global_step}"
     )

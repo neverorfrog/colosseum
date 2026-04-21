@@ -1,51 +1,38 @@
-"""DAgger-PPO: PPO with teacher-student imitation loss.
+"""DAgger-RMA-PPO: RmaPPO with teacher-student imitation loss.
 
-Extends PPO with a frozen pre-trained teacher policy. At each rollout step the
-teacher's deterministic actions are stored alongside the standard transition
-data. During the learning phase an imitation loss term is added to the PPO
-objective:
+This variant is tailored for RMA-style policies whose actor input is:
 
-    L = L_PPO + λ · MSE(student_mean, teacher_action)
+    concat(normalized_actor_obs, privileged_latent)
 
-λ is annealed linearly from imitation_coef → 0 over imitation_annealing_steps
-global steps, so the policy eventually acts on pure RL signal.
+The teacher is a frozen stage-0 policy head loaded from checkpoint. During
+rollout and learning it is queried with:
 
-The teacher's observation is a contiguous suffix of the student's observation:
+    concat(teacher_normalized_actor_obs, current_student_latent)
 
-    student_obs[:, teacher_obs_start_idx:] == teacher_obs
-
-For the maze → velocity transfer this is indices [7:] (78-dim velocity obs).
-
-Reference: DAgger (Ross et al., 2011) + teacher-student RL (arxiv:2512.06571).
+This keeps the nominal stage-0 action style as a regularizer while PPO still
+learns obstacle-specific behavior through the live RMA encoders and rewards.
 """
 
 from __future__ import annotations
 
-from collections import defaultdict, deque
 from pathlib import Path
 from typing import Any, Callable
 
 import torch
 import torch.nn.functional as F
-import torch.optim as optim
-from loguru import logger
 from mjlab.envs import ManagerBasedRlEnv
 
-from colosseum.algorithm.base_algorithm import BaseAlgorithm
 from colosseum.algorithm.normalization import EmpiricalNormalization
-from colosseum.algorithm.ppo import PPO
-from colosseum.algorithm.ppo_networks import PpoActor, PpoValueNet
+from colosseum.algorithm.ppo_networks import PpoActor
 from colosseum.algorithm.rollout_buffer import RolloutBuffer
-from colosseum.algorithm.teacher_policy import TeacherPolicy
-from colosseum.config.types.algorithm import DaggerPpoConfig, PpoConfig, register_algorithm
-from colosseum.config.types.networks import PpoActorConfig, PpoCriticConfig
-from colosseum.utils.logger import extract_episode_metrics
-from colosseum.utils.torch import get_obs_dims
+from colosseum.algorithm.rma_ppo import RmaPPO
+from colosseum.config.types.algorithm import DaggerPpoConfig, register_algorithm
+from colosseum.config.types.networks import PpoActorConfig
 
 
-@register_algorithm("dagger_ppo", config_class=DaggerPpoConfig)
-class DaggerPPO(PPO):
-  """PPO extended with DAgger-style teacher-student imitation loss."""
+@register_algorithm("dagger_rma_ppo", config_class=DaggerPpoConfig)
+class DaggerRmaPPO(RmaPPO):
+  """RmaPPO extended with a DAgger-style imitation loss."""
 
   def __init__(
     self,
@@ -55,30 +42,45 @@ class DaggerPPO(PPO):
     log_fn: Callable[[dict[str, float], int], None],
     log_interval: int,
   ) -> None:
-    # super().__init__ calls _build_networks → _build_rollout_buffer (overridden
-    # below via MRO, so extras are registered before any data is collected).
     super().__init__(config, env, device, log_fn, log_interval)
 
     teacher_actor_cfg = PpoActorConfig(
       hidden_layers=list(config.teacher_actor_hidden_layers),
       activation=config.teacher_actor_activation,
     )
-    self.teacher = TeacherPolicy(
-      checkpoint_path=config.teacher_checkpoint,
-      obs_dim=config.teacher_obs_dim,
-      action_dim=self.action_dim,
-      actor_cfg=teacher_actor_cfg,
-      obs_start_idx=config.teacher_obs_start_idx,
-      device=self.device,
+    self.teacher_actor = PpoActor(
+      self.actor_obs_dim + self.rma_manager.total_latent_dim,
+      self.action_dim,
+      teacher_actor_cfg,
+    ).to(self.device)
+    self.teacher_actor_obs_normalizer = EmpiricalNormalization(self.actor_obs_dim).to(
+      self.device
     )
 
-  # ------------------------------------------------------------------
-  # Rollout buffer: register teacher_actions extra slot
-  # ------------------------------------------------------------------
+    checkpoint = torch.load(
+      Path(config.teacher_checkpoint), map_location="cpu", weights_only=False
+    )
+    self.teacher_actor.load_state_dict(checkpoint["actor_state_dict"])
+    self.teacher_actor_obs_normalizer.load_state_dict(
+      checkpoint["actor_obs_normalizer_state_dict"]
+    )
+    self.teacher_actor.eval()
+    self.teacher_actor_obs_normalizer.eval()
+    for param in self.teacher_actor.parameters():
+      param.requires_grad_(False)
+    for param in self.teacher_actor_obs_normalizer.parameters():
+      param.requires_grad_(False)
 
   def _build_rollout_buffer(self) -> None:
     config = self.config
     assert isinstance(config, DaggerPpoConfig)
+
+    obs_mgr = self.env.observation_manager
+    privileged_obs_dims = {
+      group: obs_mgr.group_obs_dim[group][0]
+      for group in self.rma_manager.privileged_group_names
+    }
+
     self.rollout_buffer = RolloutBuffer(
       num_envs=self.env.num_envs,
       num_steps=config.num_steps_per_env,
@@ -87,24 +89,28 @@ class DaggerPPO(PPO):
       action_dim=self.action_dim,
       device=self.device,
       extras={"teacher_actions": self.action_dim},
+      privileged_obs_dims=privileged_obs_dims,
     )
 
-  # ------------------------------------------------------------------
-  # Rollout collection: store teacher actions alongside each transition
-  # ------------------------------------------------------------------
+  @torch.no_grad()
+  def _get_teacher_actions(
+    self,
+    actor_obs_raw: torch.Tensor,
+    privileged_obs: dict[str, torch.Tensor],
+  ) -> torch.Tensor:
+    """Teacher action means using teacher normalizer and current privileged latents."""
+    teacher_actor_obs = self.teacher_actor_obs_normalizer(actor_obs_raw)
+    z = self.rma_manager.encode(privileged_obs)
+    teacher_input = torch.cat([teacher_actor_obs, z], dim=-1)
+    return self.teacher_actor.forward(teacher_input)
 
   def _collect_rollout(
     self,
     current_actor_obs: torch.Tensor,
     current_critic_obs: torch.Tensor,
     current_dones: torch.Tensor,
-    obs_dict: torch.Tensor | dict[str, torch.Tensor | dict[str, torch.Tensor]],
-  ) -> tuple[
-    torch.Tensor,
-    torch.Tensor,
-    torch.Tensor,
-    torch.Tensor | dict[str, torch.Tensor | dict[str, torch.Tensor]],
-  ]:
+    obs_dict: dict[str, Any] | torch.Tensor,
+  ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict[str, Any] | torch.Tensor]:
     config = self.config
     assert isinstance(config, DaggerPpoConfig)
 
@@ -112,23 +118,26 @@ class DaggerPPO(PPO):
 
     with torch.no_grad():
       for _step in range(config.num_steps_per_env):
-        norm_actor_obs = self.actor_obs_normalizer(current_actor_obs)
+        norm_actor_obs_base = self.actor_obs_normalizer(current_actor_obs)
         norm_critic_obs = self.critic_obs_normalizer(current_critic_obs)
+        current_privileged_obs = self.get_privileged_obs(obs_dict)
+        norm_actor_obs = self._compose_actor_input(
+          norm_actor_obs_base, current_privileged_obs
+        )
 
         actions, log_probs, action_means, action_stds = self.actor.act_with_log_prob(
           norm_actor_obs
         )
         values = self.value_net(norm_critic_obs)
+        teacher_actions = self._get_teacher_actions(
+          current_actor_obs, current_privileged_obs
+        )
 
-        # Query teacher on raw (un-normalized) student obs — teacher normalizes
-        # internally using its own saved normalizer.
-        teacher_actions = self.teacher.get_actions(current_actor_obs)
-
-        next_obs_dict, rewards, terminated, truncated, infos = self.env.step(actions)
+        obs_dict, rewards, terminated, truncated, infos = self.env.step(actions)
         dones = (terminated | truncated).float()
 
-        next_actor_obs = self.get_actor_obs(next_obs_dict)
-        next_critic_obs = self.get_critic_obs(next_obs_dict)
+        next_actor_obs = self.get_actor_obs(obs_dict)
+        next_critic_obs = self.get_critic_obs(obs_dict)
 
         if config.obs_normalization:
           self.actor_obs_normalizer.update(next_actor_obs)
@@ -155,6 +164,7 @@ class DaggerPPO(PPO):
 
         self.update_episode_counts(terminated, truncated)
 
+        from colosseum.utils.logger import extract_episode_metrics
         if "log" in infos and dones.any():
           self.latest_episode_metrics = extract_episode_metrics(infos["log"])
 
@@ -169,6 +179,7 @@ class DaggerPPO(PPO):
           action_means=action_means,
           action_stds=action_stds,
           extras={"teacher_actions": teacher_actions},
+          privileged_obs=current_privileged_obs,
         )
 
         current_actor_obs = next_actor_obs
@@ -186,11 +197,7 @@ class DaggerPPO(PPO):
       normalize_advantage=normalize_globally,
     )
 
-    return current_actor_obs, current_critic_obs, current_dones, next_obs_dict
-
-  # ------------------------------------------------------------------
-  # Learning step: PPO losses + annealed imitation loss
-  # ------------------------------------------------------------------
+    return current_actor_obs, current_critic_obs, current_dones, obs_dict
 
   def _learning_step(self) -> dict[str, float]:
     config = self.config
@@ -203,7 +210,6 @@ class DaggerPPO(PPO):
     total_imitation_loss = 0.0
     num_updates = 0
 
-    # Annealing coefficient: linear decay from imitation_coef → 0
     progress = min(
       self.global_step / max(config.imitation_annealing_steps, 1), 1.0
     )
@@ -218,6 +224,7 @@ class DaggerPPO(PPO):
     for batch in generator:
       actor_obs_raw = batch["actor_obs"]
       critic_obs_raw = batch["critic_obs"]
+      privileged_obs = batch["privileged_obs"]
       actions = batch["actions"]
       returns = batch["returns"]
       advantages = batch["advantages"]
@@ -229,13 +236,13 @@ class DaggerPPO(PPO):
 
       actor_obs = self.actor_obs_normalizer(actor_obs_raw)
       critic_obs = self.critic_obs_normalizer(critic_obs_raw)
+      actor_input = self._compose_actor_input(actor_obs, privileged_obs)
 
-      new_log_probs, entropy = self.actor.evaluate(actor_obs, actions)
+      new_log_probs, entropy = self.actor.evaluate(actor_input, actions)
       new_values = self.value_net(critic_obs)
 
-      # --- KL divergence ---
       with torch.inference_mode():
-        mu_batch = self.actor.forward(actor_obs)
+        mu_batch = self.actor.forward(actor_input)
         sigma_batch = torch.clamp(
           self.actor.std, min=self.actor.min_noise_std
         ).expand_as(mu_batch)
@@ -256,7 +263,6 @@ class DaggerPPO(PPO):
         for g in self.optimizer.param_groups:
           g["lr"] = self.learning_rate
 
-      # --- Surrogate loss ---
       advantages_squeezed = advantages.squeeze(-1)
       ratio = torch.exp(new_log_probs - old_log_probs)
       surrogate = -advantages_squeezed * ratio
@@ -265,7 +271,6 @@ class DaggerPPO(PPO):
       )
       surrogate_loss = torch.max(surrogate, surrogate_clipped).mean()
 
-      # --- Value loss ---
       if config.use_clipped_value_loss:
         value_clipped = target_values + torch.clamp(
           new_values - target_values,
@@ -279,11 +284,9 @@ class DaggerPPO(PPO):
       else:
         value_loss = (returns - new_values).pow(2).mean()
 
-      # --- Imitation loss: MSE between student mean and stored teacher actions ---
-      student_means = self.actor.forward(actor_obs)
+      student_means = self.actor.forward(actor_input)
       imitation_loss = F.mse_loss(student_means, teacher_actions)
 
-      # --- Total loss ---
       loss = (
         surrogate_loss
         + config.value_loss_coef * value_loss
