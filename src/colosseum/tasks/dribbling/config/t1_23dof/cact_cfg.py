@@ -50,7 +50,7 @@ commands: Dict[str, CommandTermCfg] = {
     resampling_time_range=(5.0, 10.0),
     debug_vis=True,
   ),
-  "gait_phase": GaitPhaseCommandCfg(),
+  "gait_phase": GaitPhaseCommandCfg(gait_freq_range=(1.5, 2.5)),
   # Obstacle command: starts with 0 active obstacles (unlocked by curriculum).
   "adversary": ObstacleCommandCfg(
     num_obstacles=NUM_OBSTACLES,

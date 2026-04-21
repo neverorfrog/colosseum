@@ -27,6 +27,7 @@ from colosseum.robots.t1_23dof.sensors import (
 from colosseum.tasks.dribbling.mdp.rewards import (
   ball_obstacle_collision,
   ball_target_progress,
+  ball_target_reached,
   ball_vel_angle_relaxed,
   ball_vel_norm_relaxed,
   ball_vel_tracking_relaxed,
@@ -125,6 +126,11 @@ rewards = {
       "distance_scale_ref": 2.0,  # Target distance at which the distance-aware bonus saturates.
       "distance_scale_max": 1.5,  # Maximum multiplicative bonus applied to progress on far targets.
     },
+  ),
+  "ball_target_reached": RewardTermCfg(  # Discrete bonus fired exactly once when the ball crosses the target threshold.
+    func=ball_target_reached,
+    weight=10.0,
+    params={"command_name": "ball_vel"},
   ),
   "robot_obstacle_collision": RewardTermCfg(  # Local robot-obstacle safety term.
     func=robot_obstacle_collision,
@@ -231,7 +237,7 @@ rewards = {
   # ------------------------------------------------------------------ #
   "swing_phase": RewardTermCfg(
     func=swing_phase_schedule,
-    weight=2.0,
+    weight=3.0,
     params={
       "phase_command_name": "gait_phase",
       "sensor_name": "feet_ground_contact",

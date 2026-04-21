@@ -6,7 +6,7 @@ from colosseum.config.types.networks import PpoActorConfig, PpoCriticConfig
 
 def booster_t1_dribbling_ppo_cfg() -> RmaPPOConfig:
   return RmaPPOConfig(
-    learning_steps=2_000_000_000,
+    learning_steps=300_000_000,
     num_steps_per_env=24,
     gamma=0.99,
     lam=0.95,
@@ -32,7 +32,7 @@ def booster_t1_dribbling_dagger_ppo_cfg(
   return DaggerPpoConfig(
     name="DaggerRmaPPO",
     target="colosseum.algorithm.dagger_rma_ppo:DaggerRmaPPO",
-    learning_steps=2_000_000_000,
+    learning_steps=300_000_000,
     num_steps_per_env=24,
     gamma=0.99,
     lam=0.95,
@@ -54,6 +54,6 @@ def booster_t1_dribbling_dagger_ppo_cfg(
     teacher_obs_start_idx=0,  # Dribbling teacher and student share the same actor obs layout.
     teacher_actor_hidden_layers=(512, 256, 128),
     teacher_actor_activation="elu",
-    imitation_coef=0.35,
-    imitation_annealing_steps=400_000_000,
+    imitation_coef=0.4,
+    imitation_annealing_steps=200_000_000,
   )

@@ -38,6 +38,7 @@ class BallVelocityCommand(CommandTerm):
     super().__init__(cfg, env)
     self.velocity_command = torch.zeros((env.num_envs, 3), device=env.device)
     self.target_position = torch.zeros((env.num_envs, 2), device=env.device)
+    self.target_reached_mask = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
     self.metrics["ball_distance"] = torch.zeros(env.num_envs, device=env.device)
     self.metrics["cmd_ball_vel_error"] = torch.zeros(env.num_envs, device=env.device)
     self.metrics["target_distance"] = torch.zeros(env.num_envs, device=env.device)
@@ -112,7 +113,6 @@ class BallVelocityCommand(CommandTerm):
       robot_pos[:, 1] + torch.sin(target_heading) * target_distances
     )
     self._recompute_velocity_command(env_ids)
-    self._resample_obstacles(env_ids)
 
   def _resample_obstacles(self, env_ids: torch.Tensor) -> None:
     """Force the adversary command to resample obstacles for the given envs
@@ -130,6 +130,7 @@ class BallVelocityCommand(CommandTerm):
 
   def _update_command(self) -> None:
     all_env_ids = torch.arange(self.num_envs, device=self.device)
+    self.target_reached_mask[:] = False
     self._recompute_velocity_command(all_env_ids)
 
     ball_pos = self._env.scene[self.cfg.ball_entity].data.root_link_pos_w[:, :2]
@@ -144,7 +145,9 @@ class BallVelocityCommand(CommandTerm):
 
     reached_env_ids = torch.where(target_distance <= self.cfg.target_reached_threshold)[0]
     if len(reached_env_ids) > 0:
+      self.target_reached_mask[reached_env_ids] = True
       self._resample(reached_env_ids)
+      self._resample_obstacles(reached_env_ids)
 
   def _update_metrics(self) -> None:
     robot_pos = self._env.scene[self.cfg.robot_entity].data.root_link_pos_w[:, :2]
@@ -183,19 +186,23 @@ class BallVelocityCommand(CommandTerm):
     )
 
     target_pos = self.target_position[batch]
+    reached = self.target_reached_mask[batch].item()
     target_pos_3d = torch.cat(
       [target_pos, torch.tensor([0.05], device=target_pos.device)]
     )
+    target_color = (0.1, 1.0, 0.1, 0.9) if reached else (0.2, 0.4, 1.0, 0.65)
+    target_radius = 0.25 if reached else 0.05
+    target_label = "TARGET REACHED!" if reached else f"ball_target d={(target_pos - ball_pos[:2]).norm():.2f}"
     visualizer.add_sphere(
       center=target_pos_3d.cpu().numpy(),
-      radius=0.05,
-      color=(0.2, 0.4, 1.0, 0.65),
-      label=f"ball_target d={(target_pos - ball_pos[:2]).norm():.2f}",
+      radius=target_radius,
+      color=target_color,
+      label=target_label,
     )
     visualizer.add_arrow(
       start=ball_pos.cpu().numpy(),
       end=target_pos_3d.cpu().numpy(),
-      color=(0.2, 0.4, 1.0, 0.55),
+      color=(0.1, 1.0, 0.1, 0.9) if reached else (0.2, 0.4, 1.0, 0.55),
       label="target_dir",
     )
 
