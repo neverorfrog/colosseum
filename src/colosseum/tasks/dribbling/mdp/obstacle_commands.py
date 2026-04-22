@@ -55,6 +55,9 @@ class ObstacleCommand(CommandTerm):
     self._random_dirs = torch.zeros((N, K, 2), device=env.device)
     self._random_dirs[:, :, 0] = 1.0
     self._resample_timers = torch.zeros((N, K), device=env.device)
+    # Per-env replay mask: True means this env runs with 0 active obstacles
+    # even when the curriculum stage has num_active > 0.
+    self._replay_mask = torch.zeros(N, dtype=torch.bool, device=env.device)
 
   # ------------------------------------------------------------------
   # CommandTerm interface
@@ -79,6 +82,18 @@ class ObstacleCommand(CommandTerm):
     device = self._env.device
     K = self.cfg.num_obstacles
     num_active = self.cfg.num_active
+
+    # Stage replay: randomly force a fraction of resetting envs to stage 0.
+    if num_active > 0 and self.cfg.replay_fraction > 0.0:
+      is_replay = torch.rand(len(env_ids), device=device) < self.cfg.replay_fraction
+      self._replay_mask[env_ids] = is_replay
+      normal_ids = env_ids[~is_replay]
+      replay_ids = env_ids[is_replay]
+    else:
+      self._replay_mask[env_ids] = False
+      normal_ids = env_ids
+      replay_ids = torch.empty(0, dtype=env_ids.dtype, device=device)
+
     self._velocities_w[env_ids] = 0.0
     self._speed_targets[env_ids] = 0.0
     self._tangent_mix[env_ids] = 0.0
@@ -87,11 +102,14 @@ class ObstacleCommand(CommandTerm):
 
     for k in range(K):
       if k < num_active:
-        self._positions_w[env_ids, k] = self._sample_spawn_positions(env_ids, k)
-        self._resample_motion_state(env_ids, k)
-        vel_target = self._compute_velocity_target(env_ids, k)
-        self._velocities_w[env_ids, k] = vel_target
-        self._write_obstacle_to_sim(k, env_ids, z=0.0)
+        if len(normal_ids) > 0:
+          self._positions_w[normal_ids, k] = self._sample_spawn_positions(normal_ids, k)
+          self._resample_motion_state(normal_ids, k)
+          vel_target = self._compute_velocity_target(normal_ids, k)
+          self._velocities_w[normal_ids, k] = vel_target
+          self._write_obstacle_to_sim(k, normal_ids, z=0.0)
+        if len(replay_ids) > 0:
+          self._park_obstacle(k, replay_ids)
       else:
         self._park_obstacle(k, env_ids)
 
@@ -107,6 +125,7 @@ class ObstacleCommand(CommandTerm):
     N = self._env.num_envs
     all_ids = torch.arange(N, device=device)
     dt = self._env.step_dt
+    replay_ids = self._replay_mask.nonzero(as_tuple=False).flatten()
 
     for k in range(self.cfg.num_obstacles):
       if k >= self.cfg.num_active:
@@ -140,6 +159,10 @@ class ObstacleCommand(CommandTerm):
       ] + alpha * vel_target
       self._positions_w[:, k] += self._velocities_w[:, k] * dt
       self._write_obstacle_to_sim(k, all_ids, z=0.0)
+
+      # Force-park replay envs last so any mistaken respawn above is undone.
+      if replay_ids.numel() > 0:
+        self._park_obstacle(k, replay_ids)
 
   def _update_metrics(self) -> None:
     pass
@@ -402,6 +425,11 @@ class ObstacleCommandCfg(CommandTermCfg):
 
   # Active obstacles at this curriculum stage (0 = none, ramps up).
   num_active: int = 0
+
+  # Fraction of episodes that are forced to stage 0 (no obstacles) even when
+  # the curriculum has num_active > 0. Prevents catastrophic forgetting of the
+  # no-obstacle dribbling behavior across curriculum stages.
+  replay_fraction: float = 0.0
 
   # Spawn distance in metres along the behavior-specific forward/radial direction.
   distance_range: tuple[float, float] = (1.5, 3.0)
