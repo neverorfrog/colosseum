@@ -211,7 +211,11 @@ class ObstacleCommand(CommandTerm):
 
       f_lo, f_hi = self.cfg.forward_fraction_range
       forward_frac = torch.rand(n, device=device) * (f_hi - f_lo) + f_lo
-      forward = forward_frac.unsqueeze(-1) * seg_len
+      # Absolute floor on the forward distance so the obstacle never spawns on
+      # top of the ball when the live seg_len is short (ball close to target).
+      forward = (forward_frac.unsqueeze(-1) * seg_len).clamp(
+        min=self.cfg.min_spawn_forward_distance
+      )
 
       l_lo, l_hi = self.cfg.lateral_offset_range
       lateral = torch.rand(n, device=device) * (l_hi - l_lo) + l_lo
@@ -417,6 +421,11 @@ class ObstacleCommandCfg(CommandTermCfg):
   # length. 0.0 is at the ball, 1.0 is at the target. Blockers therefore sit
   # in the middle portion of the path.
   forward_fraction_range: tuple[float, float] = (0.35, 0.75)
+
+  # Absolute floor (metres) on the spawn forward distance along the segment,
+  # so obstacles don't spawn on top of the ball when the live ball→target
+  # segment is short (e.g. ball has nearly reached the target).
+  min_spawn_forward_distance: float = 2.0
 
   # Resample target speed/bias every random interval in seconds.
   velocity_resample_time_range: tuple[float, float] = (0.5, 1.0)

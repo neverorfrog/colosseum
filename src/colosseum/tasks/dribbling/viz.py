@@ -24,7 +24,7 @@ def _get_obstacle_reward_params(env) -> dict:
     return {
       "command_name": "adversary",
       "ball_vel_command_name": "ball_vel",
-      "collision_detection_range": 1.5,
+      "collision_far_distance": 1.5,
       "direction_detection_range": 3.0,
       "collision_tube_radius": 0.75,
       "direction_tube_radius": 1.0,
@@ -272,8 +272,7 @@ def draw_obstacle_reward_overlay(env, vis: DebugVisualizer) -> None:
   params = _get_obstacle_reward_params(env)
   command_name = params.get("command_name", "adversary")
   ball_vel_command_name = params.get("ball_vel_command_name", "ball_vel")
-  collision_detection_range = float(params.get("collision_detection_range", 1.5))
-  collision_far_distance = float(params.get("collision_far_distance", collision_detection_range))
+  collision_far_distance = float(params.get("collision_far_distance", 1.5))
   direction_detection_range = float(params.get("direction_detection_range", 3.0))
   direction_tube_radius = float(params.get("direction_tube_radius", 1.0))
 
@@ -312,7 +311,7 @@ def draw_obstacle_reward_overlay(env, vis: DebugVisualizer) -> None:
   proj_xy = ball_xy + np.clip(obs_forward, 0.0, max(target_dist, 0.0)) * target_dir
   obs_lateral = float(np.linalg.norm(obs_xy - proj_xy))
 
-  collision_relevant = min_dist <= collision_detection_range
+  collision_relevant = min_dist <= collision_far_distance
   direction_relevant = (
     (target_dist > 1e-6)
     and (obs_forward > 0.0)
@@ -372,7 +371,7 @@ def draw_obstacle_reward_overlay(env, vis: DebugVisualizer) -> None:
   )
 
   # Collision activation circle around the nearest obstacle.
-  collision_circle_radius = max(collision_detection_range, collision_far_distance)
+  collision_circle_radius = collision_far_distance
   _draw_circle_xy(
     vis,
     obs_xy,

@@ -753,7 +753,6 @@ def _ball_engagement_gate(
 def robot_obstacle_collision(
   env: ManagerBasedRlEnv,
   command_name: str = "adversary",
-  collision_detection_range: float = 2.0,
   collision_near_distance: float = 0.5,
   collision_far_distance: float = 1.5,
 ) -> torch.Tensor:
@@ -775,16 +774,12 @@ def robot_obstacle_collision(
   collision_progress = (
     (collision_far_distance - min_dist) / collision_span
   ).clamp(min=0.0, max=1.0)
-  collision_term = collision_progress.pow(2)
-  collision_relevant = min_dist <= collision_detection_range
-
-  return collision_relevant.float() * collision_term
+  return collision_progress.pow(2)
 
 
 def ball_obstacle_collision(
   env: ManagerBasedRlEnv,
   command_name: str = "adversary",
-  collision_detection_range: float = 1.0,
   collision_near_distance: float = 0.15,
   collision_far_distance: float = 0.6,
 ) -> torch.Tensor:
@@ -806,10 +801,7 @@ def ball_obstacle_collision(
   collision_progress = (
     (collision_far_distance - min_dist) / collision_span
   ).clamp(min=0.0, max=1.0)
-  collision_term = collision_progress.pow(2)
-  collision_relevant = min_dist <= collision_detection_range
-
-  return collision_relevant.float() * collision_term
+  return collision_progress.pow(2)
 
 
 def obstacle_direction(

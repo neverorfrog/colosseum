@@ -1,9 +1,11 @@
 """Command term: target-driven ball velocity in world frame.
 
 At resampling time the term samples a persistent world-frame target from the
-current robot position.
+current ball position. The sampled radius is drawn from
+``target_distance_range`` and the heading is drawn relative to the robot yaw.
+
 At every step it recomputes the desired ball velocity from the current ball
-position toward that target:
+position toward that persistent target:
 
     dir = normalize(target - ball_pos)
     speed = clip(speed_gain * distance_to_target, min_speed, max_speed)
@@ -13,6 +15,11 @@ The command interface remains a world-frame velocity vector [vx, vy, 0.0], so
 existing rewards and body-frame observations stay consistent. The difference is
 that the command now encodes progress toward a persistent goal instead of a
 locally sampled free velocity.
+
+Because the target persists in world frame until the next resample, the
+*current* ball-to-target distance can drift outside ``target_distance_range``:
+it shrinks as the ball approaches the goal and can grow if the ball is pushed
+or otherwise moves away from the sampled target.
 """
 
 from __future__ import annotations
@@ -38,10 +45,12 @@ class BallVelocityCommand(CommandTerm):
     super().__init__(cfg, env)
     self.velocity_command = torch.zeros((env.num_envs, 3), device=env.device)
     self.target_position = torch.zeros((env.num_envs, 2), device=env.device)
+    self.sampled_target_distance = torch.zeros(env.num_envs, device=env.device)
     self.target_reached_mask = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
     self.metrics["ball_distance"] = torch.zeros(env.num_envs, device=env.device)
     self.metrics["cmd_ball_vel_error"] = torch.zeros(env.num_envs, device=env.device)
     self.metrics["target_distance"] = torch.zeros(env.num_envs, device=env.device)
+    self.metrics["sampled_target_distance"] = torch.zeros(env.num_envs, device=env.device)
 
     # Commands must be valid from the very first reset/step. Otherwise some
     # envs would keep the zero target at the global origin, which is disastrous
@@ -97,6 +106,7 @@ class BallVelocityCommand(CommandTerm):
 
     lo, hi = self.cfg.target_distance_range
     target_distances = torch.rand(n, device=device) * (hi - lo) + lo
+    self.sampled_target_distance[env_ids] = target_distances
 
     robot_quat = self._env.scene[self.cfg.robot_entity].data.root_link_quat_w[env_ids]
     robot_yaw = torch.atan2(
@@ -105,12 +115,12 @@ class BallVelocityCommand(CommandTerm):
     )
     target_heading = robot_yaw + heading_offsets
 
-    robot_pos = self._env.scene[self.cfg.robot_entity].data.root_link_pos_w[env_ids, :2]
+    ball_pos = self._env.scene[self.cfg.ball_entity].data.root_link_pos_w[env_ids, :2]
     self.target_position[env_ids, 0] = (
-      robot_pos[:, 0] + torch.cos(target_heading) * target_distances
+      ball_pos[:, 0] + torch.cos(target_heading) * target_distances
     )
     self.target_position[env_ids, 1] = (
-      robot_pos[:, 1] + torch.sin(target_heading) * target_distances
+      ball_pos[:, 1] + torch.sin(target_heading) * target_distances
     )
     self._recompute_velocity_command(env_ids)
 
@@ -135,12 +145,16 @@ class BallVelocityCommand(CommandTerm):
 
     ball_pos = self._env.scene[self.cfg.ball_entity].data.root_link_pos_w[:, :2]
     target_distance = (self.target_position - ball_pos).norm(dim=-1)
+    # Resample as soon as the live distance drifts well outside the sampled
+    # range — e.g. when the ball is knocked backward by an obstacle — instead
+    # of letting a stale 6–10 m target persist until episode reset.
     invalid_env_ids = torch.where(
       (~torch.isfinite(target_distance))
-      | (target_distance > self.cfg.target_distance_range[1] * 3.0)
+      | (target_distance > self.cfg.target_distance_range[1] * 1.5)
     )[0]
     if len(invalid_env_ids) > 0:
       self._resample(invalid_env_ids)
+      self._resample_obstacles(invalid_env_ids)
       target_distance = (self.target_position - ball_pos).norm(dim=-1)
 
     reached_env_ids = torch.where(target_distance <= self.cfg.target_reached_threshold)[0]
@@ -159,6 +173,7 @@ class BallVelocityCommand(CommandTerm):
       dim=-1
     )
     self.metrics["target_distance"] = (self.target_position - ball_pos).norm(dim=-1)
+    self.metrics["sampled_target_distance"] = self.sampled_target_distance
 
   def _debug_vis_impl(self, visualizer: DebugVisualizer) -> None:
     batch = visualizer.env_idx
@@ -192,7 +207,16 @@ class BallVelocityCommand(CommandTerm):
     )
     target_color = (0.1, 1.0, 0.1, 0.9) if reached else (0.2, 0.4, 1.0, 0.65)
     target_radius = 0.25 if reached else 0.05
-    target_label = "TARGET REACHED!" if reached else f"ball_target d={(target_pos - ball_pos[:2]).norm():.2f}"
+    live_target_distance = (target_pos - ball_pos[:2]).norm().item()
+    sampled_target_distance = self.sampled_target_distance[batch].item()
+    target_label = (
+      "TARGET REACHED!"
+      if reached
+      else (
+        f"ball_target live={live_target_distance:.2f} "
+        f"sampled={sampled_target_distance:.2f}"
+      )
+    )
     visualizer.add_sphere(
       center=target_pos_3d.cpu().numpy(),
       radius=target_radius,
@@ -222,9 +246,10 @@ class BallVelocityCommandCfg(CommandTermCfg):
   # Command speed is recomputed every step and clipped to this range.
   speed_range: tuple[float, float] = (0.1, 0.1)
 
-  # Target distance sampled uniformly from the robot position at each
-  # reset/resample.
-  target_distance_range: tuple[float, float] = (1.5, 4.0)
+  # Sampled target radius in metres, drawn uniformly from the current ball
+  # position at each reset/resample. The live ball-to-target distance can
+  # later become smaller or larger because the target persists in world frame.
+  target_distance_range: tuple[float, float] = (2.5, 3.5)
 
   # Gain mapping target distance -> desired speed before clipping.
   speed_gain: float = 1.0
