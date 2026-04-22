@@ -142,9 +142,9 @@ class SokobanGridAbstractionTermCfg(GridAbstractionTermCfg):
 
   robot_entity: str = "robot"
   ball_entity: str = "ball"
-  hysteresis_fraction: float = 0.2
+  hysteresis_fraction: float = 0.1
   replan_timeout_s: float = 5.0
-  allow_diagonal: bool = True
+  allow_diagonal: bool = False
 
   def build(self, env: AbstractionBasedEnv) -> SokobanGridAbstraction:
     return SokobanGridAbstraction(cfg=self, env=env)
@@ -223,6 +223,9 @@ class SokobanGridAbstraction(GridAbstraction):
     self._push_start_ball_cell = torch.zeros(
       (self.num_envs, 2), dtype=torch.long, device=self.device
     )
+    self._push_start_robot_cell = torch.zeros(
+      (self.num_envs, 2), dtype=torch.long, device=self.device
+    )
     self.deviation_detected = torch.zeros(
       self.num_envs, dtype=torch.bool, device=self.device
     )
@@ -253,6 +256,7 @@ class SokobanGridAbstraction(GridAbstraction):
       self._confirmed_ball_cells[env_ids] = raw_ball[env_ids]
       self._robot_prev_cells[env_ids] = raw_robot[env_ids]
       self.plan_length[env_ids] = 0
+      self.current_step[env_ids] = 0
       self.deviation_detected[env_ids] = False
       self._initialize_plans(env_ids)
 
@@ -279,35 +283,55 @@ class SokobanGridAbstraction(GridAbstraction):
 
     # Update prev only when the NEW positions are not co-occupying, so that
     # prev always holds the last pre-contact approach cell.
-    not_cooccupying = ~(self._confirmed_robot_cells == self._confirmed_ball_cells).all(dim=1)
+    not_cooccupying = ~(self._confirmed_robot_cells == self._confirmed_ball_cells).all(
+      dim=1
+    )
     self._robot_prev_cells[not_cooccupying] = prev_robot_snapshot[not_cooccupying]
 
     robot = self._confirmed_robot_cells  # [N, 2]
-    ball = self._confirmed_ball_cells    # [N, 2]
+    ball = self._confirmed_ball_cells  # [N, 2]
+
+    # Retry plan init for envs where reset() skipped it due to stale physics
+    # positions (entity.data is only updated by scene.update() AFTER _reset_idx).
+    needs_init = (self.plan_length == 0) & ~self.deviation_detected
+    if needs_init.any():
+      self._initialize_plans(needs_init.nonzero(as_tuple=True)[0])
 
     active = self.current_step < self.plan_length  # [N]
     is_push = self._current_action_is_push & active
     is_move = ~self._current_action_is_push & active
 
     # ── MOVE completion / deviation ───────────────────────────────────────────
-    robot_moved    = ~(robot == self._move_start_robot_cell).all(dim=1)
-    robot_reached  = (robot == self.expected_next_robot_cell).all(dim=1)
-    move_done      = is_move & robot_moved & robot_reached
+    robot_moved = ~(robot == self._move_start_robot_cell).all(dim=1)
+    robot_reached = (robot == self.expected_next_robot_cell).all(dim=1)
+    move_done = is_move & robot_moved & robot_reached
     move_deviation = is_move & robot_moved & ~robot_reached
 
     # ── PUSH completion / deviation ───────────────────────────────────────────
-    ball_moved    = ~(ball == self._push_start_ball_cell).all(dim=1)
-    ball_reached  = (ball == self.expected_next_ball_cell).all(dim=1)
-    push_done     = is_push & ball_moved & ball_reached
+    ball_moved = ~(ball == self._push_start_ball_cell).all(dim=1)
+    ball_reached = (ball == self.expected_next_ball_cell).all(dim=1)
+    push_done = is_push & ball_moved & ball_reached
     push_deviation = is_push & ball_moved & ~ball_reached
 
+    # ── PUSH robot-position deviation: robot entered wrong cell during PUSH ───
+    # The only valid cell for the robot to enter during a PUSH is the ball's
+    # starting cell.  If it moves anywhere else, the approach has failed.
+    robot_push_moved = is_push & ~(robot == self._push_start_robot_cell).all(dim=1)
+    robot_in_ball_cell = (robot == self._push_start_ball_cell).all(dim=1)
+    push_robot_deviation = robot_push_moved & ~robot_in_ball_cell & ~ball_moved
+
     # ── Online replanning for deviating envs ─────────────────────────────────
-    deviated = move_deviation | push_deviation
+    deviated = move_deviation | push_deviation | push_robot_deviation
     if deviated.any():
       deviated_ids = deviated.nonzero(as_tuple=True)[0]
       for env_idx in deviated_ids.tolist():
-        action_type = "PUSH" if self._current_action_is_push[env_idx].item() else "MOVE"
-        if action_type == "PUSH":
+        if push_robot_deviation[env_idx].item():
+          logger.debug(
+            f"[env {env_idx}] PUSH robot deviation: "
+            f"robot at {robot[env_idx].tolist()}, "
+            f"expected ball cell {self._push_start_ball_cell[env_idx].tolist()}"
+          )
+        elif self._current_action_is_push[env_idx].item():
           logger.debug(
             f"[env {env_idx}] PUSH deviation: "
             f"ball at {ball[env_idx].tolist()}, "
@@ -367,31 +391,31 @@ class SokobanGridAbstraction(GridAbstraction):
 
     # j-axis (x ↔ j, same direction)
     going_right = raw_j > old_j
-    going_left  = raw_j < old_j
-    large_j     = (raw_j - old_j).abs() > 1
+    going_left = raw_j < old_j
+    large_j = (raw_j - old_j).abs() > 1
 
     bnd_right = (old_j + 1) * cs - xmc + cx
-    bnd_left  = old_j * cs - xmc + cx
+    bnd_left = old_j * cs - xmc + cx
 
     accept_j = (
       large_j
       | (going_right & (pos_x >= bnd_right + h))
-      | (going_left  & (pos_x <= bnd_left  - h))
+      | (going_left & (pos_x <= bnd_left - h))
     )
     new_cells[:, 1] = torch.where(accept_j, raw_cells[:, 1], confirmed_cells[:, 1])
 
     # i-axis (y ↔ i inverted: i increases downward, y increases upward)
     going_down = raw_i > old_i
-    going_up   = raw_i < old_i
-    large_i    = (raw_i - old_i).abs() > 1
+    going_up = raw_i < old_i
+    large_i = (raw_i - old_i).abs() > 1
 
     bnd_down = ymc - (old_i + 1) * cs + cy
-    bnd_up   = ymc - old_i * cs + cy
+    bnd_up = ymc - old_i * cs + cy
 
     accept_i = (
       large_i
       | (going_down & (pos_y <= bnd_down - h))
-      | (going_up   & (pos_y >= bnd_up   + h))
+      | (going_up & (pos_y >= bnd_up + h))
     )
     new_cells[:, 0] = torch.where(accept_i, raw_cells[:, 0], confirmed_cells[:, 0])
 
@@ -412,18 +436,20 @@ class SokobanGridAbstraction(GridAbstraction):
 
     for env_idx in env_ids.tolist():
       ball_cell = self._confirmed_ball_cells[env_idx]
-      bi, bj    = int(ball_cell[0].item()), int(ball_cell[1].item())
+      bi, bj = int(ball_cell[0].item()), int(ball_cell[1].item())
 
       # 2-MDP: use confirmed robot cell unless co-occupying, then use prev.
       robot_cell = self._confirmed_robot_cells[env_idx]
-      ri, rj     = int(robot_cell[0].item()), int(robot_cell[1].item())
+      ri, rj = int(robot_cell[0].item()), int(robot_cell[1].item())
       if ri == bi and rj == bj:
         robot_cell = self._robot_prev_cells[env_idx]
-        ri, rj     = int(robot_cell[0].item()), int(robot_cell[1].item())
+        ri, rj = int(robot_cell[0].item()), int(robot_cell[1].item())
         if ri == bi and rj == bj:
           # prev is also at ball's cell — ball bounced into robot's post-push
           # position. Skip replanning; plan stays active and will recover.
-          logger.debug(f"[env {env_idx}] Co-occupancy: prev also at ball cell, skipping replan")
+          logger.debug(
+            f"[env {env_idx}] Co-occupancy: prev also at ball cell, skipping replan"
+          )
           continue
 
       if map_cpu[ri, rj].item() or map_cpu[bi, bj].item():
@@ -432,20 +458,31 @@ class SokobanGridAbstraction(GridAbstraction):
         )
         continue
 
-      key: _PlanKey = (ri, rj, bi, bj, int(goal_cells[env_idx, 0].item()), int(goal_cells[env_idx, 1].item()))
+      key: _PlanKey = (
+        ri,
+        rj,
+        bi,
+        bj,
+        int(goal_cells[env_idx, 0].item()),
+        int(goal_cells[env_idx, 1].item()),
+      )
 
       if key not in self.plan_cache:
         self.plan_cache[key] = self._solve_sokoban(key)
+        if self.plan_cache[key] is None:
+          logger.warning(
+            f"[env {env_idx}] No Sokoban plan found for key {key}; "
+            "this configuration will always terminate"
+          )
 
       plan = self.plan_cache[key]
 
       if plan is None:
         self.deviation_detected[env_idx] = True
-        logger.warning(f"[env {env_idx}] No Sokoban plan found for key {key}; episode will terminate")
         continue
 
       self.current_plan[env_idx] = plan
-      self.plan_length[env_idx]  = len(plan)
+      self.plan_length[env_idx] = len(plan)
       self.current_step[env_idx] = 0
       self.deviation_detected[env_idx] = False
       self._load_step_targets(env_idx, robot_cell, ball_cell)
@@ -468,7 +505,8 @@ class SokobanGridAbstraction(GridAbstraction):
     self._current_action_is_push[env_idx] = is_push
     self._current_direction_grid[env_idx] = torch.tensor(
       [float(action.direction_grid[0]), float(action.direction_grid[1])],
-      device=self.device, dtype=torch.float32,
+      device=self.device,
+      dtype=torch.float32,
     )
     self.expected_next_robot_cell[env_idx] = torch.tensor(
       action.robot_target_cell, device=self.device, dtype=torch.long
@@ -480,6 +518,7 @@ class SokobanGridAbstraction(GridAbstraction):
         action.ball_target_cell, device=self.device, dtype=torch.long
       )
       self._push_start_ball_cell[env_idx] = current_ball_cell.clone()
+      self._push_start_robot_cell[env_idx] = current_robot_cell.clone()
     else:
       self._move_start_robot_cell[env_idx] = current_robot_cell.clone()
 
@@ -493,13 +532,15 @@ class SokobanGridAbstraction(GridAbstraction):
     map_cpu = self.map.cpu()
 
     grid = [
-      [ENCODING["WALL"] if map_cpu[r, c].item() else ENCODING["EMPTY"]
-       for c in range(cols)]
+      [
+        ENCODING["WALL"] if map_cpu[r, c].item() else ENCODING["EMPTY"]
+        for c in range(cols)
+      ]
       for r in range(rows)
     ]
     grid[robot_row][robot_col] = ENCODING["ROBOT"]
-    grid[ball_row][ball_col]   = ENCODING["BLOCK"]
-    grid[goal_row][goal_col]   = ENCODING["GOAL"]
+    grid[ball_row][ball_col] = ENCODING["BLOCK"]
+    grid[goal_row][goal_col] = ENCODING["GOAL"]
     return maze_to_string(grid)
 
   def _solve_sokoban(self, config: _PlanKey) -> Optional[SokobanPlan]:
@@ -525,7 +566,9 @@ class SokobanGridAbstraction(GridAbstraction):
       try:
         up_plan = future.result(timeout=self.cfg.replan_timeout_s)
       except concurrent.futures.TimeoutError:
-        logger.warning(f"Sokoban solver timed out (>{self.cfg.replan_timeout_s}s) for key {config}")
+        logger.warning(
+          f"Sokoban solver timed out (>{self.cfg.replan_timeout_s}s) for key {config}"
+        )
         return None
 
     if up_plan is None:
@@ -557,27 +600,31 @@ class SokobanGridAbstraction(GridAbstraction):
 
     for step_label in steps:
       if step_label.startswith("move_"):
-        direction = step_label[len("move_"):]
+        direction = step_label[len("move_") :]
         di, dj = _DIRECTION_TO_IJ[direction]
         new_r_row, new_r_col = r_row + di, r_col + dj
-        plan.append(SokobanAction(
-          action_type="MOVE",
-          direction_grid=(di, dj),
-          robot_target_cell=(new_r_row, new_r_col),
-          ball_target_cell=None,
-        ))
+        plan.append(
+          SokobanAction(
+            action_type="MOVE",
+            direction_grid=(di, dj),
+            robot_target_cell=(new_r_row, new_r_col),
+            ball_target_cell=None,
+          )
+        )
         r_row, r_col = new_r_row, new_r_col
 
       elif step_label.startswith("push_"):
-        direction = step_label[len("push_"):]
+        direction = step_label[len("push_") :]
         di, dj = _DIRECTION_TO_IJ[direction]
         new_b_row, new_b_col = b_row + di, b_col + dj
-        plan.append(SokobanAction(
-          action_type="PUSH",
-          direction_grid=(di, dj),
-          robot_target_cell=(b_row, b_col),  # robot ends where ball was
-          ball_target_cell=(new_b_row, new_b_col),
-        ))
+        plan.append(
+          SokobanAction(
+            action_type="PUSH",
+            direction_grid=(di, dj),
+            robot_target_cell=(b_row, b_col),  # robot ends where ball was
+            ball_target_cell=(new_b_row, new_b_col),
+          )
+        )
         r_row, r_col = b_row, b_col
         b_row, b_col = new_b_row, new_b_col
 
@@ -620,39 +667,39 @@ class SokobanGridAbstraction(GridAbstraction):
     if env_idx >= self.num_envs:
       return
 
-    plan = self.current_plan[env_idx]
-    step = int(self.current_step[env_idx].item())
-    if plan is None or step >= len(plan):
-      return
+    # plan = self.current_plan[env_idx]
+    # step = int(self.current_step[env_idx].item())
+    # if plan is None or step >= len(plan):
+    #   return
 
-    env_origin = self._env.scene.env_origins[env_idx, :2].cpu().numpy()
+    # env_origin = self._env.scene.env_origins[env_idx, :2].cpu().numpy()
 
-    def cell_world(row: int, col: int, z: float) -> np.ndarray:
-      idx = torch.tensor([[row, col]], dtype=torch.long, device=self.device)
-      xy = self._grid_to_local(idx, center=True)[0].cpu().numpy()
-      return np.array([xy[0] + env_origin[0], xy[1] + env_origin[1], z])
+    # def cell_world(row: int, col: int, z: float) -> np.ndarray:
+    #   idx = torch.tensor([[row, col]], dtype=torch.long, device=self.device)
+    #   xy = self._grid_to_local(idx, center=True)[0].cpu().numpy()
+    #   return np.array([xy[0] + env_origin[0], xy[1] + env_origin[1], z])
 
-    action = plan[step]
-    if action.action_type == "MOVE":
-      r_row = int(self._confirmed_robot_cells[env_idx, 0].item())
-      r_col = int(self._confirmed_robot_cells[env_idx, 1].item())
-      tgt_row, tgt_col = action.robot_target_cell
-      visualizer.add_arrow(
-        start=cell_world(r_row, r_col, 0.5),
-        end=cell_world(tgt_row, tgt_col, 0.5),
-        color=(0.1, 0.9, 0.1, 1.0),
-        width=0.08,
-        label=f"MOVE→({tgt_row},{tgt_col})",
-      )
-    else:  # PUSH
-      assert action.ball_target_cell is not None
-      b_row = int(self._confirmed_ball_cells[env_idx, 0].item())
-      b_col = int(self._confirmed_ball_cells[env_idx, 1].item())
-      tgt_row, tgt_col = action.ball_target_cell
-      visualizer.add_arrow(
-        start=cell_world(b_row, b_col, 0.2),
-        end=cell_world(tgt_row, tgt_col, 0.2),
-        color=(1.0, 0.55, 0.0, 1.0),
-        width=0.08,
-        label=f"PUSH→({tgt_row},{tgt_col})",
-      )
+    # action = plan[step]
+    # if action.action_type == "MOVE":
+    #   r_row = int(self._confirmed_robot_cells[env_idx, 0].item())
+    #   r_col = int(self._confirmed_robot_cells[env_idx, 1].item())
+    #   tgt_row, tgt_col = action.robot_target_cell
+    #   visualizer.add_arrow(
+    #     start=cell_world(r_row, r_col, 0.5),
+    #     end=cell_world(tgt_row, tgt_col, 0.5),
+    #     color=(0.1, 0.9, 0.1, 1.0),
+    #     width=0.08,
+    #     label=f"MOVE→({tgt_row},{tgt_col})",
+    #   )
+    # else:  # PUSH
+    #   assert action.ball_target_cell is not None
+    #   b_row = int(self._confirmed_ball_cells[env_idx, 0].item())
+    #   b_col = int(self._confirmed_ball_cells[env_idx, 1].item())
+    #   tgt_row, tgt_col = action.ball_target_cell
+    #   visualizer.add_arrow(
+    #     start=cell_world(b_row, b_col, 0.2),
+    #     end=cell_world(tgt_row, tgt_col, 0.2),
+    #     color=(1.0, 0.55, 0.0, 1.0),
+    #     width=0.08,
+    #     label=f"PUSH→({tgt_row},{tgt_col})",
+    #   )

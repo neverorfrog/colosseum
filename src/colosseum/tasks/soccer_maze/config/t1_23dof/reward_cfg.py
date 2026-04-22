@@ -8,6 +8,7 @@ from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.tasks.velocity.mdp import (
   angular_momentum_penalty,
   body_angular_velocity_penalty,
+  feet_slip,
   feet_swing_height,
   self_collision_cost,
   soft_landing,
@@ -21,15 +22,18 @@ from colosseum.robots.t1_23dof.sensors import (
   SELF_COLLISION_SENSOR,
 )
 from colosseum.tasks.dribbling.mdp.rewards import (
-  ball_vel_norm,
-  feet_distance_penalty,
   pose_deviation,
   stance_phase_schedule,
   swing_phase_schedule,
 )
 from colosseum.tasks.maze.mdp.rewards import wall_collisions
 from colosseum.tasks.soccer_maze.mdp.rewards import (
+  action_step_timeout_penalty,
+  ball_at_final_goal,
+  ball_push_target_progress,
+  ball_push_target_reached,
   ball_vel_angle_body,
+  ball_vel_norm_body,
   ball_vel_tracking_body,
   robot_ang_vel_tracking,
   robot_ball_approach_vel_push,
@@ -41,7 +45,7 @@ from colosseum.tasks.soccer_maze.mdp.rewards import (
 
 rewards = {
   # ------------------------------------------------------------------ #
-  # Task: ball velocity tracking                                       #
+  # Task: ball to target tracking (PUSH only)                           #
   # ------------------------------------------------------------------ #
   "ball_vel_tracking": RewardTermCfg(
     func=ball_vel_tracking_body,
@@ -49,62 +53,80 @@ rewards = {
     params={"command_name": "sokoban", "sharpness": 1.0},
   ),
   "ball_vel_norm": RewardTermCfg(
-    func=ball_vel_norm,
-    weight=4.0,
+    func=ball_vel_norm_body,
+    weight=2.0,
     params={"command_name": "sokoban", "sharpness": 1.0},
   ),
   "ball_vel_angle": RewardTermCfg(
     func=ball_vel_angle_body,
-    weight=4.0,
+    weight=2.0,
     params={"command_name": "sokoban"},
+  ),
+  "ball_push_target_progress": RewardTermCfg(
+    func=ball_push_target_progress,
+    weight=3.0,
+    params={"command_name": "sokoban", "speed_ref": 0.5},
+  ),
+  "ball_push_target_reached": RewardTermCfg(
+    func=ball_push_target_reached,
+    weight=8.0,
+    params={"command_name": "sokoban", "threshold": 0.5},
+  ),
+  "ball_at_final_goal": RewardTermCfg(
+    func=ball_at_final_goal,
+    weight=20.0,
+    params={"command_name": "goal", "threshold": 0.5},
+  ),
+  # ------------------------------------------------------------------ #
+  # Progress: penalise stalling on a single plan step                   #
+  # ------------------------------------------------------------------ #
+  "action_step_timeout": RewardTermCfg(
+    func=action_step_timeout_penalty,
+    weight=5.0,
+    params={"abstraction_name": "sokoban", "window_steps": 200},
   ),
   # ------------------------------------------------------------------ #
   # Task: robot velocity tracking (MOVE actions)                        #
   # ------------------------------------------------------------------ #
   "robot_lin_vel": RewardTermCfg(
     func=robot_lin_vel_tracking,
-    weight=2.0,
-    params={"command_name": "sokoban", "std": math.sqrt(0.25)},
-  ),
-  "robot_ang_vel": RewardTermCfg(
-    func=robot_ang_vel_tracking,
-    weight=1.5,
+    weight=3.0,
     params={"command_name": "sokoban", "std": math.sqrt(0.25)},
   ),
   "robot_heading": RewardTermCfg(
     func=robot_heading_alignment,
-    weight=1.5,
+    weight=2.0,
     params={"command_name": "sokoban"},
   ),
   # ------------------------------------------------------------------ #
   # Task: robot–ball relationship                                        #
   # ------------------------------------------------------------------ #
-  "robot_ball_distance": RewardTermCfg(
-    func=robot_ball_distance_push,
-    weight=0.3,
-    params={"command_name": "sokoban", "sharpness": 0.5},
-  ),
+  # "robot_ball_distance": RewardTermCfg(
+  #   func=robot_ball_distance_push,
+  #   weight=1.0,
+  #   params={"command_name": "sokoban", "sharpness": 0.5},
+  # ),
   "robot_ball_yaw": RewardTermCfg(
     func=robot_ball_yaw_body,
-    weight=1.0,
+    weight=4.0,
     params={"command_name": "sokoban"},
   ),
   "robot_ball_approach_vel": RewardTermCfg(
     func=robot_ball_approach_vel_push,
-    weight=2.0,
+    weight=1.0,
     params={"command_name": "sokoban"},
   ),
   # ------------------------------------------------------------------ #
   # Maze: wall collision penalty                                         #
   # ------------------------------------------------------------------ #
-  # "wall_collisions": RewardTermCfg(
-  #   func=wall_collisions,
-  #   weight=-10.0,
-  #   params={
-  #     "sensor_name": "wall_collision",
-  #     "min_robot_height": 0.3,
-  #   },
-  # ),
+  "wall_collisions": RewardTermCfg(
+    func=wall_collisions,
+    weight=-2.0,
+    params={
+      "sensor_name": "wall_collision",
+      "min_robot_height": 0.3,
+    },
+  ),
   # ------------------------------------------------------------------ #
   # Locomotion regularization                                          #
   # ------------------------------------------------------------------ #
@@ -139,6 +161,16 @@ rewards = {
       "command_threshold": 0.05,
     },
   ),
+  "foot_slip": RewardTermCfg(
+    func=feet_slip,
+    weight=-0.1,
+    params={
+      "sensor_name": "feet_ground_contact",
+      "command_name": "sokoban",
+      "command_threshold": 0.05,
+      "asset_cfg": SceneEntityCfg("robot", site_names=FOOT_SITE_NAMES),
+    },
+  ),
   "soft_landing": RewardTermCfg(
     func=soft_landing,
     weight=-1e-5,
@@ -152,14 +184,6 @@ rewards = {
     func=self_collision_cost,
     weight=-1.0,
     params={"sensor_name": SELF_COLLISION_SENSOR.name, "force_threshold": 10.0},
-  ),
-  "feet_distance": RewardTermCfg(
-    func=feet_distance_penalty,
-    weight=-4.0,
-    params={
-      "asset_cfg": SceneEntityCfg("robot", site_names=FOOT_SITE_NAMES),
-      "min_dist": 0.15,
-    },
   ),
   "foot_foot_contact": RewardTermCfg(
     func=self_collision_cost,
@@ -176,7 +200,7 @@ rewards = {
   # ------------------------------------------------------------------ #
   "swing_phase": RewardTermCfg(
     func=swing_phase_schedule,
-    weight=4.0,
+    weight=3.0,
     params={
       "phase_command_name": "gait_phase",
       "sensor_name": "feet_ground_contact",
@@ -184,7 +208,7 @@ rewards = {
   ),
   "stance_phase": RewardTermCfg(
     func=stance_phase_schedule,
-    weight=4.0,
+    weight=2.0,
     params={
       "phase_command_name": "gait_phase",
       "asset_cfg": SceneEntityCfg("robot", site_names=FOOT_SITE_NAMES),

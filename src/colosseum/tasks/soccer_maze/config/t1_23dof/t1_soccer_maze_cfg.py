@@ -14,8 +14,10 @@ from mjlab.viewer import ViewerConfig
 
 from colosseum.assets.ball.ball_spec import get_ball_cfg
 from colosseum.config.types.task import TaskConfig, register_task
-from colosseum.envs.abstraction_based_env import AbstractionBasedEnvCfg
-from colosseum.mdp.abstraction.maze.sokoban_grid_abstraction import SokobanGridAbstractionTermCfg
+from colosseum.envs.constraint_abstraction_env import ConstraintAbstractionBasedEnvCfg
+from colosseum.mdp.abstraction.maze.sokoban_grid_abstraction import (
+  SokobanGridAbstractionTermCfg,
+)
 from colosseum.robots.t1_23dof.constants import BASE_BODY_NAME, get_robot_cfg
 from colosseum.robots.t1_23dof.sensors import (
   FEET_GROUND_CONTACT_SENSOR,
@@ -29,11 +31,11 @@ from colosseum.robots.t1_23dof.sensors import (
 )
 from colosseum.tasks.maze.maps import MAPS
 from colosseum.tasks.maze.maze import Maze, MazeCfg
-
 from colosseum.tasks.maze.terrain import MazeTerrainEntityCfg
 
 from .algo_cfg import t1_soccer_maze_ppo_cfg
 from .cact_cfg import actions, commands, curriculum, terminations
+from .constraint_cfg import constraints
 from .event_cfg import events
 from .observation_cfg import observations
 from .reward_cfg import rewards
@@ -111,7 +113,7 @@ def t1_soccer_maze_env_cfg(
   resolution_factor: int = 1,
   wall_center_weight: float = 2.0,
   play: bool = False,
-) -> AbstractionBasedEnvCfg:
+) -> ConstraintAbstractionBasedEnvCfg:
   """Create Booster T1 soccer-maze task configuration.
 
   Args:
@@ -123,11 +125,11 @@ def t1_soccer_maze_env_cfg(
   """
   maze = Maze(
     MazeCfg(
-      maze_map=MAPS[scenario], cell_size=2.0, wall_height=2.0, wall_size_factor=1.0
+      maze_map=MAPS[scenario], cell_size=1.0, wall_height=1.2, wall_size_factor=1.0
     )
   )
 
-  cfg = AbstractionBasedEnvCfg(
+  cfg = ConstraintAbstractionBasedEnvCfg(
     scene=scene_cfg(maze, num_envs=1 if play else num_envs),
     sim=sim_cfg(),
     viewer=viewer_cfg(),
@@ -139,9 +141,10 @@ def t1_soccer_maze_env_cfg(
     events=events,
     curriculum={} if play else curriculum,
     abstractions=abstractions_cfg(maze, resolution_factor, wall_center_weight),
+    constraints=constraints,
     metrics={},
     decimation=4,
-    episode_length_s=90.0,
+    episode_length_s=120.0,
   )
 
   if play:
@@ -157,7 +160,7 @@ def t1_soccer_maze_env_cfg(
 @dataclass(frozen=True)
 class T1SoccerMazeTask(TaskConfig):
   name: str = "t1-soccer-maze"
-  env: AbstractionBasedEnvCfg = field(default_factory=t1_soccer_maze_env_cfg)
+  env: ConstraintAbstractionBasedEnvCfg = field(default_factory=t1_soccer_maze_env_cfg)
 
   @property
   def train_env_cfg(self):

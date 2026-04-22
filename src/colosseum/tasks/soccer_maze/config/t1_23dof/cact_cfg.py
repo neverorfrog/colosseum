@@ -41,6 +41,7 @@ commands: Dict[str, CommandTermCfg] = {
     abstraction_name="sokoban",
     ball_speed=0.5,
     robot_speed=1.0,
+    push_robot_speed=0.5,
   ),
   "goal": MazeGoalCommandCfg(static_goals=True),
   "gait_phase": GaitPhaseCommandCfg(),

@@ -2,6 +2,10 @@ from colosseum.envs.abstraction_based_env import (
   AbstractionBasedEnv,
   AbstractionBasedEnvCfg,
 )
+from colosseum.envs.constraint_abstraction_env import (
+  ConstraintAbstractionBasedEnv,
+  ConstraintAbstractionBasedEnvCfg,
+)
 from colosseum.envs.constraint_based_env import (
   ConstraintBasedEnv,
   ConstraintBasedEnvCfg,

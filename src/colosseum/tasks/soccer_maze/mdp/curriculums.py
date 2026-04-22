@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from colosseum.envs.abstraction_based_env import AbstractionBasedEnv
 from colosseum.mdp.abstraction.maze.sokoban_grid_abstraction import SokobanGridAbstraction
 
 if TYPE_CHECKING:
@@ -41,7 +40,7 @@ def sokoban_cache_curriculum(
       (0 = none yet, 1 = first, …).  Used as a curriculum metric.
   """
   del env_ids  # Cache is global, not per-environment.
-  assert isinstance(env, AbstractionBasedEnv)
+  assert hasattr(env, "abstraction_manager")
 
   step = env.common_step_counter
   last_cleared: int = getattr(env, "_sokoban_cleared_up_to", -1)

@@ -35,17 +35,18 @@ from colosseum.tasks.soccer_maze.mdp.observations import (
 )
 
 _ASSET_CFG = SceneEntityCfg("robot", site_names="root_site", joint_names=".*")
+_BALL_ASSET_CFG = SceneEntityCfg("ball", site_names="root_site")
 
 actor_terms = {
-  # # Maze spatial context
+  # Maze spatial context
   "agent_pos_local": ObservationTermCfg(
     func=agent_pos_local,
     params={"asset_cfg": _ASSET_CFG},
     noise=Unoise(n_min=-0.01, n_max=0.01),
   ),
-  "agent_to_goal": ObservationTermCfg(
+  "ball_to_goal": ObservationTermCfg(
     func=agent_to_goal_vector,
-    params={"asset_cfg": _ASSET_CFG},
+    params={"asset_cfg": _BALL_ASSET_CFG},
     noise=Unoise(n_min=-0.05, n_max=0.05),
   ),
   # Proprioception
@@ -92,10 +93,10 @@ critic_terms = {
     func=obstacle_map,
     params={"abstraction_name": "sokoban"},
   ),
-  "foot_ball_contact_force": ObservationTermCfg(
-    func=foot_ball_contact_force,
-    params={"sensor_name": "foot_ball_contact"},
-  ),
+  # "foot_ball_contact_force": ObservationTermCfg(
+  #   func=foot_ball_contact_force,
+  #   params={"sensor_name": "foot_ball_contact"},
+  # ),
   "base_height": ObservationTermCfg(func=base_height),
   "ball_mass": ObservationTermCfg(
     func=ball_mass,

@@ -112,14 +112,17 @@ class MazeTerrainEntity(TerrainEntity):
 
       local_centers.append([cx, cy, cz])
 
-      # One mocap body per block: position is overridden per-world at runtime.
-      body = self._spec.worldbody.add_body(
+      # One mocap body per block. The geom lives directly on the mocap body so
+      # that _geom_local_to_global reads the position already overwritten by
+      # _mocap (which runs between _kinematics_level and _geom_local_to_global).
+      # A child body would get a stale xpos (computed from the pre-_mocap
+      # kinematics pass) and end up stuck at env 0's world coordinates.
+      mocap_body = self._spec.worldbody.add_body(
         name=f"wall_block_{block_idx}",
         pos=(env0_x + cx, env0_y + cy, cz),
       )
-      body.mocap = True
-
-      body.add_geom(
+      mocap_body.mocap = True
+      mocap_body.add_geom(
         name=f"wall_block_{block_idx}_geom",
         type=mujoco.mjtGeom.mjGEOM_BOX,
         pos=(0, 0, 0),

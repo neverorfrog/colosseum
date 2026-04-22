@@ -28,7 +28,7 @@ events = {
     params={
       "robot_z_offset": 0.665,
       "ball_z": 0.2,
-      "yaw_range": (-3.14159, 3.14159),
+      "yaw_range": (0.0, 0.0),
       "jitter_fraction": 0.3,
     },
   ),

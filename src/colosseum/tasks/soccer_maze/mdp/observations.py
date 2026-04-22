@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 import torch
 from mjlab.utils.lab_api.math import quat_apply
 
-from colosseum.envs.abstraction_based_env import AbstractionBasedEnv
 from colosseum.mdp.abstraction.maze.grid_abstraction import GridAbstraction
 from colosseum.tasks.soccer_maze.mdp.sokoban_command import SokobanCommand
 
@@ -18,16 +17,17 @@ if TYPE_CHECKING:
 def ball_vel_command_body(env: ManagerBasedRlEnv, command_name: str) -> torch.Tensor:
   """Ball velocity command rotated into the robot body frame. Shape (N, 2).
 
-  The command from AbstractionVelocityCommand is in world frame [vx_w, vy_w].
-  The ball_pos observation is in body frame.  Giving both in the same frame
-  lets the actor learn the relative geometry without needing heading knowledge.
+  Reads ``SokobanCommand.ball_vel`` (world frame, non-zero only during PUSH) so
+  the observation is zero during MOVE — matching the actor's expectation that
+  the ball target is meaningful only while pushing.
   """
-  command = env.command_manager.get_command(command_name)[:, :2]  # [N, 2] world
+  sokoban: SokobanCommand = env.command_manager.get_term(command_name)  # type: ignore[assignment]
+  cmd_w = sokoban.ball_vel  # [N, 2] world
   robot = env.scene["robot"]
   quat_w = robot.data.root_link_quat_w  # [N, 4]
   quat_conj = torch.cat([quat_w[:, :1], -quat_w[:, 1:]], dim=-1)
   cmd_3d = torch.cat(
-    [command, torch.zeros(env.num_envs, 1, device=env.device)], dim=-1
+    [cmd_w, torch.zeros(env.num_envs, 1, device=env.device)], dim=-1
   )  # [N, 3]
   return quat_apply(quat_conj, cmd_3d)[:, :2]  # [N, 2]
 
@@ -41,7 +41,7 @@ def obstacle_map(env: ManagerBasedRlEnv, abstraction_name: str) -> torch.Tensor:
 
   This is a privileged observation — add it to critic_terms only.
   """
-  assert isinstance(env, AbstractionBasedEnv)
+  assert hasattr(env, "abstraction_manager")
   abstraction = env.abstraction_manager.get_term(abstraction_name)
   assert isinstance(abstraction, GridAbstraction)
   flat = abstraction.map.float().flatten()  # [rows*cols]
@@ -51,13 +51,13 @@ def obstacle_map(env: ManagerBasedRlEnv, abstraction_name: str) -> torch.Tensor:
 def robot_vel_command(env: ManagerBasedRlEnv, command_name: str) -> torch.Tensor:
   """Robot velocity command in body frame. Shape [N, 3]: [vx_b, vy_b, omega_z].
 
-  Same format as AbstractionVelocityCommand so the actor gets both the linear
-  direction and the heading correction to produce.  Non-zero during MOVE only;
-  zero during PUSH (robot should stand still while pushing the ball).
+  Same format as AbstractionVelocityCommand: body-frame direction scaled by
+  speed plus the yaw-rate from the heading P-controller.  Populated only during
+  MOVE; zero during PUSH so the actor sees no locomotion target while kicking.
   """
   sokoban: SokobanCommand = env.command_manager.get_term(command_name)  # type: ignore[assignment]
   return torch.cat(
-    [sokoban.robot_lin_vel, sokoban.robot_omega_z.unsqueeze(1)], dim=-1
+    [sokoban.robot_lin_vel, sokoban.robot_omega_z.unsqueeze(-1)], dim=-1
   )  # [N, 3]
 
 
