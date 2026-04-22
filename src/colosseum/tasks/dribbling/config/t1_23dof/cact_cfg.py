@@ -60,7 +60,7 @@ commands: Dict[str, CommandTermCfg] = {
     lateral_offset_range=(-0.8, 0.8),
     min_speed=0.0,
     max_speed=0.0,
-    replay_fraction=0.3,
+    replay_fraction=0.4,
   ),
 }
 

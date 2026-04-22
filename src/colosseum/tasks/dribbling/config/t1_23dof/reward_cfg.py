@@ -150,20 +150,20 @@ rewards = {
       "collision_far_distance": 1.5,
     },
   ),
-  "obstacle_direction": RewardTermCfg(  # Penalize the ball actually moving toward an obstacle on the target path.
-    func=obstacle_direction,
-    weight=-10.0,
-    params={
-      "command_name": "adversary",  # Obstacle command term providing obstacle positions/velocities.
-      "ball_vel_command_name": "ball_vel",  # Ball command term providing the persistent target.
-      "direction_detection_range": 1.5,  # Only obstacles within this forward target-segment range affect direction.
-      "direction_tube_radius": 0.5,  # Direction term only if the obstacle lies close to the ball-target segment.
-      "direction_sharpness": 3.0,  # Larger -> sharper bounded penalty for pushing the ball toward the obstacle.
-      "min_ball_speed": 0.1,  # Below this ball speed the direction penalty is suppressed.
-      "ball_engagement_near_distance": 0.3,  # Full obstacle pressure only when the ball is under close control.
-      "ball_engagement_far_distance": 0.75,  # Obstacle pressure fades out when the ball is not engaged.
-    },
-  ),
+  # "obstacle_direction": RewardTermCfg(  # Penalize the ball actually moving toward an obstacle on the target path.
+  #   func=obstacle_direction,
+  #   weight=-10.0,
+  #   params={
+  #     "command_name": "adversary",  # Obstacle command term providing obstacle positions/velocities.
+  #     "ball_vel_command_name": "ball_vel",  # Ball command term providing the persistent target.
+  #     "direction_detection_range": 1.5,  # Only obstacles within this forward target-segment range affect direction.
+  #     "direction_tube_radius": 0.5,  # Direction term only if the obstacle lies close to the ball-target segment.
+  #     "direction_sharpness": 3.0,  # Larger -> sharper bounded penalty for pushing the ball toward the obstacle.
+  #     "min_ball_speed": 0.1,  # Below this ball speed the direction penalty is suppressed.
+  #     "ball_engagement_near_distance": 0.3,  # Full obstacle pressure only when the ball is under close control.
+  #     "ball_engagement_far_distance": 0.75,  # Obstacle pressure fades out when the ball is not engaged.
+  #   },
+  # ),
   # ------------------------------------------------------------------ #
   # Locomotion regularization                                            #
   # ------------------------------------------------------------------ #
