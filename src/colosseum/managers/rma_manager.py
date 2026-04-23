@@ -443,14 +443,14 @@ class RmaManager(ManagerBase):
     sample_ad_str = "[" + ", ".join(f"{v:+.2f}" for v in sample_ad) + "]"
     sample_pr_str = "[" + ", ".join(f"{v:+.2f}" for v in sample_pr) + "]"
 
-    print(
-      f"[CHECK_B] fov={n_fov}/{n_envs} "
-      f"|z_ad|={z_adapt_norm:.3f} |z_pr|={z_priv_norm:.3f} "
-      f"|dz|all={diff_all:.3f} |dz|fov={diff_fov:.3f} "
-      f"sig(z_ad)={z_adapt_std:.3f} sig(z_pr)={z_priv_std:.3f} "
-      f"z_ad[0,:4]={sample_ad_str} z_pr[0,:4]={sample_pr_str}",
-      flush=True,
-    )
+    # print(
+    #   f"[CHECK_B] fov={n_fov}/{n_envs} "
+    #   f"|z_ad|={z_adapt_norm:.3f} |z_pr|={z_priv_norm:.3f} "
+    #   f"|dz|all={diff_all:.3f} |dz|fov={diff_fov:.3f} "
+    #   f"sig(z_ad)={z_adapt_std:.3f} sig(z_pr)={z_priv_std:.3f} "
+    #   f"z_ad[0,:4]={sample_ad_str} z_pr[0,:4]={sample_pr_str}",
+    #   flush=True,
+    # )
 
   # ------------------------------------------------------------------
   # Phase 2 loss
