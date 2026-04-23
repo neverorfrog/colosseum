@@ -28,9 +28,24 @@ def ball_captured(
 
 def ball_lost(
   env: ManagerBasedRlEnv,
-  max_robot_ball_distance: float = 2.0,
+  max_robot_ball_distance: float = 5.0,
 ) -> torch.Tensor:
   """Terminate when the robot loses the ball by more than max_robot_ball_distance."""
   robot_xy = env.scene["robot"].data.root_link_pos_w[:, :2]
   ball_xy = env.scene["ball"].data.root_link_pos_w[:, :2]
   return (ball_xy - robot_xy).norm(dim=-1) > max_robot_ball_distance
+
+
+def ball_target_reached(
+  env: ManagerBasedRlEnv,
+  command_name: str = "ball_vel",
+) -> torch.Tensor:
+  """Discrete bonus fired exactly once when the ball crosses the target threshold.
+
+  Reads the ``target_reached_mask`` set by BallVelocityCommand in the same step
+  that the target resamples, so the spike is guaranteed to fire for one step.
+  """
+  from colosseum.tasks.dribbling.mdp.ball_velocity_command import BallVelocityCommand
+
+  term: BallVelocityCommand = env.command_manager.get_term(command_name)
+  return term.target_reached_mask
