@@ -49,27 +49,27 @@ rewards = {
   # ------------------------------------------------------------------ #
   "ball_vel_tracking": RewardTermCfg(
     func=ball_vel_tracking_body,
-    weight=2.0,
+    weight=3.0,
     params={"command_name": "sokoban", "sharpness": 1.0},
   ),
   "ball_vel_norm": RewardTermCfg(
     func=ball_vel_norm_body,
-    weight=2.0,
+    weight=3.0,
     params={"command_name": "sokoban", "sharpness": 1.0},
   ),
   "ball_vel_angle": RewardTermCfg(
     func=ball_vel_angle_body,
-    weight=2.0,
+    weight=3.0,
     params={"command_name": "sokoban"},
   ),
   "ball_push_target_progress": RewardTermCfg(
     func=ball_push_target_progress,
-    weight=3.0,
+    weight=1.0,
     params={"command_name": "sokoban", "speed_ref": 0.5},
   ),
   "ball_push_target_reached": RewardTermCfg(
     func=ball_push_target_reached,
-    weight=8.0,
+    weight=10.0,
     params={"command_name": "sokoban", "threshold": 0.5},
   ),
   "ball_at_final_goal": RewardTermCfg(
@@ -82,7 +82,7 @@ rewards = {
   # ------------------------------------------------------------------ #
   "action_step_timeout": RewardTermCfg(
     func=action_step_timeout_penalty,
-    weight=5.0,
+    weight=0.1,
     params={"abstraction_name": "sokoban", "window_steps": 200},
   ),
   # ------------------------------------------------------------------ #
@@ -101,11 +101,11 @@ rewards = {
   # ------------------------------------------------------------------ #
   # Task: robot–ball relationship                                        #
   # ------------------------------------------------------------------ #
-  # "robot_ball_distance": RewardTermCfg(
-  #   func=robot_ball_distance_push,
-  #   weight=1.0,
-  #   params={"command_name": "sokoban", "sharpness": 0.5},
-  # ),
+  "robot_ball_distance": RewardTermCfg(
+    func=robot_ball_distance_push,
+    weight=0.05,
+    params={"command_name": "sokoban", "sharpness": 0.5},
+  ),
   "robot_ball_yaw": RewardTermCfg(
     func=robot_ball_yaw_body,
     weight=4.0,
@@ -113,7 +113,7 @@ rewards = {
   ),
   "robot_ball_approach_vel": RewardTermCfg(
     func=robot_ball_approach_vel_push,
-    weight=1.0,
+    weight=2.0,
     params={"command_name": "sokoban"},
   ),
   # ------------------------------------------------------------------ #

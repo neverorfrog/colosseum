@@ -93,10 +93,10 @@ critic_terms = {
     func=obstacle_map,
     params={"abstraction_name": "sokoban"},
   ),
-  # "foot_ball_contact_force": ObservationTermCfg(
-  #   func=foot_ball_contact_force,
-  #   params={"sensor_name": "foot_ball_contact"},
-  # ),
+  "foot_ball_contact_force": ObservationTermCfg(
+    func=foot_ball_contact_force,
+    params={"sensor_name": "foot_ball_contact"},
+  ),
   "base_height": ObservationTermCfg(func=base_height),
   "ball_mass": ObservationTermCfg(
     func=ball_mass,

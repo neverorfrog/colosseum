@@ -28,6 +28,7 @@ def register_algorithm(name: str, config_class: Type["AlgorithmConfig"]):
 
     def decorator(cls: Type["BaseAlgorithm"]) -> Type["BaseAlgorithm"]:
         _ALGORITHM_REGISTRY[name] = (cls, config_class)
+        cls._algo_name = name
         return cls
 
     return decorator

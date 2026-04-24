@@ -775,6 +775,10 @@ class BaseAlgorithm(ABC):
     if self._metadata:
       state_dict["metadata"] = self._metadata
 
+    algo_name = getattr(self, "_algo_name", None)
+    if algo_name is not None:
+      state_dict.setdefault("algo_name", algo_name)
+
     cpu_dict = {}
     for key, value in state_dict.items():
       if isinstance(value, dict):
