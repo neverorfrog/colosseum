@@ -245,6 +245,17 @@ def parse_args() -> tuple[argparse.Namespace, list[str]]:
     action="store_true",
     help="Each stage imitates the previous stage's P1 checkpoint as teacher.",
   )
+  train_p.add_argument(
+    "--warm-start-stage",
+    type=int,
+    default=None,
+    metavar="N",
+    help=(
+      "Override warm-start source for every stage being run. "
+      "N is the stage id whose P1 checkpoint to load (-1 = train from scratch). "
+      "Default: each stage uses its own warm_start_from definition."
+    ),
+  )
 
   # --- play subcommand ---
   play_p = sub.add_parser(
@@ -418,10 +429,25 @@ def main() -> None:
       print(f"[pipeline] Stage {sid} P1 already done, skipping: {p1_ckpt}")
     else:
       warm_start_path: str | None = None
-      if stage["warm_start_from"]:
-        ws_ckpt = _ckpt(log_dir, stage["warm_start_from"])
+      ws_stage_override = getattr(args, "warm_start_stage", None)
+      if ws_stage_override == -1:
+        # Explicit "train from scratch" — ignore the stage's default.
+        warm_start_source = None
+      elif ws_stage_override is not None:
+        ws_def = next((s for s in STAGES if s["id"] == ws_stage_override), None)
+        if ws_def is None:
+          print(f"[pipeline] ERROR: --warm-start-stage {ws_stage_override} is not a valid stage id.")
+          sys.exit(1)
+        warm_start_source = ws_def["name"] + "_p1"
+      else:
+        warm_start_source = stage["warm_start_from"]
+
+      if warm_start_source:
+        ws_ckpt = _ckpt(log_dir, warm_start_source)
         if not ws_ckpt.exists():
-          ws_link = log_dir / "checkpoints" / f"s{sid - 1}_p1.pt"
+          # Try the checkpoint index as fallback.
+          src_sid = ws_stage_override if ws_stage_override is not None else sid - 1
+          ws_link = log_dir / "checkpoints" / f"s{src_sid}_p1.pt"
           if ws_link.exists():
             ws_ckpt = ws_link.resolve()
           else:
