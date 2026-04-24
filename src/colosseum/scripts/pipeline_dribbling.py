@@ -50,6 +50,7 @@ STAGES = [
         "obstacle_stage_index": 0,   # num_active=0, behavior='none'
         "warm_start_from": None,     # train from scratch
         "ball_spawn_x_range": (1.5, 3.0),  # far spawn forces the robot to walk to the ball
+        "skip_phase2": True,  # no visual encoder in locomotion warmup
     },
     {
         "id": 1,
@@ -157,6 +158,7 @@ def _pixi_train_phase2(
         "--cuda", cuda,
         "--task.env.scene.num-envs", str(num_envs),
         "--task.obstacle-stage-index", str(obstacle_stage_index),
+        "--task.use-depth-camera",
     ]
     cmd += extra or []
     return cmd
@@ -179,6 +181,8 @@ def parse_args() -> tuple[argparse.Namespace, list[str]]:
     # --- train subcommand (default) ---
     train_p = sub.add_parser("train", help="Run the training pipeline (default).")
     train_p.add_argument("--num-envs", type=int, default=4096)
+    train_p.add_argument("--p2-num-envs", type=int, default=None,
+        help="Num envs for Phase 2. Defaults to --num-envs if not set.")
     train_p.add_argument("--start-stage", type=int, default=0,
         help="Stage to start from. Earlier checkpoints must exist.")
     train_p.add_argument("--end-stage", type=int, default=None,
@@ -194,14 +198,48 @@ def parse_args() -> tuple[argparse.Namespace, list[str]]:
         help="Phase to play: 1 = privileged encoder, 2 = visual adaptation encoder.")
     play_p.add_argument("--obstacle-stage-index", type=int, default=None,
         help="Override obstacle stage for the play env (defaults to the stage's training value).")
+    play_p.add_argument(
+        "--sync-from",
+        metavar="USER@HOST:PATH",
+        default=None,
+        help=(
+            "Sync checkpoints from a remote training machine before playing. "
+            "Example: phd_student@gin:~/Maiorana/colosseum/logs/dribbling_pipeline"
+        ),
+    )
 
     return p.parse_known_args()
+
+
+def _sync_checkpoints(remote: str, log_dir: Path, stage: int, phase: int) -> None:
+    """Rsync the checkpoint index entry and its target from a remote machine."""
+    link_name = f"s{stage}_p{phase}"
+
+    # Sync the flat checkpoint index (symlinks dereferenced so we get the real file).
+    index_src = f"{remote}/checkpoints/{link_name}.pt"
+    index_dst = log_dir / "checkpoints"
+    index_dst.mkdir(parents=True, exist_ok=True)
+
+    cmd = [
+        "rsync", "-avz", "--copy-links",
+        index_src,
+        str(index_dst) + "/",
+    ]
+    print(f"[pipeline] Syncing {index_src} ...", flush=True)
+    result = subprocess.run(cmd)
+    if result.returncode != 0:
+        print(f"[pipeline] ERROR: rsync failed (exit {result.returncode}).", flush=True)
+        sys.exit(result.returncode)
 
 
 def _play(args: argparse.Namespace, extra_args: list[str], log_dir: Path) -> None:
     sid = args.stage
     phase = args.phase
     link_name = f"s{sid}_p{phase}"
+
+    if getattr(args, "sync_from", None):
+        _sync_checkpoints(args.sync_from, log_dir, sid, phase)
+
     ckpt = log_dir / "checkpoints" / f"{link_name}.pt"
     if not ckpt.exists():
         print(f"[pipeline] ERROR: no checkpoint for stage {sid} phase {phase}: {ckpt}")
@@ -303,7 +341,7 @@ def main() -> None:
 
         _symlink_stage_ckpt(log_dir, p1_run, p1_link)
 
-        if args.skip_phase2:
+        if args.skip_phase2 or stage.get("skip_phase2", False):
             continue
 
         # ------------------------------------------------------------------
@@ -313,6 +351,7 @@ def main() -> None:
         if p2_ckpt.exists():
             print(f"[pipeline] Stage {sid} P2 already done, skipping: {p2_ckpt}")
         else:
+            p2_envs = args.p2_num_envs if args.p2_num_envs is not None else args.num_envs
             _run(
                 _pixi_train_phase2(
                     log_dir=log_dir,
@@ -320,7 +359,7 @@ def main() -> None:
                     steps=stage["p2_steps"],
                     obstacle_stage_index=stage["obstacle_stage_index"],
                     cuda=args.cuda,
-                    num_envs=args.num_envs,
+                    num_envs=p2_envs,
                     checkpoint=str(p1_ckpt),
                     extra=extra_args,
                 ),
