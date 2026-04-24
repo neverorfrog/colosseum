@@ -325,6 +325,12 @@ def _cleanup_runtime_memory() -> None:
   gc.collect()
   if torch.cuda.is_available():
     torch.cuda.empty_cache()
+  try:
+    import warp as wp
+
+    wp.synchronize_device()
+  except Exception:
+    pass
 
 
 def _stage_task(config: DribblingEvalConfig, stage_index: int):
@@ -1045,8 +1051,13 @@ def _run_condition(
     progress.close()
     if live_viewer is not None:
       live_viewer.close()
+      live_viewer = None
     scene_controller.uninstall()
     env.close()
+    # Drop every local that pins the env / warp buffers; empty_cache() only
+    # reclaims torch's pool, so warp allocations leak unless the env object
+    # itself is garbage-collected before the next condition is built.
+    del agent, scene_controller, env, obs
     _cleanup_runtime_memory()
   return stats
 
