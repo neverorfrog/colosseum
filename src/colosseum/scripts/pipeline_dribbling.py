@@ -538,6 +538,8 @@ def main() -> None:
         if tc_def is None:
           print(f"[pipeline] ERROR: --teacher-stage {tc_stage_override} is not a valid stage id.")
           sys.exit(1)
+        if pull_from:
+          _sync_checkpoints(pull_from, log_dir, tc_stage_override, 1)
         tc_ckpt = _ckpt(log_dir, tc_def["name"] + "_p1")
         if not tc_ckpt.exists():
           tc_link = log_dir / "checkpoints" / f"s{tc_stage_override}_p1.pt"
