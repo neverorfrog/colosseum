@@ -278,26 +278,61 @@ def parse_args() -> tuple[argparse.Namespace, list[str]]:
 
 
 def _sync_checkpoints(remote: str, log_dir: Path, stage: int, phase: int) -> None:
-  """Rsync the checkpoint index entry and its target from a remote machine."""
-  link_name = f"s{stage}_p{phase}"
+    """Rsync a checkpoint from a remote training machine.
 
-  # Sync the flat checkpoint index (symlinks dereferenced so we get the real file).
-  index_src = f"{remote}/checkpoints/{link_name}.pt"
-  index_dst = log_dir / "checkpoints"
-  index_dst.mkdir(parents=True, exist_ok=True)
+    Tries two locations in order:
+    1. Post-training index symlink: <remote>/checkpoints/s{stage}_p{phase}.pt
+    2. Mid-run fallback: newest .pt file in <remote>/<run_name>/checkpoints/
+    """
+    link_name = f"s{stage}_p{phase}"
+    index_dst = log_dir / "checkpoints"
+    index_dst.mkdir(parents=True, exist_ok=True)
+    local_ckpt = index_dst / f"{link_name}.pt"
 
-  cmd = [
-    "rsync",
-    "-avz",
-    "--copy-links",
-    index_src,
-    str(index_dst) + "/",
-  ]
-  print(f"[pipeline] Syncing {index_src} ...", flush=True)
-  result = subprocess.run(cmd)
-  if result.returncode != 0:
-    print(f"[pipeline] ERROR: rsync failed (exit {result.returncode}).", flush=True)
-    sys.exit(result.returncode)
+    # --- attempt 1: post-training index symlink ---
+    index_src = f"{remote}/checkpoints/{link_name}.pt"
+    print(f"[pipeline] Syncing {index_src} ...", flush=True)
+    result = subprocess.run(
+        ["rsync", "-avz", "--copy-links", index_src, str(index_dst) + "/"],
+        capture_output=True,
+    )
+    if result.returncode == 0:
+        print(result.stdout.decode(), end="", flush=True)
+        return
+
+    # --- attempt 2: mid-run fallback via SSH find ---
+    stage_def = next((s for s in STAGES if s["id"] == stage), None)
+    if stage_def is None:
+        print(f"[pipeline] ERROR: unknown stage {stage}", flush=True)
+        sys.exit(1)
+
+    run_name = f"{stage_def['name']}_p{phase}"
+
+    if ":" not in remote:
+        print(f"[pipeline] ERROR: --sync-from must be user@host:path, got {remote!r}", flush=True)
+        sys.exit(1)
+    host, remote_path = remote.split(":", 1)
+    ckpt_dir = f"{remote_path}/{run_name}/checkpoints"
+
+    print(
+        f"[pipeline] Index symlink not found (training still running?); "
+        f"looking for latest checkpoint in {host}:{ckpt_dir} ...",
+        flush=True,
+    )
+    find_result = subprocess.run(
+        ["ssh", host, f"ls -t {ckpt_dir}/*.pt 2>/dev/null | head -1"],
+        capture_output=True, text=True,
+    )
+    remote_ckpt = find_result.stdout.strip()
+    if find_result.returncode != 0 or not remote_ckpt:
+        print(f"[pipeline] ERROR: no checkpoints found in {host}:{ckpt_dir}", flush=True)
+        sys.exit(1)
+
+    print(f"[pipeline] Syncing mid-run checkpoint {host}:{remote_ckpt} -> {local_ckpt} ...", flush=True)
+    result = subprocess.run(["rsync", "-avz", "--copy-links", f"{host}:{remote_ckpt}", str(local_ckpt)])
+    if result.returncode != 0:
+        print(f"[pipeline] ERROR: rsync failed (exit {result.returncode}).", flush=True)
+        sys.exit(result.returncode)
 
 
 def _play(args: argparse.Namespace, extra_args: list[str], log_dir: Path) -> None:

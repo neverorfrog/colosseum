@@ -81,12 +81,12 @@ class DribblingRmaTermCfg(RmaTermCfg):
 
   # Training loss weights.
   lambda_ball_pos: float = 1.0
-  lambda_ball_vel: float = 0.5
+  lambda_ball_vel: float = 3.0
   lambda_obstacle_pos: float = 1.0
-  lambda_obstacle_vel: float = 0.5
+  lambda_obstacle_vel: float = 2.0
 
   # TBPTT / warmup.
-  tbptt_chunk_len: int = 16
+  tbptt_chunk_len: int = 32
   warmup_steps: int = 4
 
   # Phase 1 latent noise: simulates visual encoder imprecision so the actor
