@@ -64,7 +64,7 @@ commands: Dict[str, CommandTermCfg] = {
     lateral_offset_range=(-0.8, 0.8),
     min_speed=0.0,
     max_speed=0.0,
-    replay_fraction=0.5,
+    replay_fraction=0.1,
   ),
 }
 
@@ -94,17 +94,17 @@ curriculum = {
       ],
     },
   ),
-  # "push_ball": CurriculumTermCfg(
-  #   func=push_ball_curriculum,
-  #   params={
-  #     "event_name": "push_ball",
-  #     "stages": [
-  #       {"step": 0, "max_speed": 0.3},
-  #       {"step": 48_000, "max_speed": 0.6},
-  #       {"step": 112_000, "max_speed": 1.0},
-  #     ],
-  #   },
-  # ),
+  "push_ball": CurriculumTermCfg(
+    func=push_ball_curriculum,
+    params={
+      "event_name": "push_ball",
+      "stages": [
+        {"step": 0, "max_speed": 0.3},
+        {"step": 48_000, "max_speed": 0.6},
+        {"step": 112_000, "max_speed": 1.0},
+      ],
+    },
+  ),
   "obstacle": CurriculumTermCfg(
     func=obstacle_curriculum,
     params={
@@ -140,7 +140,7 @@ curriculum = {
           "step": 19_500,
           "num_active": 1,
           "behavior": "static_blocker",
-          "lateral_offset_range": (-1.0, 1.0),
+          "lateral_offset_range": (-0.5, 0.5),
           "forward_fraction_range": (0.35, 0.75),
           "max_speed": 0.0,
         },
@@ -148,7 +148,7 @@ curriculum = {
           "step": 68_400,
           "num_active": 1,
           "behavior": "lateral_blocker",
-          "lateral_offset_range": (-1.0, 1.0),
+          "lateral_offset_range": (-0.5, 0.5),
           "forward_fraction_range": (0.35, 0.75),
           "min_speed": 0.1,
           "max_speed": 0.4,
@@ -158,7 +158,7 @@ curriculum = {
           "step": 97_700,
           "num_active": 1,
           "behavior": "ball_attacker",
-          "lateral_offset_range": (-2.0, 2.0),
+          "lateral_offset_range": (-1.0, 1.0),
           "forward_fraction_range": (0.35, 0.75),
           "min_speed": 0.1,
           "max_speed": 0.4,
@@ -170,7 +170,7 @@ curriculum = {
           "behavior": "mixed_attackers",
           # Distractors still use distance_range for their random-angle spawn.
           "distance_range": (2.0, 3.0),
-          "lateral_offset_range": (-2.0, 2.0),
+          "lateral_offset_range": (-1.0, 1.0),
           "forward_fraction_range": (0.35, 0.75),
           "min_speed": 0.1,
           "max_speed": 0.4,
@@ -195,8 +195,8 @@ terminations = {
   #   func=ball_captured,
   #   params={"command_name": "adversary", "capture_radius": 0.25},
   # ),
-  # "ball_lost": TerminationTermCfg(
-  #   func=ball_lost,
-  #   params={"max_robot_ball_distance": 2.0},
-  # ),
+  "ball_lost": TerminationTermCfg(
+    func=ball_lost,
+    params={"max_robot_ball_distance": 3.0},
+  ),
 }
