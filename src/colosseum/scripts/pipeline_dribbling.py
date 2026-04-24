@@ -225,6 +225,15 @@ def _play(args: argparse.Namespace, extra_args: list[str], log_dir: Path) -> Non
 
 def main() -> None:
     args, extra_args = parse_args()
+
+    # --cuda may land in extra_args if placed after the subcommand name;
+    # extract it so we don't emit duplicate --cuda flags in child commands.
+    if "--cuda" in extra_args:
+        idx = extra_args.index("--cuda")
+        if idx + 1 < len(extra_args):
+            args.cuda = extra_args[idx + 1]
+            extra_args = extra_args[:idx] + extra_args[idx + 2:]
+
     log_dir = Path(args.log_dir)
     log_dir.mkdir(parents=True, exist_ok=True)
 
