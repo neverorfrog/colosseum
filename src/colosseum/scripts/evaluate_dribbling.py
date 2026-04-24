@@ -1471,11 +1471,27 @@ def _build_report(
     "",
   ]
   if main_stats:
-    lines.extend(["## Main Task Metrics", "", _main_task_table(main_stats), ""])
+    lines.extend([
+      "## Main Task Metrics",
+      "",
+      _main_task_table(main_stats),
+      "",
+      "### Perception And Depth Encoder Metrics",
+      "",
+      _perception_table(main_stats),
+      "",
+    ])
   if velocity_stats:
-    lines.extend(["## Ball Velocity Tracking Diagnostic", "", _velocity_table(velocity_stats), ""])
-  if main_stats:
-    lines.extend(["## Perception And Depth Encoder Metrics", "", _perception_table(main_stats), ""])
+    lines.extend([
+      "## Ball Velocity Tracking Diagnostic",
+      "",
+      _velocity_table(velocity_stats),
+      "",
+      "### Perception And Depth Encoder Metrics",
+      "",
+      _perception_table(velocity_stats),
+      "",
+    ])
   if plot_paths:
     lines.extend(["## Plots", ""])
     for path in plot_paths:
