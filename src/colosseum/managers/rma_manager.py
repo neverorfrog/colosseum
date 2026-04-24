@@ -54,6 +54,11 @@ class RmaTermCfg(abc.ABC):
   latent_dim: int = 8
   """Shared output dimension for both encoders."""
 
+  latent_noise_std: float = 0.0
+  """Gaussian noise σ added to the privileged encoder output during Phase 1 training.
+  Simulates visual encoder imprecision so the actor stays robust to Phase 2 estimation
+  error. Disabled (0.0) during eval and Phase 2."""
+
   @abc.abstractmethod
   def build(self, env: ManagerBasedRlEnv) -> RmaTerm:
     raise NotImplementedError
@@ -257,6 +262,7 @@ class RmaManager(ManagerBase):
   def __init__(self, cfg: dict[str, RmaTermCfg], env: ManagerBasedRlEnv) -> None:
     self.cfg = cfg
     self._terms: dict[str, RmaTerm] = {}
+    self._training: bool = True
     super().__init__(env)
 
   # ------------------------------------------------------------------
@@ -319,10 +325,13 @@ class RmaManager(ManagerBase):
       z: (N, total_latent_dim) concatenated latents in declaration order.
     """
     encode_fn = "encode_privileged" if phase == 1 else "encode_adaptation"
-    return torch.cat(
-      [getattr(term, encode_fn)(obs_dict) for term in self._terms.values()],
-      dim=-1,
-    )
+    latents: list[torch.Tensor] = []
+    for term in self._terms.values():
+      z = getattr(term, encode_fn)(obs_dict)
+      if phase == 1 and self._training and term.cfg.latent_noise_std > 0.0:
+        z = z + torch.randn_like(z) * term.cfg.latent_noise_std
+      latents.append(z)
+    return torch.cat(latents, dim=-1)
 
   def get_adaptation_obs(self) -> dict[str, torch.Tensor]:
     """Snapshot current adaptation obs from all terms.
@@ -564,6 +573,7 @@ class RmaManager(ManagerBase):
     return {}
 
   def train(self, mode: bool = True) -> None:
+    self._training = mode
     for term in self._terms.values():
       term.privileged_encoder.train(mode)
       if term.adaptation_encoder is not None:

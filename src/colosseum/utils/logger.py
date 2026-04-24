@@ -205,7 +205,7 @@ def setup_wandb(
     run = wandb.init(**wandb_kwargs)
 
     if run is not None:
-        run_dir = Path(run.dir).parent  # run.dir points to files/, we want parent
+        run_dir = base_log_dir / run_name
         logger.info(f"W&B initialized: {run.url}")
         logger.info(f"Run directory: {run_dir}")
         return run, run_dir

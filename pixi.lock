@@ -1240,7 +1240,11 @@ packages:
 - pypi: ./
   name: colosseum
   version: 0.1.0
+<<<<<<< HEAD
   sha256: 670d8094a375425d97c7a8da9608db3826c423263004d07439d0a2c4449bcd32
+=======
+  sha256: 12ac0b8375b4be47b8c22437b95d8c33cac811f46dc6706b90d435157dfaf870
+>>>>>>> origin/obstacle-fov
   requires_dist:
   - ty>=0.0.1a34,<0.0.1a35
   - pydantic>=2.12.5,<3

@@ -134,6 +134,7 @@ def booster_t1_dribbling_env_cfg(
   show_depth: bool = False,
   num_obstacles: int = NUM_OBSTACLES,
   obstacle_stage_index: int = -1,
+  ball_spawn_x_range: tuple[float, float] | None = None,
 ) -> ConstraintRmaEnvCfg:
   cfg = ConstraintRmaEnvCfg(
     scene=scene_cfg(
@@ -179,6 +180,13 @@ def booster_t1_dribbling_env_cfg(
         cfg.scene.terrain.terrain_generator.num_rows = 5
         cfg.scene.terrain.terrain_generator.border_width = 10.0
 
+  if ball_spawn_x_range is not None:
+    cfg.events = dict(cfg.events)
+    reset_ball = deepcopy(cfg.events["reset_ball"])
+    reset_ball.params["pose_range"] = dict(reset_ball.params["pose_range"])
+    reset_ball.params["pose_range"]["x"] = ball_spawn_x_range
+    cfg.events["reset_ball"] = reset_ball
+
   if obstacle_stage_index >= 0:
     cfg.commands = dict(cfg.commands)
     cfg.commands["adversary"] = _build_obstacle_command_from_stage(
@@ -202,6 +210,7 @@ class T1DribblingTask(TaskConfig):
   use_depth_camera: bool = False
   show_depth: bool = False
   obstacle_stage_index: int = -1
+  ball_spawn_x_range: tuple[float, float] | None = None
   use_dagger: bool = False
   teacher_checkpoint: str = ""
   """Show a cv2 filmstrip of the encoder's depth buffer during play (--show-depth)."""
@@ -211,6 +220,7 @@ class T1DribblingTask(TaskConfig):
     cfg = booster_t1_dribbling_env_cfg(
       use_depth_camera=self.use_depth_camera,
       obstacle_stage_index=self.obstacle_stage_index,
+      ball_spawn_x_range=self.ball_spawn_x_range,
     )
     return replace(cfg, scene=replace(cfg.scene, num_envs=self.env.scene.num_envs))
 

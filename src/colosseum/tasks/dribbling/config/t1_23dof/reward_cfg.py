@@ -12,6 +12,7 @@ from mjlab.tasks.velocity.mdp import (
   feet_swing_height,
   self_collision_cost,
   soft_landing,
+  feet_slip,
 )
 
 from colosseum.mdp.rewards import flat_orientation
@@ -114,7 +115,7 @@ rewards = {
   # ),
   "ball_target_progress": RewardTermCfg(  # Reward moving the ball along the current ball-to-target direction.
     func=ball_target_progress,
-    weight=1.0,
+    weight=2.0,
     params={
       "command_name": "ball_vel",  # Ball command term providing the persistent world-frame target.
       "obstacle_command_name": "adversary",  # Obstacle command term used to detect blocked target neighborhoods.
@@ -129,12 +130,12 @@ rewards = {
   ),
   "ball_target_reached": RewardTermCfg(  # Discrete bonus fired exactly once when the ball crosses the target threshold.
     func=ball_target_reached,
-    weight=10.0,
+    weight=50.0,
     params={"command_name": "ball_vel"},
   ),
   "robot_obstacle_collision": RewardTermCfg(  # Local robot-obstacle safety term.
     func=robot_obstacle_collision,
-    weight=-2.0,
+    weight=-10.0,
     params={
       "command_name": "adversary",  # Obstacle command term providing obstacle positions/velocities.
       "collision_near_distance": 0.5,  # Maximum collision penalty at or below this distance.
@@ -167,6 +168,16 @@ rewards = {
   # ------------------------------------------------------------------ #
   # Locomotion regularization                                            #
   # ------------------------------------------------------------------ #
+  "foot_slip": RewardTermCfg(
+    func=feet_slip,
+    weight=-0.1,
+    params={
+      "sensor_name": "feet_ground_contact",
+      "command_name": "ball_vel",
+      "command_threshold": 0.05,
+      "asset_cfg": SceneEntityCfg("robot", site_names=(FOOT_SITE_NAMES)),
+    },
+  ),
   "upright": RewardTermCfg(
     func=flat_orientation,
     weight=1.0,

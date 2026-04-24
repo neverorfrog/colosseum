@@ -30,6 +30,35 @@ if TYPE_CHECKING:
 
 from colosseum.tasks.dribbling.mdp.obstacle_commands import ObstacleCommand
 
+
+def _camera_fov_mask(
+  env: ManagerBasedRlEnv,
+  pos_w: torch.Tensor,
+  camera_name: str,
+  camera_fovy: float,
+  camera_aspect_ratio: float,
+  depth_clip: float,
+) -> torch.Tensor:
+  """Return (N,) bool: True where pos_w (N, 2) world-XY falls inside the camera frustum."""
+  N = env.num_envs
+  device = env.device
+  try:
+    cam_id = env.sim.mj_model.camera(camera_name).id
+  except Exception:
+    return torch.ones(N, dtype=torch.bool, device=device)
+  cam_pos = env.sim.data.cam_xpos[:, cam_id, :]
+  cam_mat = env.sim.data.cam_xmat[:, cam_id, :].reshape(-1, 3, 3)
+  pos_3d = torch.cat([pos_w, torch.zeros(N, 1, device=device)], dim=-1)
+  p_rel = pos_3d - cam_pos
+  p_cam = torch.bmm(cam_mat.transpose(1, 2), p_rel.unsqueeze(-1)).squeeze(-1)
+  in_front = p_cam[:, 2] < 0
+  depth = (-p_cam[:, 2]).clamp_min(1e-6)
+  tan_half_v = math.tan(math.radians(camera_fovy / 2))
+  tan_half_h = tan_half_v * camera_aspect_ratio
+  nx = p_cam[:, 0] / (depth * tan_half_h)
+  ny = p_cam[:, 1] / (depth * tan_half_v)
+  return in_front & (nx.abs() <= 1.0) & (ny.abs() <= 1.0) & (depth < depth_clip)
+
 # ------------------------------------------------------------------
 # Body-frame helpers (shared by tracking, angle, and yaw rewards)
 # ------------------------------------------------------------------
@@ -93,11 +122,16 @@ def _obstacle_relax_gate(
   direction_tube_radius: float = 0.5,
   ball_engagement_near_distance: float = 0.3,
   ball_engagement_far_distance: float = 0.75,
+  camera_name: str = "robot/d455_color",
+  camera_fovy: float = 60.0,
+  camera_aspect_ratio: float = 4.0 / 3.0,
+  depth_clip: float = 6.0,
 ) -> torch.Tensor:
   """Return a [0, 1] gate indicating when nominal tracking should be relaxed.
 
   The gate is active when the nearest obstacle lies on the current ball-target
-  corridor and the robot is still engaged with the ball.
+  corridor, the robot is still engaged with the ball, AND the obstacle is within
+  the camera FOV (so the policy actually has information about it).
   """
   try:
     term: ObstacleCommand = env.command_manager.get_term(command_name)
@@ -108,6 +142,8 @@ def _obstacle_relax_gate(
     return torch.zeros(env.num_envs, device=env.device)
 
   _, nearest_obs_xy, _ = _get_closest_robot_obstacle(env, command_name)
+  in_fov = _camera_fov_mask(env, nearest_obs_xy, camera_name, camera_fovy, camera_aspect_ratio, depth_clip)
+
   ball_xy = env.scene["ball"].data.root_link_pos_w[:, :2]
   cmd_term = env.command_manager.get_term(ball_vel_command_name)
   target_xy = cmd_term.target_position[:, :2]
@@ -127,6 +163,7 @@ def _obstacle_relax_gate(
     & (obs_forward < target_dist)
     & (obs_forward <= direction_detection_range)
     & (obs_lateral <= direction_tube_radius)
+    & in_fov
   )
 
   _, engagement = _ball_engagement_gate(
@@ -146,8 +183,12 @@ def ball_vel_tracking_relaxed(
   ball_engagement_far_distance: float = 0.75,
   relax_min_scale: float = 0.2,
   min_speed: float = 0.05,
+  camera_name: str = "robot/d455_color",
+  camera_fovy: float = 60.0,
+  camera_aspect_ratio: float = 4.0 / 3.0,
+  depth_clip: float = 6.0,
 ) -> torch.Tensor:
-  """Relax vector tracking only near a relevant blocking obstacle."""
+  """Relax vector tracking only near a relevant in-FOV blocking obstacle."""
   base_reward = ball_vel_tracking_body(env, command_name, sharpness, min_speed)
   relax_gate = _obstacle_relax_gate(
     env,
@@ -157,6 +198,10 @@ def ball_vel_tracking_relaxed(
     direction_tube_radius=direction_tube_radius,
     ball_engagement_near_distance=ball_engagement_near_distance,
     ball_engagement_far_distance=ball_engagement_far_distance,
+    camera_name=camera_name,
+    camera_fovy=camera_fovy,
+    camera_aspect_ratio=camera_aspect_ratio,
+    depth_clip=depth_clip,
   )
   scale = 1.0 - (1.0 - relax_min_scale) * relax_gate
   return scale * base_reward
@@ -173,8 +218,12 @@ def ball_vel_norm_relaxed(
   ball_engagement_far_distance: float = 0.75,
   relax_min_scale: float = 0.5,
   min_speed: float = 0.05,
+  camera_name: str = "robot/d455_color",
+  camera_fovy: float = 60.0,
+  camera_aspect_ratio: float = 4.0 / 3.0,
+  depth_clip: float = 6.0,
 ) -> torch.Tensor:
-  """Relax speed tracking only near a relevant blocking obstacle."""
+  """Relax speed tracking only near a relevant in-FOV blocking obstacle."""
   base_reward = ball_vel_norm(env, command_name, sharpness, min_speed)
   relax_gate = _obstacle_relax_gate(
     env,
@@ -184,6 +233,10 @@ def ball_vel_norm_relaxed(
     direction_tube_radius=direction_tube_radius,
     ball_engagement_near_distance=ball_engagement_near_distance,
     ball_engagement_far_distance=ball_engagement_far_distance,
+    camera_name=camera_name,
+    camera_fovy=camera_fovy,
+    camera_aspect_ratio=camera_aspect_ratio,
+    depth_clip=depth_clip,
   )
   scale = 1.0 - (1.0 - relax_min_scale) * relax_gate
   return scale * base_reward
@@ -199,8 +252,12 @@ def ball_vel_angle_relaxed(
   ball_engagement_far_distance: float = 0.75,
   relax_min_scale: float = 0.2,
   min_speed: float = 0.05,
+  camera_name: str = "robot/d455_color",
+  camera_fovy: float = 60.0,
+  camera_aspect_ratio: float = 4.0 / 3.0,
+  depth_clip: float = 6.0,
 ) -> torch.Tensor:
-  """Relax direction tracking only near a relevant blocking obstacle."""
+  """Relax direction tracking only near a relevant in-FOV blocking obstacle."""
   base_reward = ball_vel_angle_body(env, command_name, min_speed)
   relax_gate = _obstacle_relax_gate(
     env,
@@ -210,6 +267,10 @@ def ball_vel_angle_relaxed(
     direction_tube_radius=direction_tube_radius,
     ball_engagement_near_distance=ball_engagement_near_distance,
     ball_engagement_far_distance=ball_engagement_far_distance,
+    camera_name=camera_name,
+    camera_fovy=camera_fovy,
+    camera_aspect_ratio=camera_aspect_ratio,
+    depth_clip=depth_clip,
   )
   scale = 1.0 - (1.0 - relax_min_scale) * relax_gate
   return scale * base_reward
@@ -640,6 +701,10 @@ def ball_target_progress(
   speed_ref: float = 1.0,
   distance_scale_ref: float = 2.0,
   distance_scale_max: float = 1.5,
+  camera_name: str = "robot/d455_color",
+  camera_fovy: float = 60.0,
+  camera_aspect_ratio: float = 4.0 / 3.0,
+  depth_clip: float = 6.0,
 ) -> torch.Tensor:
   """Reward ball velocity toward the persistent target, gated off near the target.
 
@@ -680,14 +745,21 @@ def ball_target_progress(
     term: ObstacleCommand = env.command_manager.get_term(obstacle_command_name)
     if term.cfg.num_active > 0:
       obs_xy = term.obstacle_positions_w[:, : term.cfg.num_active]
-      target_obs_dist = (obs_xy - target_xy.unsqueeze(1)).norm(dim=-1).min(dim=-1).values
+      target_obs_dists = (obs_xy - target_xy.unsqueeze(1)).norm(dim=-1)  # (N, Ka)
+      min_idx = target_obs_dists.argmin(dim=-1)
+      nearest_to_target_xy = obs_xy[torch.arange(env.num_envs, device=env.device), min_idx]
+      target_obs_dist = target_obs_dists.min(dim=-1).values
+      in_fov = _camera_fov_mask(env, nearest_to_target_xy, camera_name, camera_fovy, camera_aspect_ratio, depth_clip)
       obstacle_gate_span = max(
         target_obstacle_far_distance - target_obstacle_near_distance,
         1e-6,
       )
-      obstacle_gate = (
+      raw_gate = (
         (target_obs_dist - target_obstacle_near_distance) / obstacle_gate_span
       ).clamp(min=0.0, max=1.0)
+      # When the blocking obstacle is out of FOV the policy can't see it,
+      # so don't restrict progress (gate = 1.0).
+      obstacle_gate = torch.where(in_fov, raw_gate, torch.ones_like(raw_gate))
   except Exception:
     pass
 
@@ -814,6 +886,10 @@ def obstacle_direction(
   min_ball_speed: float = 0.1,
   ball_engagement_near_distance: float = 0.3,
   ball_engagement_far_distance: float = 0.75,
+  camera_name: str = "robot/d455_color",
+  camera_fovy: float = 60.0,
+  camera_aspect_ratio: float = 4.0 / 3.0,
+  depth_clip: float = 6.0,
 ) -> torch.Tensor:
   """Penalty for the ball actually moving toward an obstacle on the ball-target segment.
 
@@ -829,6 +905,8 @@ def obstacle_direction(
     return torch.zeros(env.num_envs, device=env.device)
 
   _, nearest_obs_xy, _ = _get_closest_robot_obstacle(env, command_name)
+  in_fov = _camera_fov_mask(env, nearest_obs_xy, camera_name, camera_fovy, camera_aspect_ratio, depth_clip)
+
   ball_xy = env.scene["ball"].data.root_link_pos_w[:, :2]
   ball_vel_xy = env.scene["ball"].data.root_link_lin_vel_w[:, :2]
   cmd_term = env.command_manager.get_term(ball_vel_command_name)
@@ -851,6 +929,7 @@ def obstacle_direction(
     & (obs_forward <= direction_detection_range)
     & (obs_lateral <= direction_tube_radius)
     & (ball_speed > min_ball_speed)
+    & in_fov
   )
 
   ball_vel_dir = ball_vel_xy / ball_speed.unsqueeze(-1).clamp(min=1e-6)

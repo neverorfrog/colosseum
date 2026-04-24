@@ -112,12 +112,6 @@ def main() -> None:
         TrainConfig,
         config=(tyro.conf.CascadeSubcommandArgs,),
     )
-    if hasattr(config.task, "obstacle_stage_index"):
-        config = replace(
-            config,
-            task=replace(config.task, obstacle_stage_index=config.obstacle_stage_index),
-        )
-
     cuda_devices = _parse_cuda_devices(config.cuda)
 
     # For non-distributed launches, support both:
@@ -176,9 +170,13 @@ def main() -> None:
             "Implement the algo_cfg property in the task's __init__.py."
         )
 
+        if config.learning_steps is not None:
+            from dataclasses import replace as dc_replace
+            algo_cfg = dc_replace(algo_cfg, learning_steps=config.learning_steps)
+
         env_cfg = config.task.train_env_cfg
 
-        run_name = generate_run_name(
+        run_name = config.logger.name or generate_run_name(
             task_name=config.task.name,
             algo_name=algo_cfg.name,
             seed=config.seed,
@@ -278,14 +276,23 @@ def main() -> None:
             local_rank=local_rank,
             world_size=world_size,
             phase=1,
-            obstacle_stage_index=config.obstacle_stage_index,
+            obstacle_stage_index=getattr(config.task, "obstacle_stage_index", -1),
         )
 
         if is_main_process and run_dir is not None and config.logger.save_interval > 0:
             ckpt_dir = run_dir / "checkpoints"
             algo.configure_checkpointing(ckpt_dir, config.logger.save_interval)
 
-        if config.checkpoint is not None:
+        if config.warm_start is not None:
+            ws_path = Path(config.warm_start)
+            if not ws_path.exists():
+                logger.error(f"Warm-start checkpoint does not exist: {ws_path}")
+                sys.exit(1)
+            logger.info(f"Warm-starting from: {ws_path}")
+            algo.load(ws_path)
+            algo.global_step = 0
+            logger.info("Weights loaded; global_step reset to 0")
+        elif config.checkpoint is not None:
             checkpoint_path = Path(config.checkpoint)
             if not checkpoint_path.exists():
                 logger.error(f"Checkpoint file does not exist: {checkpoint_path}")
