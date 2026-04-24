@@ -241,6 +241,11 @@ def parse_args() -> tuple[argparse.Namespace, list[str]]:
   )
   train_p.add_argument("--skip-phase2", action="store_true")
   train_p.add_argument(
+    "--force",
+    action="store_true",
+    help="Re-run phases even if their checkpoints already exist.",
+  )
+  train_p.add_argument(
     "--use-dagger",
     action="store_true",
     help="Each stage imitates the previous stage's P1 checkpoint as teacher.",
@@ -453,7 +458,7 @@ def main() -> None:
     # ------------------------------------------------------------------
     # Phase 1
     # ------------------------------------------------------------------
-    if p1_ckpt.exists():
+    if p1_ckpt.exists() and not args.force:
       print(f"[pipeline] Stage {sid} P1 already done, skipping: {p1_ckpt}")
     else:
       warm_start_path: str | None = None
@@ -554,7 +559,7 @@ def main() -> None:
     # Phase 2
     # ------------------------------------------------------------------
     p2_ckpt = _ckpt(log_dir, p2_run)
-    if p2_ckpt.exists():
+    if p2_ckpt.exists() and not args.force:
       print(f"[pipeline] Stage {sid} P2 already done, skipping: {p2_ckpt}")
     else:
       p2_envs = args.p2_num_envs if args.p2_num_envs is not None else args.num_envs
