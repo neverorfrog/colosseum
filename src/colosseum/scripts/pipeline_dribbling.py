@@ -256,6 +256,34 @@ def parse_args() -> tuple[argparse.Namespace, list[str]]:
       "Default: each stage uses its own warm_start_from definition."
     ),
   )
+  train_p.add_argument(
+    "--warm-start-checkpoint",
+    default=None,
+    metavar="PATH",
+    help=(
+      "Explicit checkpoint path to warm-start from. "
+      "Overrides --warm-start-stage and the stage's default warm_start_from."
+    ),
+  )
+  train_p.add_argument(
+    "--teacher-stage",
+    type=int,
+    default=None,
+    metavar="N",
+    help=(
+      "Stage id whose P1 checkpoint to use as DAgger teacher. "
+      "Implies --use-dagger. (-1 = no teacher / plain PPO)."
+    ),
+  )
+  train_p.add_argument(
+    "--teacher-checkpoint",
+    default=None,
+    metavar="PATH",
+    help=(
+      "Explicit checkpoint path to use as DAgger teacher. "
+      "Implies --use-dagger. Overrides --teacher-stage."
+    ),
+  )
 
   # --- play subcommand ---
   play_p = sub.add_parser(
@@ -429,35 +457,73 @@ def main() -> None:
       print(f"[pipeline] Stage {sid} P1 already done, skipping: {p1_ckpt}")
     else:
       warm_start_path: str | None = None
+      ws_ckpt_override = getattr(args, "warm_start_checkpoint", None)
       ws_stage_override = getattr(args, "warm_start_stage", None)
-      if ws_stage_override == -1:
-        # Explicit "train from scratch" — ignore the stage's default.
-        warm_start_source = None
-      elif ws_stage_override is not None:
-        ws_def = next((s for s in STAGES if s["id"] == ws_stage_override), None)
-        if ws_def is None:
-          print(f"[pipeline] ERROR: --warm-start-stage {ws_stage_override} is not a valid stage id.")
+
+      if ws_ckpt_override is not None:
+        # Explicit path — highest priority.
+        ws_path = Path(ws_ckpt_override)
+        if not ws_path.exists():
+          print(f"[pipeline] ERROR: --warm-start-checkpoint not found: {ws_path}")
           sys.exit(1)
-        warm_start_source = ws_def["name"] + "_p1"
+        warm_start_path = str(ws_path)
+      elif ws_stage_override == -1:
+        # Explicit "train from scratch".
+        warm_start_path = None
       else:
-        warm_start_source = stage["warm_start_from"]
-
-      if warm_start_source:
-        ws_ckpt = _ckpt(log_dir, warm_start_source)
-        if not ws_ckpt.exists():
-          # Try the checkpoint index as fallback.
-          src_sid = ws_stage_override if ws_stage_override is not None else sid - 1
-          ws_link = log_dir / "checkpoints" / f"s{src_sid}_p1.pt"
-          if ws_link.exists():
-            ws_ckpt = ws_link.resolve()
-          else:
-            print(f"[pipeline] ERROR: warm-start checkpoint missing: {ws_ckpt}")
+        # Resolve from stage id override or the stage's built-in default.
+        if ws_stage_override is not None:
+          ws_def = next((s for s in STAGES if s["id"] == ws_stage_override), None)
+          if ws_def is None:
+            print(f"[pipeline] ERROR: --warm-start-stage {ws_stage_override} is not a valid stage id.")
             sys.exit(1)
-        warm_start_path = str(ws_ckpt)
+          warm_start_source = ws_def["name"] + "_p1"
+          fallback_link = log_dir / "checkpoints" / f"s{ws_stage_override}_p1.pt"
+        else:
+          warm_start_source = stage["warm_start_from"]
+          fallback_link = log_dir / "checkpoints" / f"s{sid - 1}_p1.pt"
 
-      # In DAgger mode the previous stage's checkpoint is also the teacher.
-      # Stage 0 always trains from scratch with plain PPO (no teacher yet).
-      teacher_path = warm_start_path if (args.use_dagger and warm_start_path) else None
+        if warm_start_source:
+          ws_ckpt = _ckpt(log_dir, warm_start_source)
+          if not ws_ckpt.exists():
+            if fallback_link.exists():
+              ws_ckpt = fallback_link.resolve()
+            else:
+              print(f"[pipeline] ERROR: warm-start checkpoint missing: {ws_ckpt}")
+              sys.exit(1)
+          warm_start_path = str(ws_ckpt)
+
+      # Resolve teacher checkpoint for DAgger.
+      tc_ckpt_override = getattr(args, "teacher_checkpoint", None)
+      tc_stage_override = getattr(args, "teacher_stage", None)
+
+      if tc_ckpt_override is not None:
+        tc_path = Path(tc_ckpt_override)
+        if not tc_path.exists():
+          print(f"[pipeline] ERROR: --teacher-checkpoint not found: {tc_path}")
+          sys.exit(1)
+        teacher_path = str(tc_path)
+      elif tc_stage_override == -1:
+        teacher_path = None
+      elif tc_stage_override is not None:
+        tc_def = next((s for s in STAGES if s["id"] == tc_stage_override), None)
+        if tc_def is None:
+          print(f"[pipeline] ERROR: --teacher-stage {tc_stage_override} is not a valid stage id.")
+          sys.exit(1)
+        tc_ckpt = _ckpt(log_dir, tc_def["name"] + "_p1")
+        if not tc_ckpt.exists():
+          tc_link = log_dir / "checkpoints" / f"s{tc_stage_override}_p1.pt"
+          if tc_link.exists():
+            tc_ckpt = tc_link.resolve()
+          else:
+            print(f"[pipeline] ERROR: teacher checkpoint missing: {tc_ckpt}")
+            sys.exit(1)
+        teacher_path = str(tc_ckpt)
+      elif args.use_dagger:
+        # Default DAgger behaviour: same source as warm-start.
+        teacher_path = warm_start_path
+      else:
+        teacher_path = None
 
       _run(
         _pixi_train(
