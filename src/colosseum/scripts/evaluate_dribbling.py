@@ -240,6 +240,8 @@ class ConditionStats:
     self.ball_losts = 0
     self.robot_collisions = 0
     self.ball_collisions = 0
+    self.robot_contact_counts = ScalarAccumulator()
+    self.ball_contact_counts = ScalarAccumulator()
     self.min_ball_clearance = ScalarAccumulator()
 
     self.velocity_all = ScalarAccumulator()
@@ -743,6 +745,19 @@ def _min_obstacle_distances(env: ManagerBasedRlEnv) -> tuple[torch.Tensor, torch
   return robot_dist, ball_dist
 
 
+def _per_obstacle_distances(env: ManagerBasedRlEnv) -> tuple[torch.Tensor, torch.Tensor] | None:
+  """Return (robot_dist, ball_dist) of shape (N, num_active). None if no obstacles."""
+  term = env.command_manager.get_term("adversary")
+  if term.cfg.num_active == 0:
+    return None
+  obs_xy = term.obstacle_positions_w[:, : term.cfg.num_active]
+  robot_xy = env.scene["robot"].data.root_link_pos_w[:, :2]
+  ball_xy = env.scene["ball"].data.root_link_pos_w[:, :2]
+  robot_dist = (obs_xy - robot_xy.unsqueeze(1)).norm(dim=-1)
+  ball_dist = (obs_xy - ball_xy.unsqueeze(1)).norm(dim=-1)
+  return robot_dist, ball_dist
+
+
 def _target_distance(env: ManagerBasedRlEnv) -> torch.Tensor:
   ball_xy = env.scene["ball"].data.root_link_pos_w[:, :2]
   target_xy = env.command_manager.get_term("ball_vel").target_position[:, :2]
@@ -931,6 +946,15 @@ def _run_condition(
   ball_collision_seen = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
   fall_seen = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
   ball_lost_seen = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
+  num_obstacle_slots = env.command_manager.get_term("adversary").cfg.num_obstacles
+  robot_contact_prev = torch.zeros(
+    (env.num_envs, num_obstacle_slots), dtype=torch.bool, device=env.device
+  )
+  ball_contact_prev = torch.zeros(
+    (env.num_envs, num_obstacle_slots), dtype=torch.bool, device=env.device
+  )
+  robot_contact_count = torch.zeros(env.num_envs, device=env.device)
+  ball_contact_count = torch.zeros(env.num_envs, device=env.device)
   fov_steps = torch.zeros(env.num_envs, device=env.device)
   valid_steps = torch.zeros(env.num_envs, device=env.device)
   step_counts = torch.zeros(env.num_envs, device=env.device)
@@ -975,6 +999,21 @@ def _run_condition(
       min_ball_clearance = torch.minimum(min_ball_clearance, ball_dist)
       robot_collision_seen |= robot_dist <= config.robot_obstacle_collision_distance
       ball_collision_seen |= ball_dist <= config.ball_obstacle_collision_distance
+      # Count per-obstacle rising-edge contacts (outside threshold -> inside).
+      # A single prolonged proximity counts as one contact, and touching two
+      # different obstacles in the same trial counts as two.
+      per_obs = _per_obstacle_distances(env)
+      if per_obs is not None:
+        robot_per, ball_per = per_obs
+        num_active = robot_per.shape[1]
+        robot_now = robot_per <= config.robot_obstacle_collision_distance
+        ball_now = ball_per <= config.ball_obstacle_collision_distance
+        robot_rising = robot_now & ~robot_contact_prev[:, :num_active]
+        ball_rising = ball_now & ~ball_contact_prev[:, :num_active]
+        robot_contact_count += robot_rising.sum(dim=1).float() * active_mask.float()
+        ball_contact_count += ball_rising.sum(dim=1).float() * active_mask.float()
+        robot_contact_prev[:, :num_active] = robot_now
+        ball_contact_prev[:, :num_active] = ball_now
       fell_over = _fall_mask(env, config.fall_limit_deg)
       ball_lost = _ball_lost_mask(env, config.ball_lost_distance)
       fall_seen |= fell_over
@@ -1024,6 +1063,8 @@ def _run_condition(
           stats.robot_collisions += 1
         if bool(ball_collision_seen[idx].item()):
           stats.ball_collisions += 1
+        stats.robot_contact_counts.add(float(robot_contact_count[idx].item()))
+        stats.ball_contact_counts.add(float(ball_contact_count[idx].item()))
         if torch.isfinite(min_ball_clearance[idx]):
           stats.min_ball_clearance.add(float(min_ball_clearance[idx].item()))
         if step_counts[idx] > 0:
@@ -1049,6 +1090,10 @@ def _run_condition(
         min_ball_clearance[next_env_ids] = float("inf")
         robot_collision_seen[next_env_ids] = False
         ball_collision_seen[next_env_ids] = False
+        robot_contact_count[next_env_ids] = 0.0
+        ball_contact_count[next_env_ids] = 0.0
+        robot_contact_prev[next_env_ids] = False
+        ball_contact_prev[next_env_ids] = False
         fall_seen[next_env_ids] = False
         ball_lost_seen[next_env_ids] = False
         fov_steps[next_env_ids] = 0.0
@@ -1128,8 +1173,8 @@ def _main_task_table(stats: list[ConditionStats]) -> str:
     "Columns marked **[T]** end a trial; unmarked columns are informational safety metrics.",
     "A trial ends on target reach (success), timeout (failure), fall (failure), or ball-lost (failure).",
     "",
-    "| Environment | Episodes | Success rate **[T]** | Time to target **[T]** | Censored time **[T]** | Fall rate **[T]** | Ball-lost rate **[T]** | Robot collision | Ball collision | Min clearance |",
-    "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+    "| Environment | Episodes | Success rate **[T]** | Time to target **[T]** | Censored time **[T]** | Fall rate **[T]** | Ball-lost rate **[T]** | Robot collision | Robot contacts/trial | Ball collision | Ball contacts/trial | Min clearance |",
+    "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
   ]
   for s in stats:
     obstacle_free = s.condition.stage_index == 0 and not s.condition.static_three
@@ -1145,7 +1190,9 @@ def _main_task_table(stats: list[ConditionStats]) -> str:
           _fmt(s.fall_rate, percent=True),
           _fmt(s.ball_lost_rate, percent=True),
           "n/a" if obstacle_free else _fmt(s.robot_collision_rate, percent=True),
+          "n/a" if obstacle_free else _fmt(s.robot_contact_counts.mean()),
           "n/a" if obstacle_free else _fmt(s.ball_collision_rate, percent=True),
+          "n/a" if obstacle_free else _fmt(s.ball_contact_counts.mean()),
           "n/a" if obstacle_free else _fmt(s.min_ball_clearance.mean()),
         ]
       )
