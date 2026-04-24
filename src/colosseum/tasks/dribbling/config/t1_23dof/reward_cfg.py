@@ -173,7 +173,7 @@ rewards = {
     weight=-0.1,
     params={
       "sensor_name": "feet_ground_contact",
-      "command_name": "twist",
+      "command_name": "ball_vel",
       "command_threshold": 0.05,
       "asset_cfg": SceneEntityCfg("robot", site_names=(FOOT_SITE_NAMES)),
     },
