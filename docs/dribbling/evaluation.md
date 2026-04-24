@@ -26,7 +26,6 @@ pixi run -e train eval-dribbling \
     task:t1-dribbling \
     --checkpoint ./logs/<run>/checkpoints/latest.pt \
     --episodes-per-condition 1000 \
-    --velocity-episodes-per-condition 300 \
     --num-envs 128 \
     --seeds 0 1 2 \
     --output-dir logs/dribbling_eval
@@ -34,8 +33,7 @@ pixi run -e train eval-dribbling \
 
 The script prints the formatted results to the terminal and writes a Markdown
 report under the output directory. When plot generation is enabled, it also
-saves tracking-error and XY trajectory plots for the velocity diagnostic
-conditions.
+saves tracking-error and XY trajectory plots for every evaluation condition.
 
 Use `--num-envs` to choose how many parallel environments are used for each
 condition. Larger values speed up collection but require more GPU memory,
@@ -55,7 +53,6 @@ pixi run -e train eval-dribbling \
     task:t1-dribbling \
     --checkpoint ./checkpoints/dribbling_phase2_stage1_scratch.pt \
     --episodes-per-condition 1 \
-    --velocity-episodes-per-condition 1 \
     --num-envs 16 \
     --seeds 0 \
     --output-dir logs/dribbling_eval_smoke
@@ -68,7 +65,6 @@ pixi run -e train eval-dribbling \
     task:t1-dribbling \
     --checkpoint ./checkpoints/dribbling_phase2_stage1_scratch.pt \
     --episodes-per-condition 1000 \
-    --velocity-episodes-per-condition 300 \
     --num-envs 128 \
     --seeds 0 1 2 \
     --output-dir logs/dribbling_eval
@@ -81,34 +77,9 @@ pixi run -e train eval-dribbling \
     task:t1-dribbling \
     --checkpoint ./checkpoints/dribbling_phase2_stage1_scratch.pt \
     --episodes-per-condition 1000 \
-    --velocity-episodes-per-condition 300 \
     --num-envs 512 \
     --seeds 0 1 2 \
     --output-dir logs/dribbling_eval
-```
-
-Run only the main task metrics, skipping the velocity diagnostic:
-
-```bash
-pixi run -e train eval-dribbling \
-    task:t1-dribbling \
-    --checkpoint ./checkpoints/dribbling_phase2_stage1_scratch.pt \
-    --no-run-velocity-diagnostic \
-    --episodes-per-condition 1000 \
-    --num-envs 128 \
-    --seeds 0 1 2
-```
-
-Run only the velocity diagnostic:
-
-```bash
-pixi run -e train eval-dribbling \
-    task:t1-dribbling \
-    --checkpoint ./checkpoints/dribbling_phase2_stage1_scratch.pt \
-    --no-run-main \
-    --velocity-episodes-per-condition 300 \
-    --num-envs 128 \
-    --seeds 0 1 2
 ```
 
 Run a single-environment evaluation while watching it in realtime. The report
@@ -119,7 +90,6 @@ pixi run -e train eval-dribbling \
     task:t1-dribbling \
     --checkpoint ./checkpoints/dribbling_phase2_stage1_scratch.pt \
     --episodes-per-condition 1 \
-    --velocity-episodes-per-condition 1 \
     --num-envs 1 \
     --seeds 0 \
     --view-during-eval \
@@ -169,15 +139,15 @@ pixi run -e train eval-dribbling \
 The evaluator generates the target and obstacles directly inside
 `evaluate_dribbling.py`, rather than relying on the training curriculum sampler.
 The default fixed setup uses a `5.0 m` target ahead of the robot and places
-obstacles along the ball-to-target corridor using:
+the single obstacle along the ball-to-target corridor using:
 
-- forward fractions: `(0.3, 0.5, 0.7)`
-- lateral offsets: `(-0.35, 0.0, 0.35) m`
+- forward fraction: `0.5`
+- lateral offset: `0.0 m`
 - moving-obstacle speed: `0.15 m/s`
 
 These can be changed from the CLI with `--eval-target-distance`,
-`--eval-target-heading-offset`, `--eval-obstacle-forward-fractions`,
-`--eval-obstacle-lateral-offsets`, and `--eval-obstacle-speed`.
+`--eval-target-heading-offset`, `--eval-obstacle-forward-fraction`,
+`--eval-obstacle-lateral-offset`, and `--eval-obstacle-speed`.
 
 Each fixed value also has a plausible default range variant. The evaluator uses
 the fixed values by default. Add `--randomize-target-and-obstacle` to sample
@@ -197,10 +167,9 @@ Trials end only on target reach, maximum trial duration, fall, or ball lost.
 |---|---|
 | `--eval-target-distance` | `--eval-target-distance-range LO HI` |
 | `--eval-target-heading-offset` | `--eval-target-heading-offset-range LO HI` |
-| `--eval-obstacle-forward-fractions A B C` | `--eval-obstacle-forward-fraction-ranges A_LO A_HI B_LO B_HI C_LO C_HI` |
-| `--eval-obstacle-lateral-offsets A B C` | `--eval-obstacle-lateral-offset-ranges A_LO A_HI B_LO B_HI C_LO C_HI` |
+| `--eval-obstacle-forward-fraction` | `--eval-obstacle-forward-fraction-range LO HI` |
+| `--eval-obstacle-lateral-offset` | `--eval-obstacle-lateral-offset-range LO HI` |
 | `--eval-obstacle-speed` | `--eval-obstacle-speed-range LO HI` |
-| `--eval-lateral-limit` | `--eval-lateral-limit-range LO HI` |
 
 The direct target is generated from the current ball position:
 
@@ -209,13 +178,13 @@ target = ball_xy + eval_target_distance * heading_direction
 heading_direction = robot_yaw + eval_target_heading_offset
 ```
 
-The direct obstacles are generated on the ball-to-target segment:
+The single obstacle is generated on the ball-to-target segment:
 
 ```text
-obstacle_i =
+obstacle =
   ball_xy
-  + forward_fraction_i * (target_xy - ball_xy)
-  + lateral_offset_i * segment_side_direction
+  + forward_fraction * (target_xy - ball_xy)
+  + lateral_offset * segment_side_direction
 ```
 
 The condition-specific obstacle roles are:
@@ -223,10 +192,8 @@ The condition-specific obstacle roles are:
 | Condition | Active obstacles | Scripted roles |
 |---|---:|---|
 | `no_obstacles` | 0 | none |
-| `static_3` | 3 | static, static, static |
-| `moving_3` | 3 | ball attacker, lateral blocker, distractor |
-| `velocity_no_obstacles` | 0 | none |
-| `velocity_single_obstacle` | 1 | ball attacker |
+| `static_1` | 1 | static |
+| `moving_1` | 1 | ball attacker |
 
 Default target and obstacle generation command:
 
@@ -236,21 +203,20 @@ pixi run -e train eval-dribbling \
     --checkpoint ./checkpoints/dribbling_phase2_stage1_scratch.pt \
     --eval-target-distance 5.0 \
     --eval-target-heading-offset 0.0 \
-    --eval-obstacle-forward-fractions 0.3 0.5 0.7 \
-    --eval-obstacle-lateral-offsets -0.35 0.0 0.35 \
-    --eval-obstacle-speed 0.15 \
-    --eval-lateral-limit 0.45
+    --eval-obstacle-forward-fraction 0.5 \
+    --eval-obstacle-lateral-offset 0.0 \
+    --eval-obstacle-speed 0.15
 ```
 
-Example with a longer target and wider obstacles:
+Example with a closer target and a laterally offset obstacle:
 
 ```bash
 pixi run -e train eval-dribbling \
     task:t1-dribbling \
     --checkpoint ./checkpoints/dribbling_phase2_stage1_scratch.pt \
     --eval-target-distance 4.0 \
-    --eval-obstacle-forward-fractions 0.35 0.55 0.75 \
-    --eval-obstacle-lateral-offsets -0.5 0.0 0.5 \
+    --eval-obstacle-forward-fraction 0.55 \
+    --eval-obstacle-lateral-offset 0.3 \
     --eval-obstacle-speed 0.2
 ```
 
@@ -272,10 +238,9 @@ pixi run -e train eval-dribbling \
     --randomize-target-and-obstacle \
     --eval-target-distance-range 3.0 6.0 \
     --eval-target-heading-offset-range -0.35 0.35 \
-    --eval-obstacle-forward-fraction-ranges 0.25 0.4 0.45 0.6 0.65 0.8 \
-    --eval-obstacle-lateral-offset-ranges -0.6 -0.2 -0.15 0.15 0.2 0.6 \
-    --eval-obstacle-speed-range 0.1 0.25 \
-    --eval-lateral-limit-range 0.35 0.6
+    --eval-obstacle-forward-fraction-range 0.35 0.65 \
+    --eval-obstacle-lateral-offset-range -0.4 0.4 \
+    --eval-obstacle-speed-range 0.1 0.25
 ```
 
 Viewer check with randomized placement:
@@ -284,13 +249,13 @@ Viewer check with randomized placement:
 pixi run -e train eval-dribbling \
     task:t1-dribbling \
     --checkpoint ./checkpoints/dribbling_phase2_stage1_scratch.pt \
-    --viewer-condition moving_3 \
+    --viewer-condition moving_1 \
     --num-envs 1 \
     --randomize-target-and-obstacle \
     --eval-target-distance-range 3.0 6.0 \
     --eval-target-heading-offset-range -0.35 0.35 \
-    --eval-obstacle-forward-fraction-ranges 0.25 0.4 0.45 0.6 0.65 0.8 \
-    --eval-obstacle-lateral-offset-ranges -0.6 -0.2 -0.15 0.15 0.2 0.6 \
+    --eval-obstacle-forward-fraction-range 0.35 0.65 \
+    --eval-obstacle-lateral-offset-range -0.4 0.4 \
     --eval-obstacle-speed-range 0.1 0.25
 ```
 
@@ -303,12 +268,11 @@ and run one environment:
 pixi run -e train eval-dribbling \
     task:t1-dribbling \
     --checkpoint ./logs/<run>/checkpoints/latest.pt \
-    --viewer-condition static_3 \
+    --viewer-condition static_1 \
     --num-envs 1
 ```
 
-Supported viewer conditions are `no_obstacles`, `static_3`, `moving_3`,
-`velocity_no_obstacles`, and `velocity_single_obstacle`.
+Supported viewer conditions are `no_obstacles`, `static_1`, and `moving_1`.
 
 No obstacles:
 
@@ -326,7 +290,7 @@ Three fixed obstacles:
 pixi run -e train eval-dribbling \
     task:t1-dribbling \
     --checkpoint ./checkpoints/dribbling_phase2_stage1_scratch.pt \
-    --viewer-condition static_3 \
+    --viewer-condition static_1 \
     --num-envs 1
 ```
 
@@ -336,27 +300,7 @@ Three moving obstacles:
 pixi run -e train eval-dribbling \
     task:t1-dribbling \
     --checkpoint ./checkpoints/dribbling_phase2_stage1_scratch.pt \
-    --viewer-condition moving_3 \
-    --num-envs 1
-```
-
-Velocity diagnostic without obstacles:
-
-```bash
-pixi run -e train eval-dribbling \
-    task:t1-dribbling \
-    --checkpoint ./checkpoints/dribbling_phase2_stage1_scratch.pt \
-    --viewer-condition velocity_no_obstacles \
-    --num-envs 1
-```
-
-Velocity diagnostic with one obstacle:
-
-```bash
-pixi run -e train eval-dribbling \
-    task:t1-dribbling \
-    --checkpoint ./checkpoints/dribbling_phase2_stage1_scratch.pt \
-    --viewer-condition velocity_single_obstacle \
+    --viewer-condition moving_1 \
     --num-envs 1
 ```
 
@@ -366,7 +310,7 @@ Use the Viser viewer instead of the native MuJoCo viewer:
 pixi run -e train eval-dribbling \
     task:t1-dribbling \
     --checkpoint ./checkpoints/dribbling_phase2_stage1_scratch.pt \
-    --viewer-condition moving_3 \
+    --viewer-condition moving_1 \
     --viewer viser \
     --num-envs 1
 ```
@@ -377,30 +321,26 @@ Viewer check with custom direct generation parameters:
 pixi run -e train eval-dribbling \
     task:t1-dribbling \
     --checkpoint ./checkpoints/dribbling_phase2_stage1_scratch.pt \
-    --viewer-condition static_3 \
+    --viewer-condition static_1 \
     --num-envs 1 \
     --eval-target-distance 4.0 \
-    --eval-obstacle-forward-fractions 0.35 0.55 0.75 \
-    --eval-obstacle-lateral-offsets -0.5 0.0 0.5
+    --eval-obstacle-forward-fraction 0.55 \
+    --eval-obstacle-lateral-offset 0.3
 ```
 
-## Main Evaluation Environments
+## Evaluation Environments
 
 Evaluate the same checkpoint in three fixed environment configurations.
 
 | Environment | Obstacle setup | Purpose |
 |---|---|---|
-| No obstacles | 0 active obstacles, equivalent to stage 0 | Nominal dribbling retention and sanity check |
-| Static obstacles | 3 active static blockers | Out-of-domain obstacle count and clutter test |
-| Moving obstacles | 3 active `mixed_attackers`, equivalent to stage 4 | Main out-of-domain moving-obstacle test |
+| No obstacles | 0 active obstacles | Nominal dribbling retention and sanity check |
+| 1 static obstacle | 1 static blocker on the ball-to-target corridor | Obstacle avoidance against a stationary adversary |
+| 1 moving obstacle | 1 `ball_attacker` that pursues the ball | Obstacle avoidance against a dynamic adversary |
 
-The no-obstacle case is not strictly out of distribution, because the policy
-has seen no-obstacle training earlier in the curriculum. It should be reported
-as a retention baseline: the policy should not lose nominal dribbling quality
-after learning obstacle avoidance and visual adaptation.
-
-The three-obstacle cases are the main generalisation tests for a stage-3
-checkpoint, because the checkpoint was trained with only one active obstacle.
+The no-obstacle case is a retention baseline: the policy should not lose nominal
+dribbling quality after learning obstacle avoidance and visual adaptation. The
+one-obstacle cases are the main evaluation against the training distribution.
 
 ## Main Task Metrics
 
@@ -572,26 +512,28 @@ conditions whenever possible. Recommended reporting:
 
 ## Suggested Tables
 
-### Main Task Table
+### Task Table
 
-| Environment | Success rate | Time to target | Fall rate | Robot collision | Ball collision | Min clearance |
-|---|---:|---:|---:|---:|---:|---:|
-| No obstacles | | | | n/a | n/a | n/a |
-| 3 static obstacles | | | | | | |
-| 3 moving obstacles | | | | | | |
+| Environment | Success rate | Time to target | Fall rate | Ball-lost rate | Robot collision | Ball collision | Min clearance |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| No obstacles | | | | | n/a | n/a | n/a |
+| 1 static obstacle | | | | | | | |
+| 1 moving obstacle | | | | | | | |
 
 ### Velocity Diagnostic Table
 
-| Setup | Segment | Vector error | Speed error | Angular error |
+| Environment | Segment | Vector error | Speed error | Angular error |
 |---|---|---:|---:|---:|
 | No obstacles | all timesteps | | | |
-| Single obstacle | unblocked | | | |
-| Single obstacle | blocked | | | |
+| 1 static obstacle | unblocked | | | |
+| 1 static obstacle | blocked | | | |
+| 1 moving obstacle | unblocked | | | |
+| 1 moving obstacle | blocked | | | |
 
 ### Perception Table
 
 | Environment | Ball pos error | Ball vel error | Obstacle pos error | Obstacle vel error | FOV coverage | Valid depth coverage |
 |---|---:|---:|---:|---:|---:|---:|
 | No obstacles | | | n/a | n/a | | |
-| 3 static obstacles | | | | | | |
-| 3 moving obstacles | | | | | | |
+| 1 static obstacle | | | | | | |
+| 1 moving obstacle | | | | | | |

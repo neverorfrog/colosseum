@@ -53,25 +53,23 @@ from colosseum.scripts.play import (  # reuse checkpoint/action path from play.p
 class EvalCondition:
   name: str
   label: str
-  stage_index: int
-  static_three: bool = False
-  include_in_main: bool = True
+
+  @property
+  def num_active(self) -> int:
+    return 0 if self.name == "no_obstacles" else 1
+
+  @property
+  def obstacle_free(self) -> bool:
+    return self.num_active == 0
 
 
-MAIN_CONDITIONS = (
-  EvalCondition("no_obstacles", "No obstacles", 0),
-  EvalCondition("static_3", "3 static obstacles", 1, static_three=True),
-  EvalCondition("moving_3", "3 moving obstacles", 4),
+EVAL_CONDITIONS = (
+  EvalCondition("no_obstacles", "No obstacles"),
+  EvalCondition("static_1", "1 static obstacle"),
+  EvalCondition("moving_1", "1 moving obstacle"),
 )
 
-VELOCITY_CONDITIONS = (
-  EvalCondition("velocity_no_obstacles", "No obstacles", 0, include_in_main=False),
-  EvalCondition("velocity_single_obstacle", "Single obstacle", 3, include_in_main=False),
-)
-
-CONDITIONS_BY_NAME = {
-  condition.name: condition for condition in (*MAIN_CONDITIONS, *VELOCITY_CONDITIONS)
-}
+CONDITIONS_BY_NAME = {c.name: c for c in EVAL_CONDITIONS}
 
 
 @dataclass(frozen=True)
@@ -83,10 +81,8 @@ class DribblingEvalConfig(BaseExperimentConfig):
   viewer_condition: Literal[
     "none",
     "no_obstacles",
-    "static_3",
-    "moving_3",
-    "velocity_no_obstacles",
-    "velocity_single_obstacle",
+    "static_1",
+    "moving_1",
   ] = "none"
   view_during_eval: bool = False
   """Open a realtime viewer while still running the full evaluation loop."""
@@ -101,10 +97,7 @@ class DribblingEvalConfig(BaseExperimentConfig):
   """Parallel simulator environments used for each condition."""
 
   episodes_per_condition: int = 300
-  """Target-reaching trials collected for each main condition and seed."""
-
-  velocity_episodes_per_condition: int = 64
-  """Target-reaching trials collected for each velocity diagnostic condition."""
+  """Target-reaching trials collected for each condition and seed."""
 
   seeds: tuple[int, ...] = (0,)
   """Evaluation seeds; results are aggregated across all listed seeds."""
@@ -117,12 +110,6 @@ class DribblingEvalConfig(BaseExperimentConfig):
 
   max_trial_s: float = 30.0
   """Maximum duration of one target-reaching trial before counting failure."""
-
-  run_main: bool = True
-  """Run the main no-obstacle, 3-static, and 3-moving task evaluation."""
-
-  run_velocity_diagnostic: bool = True
-  """Run the separate velocity tracking diagnostic conditions."""
 
   save_plots: bool = True
   """Save tracking-error and XY trajectory plots for diagnostic conditions."""
@@ -169,33 +156,23 @@ class DribblingEvalConfig(BaseExperimentConfig):
   eval_target_heading_offset_range: tuple[float, float] = (-0.45, 0.45)
   """Uniform per-trial heading-offset range used when randomization is enabled."""
 
-  eval_obstacle_forward_fractions: tuple[float, float, float] = (0.3, 0.5, 0.7)
-  """Obstacle locations as fractions along the ball-to-target segment."""
+  eval_obstacle_forward_fraction: float = 0.5
+  """Obstacle location as fraction along the ball-to-target segment."""
 
-  eval_obstacle_forward_fraction_ranges: (
-    tuple[tuple[float, float], tuple[float, float], tuple[float, float]]
-  ) = ((0.2, 0.5), (0.4, 0.7), (0.6, 0.9))
-  """Per-obstacle forward-fraction ranges used when randomization is enabled."""
+  eval_obstacle_forward_fraction_range: tuple[float, float] = (0.35, 0.65)
+  """Uniform per-trial forward-fraction range used when randomization is enabled."""
 
-  eval_obstacle_lateral_offsets: tuple[float, float, float] = (-0.35, 0.0, 0.35)
-  """Obstacle lateral offsets from the ball-to-target segment, in metres."""
+  eval_obstacle_lateral_offset: float = 0.0
+  """Obstacle lateral offset from the ball-to-target segment, in metres."""
 
-  eval_obstacle_lateral_offset_ranges: (
-    tuple[tuple[float, float], tuple[float, float], tuple[float, float]]
-  ) = ((-0.5, 0.5), (-0.5, 0.5), (-0.5, 0.5))
-  """Per-obstacle lateral-offset ranges used when randomization is enabled."""
+  eval_obstacle_lateral_offset_range: tuple[float, float] = (-0.4, 0.4)
+  """Uniform per-trial lateral-offset range used when randomization is enabled."""
 
   eval_obstacle_speed: float = 0.15
-  """Scripted speed for moving evaluation obstacles, in m/s."""
+  """Scripted speed for the moving evaluation obstacle, in m/s."""
 
   eval_obstacle_speed_range: tuple[float, float] = (0.1, 0.3)
   """Uniform per-env obstacle-speed range used when randomization is enabled."""
-
-  eval_lateral_limit: float = 0.45
-  """Lateral blocker travel limit before reversing direction, in metres."""
-
-  eval_lateral_limit_range: tuple[float, float] = (0.3, 0.5)
-  """Uniform per-env lateral-travel range used when randomization is enabled."""
 
 
 class ScalarAccumulator:
@@ -374,11 +351,12 @@ def _build_env_cfg(
 
 
 class EvalSceneController:
-  """Evaluation-only target and obstacle generator.
+  """Evaluation-only target and obstacle generator (single-obstacle protocol).
 
   The task still exposes the normal `ball_vel` and `adversary` command terms,
   but their reset/update hooks are patched to use this minimal deterministic
-  protocol instead of curriculum stage sampling.
+  protocol instead of curriculum stage sampling. Only slot 0 is ever active;
+  remaining obstacle slots (if any) are parked.
   """
 
   def __init__(
@@ -393,17 +371,19 @@ class EvalSceneController:
     self.ball_term = env.command_manager.get_term("ball_vel")
     self.obstacle_term = env.command_manager.get_term("adversary")
     n = env.num_envs
-    k = self.obstacle_term.cfg.num_obstacles
     self.target_distance = torch.full(
       (n,), config.eval_target_distance, device=env.device
     )
     self.target_heading_offset = torch.full(
       (n,), config.eval_target_heading_offset, device=env.device
     )
-    self.obstacle_forward_fractions = torch.zeros((n, k), device=env.device)
-    self.obstacle_lateral_offsets = torch.zeros((n, k), device=env.device)
+    self.obstacle_forward_fraction = torch.full(
+      (n,), config.eval_obstacle_forward_fraction, device=env.device
+    )
+    self.obstacle_lateral_offset = torch.full(
+      (n,), config.eval_obstacle_lateral_offset, device=env.device
+    )
     self.obstacle_speed = torch.full((n,), config.eval_obstacle_speed, device=env.device)
-    self.lateral_limit = torch.full((n,), config.eval_lateral_limit, device=env.device)
     self._original_ball_resample_command = self.ball_term._resample_command
     self._original_ball_resample_obstacles = self.ball_term._resample_obstacles
     self._original_ball_update_command = self.ball_term._update_command
@@ -415,11 +395,14 @@ class EvalSceneController:
 
   @property
   def num_active(self) -> int:
-    if self.condition.name in {"no_obstacles", "velocity_no_obstacles"}:
-      return 0
-    if self.condition.name == "velocity_single_obstacle":
-      return 1
-    return 3
+    return self.condition.num_active
+
+  @property
+  def role(self) -> str:
+    """Behavior of the single active obstacle in this condition."""
+    if self.condition.name == "moving_1":
+      return "attacker"
+    return "static"
 
   def install(self) -> None:
     if self._installed:
@@ -472,16 +455,6 @@ class EvalSceneController:
       return torch.full(shape, lo, device=self.env.device)
     return torch.rand(shape, device=self.env.device) * (hi - lo) + lo
 
-  def _tuple_at(self, values: tuple[float, ...], index: int) -> float:
-    return values[min(index, len(values) - 1)]
-
-  def _range_tuple_at(
-    self,
-    values: tuple[tuple[float, float], ...],
-    index: int,
-  ) -> tuple[float, float]:
-    return values[min(index, len(values) - 1)]
-
   def _sample_scene_params(self, env_ids: torch.Tensor) -> None:
     n = env_ids.numel()
     self.target_distance[env_ids] = self._sample_uniform(
@@ -499,27 +472,16 @@ class EvalSceneController:
       self.config.eval_obstacle_speed,
       (n,),
     )
-    self.lateral_limit[env_ids] = self._sample_uniform(
-      self.config.eval_lateral_limit_range,
-      self.config.eval_lateral_limit,
+    self.obstacle_forward_fraction[env_ids] = self._sample_uniform(
+      self.config.eval_obstacle_forward_fraction_range,
+      self.config.eval_obstacle_forward_fraction,
       (n,),
     )
-
-    for obstacle_idx in range(self.obstacle_term.cfg.num_obstacles):
-      self.obstacle_forward_fractions[env_ids, obstacle_idx] = self._sample_uniform(
-        self._range_tuple_at(
-          self.config.eval_obstacle_forward_fraction_ranges, obstacle_idx
-        ),
-        self._tuple_at(self.config.eval_obstacle_forward_fractions, obstacle_idx),
-        (n,),
-      )
-      self.obstacle_lateral_offsets[env_ids, obstacle_idx] = self._sample_uniform(
-        self._range_tuple_at(
-          self.config.eval_obstacle_lateral_offset_ranges, obstacle_idx
-        ),
-        self._tuple_at(self.config.eval_obstacle_lateral_offsets, obstacle_idx),
-        (n,),
-      )
+    self.obstacle_lateral_offset[env_ids] = self._sample_uniform(
+      self.config.eval_obstacle_lateral_offset_range,
+      self.config.eval_obstacle_lateral_offset,
+      (n,),
+    )
 
   def resample_all(self) -> None:
     env_ids = torch.arange(self.env.num_envs, device=self.env.device)
@@ -557,11 +519,11 @@ class EvalSceneController:
       return
 
     self.obstacle_term.cfg.num_active = self.num_active
-    for obstacle_idx in range(self.obstacle_term.cfg.num_obstacles):
-      if obstacle_idx >= self.num_active:
-        self.obstacle_term._park_obstacle(obstacle_idx, env_ids)
+    for slot in range(self.obstacle_term.cfg.num_obstacles):
+      if slot >= self.num_active:
+        self.obstacle_term._park_obstacle(slot, env_ids)
         continue
-      self._place_obstacle(obstacle_idx, env_ids)
+      self._place_obstacle(env_ids)
 
   def update_target_command(self) -> None:
     """Update desired ball velocity without resampling a reached target.
@@ -591,97 +553,41 @@ class EvalSceneController:
     side_dir = torch.stack([-segment_dir[:, 1], segment_dir[:, 0]], dim=-1)
     return ball_xy, segment, side_dir
 
-  def _place_obstacle(self, obstacle_idx: int, env_ids: torch.Tensor) -> None:
+  def _place_obstacle(self, env_ids: torch.Tensor) -> None:
     ball_xy, segment, side_dir = self._path_frame(env_ids)
-    forward_fraction = self.obstacle_forward_fractions[
-      env_ids, obstacle_idx
-    ].unsqueeze(-1)
-    lateral_offset = self.obstacle_lateral_offsets[
-      env_ids, obstacle_idx
-    ].unsqueeze(-1)
-    position = (
-      ball_xy
-      + forward_fraction * segment
-      + lateral_offset * side_dir
-    )
-    self.obstacle_term._positions_w[env_ids, obstacle_idx] = position
-    self.obstacle_term._velocities_w[env_ids, obstacle_idx] = 0.0
-    self.obstacle_term._lateral_signs[env_ids, obstacle_idx] = (
-      1.0 if obstacle_idx % 2 else -1.0
-    )
-    self.obstacle_term._random_dirs[env_ids, obstacle_idx] = side_dir
-    self.obstacle_term._write_obstacle_to_sim(obstacle_idx, env_ids, z=0.0)
+    forward_fraction = self.obstacle_forward_fraction[env_ids].unsqueeze(-1)
+    lateral_offset = self.obstacle_lateral_offset[env_ids].unsqueeze(-1)
+    position = ball_xy + forward_fraction * segment + lateral_offset * side_dir
+    self.obstacle_term._positions_w[env_ids, 0] = position
+    self.obstacle_term._velocities_w[env_ids, 0] = 0.0
+    self.obstacle_term._lateral_signs[env_ids, 0] = -1.0
+    self.obstacle_term._random_dirs[env_ids, 0] = side_dir
+    self.obstacle_term._write_obstacle_to_sim(0, env_ids, z=0.0)
 
   def update_obstacles(self) -> None:
     env_ids = torch.arange(self.env.num_envs, device=self.env.device)
+    # Park all unused slots first.
+    for slot in range(self.obstacle_term.cfg.num_obstacles):
+      if slot >= self.num_active:
+        self.obstacle_term._park_obstacle(slot, env_ids)
     if self.num_active == 0:
-      for obstacle_idx in range(self.obstacle_term.cfg.num_obstacles):
-        self.obstacle_term._park_obstacle(obstacle_idx, env_ids)
       return
 
     dt = self.env.step_dt
-    ball_xy, segment, side_dir = self._path_frame(env_ids)
-    segment_dir = segment / segment.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+    ball_xy, _, _ = self._path_frame(env_ids)
+    obs_xy = self.obstacle_term._positions_w[:, 0]
 
-    for obstacle_idx in range(self.obstacle_term.cfg.num_obstacles):
-      if obstacle_idx >= self.num_active:
-        self.obstacle_term._park_obstacle(obstacle_idx, env_ids)
-        continue
+    if self.role == "static":
+      velocity = torch.zeros_like(obs_xy)
+    else:  # "attacker": move toward the ball
+      to_ball = ball_xy - obs_xy
+      velocity = (
+        to_ball / to_ball.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+      ) * self.obstacle_speed.unsqueeze(-1)
 
-      role = self._role(obstacle_idx)
-      obs_xy = self.obstacle_term._positions_w[:, obstacle_idx]
-      if role == "static":
-        velocity = torch.zeros_like(obs_xy)
-      elif role == "attacker":
-        to_ball = ball_xy - obs_xy
-        velocity = (
-          to_ball / to_ball.norm(dim=-1, keepdim=True).clamp(min=1e-6)
-        ) * self.obstacle_speed.unsqueeze(-1)
-      elif role == "lateral":
-        lateral_offset = ((obs_xy - ball_xy) * side_dir).sum(dim=-1)
-        sign = self.obstacle_term._lateral_signs[:, obstacle_idx]
-        sign = torch.where(
-          lateral_offset.abs() > self.lateral_limit,
-          -torch.sign(lateral_offset).clamp(min=-1.0, max=1.0),
-          sign,
-        )
-        sign = torch.where(sign == 0.0, torch.ones_like(sign), sign)
-        self.obstacle_term._lateral_signs[:, obstacle_idx] = sign
-        velocity = (
-          sign.unsqueeze(-1) * side_dir * self.obstacle_speed.unsqueeze(-1)
-        )
-      else:
-        velocity = (
-          self.obstacle_term._random_dirs[:, obstacle_idx]
-          * self.obstacle_speed.unsqueeze(-1)
-        )
-        radial = obs_xy - ball_xy
-        too_far = radial.norm(dim=-1) > (self.target_distance + 1.0)
-        if too_far.any():
-          self.obstacle_term._random_dirs[too_far, obstacle_idx] = -segment_dir[
-            too_far
-          ]
-          velocity = (
-            self.obstacle_term._random_dirs[:, obstacle_idx]
-            * self.obstacle_speed.unsqueeze(-1)
-          )
-
-      self.obstacle_term._velocities_w[:, obstacle_idx] = velocity
-      self.obstacle_term._positions_w[:, obstacle_idx] = obs_xy + velocity * dt
-      self.obstacle_term._write_obstacle_to_sim(obstacle_idx, env_ids, z=0.0)
-
-  def _role(self, obstacle_idx: int) -> str:
-    if self.condition.name == "static_3":
-      return "static"
-    if self.condition.name == "velocity_single_obstacle":
-      return "attacker"
-    if self.condition.name == "moving_3":
-      if obstacle_idx == 0:
-        return "attacker"
-      if obstacle_idx == 1:
-        return "lateral"
-      return "distractor"
-    return "static"
+    self.obstacle_term._velocities_w[:, 0] = velocity
+    self.obstacle_term._positions_w[:, 0] = obs_xy + velocity * dt
+    self.obstacle_term._write_obstacle_to_sim(0, env_ids, z=0.0)
 
 
 def _quat_yaw(quat_wxyz: torch.Tensor) -> torch.Tensor:
@@ -1187,7 +1093,7 @@ def _main_task_table(stats: list[ConditionStats]) -> str:
     "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
   ]
   for s in stats:
-    obstacle_free = s.condition.stage_index == 0 and not s.condition.static_three
+    obstacle_free = s.condition.obstacle_free
     lines.append(
       "| "
       + " | ".join(
@@ -1239,7 +1145,7 @@ def _perception_table(stats: list[ConditionStats]) -> str:
     "|---|---:|---:|---:|---:|---:|---:|",
   ]
   for s in stats:
-    obstacle_free = s.condition.stage_index == 0 and not s.condition.static_three
+    obstacle_free = s.condition.obstacle_free
     lines.append(
       "| "
       + " | ".join(
@@ -1428,8 +1334,7 @@ def _save_plots(stats: list[ConditionStats], output_dir: Path) -> list[Path]:
 def _build_report(
   config: DribblingEvalConfig,
   checkpoint_path: Path | None,
-  main_stats: list[ConditionStats],
-  velocity_stats: list[ConditionStats],
+  stats: list[ConditionStats],
   plot_paths: list[Path],
 ) -> str:
   lines = [
@@ -1444,8 +1349,7 @@ def _build_report(
     f"- Agent: `{config.agent}`",
     f"- View during eval: `{config.view_during_eval}`",
     f"- Num envs: `{config.num_envs}`",
-    f"- Main episodes per condition per seed: `{config.episodes_per_condition}`",
-    f"- Velocity episodes per condition per seed: `{config.velocity_episodes_per_condition}`",
+    f"- Episodes per condition per seed: `{config.episodes_per_condition}`",
     f"- Seeds: `{', '.join(str(s) for s in config.seeds)}`",
     f"- Max trial duration: `{config.max_trial_s} s`",
     f"- Progress bar: `{config.progress_bar}`",
@@ -1460,36 +1364,27 @@ def _build_report(
     f"- Direct eval target distance range: `{config.eval_target_distance_range}`",
     f"- Direct eval target heading offset: `{config.eval_target_heading_offset} rad`",
     f"- Direct eval target heading offset range: `{config.eval_target_heading_offset_range}`",
-    f"- Direct eval obstacle forward fractions: `{config.eval_obstacle_forward_fractions}`",
-    f"- Direct eval obstacle forward fraction ranges: `{config.eval_obstacle_forward_fraction_ranges}`",
-    f"- Direct eval obstacle lateral offsets: `{config.eval_obstacle_lateral_offsets} m`",
-    f"- Direct eval obstacle lateral offset ranges: `{config.eval_obstacle_lateral_offset_ranges}`",
+    f"- Direct eval obstacle forward fraction: `{config.eval_obstacle_forward_fraction}`",
+    f"- Direct eval obstacle forward fraction range: `{config.eval_obstacle_forward_fraction_range}`",
+    f"- Direct eval obstacle lateral offset: `{config.eval_obstacle_lateral_offset} m`",
+    f"- Direct eval obstacle lateral offset range: `{config.eval_obstacle_lateral_offset_range}`",
     f"- Direct eval obstacle speed: `{config.eval_obstacle_speed} m/s`",
     f"- Direct eval obstacle speed range: `{config.eval_obstacle_speed_range}`",
-    f"- Direct eval lateral limit: `{config.eval_lateral_limit} m`",
-    f"- Direct eval lateral limit range: `{config.eval_lateral_limit_range}`",
     "",
   ]
-  if main_stats:
+  if stats:
     lines.extend([
-      "## Main Task Metrics",
+      "## Task Metrics",
       "",
-      _main_task_table(main_stats),
+      _main_task_table(stats),
       "",
-      "### Perception And Depth Encoder Metrics",
-      "",
-      _perception_table(main_stats),
-      "",
-    ])
-  if velocity_stats:
-    lines.extend([
       "## Ball Velocity Tracking Diagnostic",
       "",
-      _velocity_table(velocity_stats),
+      _velocity_table(stats),
       "",
-      "### Perception And Depth Encoder Metrics",
+      "## Perception And Depth Encoder Metrics",
       "",
-      _perception_table(velocity_stats),
+      _perception_table(stats),
       "",
     ])
   if plot_paths:
@@ -1541,53 +1436,35 @@ def main() -> None:
     )
     return
 
-  main_stats: list[ConditionStats] = []
-  velocity_stats: list[ConditionStats] = []
+  all_stats: list[ConditionStats] = []
 
   # Build the env and agent ONCE and reuse them across every condition and
   # seed. Rebuilding per condition leaks warp render-context buffers (~2 GB)
   # because nothing in the mjlab env class explicitly releases them on close;
   # matches training, which is memory-stable for the same reason.
-  env_cfg = _build_env_cfg(config, MAIN_CONDITIONS[0])
+  env_cfg = _build_env_cfg(config, EVAL_CONDITIONS[0])
   env = _make_env(env_cfg, str(device))
   agent = create_agent(config, env, device)
   try:
-    if config.run_main:
-      for condition in MAIN_CONDITIONS:
-        logger.info(f"Running main condition: {condition.label}")
-        per_seed = [
-          _run_condition(
-            config,
-            condition,
-            seed,
-            config.episodes_per_condition,
-            env,
-            agent,
-          )
-          for seed in config.seeds
-        ]
-        main_stats.append(_merge_stats(per_seed))
-
-    if config.run_velocity_diagnostic:
-      for condition in VELOCITY_CONDITIONS:
-        logger.info(f"Running velocity diagnostic condition: {condition.label}")
-        per_seed = [
-          _run_condition(
-            config,
-            condition,
-            seed,
-            config.velocity_episodes_per_condition,
-            env,
-            agent,
-          )
-          for seed in config.seeds
-        ]
-        velocity_stats.append(_merge_stats(per_seed))
+    for condition in EVAL_CONDITIONS:
+      logger.info(f"Running condition: {condition.label}")
+      per_seed = [
+        _run_condition(
+          config,
+          condition,
+          seed,
+          config.episodes_per_condition,
+          env,
+          agent,
+        )
+        for seed in config.seeds
+      ]
+      all_stats.append(_merge_stats(per_seed))
   finally:
     env.close()
 
-  plot_paths = _save_plots(velocity_stats, output_dir) if config.save_plots else []
-  report = _build_report(config, checkpoint_path, main_stats, velocity_stats, plot_paths)
+  plot_paths = _save_plots(all_stats, output_dir) if config.save_plots else []
+  report = _build_report(config, checkpoint_path, all_stats, plot_paths)
   report_path = output_dir / config.report_name
   report_path.write_text(report, encoding="utf-8")
   print(report)
