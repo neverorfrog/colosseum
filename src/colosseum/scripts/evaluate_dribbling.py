@@ -160,13 +160,13 @@ class DribblingEvalConfig(BaseExperimentConfig):
   eval_target_distance: float = 5.0
   """Directly generated target distance from the current ball position."""
 
-  eval_target_distance_range: tuple[float, float] = (3.0, 6.0)
+  eval_target_distance_range: tuple[float, float] = (2.5, 8.0)
   """Uniform per-trial target-distance range used when randomization is enabled."""
 
   eval_target_heading_offset: float = 0.0
   """Target heading offset in radians relative to robot yaw."""
 
-  eval_target_heading_offset_range: tuple[float, float] = (-0.35, 0.35)
+  eval_target_heading_offset_range: tuple[float, float] = (-0.45, 0.45)
   """Uniform per-trial heading-offset range used when randomization is enabled."""
 
   eval_obstacle_forward_fractions: tuple[float, float, float] = (0.3, 0.5, 0.7)
@@ -174,7 +174,7 @@ class DribblingEvalConfig(BaseExperimentConfig):
 
   eval_obstacle_forward_fraction_ranges: (
     tuple[tuple[float, float], tuple[float, float], tuple[float, float]]
-  ) = ((0.25, 0.4), (0.45, 0.6), (0.65, 0.8))
+  ) = ((0.2, 0.5), (0.4, 0.7), (0.6, 0.9))
   """Per-obstacle forward-fraction ranges used when randomization is enabled."""
 
   eval_obstacle_lateral_offsets: tuple[float, float, float] = (-0.35, 0.0, 0.35)
@@ -182,19 +182,19 @@ class DribblingEvalConfig(BaseExperimentConfig):
 
   eval_obstacle_lateral_offset_ranges: (
     tuple[tuple[float, float], tuple[float, float], tuple[float, float]]
-  ) = ((-0.6, -0.2), (-0.15, 0.15), (0.2, 0.6))
+  ) = ((-0.5, 0.5), (-0.5, 0.5), (-0.5, 0.5))
   """Per-obstacle lateral-offset ranges used when randomization is enabled."""
 
   eval_obstacle_speed: float = 0.15
   """Scripted speed for moving evaluation obstacles, in m/s."""
 
-  eval_obstacle_speed_range: tuple[float, float] = (0.1, 0.2)
+  eval_obstacle_speed_range: tuple[float, float] = (0.1, 0.3)
   """Uniform per-env obstacle-speed range used when randomization is enabled."""
 
   eval_lateral_limit: float = 0.45
   """Lateral blocker travel limit before reversing direction, in metres."""
 
-  eval_lateral_limit_range: tuple[float, float] = (0.35, 0.6)
+  eval_lateral_limit_range: tuple[float, float] = (0.3, 0.5)
   """Uniform per-env lateral-travel range used when randomization is enabled."""
 
 
