@@ -237,6 +237,7 @@ class ConditionStats:
     self.success_times = ScalarAccumulator()
     self.censored_times = ScalarAccumulator()
     self.falls = 0
+    self.ball_losts = 0
     self.robot_collisions = 0
     self.ball_collisions = 0
     self.min_ball_clearance = ScalarAccumulator()
@@ -290,6 +291,10 @@ class ConditionStats:
   @property
   def fall_rate(self) -> float:
     return self.falls / self.episodes if self.episodes else float("nan")
+
+  @property
+  def ball_lost_rate(self) -> float:
+    return self.ball_losts / self.episodes if self.episodes else float("nan")
 
   @property
   def robot_collision_rate(self) -> float:
@@ -910,6 +915,7 @@ def _run_condition(
   robot_collision_seen = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
   ball_collision_seen = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
   fall_seen = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
+  ball_lost_seen = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
   fov_steps = torch.zeros(env.num_envs, device=env.device)
   valid_steps = torch.zeros(env.num_envs, device=env.device)
   step_counts = torch.zeros(env.num_envs, device=env.device)
@@ -957,6 +963,7 @@ def _run_condition(
       fell_over = _fall_mask(env, config.fall_limit_deg)
       ball_lost = _ball_lost_mask(env, config.ball_lost_distance)
       fall_seen |= fell_over
+      ball_lost_seen |= ball_lost
 
       if live_viewer is not None and live_viewer.is_running():
         now = time.perf_counter()
@@ -996,6 +1003,8 @@ def _run_condition(
         )
         if bool(fall_seen[idx].item()):
           stats.falls += 1
+        if not success and bool(ball_lost_seen[idx].item()):
+          stats.ball_losts += 1
         if bool(robot_collision_seen[idx].item()):
           stats.robot_collisions += 1
         if bool(ball_collision_seen[idx].item()):
@@ -1026,6 +1035,7 @@ def _run_condition(
         robot_collision_seen[next_env_ids] = False
         ball_collision_seen[next_env_ids] = False
         fall_seen[next_env_ids] = False
+        ball_lost_seen[next_env_ids] = False
         fov_steps[next_env_ids] = 0.0
         valid_steps[next_env_ids] = 0.0
         step_counts[next_env_ids] = 0.0
@@ -1047,6 +1057,7 @@ def _merge_stats(stats_list: list[ConditionStats]) -> ConditionStats:
     merged.successes += stats.successes
     merged.failures += stats.failures
     merged.falls += stats.falls
+    merged.ball_losts += stats.ball_losts
     merged.robot_collisions += stats.robot_collisions
     merged.ball_collisions += stats.ball_collisions
     for name, value in stats.__dict__.items():
@@ -1101,8 +1112,11 @@ def _fmt(value: float, digits: int = 3, percent: bool = False) -> str:
 
 def _main_task_table(stats: list[ConditionStats]) -> str:
   lines = [
-    "| Environment | Episodes | Success rate | Time to target | Censored time | Fall rate | Robot collision | Ball collision | Min clearance |",
-    "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+    "Columns marked **[T]** end a trial; unmarked columns are informational safety metrics.",
+    "A trial ends on target reach (success), timeout (failure), fall (failure), or ball-lost (failure).",
+    "",
+    "| Environment | Episodes | Success rate **[T]** | Time to target **[T]** | Censored time **[T]** | Fall rate **[T]** | Ball-lost rate **[T]** | Robot collision | Ball collision | Min clearance |",
+    "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
   ]
   for s in stats:
     obstacle_free = s.condition.stage_index == 0 and not s.condition.static_three
@@ -1116,6 +1130,7 @@ def _main_task_table(stats: list[ConditionStats]) -> str:
           _fmt(s.success_times.mean()),
           _fmt(s.censored_times.mean()),
           _fmt(s.fall_rate, percent=True),
+          _fmt(s.ball_lost_rate, percent=True),
           "n/a" if obstacle_free else _fmt(s.robot_collision_rate, percent=True),
           "n/a" if obstacle_free else _fmt(s.ball_collision_rate, percent=True),
           "n/a" if obstacle_free else _fmt(s.min_ball_clearance.mean()),
