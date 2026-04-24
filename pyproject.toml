@@ -54,6 +54,7 @@ train-rsl-rl = { cmd = "python -m colosseum.scripts.train_rsl_rl", description =
 train-mjlab = { cmd = "python -m mjlab.scripts.train", description = "Train with RSL-RL (mjlab built-in tasks)" }
 train = { cmd = "python -m colosseum.scripts.train", description = "Train with custom PPO" }
 train-phase2 = { cmd = "python -m colosseum.scripts.train_phase2", description = "RMA Phase 2 adaptation encoder training" }
+pipeline-dribbling = { cmd = "python -m colosseum.scripts.pipeline_dribbling", description = "Full dribbling curriculum pipeline (Phase 1 + Phase 2 per stage)" }
 play = { cmd = "python -m colosseum.scripts.play", description = "Evaluate trained policy in simulation" }
 export-onnx = { cmd = "python -m colosseum.scripts.export_onnx", description = "Export checkpoint to ONNX" }
 

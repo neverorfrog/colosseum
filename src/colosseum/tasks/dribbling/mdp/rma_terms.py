@@ -89,6 +89,10 @@ class DribblingRmaTermCfg(RmaTermCfg):
   tbptt_chunk_len: int = 16
   warmup_steps: int = 4
 
+  # Phase 1 latent noise: simulates visual encoder imprecision so the actor
+  # stays robust to estimation error in Phase 2 (σ on LayerNorm'd latent).
+  latent_noise_std: float = 0.1
+
   # Ball FOV tracking (for adaptation mask).
   camera_name: str = "robot/d455_color"
   camera_fovy: float = 60.0

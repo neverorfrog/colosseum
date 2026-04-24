@@ -131,12 +131,6 @@ def main() -> None:
     Phase2Config,
     config=(tyro.conf.CascadeSubcommandArgs,),
   )
-  if hasattr(config.task, "obstacle_stage_index"):
-    config = replace(
-      config,
-      task=replace(config.task, obstacle_stage_index=config.obstacle_stage_index),
-    )
-
   cuda_devices = _parse_cuda_devices(config.cuda)
 
   # For non-distributed launches, support both:
@@ -204,9 +198,13 @@ def main() -> None:
       "Implement the algo_cfg property in the task's __init__.py."
     )
 
+    if config.learning_steps is not None:
+      from dataclasses import replace as dc_replace
+      algo_cfg = dc_replace(algo_cfg, learning_steps=config.learning_steps)
+
     env_cfg: ManagerBasedRlEnvCfg = config.task.train_env_cfg
 
-    run_name = generate_run_name(
+    run_name = config.logger.name or generate_run_name(
       task_name=config.task.name,
       algo_name=f"{algo_cfg.name}_phase2",
       seed=config.seed,
@@ -312,7 +310,7 @@ def main() -> None:
       world_size=world_size,
       phase=2,
       phase1_checkpoint=str(checkpoint_path),
-      obstacle_stage_index=config.obstacle_stage_index,
+      obstacle_stage_index=getattr(config.task, "obstacle_stage_index", -1),
     )
 
     if is_main_process and run_dir is not None and config.save_interval > 0:
@@ -320,8 +318,9 @@ def main() -> None:
       algo.configure_checkpointing(ckpt_dir, config.save_interval)
 
     logger.info(f"Loading Phase 1 checkpoint: {checkpoint_path}")
-    state = algo.load(checkpoint_path)
-    logger.info(f"Phase 1 checkpoint loaded (step {state.get('global_step', 0)})")
+    algo.load(checkpoint_path)
+    algo.global_step = 0
+    logger.info("Phase 1 checkpoint loaded; global_step reset to 0 for Phase 2")
 
     if is_distributed and dist.is_initialized():
       dist.barrier()
