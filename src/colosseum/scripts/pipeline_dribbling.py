@@ -112,6 +112,7 @@ def _pixi_train(
     num_envs: int,
     checkpoint: str | None = None,
     warm_start: str | None = None,
+    teacher_checkpoint: str | None = None,
     extra: list[str] | None = None,
 ) -> list[str]:
     cmd = [
@@ -127,6 +128,8 @@ def _pixi_train(
         cmd += ["--warm-start", warm_start]
     if checkpoint:
         cmd += ["--checkpoint", checkpoint]
+    if teacher_checkpoint:
+        cmd += ["--task.use-dagger", "--task.teacher-checkpoint", teacher_checkpoint]
     cmd += extra or []
     return cmd
 
@@ -162,27 +165,72 @@ def _pixi_train_phase2(
 def parse_args() -> tuple[argparse.Namespace, list[str]]:
     p = argparse.ArgumentParser(
         description="Dribbling curriculum pipeline",
-        epilog="Any flags after -- are forwarded verbatim to every train invocation.",
+        epilog="Any flags after -- are forwarded verbatim to every train/play invocation.",
     )
     p.add_argument("--log-dir", default="./logs/dribbling_pipeline")
-    p.add_argument("--cuda", default="0", help="GPU id(s), e.g. '0' or '0,1'")
-    p.add_argument("--num-envs", type=int, default=4096)
-    p.add_argument(
-        "--start-stage", type=int, default=0,
-        help="Stage to start from (0–2). Earlier checkpoints must already exist.",
-    )
-    p.add_argument(
-        "--end-stage", type=int, default=None,
-        help="Last stage to run, inclusive (0–2). Defaults to the last defined stage.",
-    )
-    p.add_argument("--skip-phase2", action="store_true", help="Skip Phase 2 for all stages.")
+    p.add_argument("--cuda", default="0", help="GPU id(s) for training, or single id for play.")
+
+    sub = p.add_subparsers(dest="command")
+
+    # --- train subcommand (default) ---
+    train_p = sub.add_parser("train", help="Run the training pipeline (default).")
+    train_p.add_argument("--num-envs", type=int, default=4096)
+    train_p.add_argument("--start-stage", type=int, default=0,
+        help="Stage to start from. Earlier checkpoints must exist.")
+    train_p.add_argument("--end-stage", type=int, default=None,
+        help="Last stage to run, inclusive. Defaults to the last stage.")
+    train_p.add_argument("--skip-phase2", action="store_true")
+    train_p.add_argument("--use-dagger", action="store_true",
+        help="Each stage imitates the previous stage's P1 checkpoint as teacher.")
+
+    # --- play subcommand ---
+    play_p = sub.add_parser("play", help="Play a trained policy from the pipeline checkpoint index.")
+    play_p.add_argument("--stage", type=int, default=0, help="Stage index to play (0–2).")
+    play_p.add_argument("--phase", type=int, default=1, choices=[1, 2],
+        help="Phase to play: 1 = privileged encoder, 2 = visual adaptation encoder.")
+    play_p.add_argument("--obstacle-stage-index", type=int, default=None,
+        help="Override obstacle stage for the play env (defaults to the stage's training value).")
+
     return p.parse_known_args()
+
+
+def _play(args: argparse.Namespace, extra_args: list[str], log_dir: Path) -> None:
+    sid = args.stage
+    phase = args.phase
+    link_name = f"s{sid}_p{phase}"
+    ckpt = log_dir / "checkpoints" / f"{link_name}.pt"
+    if not ckpt.exists():
+        print(f"[pipeline] ERROR: no checkpoint for stage {sid} phase {phase}: {ckpt}")
+        print(f"[pipeline] Run 'pipeline-dribbling train --end-stage {sid}' first.")
+        sys.exit(1)
+
+    stage_def = next((s for s in STAGES if s["id"] == sid), None)
+    if stage_def is None:
+        print(f"[pipeline] ERROR: unknown stage {sid}")
+        sys.exit(1)
+
+    obs_idx = args.obstacle_stage_index if args.obstacle_stage_index is not None else stage_def["obstacle_stage_index"]
+
+    cmd = [
+        "pixi", "run", "-e", "train", "play",
+        "--checkpoint", str(ckpt),
+        "--cuda", args.cuda,
+        "--task.obstacle-stage-index", str(obs_idx),
+        "--task.use-depth-camera",
+    ] + extra_args
+    print(f"[pipeline] Playing stage {sid} phase {phase}: {ckpt}", flush=True)
+    print("  " + " ".join(cmd), flush=True)
+    subprocess.run(cmd)
 
 
 def main() -> None:
     args, extra_args = parse_args()
     log_dir = Path(args.log_dir)
     log_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.command == "play":
+        _play(args, extra_args, log_dir)
+        return
 
     end_stage = args.end_stage if args.end_stage is not None else STAGES[-1]["id"]
 
@@ -208,7 +256,6 @@ def main() -> None:
             if stage["warm_start_from"]:
                 ws_ckpt = _ckpt(log_dir, stage["warm_start_from"])
                 if not ws_ckpt.exists():
-                    # Also try the pipeline index symlink
                     ws_link = log_dir / "checkpoints" / f"s{sid - 1}_p1.pt"
                     if ws_link.exists():
                         ws_ckpt = ws_link.resolve()
@@ -216,6 +263,10 @@ def main() -> None:
                         print(f"[pipeline] ERROR: warm-start checkpoint missing: {ws_ckpt}")
                         sys.exit(1)
                 warm_start_path = str(ws_ckpt)
+
+            # In DAgger mode the previous stage's checkpoint is also the teacher.
+            # Stage 0 always trains from scratch with plain PPO (no teacher yet).
+            teacher_path = warm_start_path if (args.use_dagger and warm_start_path) else None
 
             _run(
                 _pixi_train(
@@ -226,6 +277,7 @@ def main() -> None:
                     cuda=args.cuda,
                     num_envs=args.num_envs,
                     warm_start=warm_start_path,
+                    teacher_checkpoint=teacher_path,
                     extra=extra_args,
                 ),
                 f"Stage {sid} Phase 1 — {stage['description']}",
