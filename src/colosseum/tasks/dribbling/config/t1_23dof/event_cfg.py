@@ -17,9 +17,9 @@ events = {
       "asset_cfg": SceneEntityCfg("ball"),
       # Random XY offset from env origin; Z fixed at ball radius (on the ground).
       "pose_range": {
-        "x": (0.4, 0.4),
-        "y": (0.0, 0.0),
-        "z": (0.2, 0.2),
+        "x": (0.5, 1.0),
+        "y": (-0.2, 0.2),
+        "z": (0.1, 0.1),
       },
       "velocity_range": {},
     },
@@ -46,19 +46,19 @@ events = {
       "asset_cfg": SceneEntityCfg("robot", joint_names=(".*",)),
     },
   ),
-  "push_ball": EventTermCfg(
-    func=push_by_setting_velocity,
-    mode="interval",
-    interval_range_s=(3.0, 8.0),
-    params={
-      "asset_cfg": SceneEntityCfg("ball"),
-      # Small bumps: starts at ~0.3 m/s max, widened by push_ball_curriculum.
-      "velocity_range": {
-        "x": (-0.3, 0.3),
-        "y": (-0.3, 0.3),
-      },
-    },
-  ),
+  # "push_ball": EventTermCfg(
+  #   func=push_by_setting_velocity,
+  #   mode="interval",
+  #   interval_range_s=(3.0, 8.0),
+  #   params={
+  #     "asset_cfg": SceneEntityCfg("ball"),
+  #     # Small bumps: starts at ~0.3 m/s max, widened by push_ball_curriculum.
+  #     "velocity_range": {
+  #       "x": (-0.3, 0.3),
+  #       "y": (-0.3, 0.3),
+  #     },
+  #   },
+  # ),
   # "push_robot": EventTermCfg(
   #   func=push_by_setting_velocity,
   #   mode="interval",
@@ -74,35 +74,35 @@ events = {
   #     },
   #   },
   # ),
-  "foot_friction": EventTermCfg(
-    mode="startup",
-    func=geom_friction,
-    params={
-      "asset_cfg": SceneEntityCfg("robot", geom_names=FOOT_GEOM_NAMES),
-      "operation": "abs",
-      "ranges": (0.3, 1.2),
-      "shared_random": True,  # All foot geoms share the same friction.
-    },
-  ),
-  "encoder_bias": EventTermCfg(
-    mode="startup",
-    func=encoder_bias,
-    params={
-      "asset_cfg": SceneEntityCfg("robot"),
-      "bias_range": (-0.015, 0.015),
-    },
-  ),
-  "base_com": EventTermCfg(
-    mode="startup",
-    func=body_com_offset,
-    params={
-      "asset_cfg": SceneEntityCfg("robot", body_names=(BASE_BODY_NAME)),
-      "operation": "add",
-      "ranges": {
-        0: (-0.025, 0.025),
-        1: (-0.025, 0.025),
-        2: (-0.03, 0.03),
-      },
-    },
-  ),
+  # "foot_friction": EventTermCfg(
+  #   mode="startup",
+  #   func=geom_friction,
+  #   params={
+  #     "asset_cfg": SceneEntityCfg("robot", geom_names=FOOT_GEOM_NAMES),
+  #     "operation": "abs",
+  #     "ranges": (0.3, 1.2),
+  #     "shared_random": True,  # All foot geoms share the same friction.
+  #   },
+  # ),
+  # "encoder_bias": EventTermCfg(
+  #   mode="startup",
+  #   func=encoder_bias,
+  #   params={
+  #     "asset_cfg": SceneEntityCfg("robot"),
+  #     "bias_range": (-0.015, 0.015),
+  #   },
+  # ),
+  # "base_com": EventTermCfg(
+  #   mode="startup",
+  #   func=body_com_offset,
+  #   params={
+  #     "asset_cfg": SceneEntityCfg("robot", body_names=(BASE_BODY_NAME)),
+  #     "operation": "add",
+  #     "ranges": {
+  #       0: (-0.025, 0.025),
+  #       1: (-0.025, 0.025),
+  #       2: (-0.03, 0.03),
+  #     },
+  #   },
+  # ),
 }

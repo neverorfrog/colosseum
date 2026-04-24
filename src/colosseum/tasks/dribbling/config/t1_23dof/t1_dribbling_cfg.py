@@ -93,6 +93,7 @@ def scene_cfg(
   return SceneCfg(
     terrain=TerrainEntityCfg(),
     sensors=tuple(sensors),
+    env_spacing=10.0,
     entities={
       "ball": get_ball_cfg(),
       "robot": get_robot_cfg(foot_self_collision=True, with_head_camera=True),
