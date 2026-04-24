@@ -195,8 +195,8 @@ terminations = {
   #   func=ball_captured,
   #   params={"command_name": "adversary", "capture_radius": 0.25},
   # ),
-  "ball_lost": TerminationTermCfg(
-    func=ball_lost,
-    params={"max_robot_ball_distance": 3.0},
-  ),
+  # "ball_lost": TerminationTermCfg(
+  #   func=ball_lost,
+  #   params={"max_robot_ball_distance": 3.0},
+  # ),
 }
