@@ -289,6 +289,16 @@ def parse_args() -> tuple[argparse.Namespace, list[str]]:
       "Implies --use-dagger. Overrides --teacher-stage."
     ),
   )
+  train_p.add_argument(
+    "--pull-from",
+    default=None,
+    metavar="USER@HOST:PATH",
+    help=(
+      "Sync warm-start (and teacher) checkpoints from a remote machine before "
+      "each stage. PATH is the remote log_dir "
+      "(e.g. phd_student@gin:~/Maiorana/colosseum/logs/dribbling_pipeline)."
+    ),
+  )
 
   # --- play subcommand ---
   play_p = sub.add_parser(
@@ -464,6 +474,19 @@ def main() -> None:
       warm_start_path: str | None = None
       ws_ckpt_override = getattr(args, "warm_start_checkpoint", None)
       ws_stage_override = getattr(args, "warm_start_stage", None)
+      pull_from = getattr(args, "pull_from", None)
+
+      # Pull the warm-start (and teacher) checkpoint from a remote machine.
+      if pull_from and ws_ckpt_override is None and ws_stage_override != -1:
+        if ws_stage_override is not None:
+          pull_stage = ws_stage_override
+        elif stage["warm_start_from"]:
+          # Derive stage id from the built-in warm_start_from name.
+          pull_stage = sid - 1
+        else:
+          pull_stage = None
+        if pull_stage is not None:
+          _sync_checkpoints(pull_from, log_dir, pull_stage, 1)
 
       if ws_ckpt_override is not None:
         # Explicit path — highest priority.
