@@ -1168,6 +1168,16 @@ def _fmt(value: float, digits: int = 3, percent: bool = False) -> str:
   return f"{value:.{digits}f}"
 
 
+def _fmt_mean_std(acc: ScalarAccumulator, digits: int = 3) -> str:
+  mean = acc.mean()
+  if not math.isfinite(mean):
+    return "n/a"
+  std = acc.std()
+  if not math.isfinite(std):
+    return f"{mean:.{digits}f}"
+  return f"{mean:.{digits}f} ± {std:.{digits}f}"
+
+
 def _main_task_table(stats: list[ConditionStats]) -> str:
   lines = [
     "Columns marked **[T]** end a trial; unmarked columns are informational safety metrics.",
@@ -1185,15 +1195,15 @@ def _main_task_table(stats: list[ConditionStats]) -> str:
           s.condition.label,
           str(s.episodes),
           _fmt(s.success_rate, percent=True),
-          _fmt(s.success_times.mean()),
-          _fmt(s.censored_times.mean()),
+          _fmt_mean_std(s.success_times),
+          _fmt_mean_std(s.censored_times),
           _fmt(s.fall_rate, percent=True),
           _fmt(s.ball_lost_rate, percent=True),
           "n/a" if obstacle_free else _fmt(s.robot_collision_rate, percent=True),
-          "n/a" if obstacle_free else _fmt(s.robot_contact_counts.mean()),
+          "n/a" if obstacle_free else _fmt_mean_std(s.robot_contact_counts),
           "n/a" if obstacle_free else _fmt(s.ball_collision_rate, percent=True),
-          "n/a" if obstacle_free else _fmt(s.ball_contact_counts.mean()),
-          "n/a" if obstacle_free else _fmt(s.min_ball_clearance.mean()),
+          "n/a" if obstacle_free else _fmt_mean_std(s.ball_contact_counts),
+          "n/a" if obstacle_free else _fmt_mean_std(s.min_ball_clearance),
         ]
       )
       + " |"
@@ -1203,8 +1213,8 @@ def _main_task_table(stats: list[ConditionStats]) -> str:
 
 def _velocity_table(stats: list[ConditionStats]) -> str:
   lines = [
-    "| Setup | Segment | Vector error mean | Vector error var | Speed error mean | Angular error mean |",
-    "|---|---|---:|---:|---:|---:|",
+    "| Setup | Segment | Vector error | Speed error | Angular error |",
+    "|---|---|---:|---:|---:|",
   ]
   rows = [
     ("all timesteps", "velocity_all", "speed_all", "angle_all"),
@@ -1217,8 +1227,8 @@ def _velocity_table(stats: list[ConditionStats]) -> str:
       sp = getattr(s, sp_name)
       a = getattr(s, a_name)
       lines.append(
-        f"| {s.condition.label} | {label} | {_fmt(v.mean())} | {_fmt(v.var())} | "
-        f"{_fmt(sp.mean())} | {_fmt(a.mean())} |"
+        f"| {s.condition.label} | {label} | {_fmt_mean_std(v)} | "
+        f"{_fmt_mean_std(sp)} | {_fmt_mean_std(a)} |"
       )
   return "\n".join(lines)
 
@@ -1235,10 +1245,10 @@ def _perception_table(stats: list[ConditionStats]) -> str:
       + " | ".join(
         [
           s.condition.label,
-          _fmt(s.ball_pos_error.mean()),
-          _fmt(s.ball_vel_error.mean()),
-          "n/a" if obstacle_free else _fmt(s.obstacle_pos_error.mean()),
-          "n/a" if obstacle_free else _fmt(s.obstacle_vel_error.mean()),
+          _fmt_mean_std(s.ball_pos_error),
+          _fmt_mean_std(s.ball_vel_error),
+          "n/a" if obstacle_free else _fmt_mean_std(s.obstacle_pos_error),
+          "n/a" if obstacle_free else _fmt_mean_std(s.obstacle_vel_error),
           _fmt(s.fov_coverage.mean(), percent=True),
           _fmt(s.valid_depth_coverage.mean(), percent=True),
         ]
