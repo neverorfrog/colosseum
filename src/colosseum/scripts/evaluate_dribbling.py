@@ -322,13 +322,24 @@ def _make_live_viewer(
 
 def _cleanup_runtime_memory() -> None:
   """Release cyclic env references before creating the next render context."""
-  gc.collect()
+  for _ in range(3):
+    gc.collect()
   if torch.cuda.is_available():
     torch.cuda.empty_cache()
+    torch.cuda.synchronize()
   try:
     import warp as wp
 
     wp.synchronize_device()
+    # Warp keeps a per-device pool of staged allocations. Free it so the next
+    # condition's render context does not compound with the previous one.
+    for name in ("free_all", "free_all_temporary"):
+      fn = getattr(wp, name, None)
+      if callable(fn):
+        try:
+          fn()
+        except Exception:
+          pass
   except Exception:
     pass
 
@@ -890,17 +901,15 @@ def _run_condition(
   config: DribblingEvalConfig,
   condition: EvalCondition,
   seed: int,
-  device: torch.device,
   episodes: int,
+  env: ManagerBasedRlEnv,
+  agent: Any,
 ) -> ConditionStats:
   set_seed(seed)
-  env_cfg = _build_env_cfg(config, condition)
-  env = _make_env(env_cfg, str(device))
   scene_controller = EvalSceneController(env, condition, config)
   scene_controller.install()
   obs, _ = env.reset(seed=seed)
   scene_controller.resample_all()
-  agent = create_agent(config, env, device)
   live_viewer = None
   next_step_time = time.perf_counter()
   next_render_time = next_step_time
@@ -1051,14 +1060,7 @@ def _run_condition(
     progress.close()
     if live_viewer is not None:
       live_viewer.close()
-      live_viewer = None
     scene_controller.uninstall()
-    env.close()
-    # Drop every local that pins the env / warp buffers; empty_cache() only
-    # reclaims torch's pool, so warp allocations leak unless the env object
-    # itself is garbage-collected before the next condition is built.
-    del agent, scene_controller, env, obs
-    _cleanup_runtime_memory()
   return stats
 
 
@@ -1469,29 +1471,47 @@ def main() -> None:
   main_stats: list[ConditionStats] = []
   velocity_stats: list[ConditionStats] = []
 
-  if config.run_main:
-    for condition in MAIN_CONDITIONS:
-      logger.info(f"Running main condition: {condition.label}")
-      per_seed = [
-        _run_condition(config, condition, seed, device, config.episodes_per_condition)
-        for seed in config.seeds
-      ]
-      main_stats.append(_merge_stats(per_seed))
+  # Build the env and agent ONCE and reuse them across every condition and
+  # seed. Rebuilding per condition leaks warp render-context buffers (~2 GB)
+  # because nothing in the mjlab env class explicitly releases them on close;
+  # matches training, which is memory-stable for the same reason.
+  env_cfg = _build_env_cfg(config, MAIN_CONDITIONS[0])
+  env = _make_env(env_cfg, str(device))
+  agent = create_agent(config, env, device)
+  try:
+    if config.run_main:
+      for condition in MAIN_CONDITIONS:
+        logger.info(f"Running main condition: {condition.label}")
+        per_seed = [
+          _run_condition(
+            config,
+            condition,
+            seed,
+            config.episodes_per_condition,
+            env,
+            agent,
+          )
+          for seed in config.seeds
+        ]
+        main_stats.append(_merge_stats(per_seed))
 
-  if config.run_velocity_diagnostic:
-    for condition in VELOCITY_CONDITIONS:
-      logger.info(f"Running velocity diagnostic condition: {condition.label}")
-      per_seed = [
-        _run_condition(
-          config,
-          condition,
-          seed,
-          device,
-          config.velocity_episodes_per_condition,
-        )
-        for seed in config.seeds
-      ]
-      velocity_stats.append(_merge_stats(per_seed))
+    if config.run_velocity_diagnostic:
+      for condition in VELOCITY_CONDITIONS:
+        logger.info(f"Running velocity diagnostic condition: {condition.label}")
+        per_seed = [
+          _run_condition(
+            config,
+            condition,
+            seed,
+            config.velocity_episodes_per_condition,
+            env,
+            agent,
+          )
+          for seed in config.seeds
+        ]
+        velocity_stats.append(_merge_stats(per_seed))
+  finally:
+    env.close()
 
   plot_paths = _save_plots(velocity_stats, output_dir) if config.save_plots else []
   report = _build_report(config, checkpoint_path, main_stats, velocity_stats, plot_paths)
