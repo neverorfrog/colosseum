@@ -49,6 +49,7 @@ STAGES = [
         "p2_steps": 20_000_000,
         "obstacle_stage_index": 0,   # num_active=0, behavior='none'
         "warm_start_from": None,     # train from scratch
+        "ball_spawn_x_range": (1.5, 3.0),  # far spawn forces the robot to walk to the ball
     },
     {
         "id": 1,
@@ -113,6 +114,7 @@ def _pixi_train(
     checkpoint: str | None = None,
     warm_start: str | None = None,
     teacher_checkpoint: str | None = None,
+    ball_spawn_x_range: tuple[float, float] | None = None,
     extra: list[str] | None = None,
 ) -> list[str]:
     cmd = [
@@ -124,6 +126,8 @@ def _pixi_train(
         "--task.env.scene.num-envs", str(num_envs),
         "--task.obstacle-stage-index", str(obstacle_stage_index),
     ]
+    if ball_spawn_x_range is not None:
+        cmd += ["--task.ball-spawn-x-range", str(ball_spawn_x_range[0]), str(ball_spawn_x_range[1])]
     if warm_start:
         cmd += ["--warm-start", warm_start]
     if checkpoint:
@@ -287,6 +291,7 @@ def main() -> None:
                     num_envs=args.num_envs,
                     warm_start=warm_start_path,
                     teacher_checkpoint=teacher_path,
+                    ball_spawn_x_range=stage.get("ball_spawn_x_range"),
                     extra=extra_args,
                 ),
                 f"Stage {sid} Phase 1 — {stage['description']}",
