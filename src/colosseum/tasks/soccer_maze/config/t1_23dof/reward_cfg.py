@@ -22,6 +22,7 @@ from colosseum.robots.t1_23dof.sensors import (
   SELF_COLLISION_SENSOR,
 )
 from colosseum.tasks.dribbling.mdp.rewards import (
+  feet_distance_penalty,
   pose_deviation,
   stance_phase_schedule,
   swing_phase_schedule,
@@ -65,7 +66,14 @@ rewards = {
   "ball_push_target_progress": RewardTermCfg(
     func=ball_push_target_progress,
     weight=1.0,
-    params={"command_name": "sokoban", "speed_ref": 0.5},
+    params={
+      "command_name": "sokoban",
+      "speed_ref": 0.5,
+      "target_near_distance": 0.3,
+      "target_far_distance": 0.7,
+      "distance_scale_ref": 2.0,
+      "distance_scale_max": 1.5,
+    },
   ),
   "ball_push_target_reached": RewardTermCfg(
     func=ball_push_target_reached,
@@ -90,12 +98,12 @@ rewards = {
   # ------------------------------------------------------------------ #
   "robot_lin_vel": RewardTermCfg(
     func=robot_lin_vel_tracking,
-    weight=3.0,
+    weight=2.0,
     params={"command_name": "sokoban", "std": math.sqrt(0.25)},
   ),
   "robot_heading": RewardTermCfg(
     func=robot_heading_alignment,
-    weight=2.0,
+    weight=1.0,
     params={"command_name": "sokoban"},
   ),
   # ------------------------------------------------------------------ #
@@ -108,12 +116,12 @@ rewards = {
   ),
   "robot_ball_yaw": RewardTermCfg(
     func=robot_ball_yaw_body,
-    weight=4.0,
+    weight=0.5,
     params={"command_name": "sokoban"},
   ),
   "robot_ball_approach_vel": RewardTermCfg(
     func=robot_ball_approach_vel_push,
-    weight=2.0,
+    weight=1.0,
     params={"command_name": "sokoban"},
   ),
   # ------------------------------------------------------------------ #
@@ -189,6 +197,14 @@ rewards = {
     func=self_collision_cost,
     weight=-3.0,
     params={"sensor_name": FOOT_FOOT_CONTACT_SENSOR.name, "force_threshold": 1.0},
+  ),
+  "feet_distance": RewardTermCfg(
+    func=feet_distance_penalty,
+    weight=-6.0,
+    params={
+      "asset_cfg": SceneEntityCfg("robot", site_names=FOOT_SITE_NAMES),
+      "min_dist": 0.15,
+    },
   ),
   "nonfoot_ball_contact": RewardTermCfg(
     func=self_collision_cost,

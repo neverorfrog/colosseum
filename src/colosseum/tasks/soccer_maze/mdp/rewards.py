@@ -24,7 +24,9 @@ from typing import TYPE_CHECKING
 import torch
 from mjlab.utils.lab_api.math import quat_apply
 
-from colosseum.mdp.abstraction.maze.sokoban_grid_abstraction import SokobanGridAbstraction
+from colosseum.mdp.abstraction.maze.sokoban_grid_abstraction import (
+  SokobanGridAbstraction,
+)
 from colosseum.tasks.soccer_maze.mdp.sokoban_command import SokobanCommand
 
 if TYPE_CHECKING:
@@ -61,7 +63,7 @@ def ball_vel_tracking_body(
   env: ManagerBasedRlEnv,
   command_name: str,
   sharpness: float = 1.0,
-  min_speed: float = 0.05,
+  min_speed: float = 0.1,
 ) -> torch.Tensor:
   """exp(-sharpness * |v_ball_b - v_cmd_b|²). Body-frame, PUSH only.
 
@@ -72,14 +74,18 @@ def ball_vel_tracking_body(
   cmd_b = _cmd_body(env, command_name)
   error_sq = ((ball_vel_b - cmd_b) ** 2).sum(dim=-1)
   moving = (ball_vel_b.norm(dim=-1) > min_speed).float()
-  return torch.exp(-sharpness * error_sq) * _sokoban(env, command_name).is_push.float() * moving
+  return (
+    torch.exp(-sharpness * error_sq)
+    * _sokoban(env, command_name).is_push.float()
+    * moving
+  )
 
 
 def ball_vel_norm_body(
   env: ManagerBasedRlEnv,
   command_name: str,
   sharpness: float = 1.0,
-  min_speed: float = 0.05,
+  min_speed: float = 0.1,
 ) -> torch.Tensor:
   """exp(-sharpness * (|v_cmd| - |v_ball|)²). Magnitude match, PUSH only.
 
@@ -96,7 +102,7 @@ def ball_vel_norm_body(
 def ball_vel_angle_body(
   env: ManagerBasedRlEnv,
   command_name: str,
-  min_speed: float = 0.05,
+  min_speed: float = 0.1,
 ) -> torch.Tensor:
   """Direction match 1 - (ψ_ball - ψ_cmd)²/π². Body-frame, PUSH only.
 
@@ -108,14 +114,16 @@ def ball_vel_angle_body(
   psi_ball = torch.atan2(ball_vel_b[:, 1], ball_vel_b[:, 0])
   psi_cmd = torch.atan2(cmd_b[:, 1], cmd_b[:, 0])
   angle_err = (psi_ball - psi_cmd + math.pi) % (2 * math.pi) - math.pi
-  active = (cmd_b.norm(dim=-1) > min_speed).float() * (ball_vel_b.norm(dim=-1) > min_speed).float()
+  active = (cmd_b.norm(dim=-1) > min_speed).float() * (
+    ball_vel_b.norm(dim=-1) > min_speed
+  ).float()
   return (1.0 - (angle_err**2) / (math.pi**2)) * active
 
 
 def robot_ball_yaw_body(
   env: ManagerBasedRlEnv,
   command_name: str,
-  min_speed: float = 0.05,
+  min_speed: float = 0.1,
 ) -> torch.Tensor:
   """Ball ahead of robot along command direction (body frame).
 
@@ -204,10 +212,9 @@ def robot_ball_approach_vel_push(
   d_unit = d / d.norm(dim=-1, keepdim=True).clamp(min=1e-6)
   approach_vel = (robot.data.root_link_lin_vel_w[:, :2] * d_unit).sum(dim=-1)
   cmd_speed = sokoban.ball_vel.norm(dim=-1)  # non-zero only during PUSH
-  return (
-    (approach_vel / cmd_speed.clamp(min=1e-6)).clamp(min=0.0, max=1.0)
-    * sokoban.is_push.float()
-  )
+  return (approach_vel / cmd_speed.clamp(min=1e-6)).clamp(
+    min=0.0, max=1.0
+  ) * sokoban.is_push.float()
 
 
 def lateral_velocity_penalty_push(
@@ -239,7 +246,9 @@ def ball_displacement_push(
   sokoban = _sokoban(env, command_name)
   ball_pos = env.scene["ball"].data.root_link_pos_w[:, :2]
   displacement = ball_pos - sokoban.push_start_ball_pos
-  push_dir = sokoban.ball_vel / sokoban.ball_vel.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+  push_dir = sokoban.ball_vel / sokoban.ball_vel.norm(dim=-1, keepdim=True).clamp(
+    min=1e-6
+  )
   progress = (displacement * push_dir).sum(dim=-1).clamp(min=0.0, max=cell_size)
   return (progress / cell_size) * sokoban.is_push.float()
 
@@ -248,13 +257,16 @@ def ball_push_target_progress(
   env: ManagerBasedRlEnv,
   command_name: str,
   speed_ref: float = 0.5,
+  target_near_distance: float = 0.3,
+  target_far_distance: float = 0.7,
+  distance_scale_ref: float = 2.0,
+  distance_scale_max: float = 1.5,
 ) -> torch.Tensor:
   """Ball velocity projected toward the PUSH target cell center. PUSH only.
 
-  Mirrors dribbling's ball_target_progress: rewards the ball for moving in the
-  direction of the target cell, normalized by speed_ref.  Active throughout
-  the PUSH phase (ball stationary or rolling) so the robot always has a
-  gradient to keep pushing until the cell is reached.
+  Mirrors dribbling's ball_target_progress: adds a near-target gate (turns
+  off when ball is already within target_near_distance) and a distance-aware
+  scale (progress on a far target is worth up to distance_scale_max×).
   """
   sokoban = _sokoban(env, command_name)
   ball_xy = env.scene["ball"].data.root_link_pos_w[:, :2]
@@ -266,7 +278,16 @@ def ball_push_target_progress(
   target_dir = target_vec / target_dist.unsqueeze(-1).clamp(min=1e-6)
 
   progress = (ball_vel_xy * target_dir).sum(dim=-1).clamp(min=0.0)
-  return (progress / max(speed_ref, 1e-6)).clamp(max=1.0) * sokoban.is_push.float()
+  progress_reward = (progress / max(speed_ref, 1e-6)).clamp(max=1.0)
+
+  gate_span = max(target_far_distance - target_near_distance, 1e-6)
+  target_gate = ((target_dist - target_near_distance) / gate_span).clamp(0.0, 1.0)
+
+  distance_scale = 1.0 + (distance_scale_max - 1.0) * (
+    target_dist / max(distance_scale_ref, 1e-6)
+  ).clamp(0.0, 1.0)
+
+  return target_gate * distance_scale * progress_reward * sokoban.is_push.float()
 
 
 def ball_push_target_reached(
