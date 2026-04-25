@@ -1096,6 +1096,23 @@ def _fmt_mean_std(acc: ScalarAccumulator, digits: int = 3) -> str:
   return f"{mean:.{digits}f} ± {std:.{digits}f}"
 
 
+def _angle_values_deg(acc: ScalarAccumulator) -> np.ndarray:
+  if not acc.values:
+    return np.asarray([], dtype=float)
+  return np.degrees(np.asarray(acc.values, dtype=float))
+
+
+def _fmt_mean_std_deg(acc: ScalarAccumulator, digits: int = 3) -> str:
+  values = _angle_values_deg(acc)
+  if values.size == 0:
+    return "n/a"
+  mean = float(np.mean(values))
+  std = float(np.std(values))
+  if not math.isfinite(std):
+    return f"{mean:.{digits}f}"
+  return f"{mean:.{digits}f} ± {std:.{digits}f}"
+
+
 def _main_task_table(stats: list[ConditionStats]) -> str:
   lines = [
     "Columns marked **[T]** end a trial; unmarked columns are informational safety metrics.",
@@ -1146,7 +1163,7 @@ def _velocity_table(stats: list[ConditionStats]) -> str:
       a = getattr(s, a_name)
       lines.append(
         f"| {s.condition.label} | {label} | {_fmt_mean_std(v)} | "
-        f"{_fmt_mean_std(sp)} | {_fmt_mean_std(a)} |"
+        f"{_fmt_mean_std(sp)} | {_fmt_mean_std_deg(a)} |"
       )
   return "\n".join(lines)
 
@@ -1193,6 +1210,17 @@ def _fmt_mean_std_latex(acc: ScalarAccumulator, digits: int = 2) -> str:
   return f"{mean:.{digits}f} $\\pm$ {std:.{digits}f}"
 
 
+def _fmt_mean_std_latex_deg(acc: ScalarAccumulator, digits: int = 2) -> str:
+  values = _angle_values_deg(acc)
+  if values.size == 0:
+    return "--"
+  mean = float(np.mean(values))
+  std = float(np.std(values))
+  if not math.isfinite(std):
+    return f"{mean:.{digits}f}"
+  return f"{mean:.{digits}f} $\\pm$ {std:.{digits}f}"
+
+
 def _fmt_mean_var_latex(acc: ScalarAccumulator, digits: int = 2) -> str:
   mean = acc.mean()
   if not math.isfinite(mean):
@@ -1203,10 +1231,29 @@ def _fmt_mean_var_latex(acc: ScalarAccumulator, digits: int = 2) -> str:
   return f"{mean:.{digits}f} $\\pm$ {var:.{digits}f}"
 
 
+def _fmt_mean_var_latex_deg(acc: ScalarAccumulator, digits: int = 2) -> str:
+  values = _angle_values_deg(acc)
+  if values.size == 0:
+    return "--"
+  mean = float(np.mean(values))
+  var = float(np.var(values))
+  if not math.isfinite(var):
+    return f"{mean:.{digits}f}"
+  return f"{mean:.{digits}f} $\\pm$ {var:.{digits}f}"
+
+
 def _fmt_mean_latex(acc: ScalarAccumulator, digits: int = 2) -> str:
   mean = acc.mean()
   if not math.isfinite(mean):
     return "--"
+  return f"{mean:.{digits}f}"
+
+
+def _fmt_mean_latex_deg(acc: ScalarAccumulator, digits: int = 2) -> str:
+  values = _angle_values_deg(acc)
+  if values.size == 0:
+    return "--"
+  mean = float(np.mean(values))
   return f"{mean:.{digits}f}"
 
 
@@ -1298,7 +1345,7 @@ def _latex_velocity_table(
         seg_label,
         _fmt_mean_latex(v) if mean_only else _fmt_mean_var_latex(v),
         _fmt_mean_latex(sp) if mean_only else _fmt_mean_var_latex(sp),
-        _fmt_mean_latex(a) if mean_only else _fmt_mean_var_latex(a),
+        _fmt_mean_latex_deg(a) if mean_only else _fmt_mean_var_latex_deg(a),
       ]
       rows.append(" & ".join(cells) + " \\\\")
   return _latex_table(

@@ -80,14 +80,7 @@ Run a single-environment evaluation while watching it in realtime. The report
 and plots are still saved as usual:
 
 ```bash
-pixi run -e train eval-dribbling \
-    task:t1-dribbling \
-    --checkpoint ./checkpoints/dribbling_phase2_stage1_scratch.pt \
-    --episodes-per-condition 1 \
-    --num-envs 1 \
-    --seeds 0 \
-    --view-during-eval \
-    --output-dir logs/dribbling_eval
+pixi run -e train eval-dribbling task:t1-dribbling --checkpoint ./checkpoints/dribbling_phase2_stage1_scratch.pt --episodes-per-condition 1 --num-envs 1 --seeds 0 --view-during-eval --viewer viser --output-dir logs/dribbling_eval
 ```
 
 Disable plot generation:
