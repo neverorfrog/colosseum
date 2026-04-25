@@ -1173,6 +1173,134 @@ def _perception_table(stats: list[ConditionStats]) -> str:
   return "\n".join(lines)
 
 
+def _fmt_latex(value: float, digits: int = 3, percent: bool = False) -> str:
+  if not math.isfinite(value):
+    return "--"
+  if percent:
+    return f"{100.0 * value:.1f}\\%"
+  return f"{value:.{digits}f}"
+
+
+def _fmt_mean_std_latex(acc: ScalarAccumulator, digits: int = 3) -> str:
+  mean = acc.mean()
+  if not math.isfinite(mean):
+    return "--"
+  std = acc.std()
+  if not math.isfinite(std):
+    return f"{mean:.{digits}f}"
+  return f"{mean:.{digits}f} $\\pm$ {std:.{digits}f}"
+
+
+def _latex_main_task_table(stats: list[ConditionStats]) -> str:
+  header = (
+    "Condition & Trials & SR & T2T & T2T-C & FR & LR & RCR & "
+    "RC/t & BCR & BC/t & Min-BC \\\\"
+  )
+  rows: list[str] = []
+  for s in stats:
+    obstacle_free = s.condition.obstacle_free
+    cells = [
+      s.condition.label,
+      str(s.episodes),
+      _fmt_latex(s.success_rate, percent=True),
+      _fmt_mean_std_latex(s.success_times),
+      _fmt_mean_std_latex(s.censored_times),
+      _fmt_latex(s.fall_rate, percent=True),
+      _fmt_latex(s.ball_lost_rate, percent=True),
+      "--" if obstacle_free else _fmt_latex(s.robot_collision_rate, percent=True),
+      "--" if obstacle_free else _fmt_mean_std_latex(s.robot_contact_counts),
+      "--" if obstacle_free else _fmt_latex(s.ball_collision_rate, percent=True),
+      "--" if obstacle_free else _fmt_mean_std_latex(s.ball_contact_counts),
+      "--" if obstacle_free else _fmt_mean_std_latex(s.min_ball_clearance),
+    ]
+    rows.append(" & ".join(cells) + " \\\\")
+  return (
+    "\\begin{table}[t]\n"
+    "\\centering\n"
+    "\\caption{Final-policy main task evaluation.}\n"
+    "\\label{tab:main_eval}\n"
+    "\\begin{tabular}{lccccccccccc}\n"
+    "\\hline\n"
+    f"{header}\n"
+    "\\hline\n"
+    + "\n".join(rows) + "\n"
+    "\\hline\n"
+    "\\end{tabular}\n"
+    "\\end{table}"
+  )
+
+
+def _latex_velocity_table(stats: list[ConditionStats]) -> str:
+  header = "Condition & Segment & Vector error & Speed error & Angular error \\\\"
+  rows: list[str] = []
+  segments = [
+    ("all timesteps", "All timesteps", "velocity_all", "speed_all", "angle_all"),
+    ("unblocked", "Unblocked", "velocity_unblocked", "speed_unblocked", "angle_unblocked"),
+    ("blocked", "Blocked", "velocity_blocked", "speed_blocked", "angle_blocked"),
+  ]
+  for s in stats:
+    for _, seg_label, v_name, sp_name, a_name in segments:
+      v = getattr(s, v_name)
+      sp = getattr(s, sp_name)
+      a = getattr(s, a_name)
+      cells = [
+        s.condition.label,
+        seg_label,
+        _fmt_mean_std_latex(v),
+        _fmt_mean_std_latex(sp),
+        _fmt_mean_std_latex(a),
+      ]
+      rows.append(" & ".join(cells) + " \\\\")
+  return (
+    "\\begin{table}[t]\n"
+    "\\centering\n"
+    "\\caption{Velocity-tracking diagnostic for the final policy.}\n"
+    "\\label{tab:velocity_eval}\n"
+    "\\begin{tabular}{llccc}\n"
+    "\\hline\n"
+    f"{header}\n"
+    "\\hline\n"
+    + "\n".join(rows) + "\n"
+    "\\hline\n"
+    "\\end{tabular}\n"
+    "\\end{table}"
+  )
+
+
+def _latex_perception_table(stats: list[ConditionStats]) -> str:
+  header = (
+    "Condition & Ball pos. & Ball vel. & Obstacle pos. & Obstacle vel. & "
+    "FOV cov. & Valid depth cov. \\\\"
+  )
+  rows: list[str] = []
+  for s in stats:
+    obstacle_free = s.condition.obstacle_free
+    cells = [
+      s.condition.label,
+      _fmt_mean_std_latex(s.ball_pos_error),
+      _fmt_mean_std_latex(s.ball_vel_error),
+      "--" if obstacle_free else _fmt_mean_std_latex(s.obstacle_pos_error),
+      "--" if obstacle_free else _fmt_mean_std_latex(s.obstacle_vel_error),
+      _fmt_latex(s.fov_coverage.mean(), percent=True),
+      _fmt_latex(s.valid_depth_coverage.mean(), percent=True),
+    ]
+    rows.append(" & ".join(cells) + " \\\\")
+  return (
+    "\\begin{table}[t]\n"
+    "\\centering\n"
+    "\\caption{Perception metrics for the final policy.}\n"
+    "\\label{tab:perception_eval}\n"
+    "\\begin{tabular}{lcccccc}\n"
+    "\\hline\n"
+    f"{header}\n"
+    "\\hline\n"
+    + "\n".join(rows) + "\n"
+    "\\hline\n"
+    "\\end{tabular}\n"
+    "\\end{table}"
+  )
+
+
 def _plot_segmented_line(
   ax: Any,
   x: np.ndarray,
@@ -1394,6 +1522,20 @@ def _build_report(
       "## Perception And Depth Encoder Metrics",
       "",
       _perception_table(stats),
+      "",
+      "## LaTeX Tables",
+      "",
+      "```latex",
+      _latex_main_task_table(stats),
+      "```",
+      "",
+      "```latex",
+      _latex_velocity_table(stats),
+      "```",
+      "",
+      "```latex",
+      _latex_perception_table(stats),
+      "```",
       "",
     ])
   if plot_paths:
