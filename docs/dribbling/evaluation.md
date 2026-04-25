@@ -22,13 +22,7 @@ running an ablation with privileged observations.
 The protocol can be run with:
 
 ```bash
-pixi run -e train eval-dribbling \
-    task:t1-dribbling \
-    --checkpoint ./logs/<run>/checkpoints/latest.pt \
-    --episodes-per-condition 1000 \
-    --num-envs 128 \
-    --seeds 0 1 2 \
-    --output-dir logs/dribbling_eval
+pixi run -e train eval-dribbling task:t1-dribbling --checkpoint ./logs/<run>/checkpoints/latest.pt --episodes-per-condition 1000 --num-envs 128 --seeds 0 1 2 --output-dir logs/dribbling_eval
 ```
 
 The script prints the formatted results to the terminal and writes a Markdown
@@ -389,6 +383,77 @@ For the single-obstacle setup, split timesteps into:
 
 - unblocked timesteps: no relevant obstacle lies on the ball-to-target corridor
 - blocked timesteps: the nearest obstacle lies between the ball and the target
+
+The evaluator uses a simple geometric rule in the 2D plane. At each timestep,
+it looks at the line from the current ball position to the current target
+position and asks whether any active obstacle lies inside a short corridor in
+front of the ball along that line.
+
+In simple words:
+
+- `forward` means "in the same general direction as the target, not behind the
+  ball"
+- `close in forward distance` means "not too far ahead of the ball"
+- `close in lateral distance` means "not too far to the side of the
+  ball-to-target line"
+
+So a timestep is marked as `blocked` when at least one active obstacle is:
+
+- in front of the ball
+- still between the ball and the target
+- within the evaluator's forward look-ahead range
+- within the evaluator's lateral corridor width
+
+Otherwise the timestep is marked as `unblocked`.
+
+More precisely, let:
+
+- `b in R^2` be the current ball position
+- `t in R^2` be the current target position
+- `o in R^2` be the current obstacle position
+- `u = (t - b) / ||t - b||` be the unit vector from ball to target
+
+Then the evaluator computes:
+
+```text
+obs_forward = (o - b)^T u
+obs_lateral = || (o - b) - obs_forward * u ||
+target_dist = ||t - b||
+```
+
+Interpretation:
+
+- `obs_forward` is the signed projection of the obstacle onto the ball-to-target
+  axis
+- `obs_lateral` is the perpendicular distance from the obstacle to that axis
+
+An obstacle counts as blocking if all of the following are true:
+
+```text
+obs_forward > 0
+obs_forward < target_dist
+obs_forward <= blocked_detection_range
+obs_lateral <= blocked_tube_radius
+```
+
+Equivalently, in the local `(forward, lateral)` frame centered at the ball, the
+blocked region is approximately:
+
+```text
+0 < forward <= min(target_dist, blocked_detection_range)
+|lateral| <= blocked_tube_radius
+```
+
+With the current evaluator defaults:
+
+- `blocked_detection_range = 2.0 m`
+- `blocked_tube_radius = 0.75 m`
+
+This means the blocked region is not a semicircle. It is a finite corridor or
+"tube" extending from the ball toward the target, capped by the smaller of:
+
+- the actual ball-to-target distance
+- the configured forward look-ahead distance
 
 Then report the ball velocity error separately for the two cases. The expected
 behavior is:

@@ -111,6 +111,9 @@ class DribblingEvalConfig(BaseExperimentConfig):
   max_trial_s: float = 30.0
   """Maximum duration of one target-reaching trial before counting failure."""
 
+  target_reached_threshold: float = 0.75
+  """Success radius, in metres, used by the evaluation ball target command."""
+
   save_plots: bool = True
   """Save tracking-error and XY trajectory plots for diagnostic conditions."""
 
@@ -346,6 +349,12 @@ def _build_env_cfg(
     episode_length_s=1e9,
     terminations={},
     constraints={},
+  )
+  ball_vel_cfg = env_cfg.commands["ball_vel"]
+  env_cfg.commands = dict(env_cfg.commands)
+  env_cfg.commands["ball_vel"] = replace(
+    ball_vel_cfg,
+    target_reached_threshold=config.target_reached_threshold,
   )
   return env_cfg
 
@@ -1397,11 +1406,6 @@ def _build_report(
 
 def main() -> None:
   config = tyro.cli(DribblingEvalConfig, config=(tyro.conf.CascadeSubcommandArgs,))
-  if hasattr(config.task, "obstacle_stage_index"):
-    config = replace(
-      config,
-      task=replace(config.task, obstacle_stage_index=config.obstacle_stage_index),
-    )
 
   logger.remove()
   logger.add(
