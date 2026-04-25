@@ -1173,15 +1173,15 @@ def _perception_table(stats: list[ConditionStats]) -> str:
   return "\n".join(lines)
 
 
-def _fmt_latex(value: float, digits: int = 3, percent: bool = False) -> str:
+def _fmt_latex(value: float, digits: int = 2, percent: bool = False) -> str:
   if not math.isfinite(value):
     return "--"
   if percent:
-    return f"{100.0 * value:.1f}\\%"
+    return f"{100.0 * value:.{digits}f}\\%"
   return f"{value:.{digits}f}"
 
 
-def _fmt_mean_std_latex(acc: ScalarAccumulator, digits: int = 3) -> str:
+def _fmt_mean_std_latex(acc: ScalarAccumulator, digits: int = 2) -> str:
   mean = acc.mean()
   if not math.isfinite(mean):
     return "--"
@@ -1193,7 +1193,7 @@ def _fmt_mean_std_latex(acc: ScalarAccumulator, digits: int = 3) -> str:
 
 def _latex_main_task_table(stats: list[ConditionStats]) -> str:
   header = (
-    "Condition & Trials & SR & T2T & T2T-C & FR & LR & RCR & "
+    "Condition & SR & T2T & T2T-C & FR & LR & RCR & "
     "RC/t & BCR & BC/t & Min-BC \\\\"
   )
   rows: list[str] = []
@@ -1201,7 +1201,6 @@ def _latex_main_task_table(stats: list[ConditionStats]) -> str:
     obstacle_free = s.condition.obstacle_free
     cells = [
       s.condition.label,
-      str(s.episodes),
       _fmt_latex(s.success_rate, percent=True),
       _fmt_mean_std_latex(s.success_times),
       _fmt_mean_std_latex(s.censored_times),
@@ -1219,7 +1218,7 @@ def _latex_main_task_table(stats: list[ConditionStats]) -> str:
     "\\centering\n"
     "\\caption{Final-policy main task evaluation.}\n"
     "\\label{tab:main_eval}\n"
-    "\\begin{tabular}{lccccccccccc}\n"
+    "\\begin{tabular}{lcccccccccc}\n"
     "\\hline\n"
     f"{header}\n"
     "\\hline\n"
