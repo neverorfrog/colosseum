@@ -1005,6 +1005,7 @@ def _run_condition(
 
       if next_trial_indices:
         next_env_ids = torch.stack(next_trial_indices)
+        obs, _ = env.reset(env_ids=next_env_ids)
         elapsed[next_env_ids] = 0.0
         min_ball_clearance[next_env_ids] = float("inf")
         robot_collision_seen[next_env_ids] = False
@@ -1017,7 +1018,6 @@ def _run_condition(
         ball_lost_seen[next_env_ids] = False
         valid_steps[next_env_ids] = 0.0
         step_counts[next_env_ids] = 0.0
-        scene_controller.resample_targets(next_env_ids)
         trial_start_distance[next_env_ids] = _target_distance(env)[next_env_ids]
   finally:
     progress.close()
