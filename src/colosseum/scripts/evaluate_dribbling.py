@@ -238,7 +238,6 @@ class ConditionStats:
     self.ball_vel_error = ScalarAccumulator()
     self.obstacle_pos_error = ScalarAccumulator()
     self.obstacle_vel_error = ScalarAccumulator()
-    self.fov_coverage = ScalarAccumulator()
     self.valid_depth_coverage = ScalarAccumulator()
 
     self.plot_history: dict[str, list[Any]] = {
@@ -706,13 +705,11 @@ def _prediction_errors(
   valid_mask = term.get_adaptation_mask()
   if valid_mask is None:
     valid_mask = torch.ones(env.num_envs, dtype=torch.bool, device=env.device)
-  fov_mask = valid_mask.clone()
   if not valid_only:
     valid_mask = torch.ones_like(valid_mask, dtype=torch.bool)
 
   pred_ball = term.predict_ball_state()
   result: dict[str, torch.Tensor | None] = {
-    "fov_mask": fov_mask,
     "valid_mask": valid_mask,
   }
   if pred_ball is not None:
@@ -732,8 +729,17 @@ def _prediction_errors(
       dim=-1,
     )
     gt_obs = torch.cat([obstacle_position_b(env), obstacle_velocity_b(env)], dim=-1)
-    result["obstacle_pos"] = (obs_pred[:, :2] - gt_obs[:, :2]).norm(dim=-1)
-    result["obstacle_vel"] = (obs_pred[:, 2:] - gt_obs[:, 2:]).norm(dim=-1)
+    # `obstacle_position_b` substitutes a 1000 m sentinel whenever the obstacle
+    # is out of FOV. The head is trained against a clipped (±2 in normalized
+    # units = ±2 * obs_pos_scale m) target, so comparing in raw units against
+    # the sentinel inflates the error to ~1000 m and is meaningless. Mask
+    # those timesteps out of the metric.
+    in_fov = gt_obs[:, :2].norm(dim=-1) < term.cfg.obs_pos_scale * 2.0
+    nan = torch.full((env.num_envs,), float("nan"), device=env.device)
+    pos_err = (obs_pred[:, :2] - gt_obs[:, :2]).norm(dim=-1)
+    vel_err = (obs_pred[:, 2:] - gt_obs[:, 2:]).norm(dim=-1)
+    result["obstacle_pos"] = torch.where(in_fov, pos_err, nan)
+    result["obstacle_vel"] = torch.where(in_fov, vel_err, nan)
 
   return result
 
@@ -743,7 +749,6 @@ def _record_step_metrics(
   config: DribblingEvalConfig,
   stats: ConditionStats,
   trial_start_distance: torch.Tensor,
-  fov_steps: torch.Tensor,
   valid_steps: torch.Tensor,
   step_counts: torch.Tensor,
   active_mask: torch.Tensor,
@@ -775,17 +780,19 @@ def _record_step_metrics(
     valid_only=config.perception_valid_only,
   )
   valid_mask = pred.get("valid_mask")
-  fov_mask = pred.get("fov_mask")
   if isinstance(valid_mask, torch.Tensor):
-    coverage_mask = fov_mask if isinstance(fov_mask, torch.Tensor) else valid_mask
-    fov_steps += coverage_mask.float() * active_mask.float()
-    valid_steps += coverage_mask.float() * active_mask.float()
+    valid_steps += valid_mask.float() * active_mask.float()
     if "ball_pos" in pred:
       stats.ball_pos_error.add_tensor(pred["ball_pos"], active_mask & valid_mask)  # type: ignore[arg-type]
       stats.ball_vel_error.add_tensor(pred["ball_vel"], active_mask & valid_mask)  # type: ignore[arg-type]
     if "obstacle_pos" in pred:
-      stats.obstacle_pos_error.add_tensor(pred["obstacle_pos"], active_mask & valid_mask)  # type: ignore[arg-type]
-      stats.obstacle_vel_error.add_tensor(pred["obstacle_vel"], active_mask & valid_mask)  # type: ignore[arg-type]
+      # Drop NaN-masked timesteps (obstacle out of FOV) so the metric reflects
+      # accuracy when the obstacle is actually visible.
+      obs_pos = pred["obstacle_pos"]
+      obs_vel = pred["obstacle_vel"]
+      obs_mask = active_mask & valid_mask & torch.isfinite(obs_pos)  # type: ignore[arg-type]
+      stats.obstacle_pos_error.add_tensor(obs_pos, obs_mask)  # type: ignore[arg-type]
+      stats.obstacle_vel_error.add_tensor(obs_vel, obs_mask)  # type: ignore[arg-type]
 
   step_counts += active_mask.float()
 
@@ -870,7 +877,6 @@ def _run_condition(
   )
   robot_contact_count = torch.zeros(env.num_envs, device=env.device)
   ball_contact_count = torch.zeros(env.num_envs, device=env.device)
-  fov_steps = torch.zeros(env.num_envs, device=env.device)
   valid_steps = torch.zeros(env.num_envs, device=env.device)
   step_counts = torch.zeros(env.num_envs, device=env.device)
   active_mask = torch.ones(env.num_envs, dtype=torch.bool, device=env.device)
@@ -893,7 +899,6 @@ def _run_condition(
         config,
         stats,
         trial_start_distance,
-        fov_steps,
         valid_steps,
         step_counts,
         active_mask,
@@ -983,7 +988,6 @@ def _run_condition(
         if torch.isfinite(min_ball_clearance[idx]):
           stats.min_ball_clearance.add(float(min_ball_clearance[idx].item()))
         if step_counts[idx] > 0:
-          stats.fov_coverage.add(float((fov_steps[idx] / step_counts[idx]).item()))
           stats.valid_depth_coverage.add(
             float((valid_steps[idx] / step_counts[idx]).item())
           )
@@ -1011,7 +1015,6 @@ def _run_condition(
         ball_contact_prev[next_env_ids] = False
         fall_seen[next_env_ids] = False
         ball_lost_seen[next_env_ids] = False
-        fov_steps[next_env_ids] = 0.0
         valid_steps[next_env_ids] = 0.0
         step_counts[next_env_ids] = 0.0
         scene_controller.resample_targets(next_env_ids)
@@ -1150,8 +1153,8 @@ def _velocity_table(stats: list[ConditionStats]) -> str:
 
 def _perception_table(stats: list[ConditionStats]) -> str:
   lines = [
-    "| Environment | Ball pos error | Ball vel error | Obstacle pos error | Obstacle vel error | FOV coverage | Valid depth coverage |",
-    "|---|---:|---:|---:|---:|---:|---:|",
+    "| Environment | Ball pos error | Ball vel error | Obstacle pos error | Obstacle vel error | Adaptation coverage |",
+    "|---|---:|---:|---:|---:|---:|",
   ]
   for s in stats:
     obstacle_free = s.condition.obstacle_free
@@ -1164,7 +1167,6 @@ def _perception_table(stats: list[ConditionStats]) -> str:
           _fmt_mean_std(s.ball_vel_error),
           "n/a" if obstacle_free else _fmt_mean_std(s.obstacle_pos_error),
           "n/a" if obstacle_free else _fmt_mean_std(s.obstacle_vel_error),
-          _fmt(s.fov_coverage.mean(), percent=True),
           _fmt(s.valid_depth_coverage.mean(), percent=True),
         ]
       )
@@ -1191,46 +1193,114 @@ def _fmt_mean_std_latex(acc: ScalarAccumulator, digits: int = 2) -> str:
   return f"{mean:.{digits}f} $\\pm$ {std:.{digits}f}"
 
 
-def _latex_main_task_table(stats: list[ConditionStats]) -> str:
-  header = (
-    "Condition & SR & T2T & T2T-C & FR & LR & RCR & "
-    "RC/t & BCR & BC/t & Min-BC \\\\"
-  )
-  rows: list[str] = []
-  for s in stats:
-    obstacle_free = s.condition.obstacle_free
-    cells = [
-      s.condition.label,
-      _fmt_latex(s.success_rate, percent=True),
-      _fmt_mean_std_latex(s.success_times),
-      _fmt_mean_std_latex(s.censored_times),
-      _fmt_latex(s.fall_rate, percent=True),
-      _fmt_latex(s.ball_lost_rate, percent=True),
-      "--" if obstacle_free else _fmt_latex(s.robot_collision_rate, percent=True),
-      "--" if obstacle_free else _fmt_mean_std_latex(s.robot_contact_counts),
-      "--" if obstacle_free else _fmt_latex(s.ball_collision_rate, percent=True),
-      "--" if obstacle_free else _fmt_mean_std_latex(s.ball_contact_counts),
-      "--" if obstacle_free else _fmt_mean_std_latex(s.min_ball_clearance),
-    ]
-    rows.append(" & ".join(cells) + " \\\\")
+def _fmt_mean_var_latex(acc: ScalarAccumulator, digits: int = 2) -> str:
+  mean = acc.mean()
+  if not math.isfinite(mean):
+    return "--"
+  var = acc.var()
+  if not math.isfinite(var):
+    return f"{mean:.{digits}f}"
+  return f"{mean:.{digits}f} ({var:.{digits}f})"
+
+
+def _latex_table(
+  alignment: str,
+  header: str,
+  rows: list[str],
+  caption: str,
+  label: str,
+) -> str:
   return (
     "\\begin{table}[t]\n"
     "\\centering\n"
-    "\\caption{Final-policy main task evaluation.}\n"
-    "\\label{tab:main_eval}\n"
-    "\\begin{tabular}{lcccccccccc}\n"
+    f"\\begin{{tabular}}{{{alignment}}}\n"
     "\\hline\n"
     f"{header}\n"
     "\\hline\n"
     + "\n".join(rows) + "\n"
     "\\hline\n"
     "\\end{tabular}\n"
+    f"\\caption{{{caption}}}\n"
+    f"\\label{{{label}}}\n"
     "\\end{table}"
   )
 
 
-def _latex_velocity_table(stats: list[ConditionStats]) -> str:
-  header = "Condition & Segment & Vector error & Speed error & Angular error \\\\"
+def _latex_main_task_table(
+  stats: list[ConditionStats],
+  *,
+  include_variance: bool = False,
+) -> str:
+  if include_variance:
+    header = (
+      "Condition & SR & T2T & Var(T2T) & T2T-C & Var(T2T-C) & FR & LR & RCR & "
+      "RC/t & Var(RC/t) & BCR & BC/t & Var(BC/t) & Min-BC & Var(Min-BC) \\\\"
+    )
+  else:
+    header = (
+      "Condition & SR & T2T & T2T-C & FR & LR & RCR & "
+      "RC/t & BCR & BC/t & Min-BC \\\\"
+    )
+  rows: list[str] = []
+  for s in stats:
+    obstacle_free = s.condition.obstacle_free
+    if include_variance:
+      cells = [
+        s.condition.label,
+        _fmt_latex(s.success_rate, percent=True),
+        _fmt_latex(s.success_times.mean()),
+        _fmt_latex(s.success_times.var()),
+        _fmt_latex(s.censored_times.mean()),
+        _fmt_latex(s.censored_times.var()),
+        _fmt_latex(s.fall_rate, percent=True),
+        _fmt_latex(s.ball_lost_rate, percent=True),
+        "--" if obstacle_free else _fmt_latex(s.robot_collision_rate, percent=True),
+        "--" if obstacle_free else _fmt_latex(s.robot_contact_counts.mean()),
+        "--" if obstacle_free else _fmt_latex(s.robot_contact_counts.var()),
+        "--" if obstacle_free else _fmt_latex(s.ball_collision_rate, percent=True),
+        "--" if obstacle_free else _fmt_latex(s.ball_contact_counts.mean()),
+        "--" if obstacle_free else _fmt_latex(s.ball_contact_counts.var()),
+        "--" if obstacle_free else _fmt_latex(s.min_ball_clearance.mean()),
+        "--" if obstacle_free else _fmt_latex(s.min_ball_clearance.var()),
+      ]
+    else:
+      cells = [
+        s.condition.label,
+        _fmt_latex(s.success_rate, percent=True),
+        _fmt_mean_std_latex(s.success_times),
+        _fmt_mean_std_latex(s.censored_times),
+        _fmt_latex(s.fall_rate, percent=True),
+        _fmt_latex(s.ball_lost_rate, percent=True),
+        "--" if obstacle_free else _fmt_latex(s.robot_collision_rate, percent=True),
+        "--" if obstacle_free else _fmt_mean_std_latex(s.robot_contact_counts),
+        "--" if obstacle_free else _fmt_latex(s.ball_collision_rate, percent=True),
+        "--" if obstacle_free else _fmt_mean_std_latex(s.ball_contact_counts),
+        "--" if obstacle_free else _fmt_mean_std_latex(s.min_ball_clearance),
+      ]
+    rows.append(" & ".join(cells) + " \\\\")
+  return _latex_table(
+    "lccccccccccccccc" if include_variance else "lcccccccccc",
+    header,
+    rows,
+    "Final-policy main task evaluation with variance."
+    if include_variance
+    else "Final-policy main task evaluation.",
+    "tab:main_eval_var" if include_variance else "tab:main_eval",
+  )
+
+
+def _latex_velocity_table(
+  stats: list[ConditionStats],
+  *,
+  include_variance: bool = False,
+) -> str:
+  if include_variance:
+    header = (
+      "Condition & Segment & Vector error & Var(Vector) & Speed error & "
+      "Var(Speed) & Angular error & Var(Angular) \\\\"
+    )
+  else:
+    header = "Condition & Segment & Vector error & Speed error & Angular error \\\\"
   rows: list[str] = []
   segments = [
     ("all timesteps", "All timesteps", "velocity_all", "speed_all", "angle_all"),
@@ -1242,61 +1312,87 @@ def _latex_velocity_table(stats: list[ConditionStats]) -> str:
       v = getattr(s, v_name)
       sp = getattr(s, sp_name)
       a = getattr(s, a_name)
-      cells = [
-        s.condition.label,
-        seg_label,
-        _fmt_mean_std_latex(v),
-        _fmt_mean_std_latex(sp),
-        _fmt_mean_std_latex(a),
-      ]
+      if include_variance:
+        cells = [
+          s.condition.label,
+          seg_label,
+          _fmt_latex(v.mean()),
+          _fmt_latex(v.var()),
+          _fmt_latex(sp.mean()),
+          _fmt_latex(sp.var()),
+          _fmt_latex(a.mean()),
+          _fmt_latex(a.var()),
+        ]
+      else:
+        cells = [
+          s.condition.label,
+          seg_label,
+          _fmt_mean_std_latex(v),
+          _fmt_mean_std_latex(sp),
+          _fmt_mean_std_latex(a),
+        ]
       rows.append(" & ".join(cells) + " \\\\")
-  return (
-    "\\begin{table}[t]\n"
-    "\\centering\n"
-    "\\caption{Velocity-tracking diagnostic for the final policy.}\n"
-    "\\label{tab:velocity_eval}\n"
-    "\\begin{tabular}{llccc}\n"
-    "\\hline\n"
-    f"{header}\n"
-    "\\hline\n"
-    + "\n".join(rows) + "\n"
-    "\\hline\n"
-    "\\end{tabular}\n"
-    "\\end{table}"
+  return _latex_table(
+    "llcccccc" if include_variance else "llccc",
+    header,
+    rows,
+    "Velocity-tracking diagnostic for the final policy with variance."
+    if include_variance
+    else "Velocity-tracking diagnostic for the final policy.",
+    "tab:velocity_eval_var" if include_variance else "tab:velocity_eval",
   )
 
 
-def _latex_perception_table(stats: list[ConditionStats]) -> str:
-  header = (
-    "Condition & Ball pos. & Ball vel. & Obstacle pos. & Obstacle vel. & "
-    "FOV cov. & Valid depth cov. \\\\"
-  )
+def _latex_perception_table(
+  stats: list[ConditionStats],
+  *,
+  include_variance: bool = False,
+) -> str:
+  if include_variance:
+    header = (
+      "Condition & Ball pos. & Var(Ball pos.) & Ball vel. & Var(Ball vel.) & "
+      "Obstacle pos. & Var(Obstacle pos.) & Obstacle vel. & Var(Obstacle vel.) & "
+      "FoV. cov. \\\\"
+    )
+  else:
+    header = (
+      "Condition & Ball pos. & Ball vel. & Obstacle pos. & Obstacle vel. & "
+      "FoV. cov. \\\\"
+    )
   rows: list[str] = []
   for s in stats:
     obstacle_free = s.condition.obstacle_free
-    cells = [
-      s.condition.label,
-      _fmt_mean_std_latex(s.ball_pos_error),
-      _fmt_mean_std_latex(s.ball_vel_error),
-      "--" if obstacle_free else _fmt_mean_std_latex(s.obstacle_pos_error),
-      "--" if obstacle_free else _fmt_mean_std_latex(s.obstacle_vel_error),
-      _fmt_latex(s.fov_coverage.mean(), percent=True),
-      _fmt_latex(s.valid_depth_coverage.mean(), percent=True),
-    ]
+    if include_variance:
+      cells = [
+        s.condition.label,
+        _fmt_latex(s.ball_pos_error.mean()),
+        _fmt_latex(s.ball_pos_error.var()),
+        _fmt_latex(s.ball_vel_error.mean()),
+        _fmt_latex(s.ball_vel_error.var()),
+        "--" if obstacle_free else _fmt_latex(s.obstacle_pos_error.mean()),
+        "--" if obstacle_free else _fmt_latex(s.obstacle_pos_error.var()),
+        "--" if obstacle_free else _fmt_latex(s.obstacle_vel_error.mean()),
+        "--" if obstacle_free else _fmt_latex(s.obstacle_vel_error.var()),
+        _fmt_latex(s.valid_depth_coverage.mean(), percent=True),
+      ]
+    else:
+      cells = [
+        s.condition.label,
+        _fmt_mean_std_latex(s.ball_pos_error),
+        _fmt_mean_std_latex(s.ball_vel_error),
+        "--" if obstacle_free else _fmt_mean_std_latex(s.obstacle_pos_error),
+        "--" if obstacle_free else _fmt_mean_std_latex(s.obstacle_vel_error),
+        _fmt_latex(s.valid_depth_coverage.mean(), percent=True),
+      ]
     rows.append(" & ".join(cells) + " \\\\")
-  return (
-    "\\begin{table}[t]\n"
-    "\\centering\n"
-    "\\caption{Perception metrics for the final policy.}\n"
-    "\\label{tab:perception_eval}\n"
-    "\\begin{tabular}{lcccccc}\n"
-    "\\hline\n"
-    f"{header}\n"
-    "\\hline\n"
-    + "\n".join(rows) + "\n"
-    "\\hline\n"
-    "\\end{tabular}\n"
-    "\\end{table}"
+  return _latex_table(
+    "lccccccccc" if include_variance else "lccccc",
+    header,
+    rows,
+    "Perception metrics for the final policy with variance."
+    if include_variance
+    else "Perception metrics for the final policy.",
+    "tab:perception_eval_var" if include_variance else "tab:perception_eval",
   )
 
 
@@ -1524,16 +1620,40 @@ def _build_report(
       "",
       "## LaTeX Tables",
       "",
+      "### Main Task Table (mean $\\pm$ std)",
+      "",
       "```latex",
       _latex_main_task_table(stats),
       "```",
+      "",
+      "### Main Task Table (mean and variance)",
+      "",
+      "```latex",
+      _latex_main_task_table(stats, include_variance=True),
+      "```",
+      "",
+      "### Velocity Diagnostic Table (mean $\\pm$ std)",
       "",
       "```latex",
       _latex_velocity_table(stats),
       "```",
       "",
+      "### Velocity Diagnostic Table (mean and variance)",
+      "",
+      "```latex",
+      _latex_velocity_table(stats, include_variance=True),
+      "```",
+      "",
+      "### Perception Table (mean $\\pm$ std)",
+      "",
       "```latex",
       _latex_perception_table(stats),
+      "```",
+      "",
+      "### Perception Table (mean and variance)",
+      "",
+      "```latex",
+      _latex_perception_table(stats, include_variance=True),
       "```",
       "",
     ])
