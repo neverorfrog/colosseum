@@ -1200,7 +1200,14 @@ def _fmt_mean_var_latex(acc: ScalarAccumulator, digits: int = 2) -> str:
   var = acc.var()
   if not math.isfinite(var):
     return f"{mean:.{digits}f}"
-  return f"{mean:.{digits}f} ({var:.{digits}f})"
+  return f"{mean:.{digits}f} $\\pm$ {var:.{digits}f}"
+
+
+def _fmt_mean_latex(acc: ScalarAccumulator, digits: int = 2) -> str:
+  mean = acc.mean()
+  if not math.isfinite(mean):
+    return "--"
+  return f"{mean:.{digits}f}"
 
 
 def _latex_table(
@@ -1229,78 +1236,52 @@ def _latex_table(
 def _latex_main_task_table(
   stats: list[ConditionStats],
   *,
-  include_variance: bool = False,
+  mean_only: bool = False,
 ) -> str:
-  if include_variance:
-    header = (
-      "Condition & SR & T2T & Var(T2T) & T2T-C & Var(T2T-C) & FR & LR & RCR & "
-      "RC/t & Var(RC/t) & BCR & BC/t & Var(BC/t) & Min-BC & Var(Min-BC) \\\\"
-    )
-  else:
-    header = (
-      "Condition & SR & T2T & T2T-C & FR & LR & RCR & "
-      "RC/t & BCR & BC/t & Min-BC \\\\"
-    )
+  header = (
+    "Condition & SR & T2T & T2T-C & FR & LR & RCR & "
+    "RC/t & BCR & BC/t & Min-BC \\\\"
+  )
   rows: list[str] = []
   for s in stats:
     obstacle_free = s.condition.obstacle_free
-    if include_variance:
-      cells = [
-        s.condition.label,
-        _fmt_latex(s.success_rate, percent=True),
-        _fmt_latex(s.success_times.mean()),
-        _fmt_latex(s.success_times.var()),
-        _fmt_latex(s.censored_times.mean()),
-        _fmt_latex(s.censored_times.var()),
-        _fmt_latex(s.fall_rate, percent=True),
-        _fmt_latex(s.ball_lost_rate, percent=True),
-        "--" if obstacle_free else _fmt_latex(s.robot_collision_rate, percent=True),
-        "--" if obstacle_free else _fmt_latex(s.robot_contact_counts.mean()),
-        "--" if obstacle_free else _fmt_latex(s.robot_contact_counts.var()),
-        "--" if obstacle_free else _fmt_latex(s.ball_collision_rate, percent=True),
-        "--" if obstacle_free else _fmt_latex(s.ball_contact_counts.mean()),
-        "--" if obstacle_free else _fmt_latex(s.ball_contact_counts.var()),
-        "--" if obstacle_free else _fmt_latex(s.min_ball_clearance.mean()),
-        "--" if obstacle_free else _fmt_latex(s.min_ball_clearance.var()),
-      ]
-    else:
-      cells = [
-        s.condition.label,
-        _fmt_latex(s.success_rate, percent=True),
-        _fmt_mean_std_latex(s.success_times),
-        _fmt_mean_std_latex(s.censored_times),
-        _fmt_latex(s.fall_rate, percent=True),
-        _fmt_latex(s.ball_lost_rate, percent=True),
-        "--" if obstacle_free else _fmt_latex(s.robot_collision_rate, percent=True),
-        "--" if obstacle_free else _fmt_mean_std_latex(s.robot_contact_counts),
-        "--" if obstacle_free else _fmt_latex(s.ball_collision_rate, percent=True),
-        "--" if obstacle_free else _fmt_mean_std_latex(s.ball_contact_counts),
-        "--" if obstacle_free else _fmt_mean_std_latex(s.min_ball_clearance),
-      ]
+    cells = [
+      s.condition.label,
+      _fmt_latex(s.success_rate, percent=True),
+      _fmt_mean_latex(s.success_times) if mean_only else _fmt_mean_var_latex(s.success_times),
+      _fmt_mean_latex(s.censored_times) if mean_only else _fmt_mean_var_latex(s.censored_times),
+      _fmt_latex(s.fall_rate, percent=True),
+      _fmt_latex(s.ball_lost_rate, percent=True),
+      "--" if obstacle_free else _fmt_latex(s.robot_collision_rate, percent=True),
+      "--"
+      if obstacle_free
+      else (_fmt_mean_latex(s.robot_contact_counts) if mean_only else _fmt_mean_var_latex(s.robot_contact_counts)),
+      "--" if obstacle_free else _fmt_latex(s.ball_collision_rate, percent=True),
+      "--"
+      if obstacle_free
+      else (_fmt_mean_latex(s.ball_contact_counts) if mean_only else _fmt_mean_var_latex(s.ball_contact_counts)),
+      "--"
+      if obstacle_free
+      else (_fmt_mean_latex(s.min_ball_clearance) if mean_only else _fmt_mean_var_latex(s.min_ball_clearance)),
+    ]
     rows.append(" & ".join(cells) + " \\\\")
   return _latex_table(
-    "lccccccccccccccc" if include_variance else "lcccccccccc",
+    "lcccccccccc",
     header,
     rows,
-    "Final-policy main task evaluation with variance."
-    if include_variance
-    else "Final-policy main task evaluation.",
-    "tab:main_eval_var" if include_variance else "tab:main_eval",
+    "Final-policy main task evaluation (mean only)."
+    if mean_only
+    else "Final-policy main task evaluation (mean $\\pm$ variance).",
+    "tab:main_eval_mean" if mean_only else "tab:main_eval",
   )
 
 
 def _latex_velocity_table(
   stats: list[ConditionStats],
   *,
-  include_variance: bool = False,
+  mean_only: bool = False,
 ) -> str:
-  if include_variance:
-    header = (
-      "Condition & Segment & Vector error & Var(Vector) & Speed error & "
-      "Var(Speed) & Angular error & Var(Angular) \\\\"
-    )
-  else:
-    header = "Condition & Segment & Vector error & Speed error & Angular error \\\\"
+  header = "Condition & Segment & Vector error & Speed error & Angular error \\\\"
   rows: list[str] = []
   segments = [
     ("all timesteps", "All timesteps", "velocity_all", "speed_all", "angle_all"),
@@ -1312,87 +1293,58 @@ def _latex_velocity_table(
       v = getattr(s, v_name)
       sp = getattr(s, sp_name)
       a = getattr(s, a_name)
-      if include_variance:
-        cells = [
-          s.condition.label,
-          seg_label,
-          _fmt_latex(v.mean()),
-          _fmt_latex(v.var()),
-          _fmt_latex(sp.mean()),
-          _fmt_latex(sp.var()),
-          _fmt_latex(a.mean()),
-          _fmt_latex(a.var()),
-        ]
-      else:
-        cells = [
-          s.condition.label,
-          seg_label,
-          _fmt_mean_std_latex(v),
-          _fmt_mean_std_latex(sp),
-          _fmt_mean_std_latex(a),
-        ]
+      cells = [
+        s.condition.label,
+        seg_label,
+        _fmt_mean_latex(v) if mean_only else _fmt_mean_var_latex(v),
+        _fmt_mean_latex(sp) if mean_only else _fmt_mean_var_latex(sp),
+        _fmt_mean_latex(a) if mean_only else _fmt_mean_var_latex(a),
+      ]
       rows.append(" & ".join(cells) + " \\\\")
   return _latex_table(
-    "llcccccc" if include_variance else "llccc",
+    "llccc",
     header,
     rows,
-    "Velocity-tracking diagnostic for the final policy with variance."
-    if include_variance
-    else "Velocity-tracking diagnostic for the final policy.",
-    "tab:velocity_eval_var" if include_variance else "tab:velocity_eval",
+    "Velocity-tracking diagnostic for the final policy (mean only)."
+    if mean_only
+    else "Velocity-tracking diagnostic for the final policy (mean $\\pm$ variance).",
+    "tab:velocity_eval_mean" if mean_only else "tab:velocity_eval",
   )
 
 
 def _latex_perception_table(
   stats: list[ConditionStats],
   *,
-  include_variance: bool = False,
+  mean_only: bool = False,
 ) -> str:
-  if include_variance:
-    header = (
-      "Condition & Ball pos. & Var(Ball pos.) & Ball vel. & Var(Ball vel.) & "
-      "Obstacle pos. & Var(Obstacle pos.) & Obstacle vel. & Var(Obstacle vel.) & "
-      "FoV. cov. \\\\"
-    )
-  else:
-    header = (
-      "Condition & Ball pos. & Ball vel. & Obstacle pos. & Obstacle vel. & "
-      "FoV. cov. \\\\"
-    )
+  header = (
+    "Condition & Ball pos. & Ball vel. & Obstacle pos. & Obstacle vel. & "
+    "FoV. cov. \\\\"
+  )
   rows: list[str] = []
   for s in stats:
     obstacle_free = s.condition.obstacle_free
-    if include_variance:
-      cells = [
-        s.condition.label,
-        _fmt_latex(s.ball_pos_error.mean()),
-        _fmt_latex(s.ball_pos_error.var()),
-        _fmt_latex(s.ball_vel_error.mean()),
-        _fmt_latex(s.ball_vel_error.var()),
-        "--" if obstacle_free else _fmt_latex(s.obstacle_pos_error.mean()),
-        "--" if obstacle_free else _fmt_latex(s.obstacle_pos_error.var()),
-        "--" if obstacle_free else _fmt_latex(s.obstacle_vel_error.mean()),
-        "--" if obstacle_free else _fmt_latex(s.obstacle_vel_error.var()),
-        _fmt_latex(s.valid_depth_coverage.mean(), percent=True),
-      ]
-    else:
-      cells = [
-        s.condition.label,
-        _fmt_mean_std_latex(s.ball_pos_error),
-        _fmt_mean_std_latex(s.ball_vel_error),
-        "--" if obstacle_free else _fmt_mean_std_latex(s.obstacle_pos_error),
-        "--" if obstacle_free else _fmt_mean_std_latex(s.obstacle_vel_error),
-        _fmt_latex(s.valid_depth_coverage.mean(), percent=True),
-      ]
+    cells = [
+      s.condition.label,
+      _fmt_mean_latex(s.ball_pos_error) if mean_only else _fmt_mean_var_latex(s.ball_pos_error),
+      _fmt_mean_latex(s.ball_vel_error) if mean_only else _fmt_mean_var_latex(s.ball_vel_error),
+      "--"
+      if obstacle_free
+      else (_fmt_mean_latex(s.obstacle_pos_error) if mean_only else _fmt_mean_var_latex(s.obstacle_pos_error)),
+      "--"
+      if obstacle_free
+      else (_fmt_mean_latex(s.obstacle_vel_error) if mean_only else _fmt_mean_var_latex(s.obstacle_vel_error)),
+      _fmt_latex(s.valid_depth_coverage.mean(), percent=True),
+    ]
     rows.append(" & ".join(cells) + " \\\\")
   return _latex_table(
-    "lccccccccc" if include_variance else "lccccc",
+    "lccccc",
     header,
     rows,
-    "Perception metrics for the final policy with variance."
-    if include_variance
-    else "Perception metrics for the final policy.",
-    "tab:perception_eval_var" if include_variance else "tab:perception_eval",
+    "Perception metrics for the final policy (mean only)."
+    if mean_only
+    else "Perception metrics for the final policy (mean $\\pm$ variance).",
+    "tab:perception_eval_mean" if mean_only else "tab:perception_eval",
   )
 
 
@@ -1620,40 +1572,40 @@ def _build_report(
       "",
       "## LaTeX Tables",
       "",
-      "### Main Task Table (mean $\\pm$ std)",
+      "### Main Task Table (mean $\\pm$ variance)",
       "",
       "```latex",
       _latex_main_task_table(stats),
       "```",
       "",
-      "### Main Task Table (mean and variance)",
+      "### Main Task Table (mean only)",
       "",
       "```latex",
-      _latex_main_task_table(stats, include_variance=True),
+      _latex_main_task_table(stats, mean_only=True),
       "```",
       "",
-      "### Velocity Diagnostic Table (mean $\\pm$ std)",
+      "### Velocity Diagnostic Table (mean $\\pm$ variance)",
       "",
       "```latex",
       _latex_velocity_table(stats),
       "```",
       "",
-      "### Velocity Diagnostic Table (mean and variance)",
+      "### Velocity Diagnostic Table (mean only)",
       "",
       "```latex",
-      _latex_velocity_table(stats, include_variance=True),
+      _latex_velocity_table(stats, mean_only=True),
       "```",
       "",
-      "### Perception Table (mean $\\pm$ std)",
+      "### Perception Table (mean $\\pm$ variance)",
       "",
       "```latex",
       _latex_perception_table(stats),
       "```",
       "",
-      "### Perception Table (mean and variance)",
+      "### Perception Table (mean only)",
       "",
       "```latex",
-      _latex_perception_table(stats, include_variance=True),
+      _latex_perception_table(stats, mean_only=True),
       "```",
       "",
     ])
