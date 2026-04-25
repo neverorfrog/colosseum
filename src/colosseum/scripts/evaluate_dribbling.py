@@ -171,10 +171,10 @@ class DribblingEvalConfig(BaseExperimentConfig):
   eval_obstacle_lateral_offset_range: tuple[float, float] = (-0.4, 0.4)
   """Uniform per-trial lateral-offset range used when randomization is enabled."""
 
-  eval_obstacle_speed: float = 0.15
+  eval_obstacle_speed: float = 0.2
   """Scripted speed for the moving evaluation obstacle, in m/s."""
 
-  eval_obstacle_speed_range: tuple[float, float] = (0.1, 0.3)
+  eval_obstacle_speed_range: tuple[float, float] = (0.1, 0.4)
   """Uniform per-env obstacle-speed range used when randomization is enabled."""
 
 
