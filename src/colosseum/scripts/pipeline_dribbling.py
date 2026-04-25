@@ -64,7 +64,7 @@ STAGES = [
     "id": 2,
     "name": "s2_static_obstacle",
     "description": "static obstacle blocker — 1 obstacle, no motion",
-    "p1_steps": 200_000_000,
+    "p1_steps": 300_000_000,
     "p2_steps": 10_000_000,
     "obstacle_stage_index": 1,  # num_active=1, behavior='static_blocker'
     "warm_start_from": "s1_dribbling_p1",
@@ -73,7 +73,7 @@ STAGES = [
     "id": 3,
     "name": "s3_attack_blocker",
     "description": "attack blocker — 1 obstacle, lateral blocker behavior",
-    "p1_steps": 200_000_000,
+    "p1_steps": 300_000_000,
     "p2_steps": 10_000_000,
     "obstacle_stage_index": 3,  # num_active=1, behavior='lateral_blocker'
     "warm_start_from": "s2_static_obstacle_p1",
@@ -289,6 +289,16 @@ def parse_args() -> tuple[argparse.Namespace, list[str]]:
       "Implies --use-dagger. Overrides --teacher-stage."
     ),
   )
+  train_p.add_argument(
+    "--pull-from",
+    default=None,
+    metavar="USER@HOST:PATH",
+    help=(
+      "Sync warm-start (and teacher) checkpoints from a remote machine before "
+      "each stage. PATH is the remote log_dir "
+      "(e.g. phd_student@gin:~/Maiorana/colosseum/logs/dribbling_pipeline)."
+    ),
+  )
 
   # --- play subcommand ---
   play_p = sub.add_parser(
@@ -322,61 +332,70 @@ def parse_args() -> tuple[argparse.Namespace, list[str]]:
 
 
 def _sync_checkpoints(remote: str, log_dir: Path, stage: int, phase: int) -> None:
-    """Rsync a checkpoint from a remote training machine.
+  """Rsync a checkpoint from a remote training machine.
 
-    Tries two locations in order:
-    1. Post-training index symlink: <remote>/checkpoints/s{stage}_p{phase}.pt
-    2. Mid-run fallback: newest .pt file in <remote>/<run_name>/checkpoints/
-    """
-    link_name = f"s{stage}_p{phase}"
-    index_dst = log_dir / "checkpoints"
-    index_dst.mkdir(parents=True, exist_ok=True)
-    local_ckpt = index_dst / f"{link_name}.pt"
+  Tries two locations in order:
+  1. Post-training index symlink: <remote>/checkpoints/s{stage}_p{phase}.pt
+  2. Mid-run fallback: newest .pt file in <remote>/<run_name>/checkpoints/
+  """
+  link_name = f"s{stage}_p{phase}"
+  index_dst = log_dir / "checkpoints"
+  index_dst.mkdir(parents=True, exist_ok=True)
+  local_ckpt = index_dst / f"{link_name}.pt"
 
-    # --- attempt 1: post-training index symlink ---
-    index_src = f"{remote}/checkpoints/{link_name}.pt"
-    print(f"[pipeline] Syncing {index_src} ...", flush=True)
-    result = subprocess.run(
-        ["rsync", "-avz", "--copy-links", index_src, str(index_dst) + "/"],
-        capture_output=True,
-    )
-    if result.returncode == 0:
-        print(result.stdout.decode(), end="", flush=True)
-        return
+  # --- attempt 1: post-training index symlink ---
+  index_src = f"{remote}/checkpoints/{link_name}.pt"
+  print(f"[pipeline] Syncing {index_src} ...", flush=True)
+  result = subprocess.run(
+    ["rsync", "-avz", "--copy-links", index_src, str(index_dst) + "/"],
+    capture_output=True,
+  )
+  if result.returncode == 0:
+    print(result.stdout.decode(), end="", flush=True)
+    return
 
-    # --- attempt 2: mid-run fallback via SSH find ---
-    stage_def = next((s for s in STAGES if s["id"] == stage), None)
-    if stage_def is None:
-        print(f"[pipeline] ERROR: unknown stage {stage}", flush=True)
-        sys.exit(1)
+  # --- attempt 2: mid-run fallback via SSH find ---
+  stage_def = next((s for s in STAGES if s["id"] == stage), None)
+  if stage_def is None:
+    print(f"[pipeline] ERROR: unknown stage {stage}", flush=True)
+    sys.exit(1)
 
-    run_name = f"{stage_def['name']}_p{phase}"
+  run_name = f"{stage_def['name']}_p{phase}"
 
-    if ":" not in remote:
-        print(f"[pipeline] ERROR: --sync-from must be user@host:path, got {remote!r}", flush=True)
-        sys.exit(1)
-    host, remote_path = remote.split(":", 1)
-    ckpt_dir = f"{remote_path}/{run_name}/checkpoints"
-
+  if ":" not in remote:
     print(
-        f"[pipeline] Index symlink not found (training still running?); "
-        f"looking for latest checkpoint in {host}:{ckpt_dir} ...",
-        flush=True,
+      f"[pipeline] ERROR: --sync-from must be user@host:path, got {remote!r}",
+      flush=True,
     )
-    find_result = subprocess.run(
-        ["ssh", host, f"ls -t {ckpt_dir}/*.pt 2>/dev/null | head -1"],
-        capture_output=True, text=True,
-    )
-    remote_ckpt = find_result.stdout.strip()
-    if find_result.returncode != 0 or not remote_ckpt:
-        print(f"[pipeline] ERROR: no checkpoints found in {host}:{ckpt_dir}", flush=True)
-        sys.exit(1)
+    sys.exit(1)
+  host, remote_path = remote.split(":", 1)
+  ckpt_dir = f"{remote_path}/{run_name}/checkpoints"
 
-    print(f"[pipeline] Syncing mid-run checkpoint {host}:{remote_ckpt} -> {local_ckpt} ...", flush=True)
-    result = subprocess.run(["rsync", "-avz", "--copy-links", f"{host}:{remote_ckpt}", str(local_ckpt)])
-    if result.returncode != 0:
-        print(f"[pipeline] ERROR: rsync failed (exit {result.returncode}).", flush=True)
-        sys.exit(result.returncode)
+  print(
+    f"[pipeline] Index symlink not found (training still running?); "
+    f"looking for latest checkpoint in {host}:{ckpt_dir} ...",
+    flush=True,
+  )
+  find_result = subprocess.run(
+    ["ssh", host, f"ls -t {ckpt_dir}/*.pt 2>/dev/null | head -1"],
+    capture_output=True,
+    text=True,
+  )
+  remote_ckpt = find_result.stdout.strip()
+  if find_result.returncode != 0 or not remote_ckpt:
+    print(f"[pipeline] ERROR: no checkpoints found in {host}:{ckpt_dir}", flush=True)
+    sys.exit(1)
+
+  print(
+    f"[pipeline] Syncing mid-run checkpoint {host}:{remote_ckpt} -> {local_ckpt} ...",
+    flush=True,
+  )
+  result = subprocess.run(
+    ["rsync", "-avz", "--copy-links", f"{host}:{remote_ckpt}", str(local_ckpt)]
+  )
+  if result.returncode != 0:
+    print(f"[pipeline] ERROR: rsync failed (exit {result.returncode}).", flush=True)
+    sys.exit(result.returncode)
 
 
 def _play(args: argparse.Namespace, extra_args: list[str], log_dir: Path) -> None:
@@ -464,6 +483,19 @@ def main() -> None:
       warm_start_path: str | None = None
       ws_ckpt_override = getattr(args, "warm_start_checkpoint", None)
       ws_stage_override = getattr(args, "warm_start_stage", None)
+      pull_from = getattr(args, "pull_from", None)
+
+      # Pull the warm-start (and teacher) checkpoint from a remote machine.
+      if pull_from and ws_ckpt_override is None and ws_stage_override != -1:
+        if ws_stage_override is not None:
+          pull_stage = ws_stage_override
+        elif stage["warm_start_from"]:
+          # Derive stage id from the built-in warm_start_from name.
+          pull_stage = sid - 1
+        else:
+          pull_stage = None
+        if pull_stage is not None:
+          _sync_checkpoints(pull_from, log_dir, pull_stage, 1)
 
       if ws_ckpt_override is not None:
         # Explicit path — highest priority.
@@ -480,7 +512,9 @@ def main() -> None:
         if ws_stage_override is not None:
           ws_def = next((s for s in STAGES if s["id"] == ws_stage_override), None)
           if ws_def is None:
-            print(f"[pipeline] ERROR: --warm-start-stage {ws_stage_override} is not a valid stage id.")
+            print(
+              f"[pipeline] ERROR: --warm-start-stage {ws_stage_override} is not a valid stage id."
+            )
             sys.exit(1)
           warm_start_source = ws_def["name"] + "_p1"
           fallback_link = log_dir / "checkpoints" / f"s{ws_stage_override}_p1.pt"
@@ -513,8 +547,12 @@ def main() -> None:
       elif tc_stage_override is not None:
         tc_def = next((s for s in STAGES if s["id"] == tc_stage_override), None)
         if tc_def is None:
-          print(f"[pipeline] ERROR: --teacher-stage {tc_stage_override} is not a valid stage id.")
+          print(
+            f"[pipeline] ERROR: --teacher-stage {tc_stage_override} is not a valid stage id."
+          )
           sys.exit(1)
+        if pull_from:
+          _sync_checkpoints(pull_from, log_dir, tc_stage_override, 1)
         tc_ckpt = _ckpt(log_dir, tc_def["name"] + "_p1")
         if not tc_ckpt.exists():
           tc_link = log_dir / "checkpoints" / f"s{tc_stage_override}_p1.pt"
