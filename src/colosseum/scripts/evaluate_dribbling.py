@@ -1257,141 +1257,175 @@ def _fmt_mean_latex_deg(acc: ScalarAccumulator, digits: int = 2) -> str:
   return f"{mean:.{digits}f}"
 
 
-def _latex_table(
-  alignment: str,
-  header: str,
-  rows: list[str],
-  caption: str,
-  label: str,
-) -> str:
+def _paper_condition_label(condition: EvalCondition) -> str:
+  if condition.name == "no_obstacles":
+    return "No obstacles"
+  if condition.name == "static_1":
+    return "Static obstacle"
+  if condition.name == "moving_1":
+    return "Ball attacker"
+  return condition.label
+
+
+def _paper_condition_label_makecell(condition: EvalCondition) -> str:
+  if condition.name == "no_obstacles":
+    return "\\makecell[l]{No\\\\obstacles}"
+  if condition.name == "static_1":
+    return "\\makecell[l]{Static\\\\obstacle}"
+  if condition.name == "moving_1":
+    return "\\makecell[l]{Ball\\\\attacker}"
+  return condition.label
+
+
+def _find_condition(stats: list[ConditionStats], condition_name: str) -> ConditionStats:
+  for s in stats:
+    if s.condition.name == condition_name:
+      return s
+  raise ValueError(f"Missing stats for condition {condition_name}.")
+
+
+def _fmt_pct_latex_no_symbol(value: float, digits: int = 2) -> str:
+  if not math.isfinite(value):
+    return "--"
+  return f"{100.0 * value:.{digits}f}"
+
+
+def _latex_main_task_table(stats: list[ConditionStats]) -> str:
+  rows: list[str] = []
+  for condition_name in ("no_obstacles", "static_1", "moving_1"):
+    s = _find_condition(stats, condition_name)
+    obstacle_free = s.condition.obstacle_free
+    cells = [
+      _paper_condition_label(s.condition),
+      _fmt_pct_latex_no_symbol(s.success_rate),
+      _fmt_mean_latex(s.success_times),
+      _fmt_mean_latex(s.censored_times),
+      _fmt_pct_latex_no_symbol(s.fall_rate),
+      _fmt_pct_latex_no_symbol(s.ball_lost_rate),
+      "--" if obstacle_free else _fmt_pct_latex_no_symbol(s.robot_collision_rate),
+      "--"
+      if obstacle_free
+      else _fmt_mean_latex(s.robot_contact_counts),
+      "--" if obstacle_free else _fmt_pct_latex_no_symbol(s.ball_collision_rate),
+      "--"
+      if obstacle_free
+      else _fmt_mean_latex(s.ball_contact_counts),
+      "--"
+      if obstacle_free
+      else _fmt_mean_latex(s.min_ball_clearance),
+    ]
+    rows.append(" & ".join(cells) + " \\\\")
   return (
     "\\begin{table}[t]\n"
     "\\centering\n"
-    f"\\begin{{tabular}}{{{alignment}}}\n"
+    "\\begin{tabular}{lcccccccccc}\n"
     "\\hline\n"
-    f"{header}\n"
+    "Condition & SR & T2T & T2T-C & FR & LR & RCR & RC/t & BCR & BC/t & MBC \\\\[-0.35em]\n"
+    "& [\\%] & [s] & [s] & [\\%] & [\\%] & [\\%] & [\\#/trial] & [\\%] & [\\#/trial] & [m] \\\\\n"
     "\\hline\n"
     + "\n".join(rows) + "\n"
     "\\hline\n"
     "\\end{tabular}\n"
-    f"\\caption{{{caption}}}\n"
-    f"\\label{{{label}}}\n"
+    "\\caption{Final-policy main task evaluation.}\n"
+    "\\label{tab:main_eval}\n"
     "\\end{table}"
   )
 
 
-def _latex_main_task_table(
-  stats: list[ConditionStats],
-  *,
-  mean_only: bool = False,
-) -> str:
-  header = (
-    "Condition & SR & T2T & T2T-C & FR & LR & RCR & "
-    "RC/t & BCR & BC/t & Min-BC \\\\"
-  )
-  rows: list[str] = []
-  for s in stats:
-    obstacle_free = s.condition.obstacle_free
-    cells = [
-      s.condition.label,
-      _fmt_latex(s.success_rate, percent=True),
-      _fmt_mean_latex(s.success_times) if mean_only else _fmt_mean_var_latex(s.success_times),
-      _fmt_mean_latex(s.censored_times) if mean_only else _fmt_mean_var_latex(s.censored_times),
-      _fmt_latex(s.fall_rate, percent=True),
-      _fmt_latex(s.ball_lost_rate, percent=True),
-      "--" if obstacle_free else _fmt_latex(s.robot_collision_rate, percent=True),
-      "--"
-      if obstacle_free
-      else (_fmt_mean_latex(s.robot_contact_counts) if mean_only else _fmt_mean_var_latex(s.robot_contact_counts)),
-      "--" if obstacle_free else _fmt_latex(s.ball_collision_rate, percent=True),
-      "--"
-      if obstacle_free
-      else (_fmt_mean_latex(s.ball_contact_counts) if mean_only else _fmt_mean_var_latex(s.ball_contact_counts)),
-      "--"
-      if obstacle_free
-      else (_fmt_mean_latex(s.min_ball_clearance) if mean_only else _fmt_mean_var_latex(s.min_ball_clearance)),
-    ]
-    rows.append(" & ".join(cells) + " \\\\")
-  return _latex_table(
-    "lcccccccccc",
-    header,
-    rows,
-    "Final-policy main task evaluation (mean only)."
-    if mean_only
-    else "Final-policy main task evaluation (mean $\\pm$ variance).",
-    "tab:main_eval_mean" if mean_only else "tab:main_eval",
-  )
-
-
-def _latex_velocity_table(
-  stats: list[ConditionStats],
-  *,
-  mean_only: bool = False,
-) -> str:
-  header = "Condition & Segment & Vector error & Speed error & Angular error \\\\"
+def _latex_velocity_table(stats: list[ConditionStats]) -> str:
   rows: list[str] = []
   segments = [
-    ("all timesteps", "All timesteps", "velocity_all", "speed_all", "angle_all"),
-    ("unblocked", "Unblocked", "velocity_unblocked", "speed_unblocked", "angle_unblocked"),
-    ("blocked", "Blocked", "velocity_blocked", "speed_blocked", "angle_blocked"),
+    ("no_obstacles", "All timesteps", "velocity_all", "speed_all", "angle_all"),
+    ("static_1", "Unblocked", "velocity_unblocked", "speed_unblocked", "angle_unblocked"),
+    ("static_1", "Blocked", "velocity_blocked", "speed_blocked", "angle_blocked"),
+    ("moving_1", "Unblocked", "velocity_unblocked", "speed_unblocked", "angle_unblocked"),
+    ("moving_1", "Blocked", "velocity_blocked", "speed_blocked", "angle_blocked"),
   ]
-  for s in stats:
-    for _, seg_label, v_name, sp_name, a_name in segments:
-      v = getattr(s, v_name)
-      sp = getattr(s, sp_name)
-      a = getattr(s, a_name)
-      cells = [
-        s.condition.label,
+  for condition_name, seg_label, v_name, sp_name, a_name in segments:
+    s = _find_condition(stats, condition_name)
+    v = getattr(s, v_name)
+    sp = getattr(s, sp_name)
+    a = getattr(s, a_name)
+    rows.append(
+      " & ".join([
+        _paper_condition_label(s.condition),
         seg_label,
-        _fmt_mean_latex(v) if mean_only else _fmt_mean_var_latex(v),
-        _fmt_mean_latex(sp) if mean_only else _fmt_mean_var_latex(sp),
-        _fmt_mean_latex_deg(a) if mean_only else _fmt_mean_var_latex_deg(a),
-      ]
-      rows.append(" & ".join(cells) + " \\\\")
-  return _latex_table(
-    "llccc",
-    header,
-    rows,
-    "Velocity-tracking diagnostic for the final policy (mean only)."
-    if mean_only
-    else "Velocity-tracking diagnostic for the final policy (mean $\\pm$ variance).",
-    "tab:velocity_eval_mean" if mean_only else "tab:velocity_eval",
+        _fmt_mean_latex(v),
+        _fmt_mean_latex(sp),
+        _fmt_mean_latex_deg(a),
+      ]) + " \\\\"
+    )
+  return (
+    "\\begin{table}[t]\n"
+    "\\centering\n"
+    "\\begin{tabular}{llccc}\n"
+    "\\hline\n"
+    "% Condition & Segment & Vector error & Speed error & Angular error \\\\ [-0.35em]\n"
+    "Condition & Segment & $e_{\\mathrm{vec}}$ [m/s] & $e_{\\mathrm{spd}}$ [m/s] & $e_{\\mathrm{ang}}$ [deg] \\\\\n"
+    "\\hline\n"
+    + "\n".join(rows) + "\n"
+    "\\hline\n"
+    "\\end{tabular}\n"
+    "\\caption{Velocity-tracking diagnostic for the final policy.}\n"
+    "\\label{tab:velocity_eval}\n"
+    "\\end{table}"
   )
 
 
-def _latex_perception_table(
-  stats: list[ConditionStats],
-  *,
-  mean_only: bool = False,
-) -> str:
-  header = (
-    "Condition & Ball pos. & Ball vel. & Obstacle pos. & Obstacle vel. & "
-    "FoV. cov. \\\\"
-  )
-  rows: list[str] = []
-  for s in stats:
+def _latex_perception_and_curriculum_tables(stats: list[ConditionStats]) -> str:
+  perception_rows: list[str] = []
+  for condition_name in ("no_obstacles", "static_1", "moving_1"):
+    s = _find_condition(stats, condition_name)
     obstacle_free = s.condition.obstacle_free
     cells = [
-      s.condition.label,
-      _fmt_mean_latex(s.ball_pos_error) if mean_only else _fmt_mean_var_latex(s.ball_pos_error),
-      _fmt_mean_latex(s.ball_vel_error) if mean_only else _fmt_mean_var_latex(s.ball_vel_error),
+      _paper_condition_label_makecell(s.condition),
+      _fmt_mean_latex(s.ball_pos_error),
+      _fmt_mean_latex(s.ball_vel_error),
       "--"
       if obstacle_free
-      else (_fmt_mean_latex(s.obstacle_pos_error) if mean_only else _fmt_mean_var_latex(s.obstacle_pos_error)),
+      else _fmt_mean_latex(s.obstacle_pos_error),
       "--"
       if obstacle_free
-      else (_fmt_mean_latex(s.obstacle_vel_error) if mean_only else _fmt_mean_var_latex(s.obstacle_vel_error)),
-      _fmt_latex(s.valid_depth_coverage.mean(), percent=True),
+      else _fmt_mean_latex(s.obstacle_vel_error),
+      _fmt_pct_latex_no_symbol(s.valid_depth_coverage.mean()),
     ]
-    rows.append(" & ".join(cells) + " \\\\")
-  return _latex_table(
-    "lccccc",
-    header,
-    rows,
-    "Perception metrics for the final policy (mean only)."
-    if mean_only
-    else "Perception metrics for the final policy (mean $\\pm$ variance).",
-    "tab:perception_eval_mean" if mean_only else "tab:perception_eval",
+    perception_rows.append(" & ".join(cells) + " \\\\")
+  curriculum_rows = [
+    "\\makecell[l]{No\\\\obstacles} & 0 & 0 & 0 & 0 \\\\",
+    "\\makecell[l]{Static\\\\obstacle} & 0 & 0 & 0 & 0 \\\\",
+    "\\makecell[l]{Ball\\\\attacker} & 0 & 0 & 0 & 0 \\\\",
+  ]
+  return (
+    "\\begin{table}[t]\n"
+    "\\centering\n\n"
+    "\\begin{minipage}[t]{0.56\\linewidth}\n"
+    "\\centering\n"
+    "\\begin{tabular}{lccccc}\n"
+    "\\hline\n"
+    "Condition & $e_{\\mathrm{ball,pos}}$ & $e_{\\mathrm{ball,vel}}$ & $e_{\\mathrm{obs,pos}}$ & $e_{\\mathrm{obs,vel}}$ & $c_{\\mathrm{fov}}$ \\\\[-0.35em]\n"
+    " & [m] & [m/s] & [m] & [m/s] & [\\%] \\\\\n"
+    "\\hline\n"
+    + "\n".join(perception_rows) + "\n"
+    "\\hline\n"
+    "\\end{tabular}\n"
+    "\\caption{Perception metrics for the final policy.}\n"
+    "\\label{tab:perception_eval}\n"
+    "\\end{minipage}\n"
+    "\\hspace{3pt} % control horizontal spacing\n"
+    "\\begin{minipage}[t]{0.40\\linewidth}\n"
+    "\\centering\n"
+    "\\begin{tabular}{lcccc}\n"
+    "\\hline\n"
+    "Condition & Stage & Stage & Stage & Stage \\\\ [-0.35em]\n"
+    " & 0 & 1 & 2 & 3 \\\\\n"
+    "\\hline\n"
+    + "\n".join(curriculum_rows) + "\n"
+    "\\hline\n"
+    "\\end{tabular}\n"
+    "\\caption{Success-rate ablation across curriculum stages.}\n"
+    "\\label{tab:curriculum_success}\n"
+    "\\end{minipage}\n\n"
+    "\\end{table}"
   )
 
 
@@ -1619,40 +1653,16 @@ def _build_report(
       "",
       "## LaTeX Tables",
       "",
-      "### Main Task Table (mean $\\pm$ variance)",
-      "",
       "```latex",
       _latex_main_task_table(stats),
       "```",
-      "",
-      "### Main Task Table (mean only)",
-      "",
-      "```latex",
-      _latex_main_task_table(stats, mean_only=True),
-      "```",
-      "",
-      "### Velocity Diagnostic Table (mean $\\pm$ variance)",
       "",
       "```latex",
       _latex_velocity_table(stats),
       "```",
       "",
-      "### Velocity Diagnostic Table (mean only)",
-      "",
       "```latex",
-      _latex_velocity_table(stats, mean_only=True),
-      "```",
-      "",
-      "### Perception Table (mean $\\pm$ variance)",
-      "",
-      "```latex",
-      _latex_perception_table(stats),
-      "```",
-      "",
-      "### Perception Table (mean only)",
-      "",
-      "```latex",
-      _latex_perception_table(stats, mean_only=True),
+      _latex_perception_and_curriculum_tables(stats),
       "```",
       "",
     ])
