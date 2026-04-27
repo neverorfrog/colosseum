@@ -31,7 +31,7 @@ from mjlab.envs import ManagerBasedRlEnv
 
 from colosseum.algorithm.base_algorithm import ObsType
 from colosseum.algorithm.ppo import PPO
-from colosseum.algorithm.rollout_buffer import RolloutBuffer
+from colosseum.algorithm.utils.rollout_buffer import RolloutBuffer
 from colosseum.config.types.algorithm import PpoConfig, register_algorithm
 from colosseum.managers.rma_manager import RmaManager
 from colosseum.utils.logger import extract_episode_metrics
@@ -73,7 +73,7 @@ class RmaPPO(PPO):
     super()._build_networks()
 
     # Widen actor: rebuild with proprio_dim + latent_dim as input
-    from colosseum.algorithm.ppo_networks import PpoActor
+    from colosseum.algorithm.networks.ppo_networks import PpoActor
 
     assert isinstance(self.config, PpoConfig)
     actor_input_dim = self.actor_obs_dim + self.rma_manager.total_latent_dim
@@ -138,7 +138,9 @@ class RmaPPO(PPO):
 
         # Compose actor input: cat([norm_proprio, encoder_latents])
         current_privileged_obs = self.get_privileged_obs(obs_dict)
-        norm_actor_obs = self._compose_actor_input(norm_actor_obs_base, current_privileged_obs)
+        norm_actor_obs = self._compose_actor_input(
+          norm_actor_obs_base, current_privileged_obs
+        )
 
         actions, log_probs, action_means, action_stds = self.actor.act_with_log_prob(
           norm_actor_obs
@@ -301,8 +303,10 @@ class RmaPPO(PPO):
     frame_group = self.rma_manager.adaptation_group_names[0]
 
     warmup_steps = max(
-      (getattr(getattr(term, "cfg", None), "warmup_steps", 0)
-       for term in self.rma_manager._terms.values()),
+      (
+        getattr(getattr(term, "cfg", None), "warmup_steps", 0)
+        for term in self.rma_manager._terms.values()
+      ),
       default=0,
     )
 
@@ -331,7 +335,9 @@ class RmaPPO(PPO):
 
         reset_event = self.rma_manager.get_reset_event()
         if reset_event is None:
-          reset_event = torch.zeros(self.env.num_envs, dtype=torch.bool, device=self.device)
+          reset_event = torch.zeros(
+            self.env.num_envs, dtype=torch.bool, device=self.device
+          )
         reset_mask_list.append(reset_event)
 
         fov_mask = self.rma_manager.get_adaptation_mask()
@@ -388,10 +394,7 @@ class RmaPPO(PPO):
         metrics_sum[key] += value
       num_updates += 1
 
-    result = {
-      key: value / max(num_updates, 1)
-      for key, value in metrics_sum.items()
-    }
+    result = {key: value / max(num_updates, 1) for key, value in metrics_sum.items()}
     result["adapt/valid_frac"] = valid_frac
     return obs_dict, result
 
@@ -473,8 +476,7 @@ class RmaPPO(PPO):
       ordered_keys = sorted(metrics.keys())
       reduced_values = self._distributed_sum_vector([metrics[k] for k in ordered_keys])
       metrics = {
-        key: reduced_values[i] / self.world_size
-        for i, key in enumerate(ordered_keys)
+        key: reduced_values[i] / self.world_size for i, key in enumerate(ordered_keys)
       }
 
     return metrics

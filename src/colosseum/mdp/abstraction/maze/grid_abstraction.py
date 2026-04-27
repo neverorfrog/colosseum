@@ -16,7 +16,7 @@ from colosseum.managers.abstraction_manager import (
   AbstractionTermCfg,
 )
 from colosseum.utils.grid_frame import GridFrame
-from colosseum.tasks.maze.mdp.observations import agent_pos_local
+from colosseum.mdp.observations import agent_pos_local
 
 if TYPE_CHECKING:
   from mjlab.viewer.debug_visualizer import DebugVisualizer

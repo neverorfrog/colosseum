@@ -32,12 +32,16 @@ from loguru import logger
 from mjlab.envs import ManagerBasedRlEnv
 
 from colosseum.algorithm.base_algorithm import BaseAlgorithm
-from colosseum.algorithm.normalization import EmpiricalNormalization
+from colosseum.algorithm.networks.ppo_networks import PpoActor, PpoValueNet
+from colosseum.algorithm.networks.teacher_policy import TeacherPolicy
 from colosseum.algorithm.ppo import PPO
-from colosseum.algorithm.ppo_networks import PpoActor, PpoValueNet
-from colosseum.algorithm.rollout_buffer import RolloutBuffer
-from colosseum.algorithm.teacher_policy import TeacherPolicy
-from colosseum.config.types.algorithm import DaggerPpoConfig, PpoConfig, register_algorithm
+from colosseum.algorithm.utils.normalization import EmpiricalNormalization
+from colosseum.algorithm.utils.rollout_buffer import RolloutBuffer
+from colosseum.config.types.algorithm import (
+  DaggerPpoConfig,
+  PpoConfig,
+  register_algorithm,
+)
 from colosseum.config.types.networks import PpoActorConfig, PpoCriticConfig
 from colosseum.utils.logger import extract_episode_metrics
 from colosseum.utils.torch import get_obs_dims
@@ -204,9 +208,7 @@ class DaggerPPO(PPO):
     num_updates = 0
 
     # Annealing coefficient: linear decay from imitation_coef → 0
-    progress = min(
-      self.global_step / max(config.imitation_annealing_steps, 1), 1.0
-    )
+    progress = min(self.global_step / max(config.imitation_annealing_steps, 1), 1.0)
     lam = config.imitation_coef * (1.0 - progress)
 
     generator = self.rollout_buffer.mini_batch_generator(

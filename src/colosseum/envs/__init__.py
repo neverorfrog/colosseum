@@ -1,3 +1,6 @@
+from colosseum.envs.colosseum_env import ColosseumEnv, ColosseumEnvCfg
+
+# Legacy aliases — kept for backward compatibility
 from colosseum.envs.abstraction_based_env import (
   AbstractionBasedEnv,
   AbstractionBasedEnvCfg,

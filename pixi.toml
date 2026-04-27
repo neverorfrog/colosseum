@@ -1,0 +1,106 @@
+[workspace]
+name = "colosseum"
+version = "0.1.0"
+platforms = ["linux-64"]
+channels = [
+    "https://prefix.dev/pixi-build-backends",
+    "https://prefix.dev/conda-forge",
+    "https://prefix.dev/spqr",
+    "robostack-staging",
+]
+preview = ["pixi-build"]
+
+[package]
+name = "colosseum"
+version = "0.1.0"
+
+[package.build.backend]
+name = "pixi-build-python"
+version = "*"
+
+[environments]
+default = { solve-group = "default" }
+deploy = { features = ["deploy"], no-default-feature = true }
+docs = { features = ["docs"], no-default-feature = true, solve-group = "docs" }
+
+[tasks]
+# Generic train tasks
+train-rsl-rl = { cmd = "python -m colosseum.scripts.train_rsl_rl", description = "Train with RSL-RL (colosseum tasks)" }
+train-mjlab = { cmd = "python -m mjlab.scripts.train", description = "Train with RSL-RL (mjlab built-in tasks)" }
+train = { cmd = "python -m colosseum.scripts.train", description = "Train with custom PPO" }
+play = { cmd = "python -m colosseum.scripts.play", description = "Evaluate trained policy in simulation" }
+export-onnx = { cmd = "python -m colosseum.scripts.export_onnx", description = "Export checkpoint to ONNX" }
+
+# Dribbling tasks
+train-phase2 = { cmd = "python research/dribbling/scripts/train_phase2.py", description = "RMA Phase 2 adaptation encoder training" }
+pipeline-dribbling = { cmd = "python research/dribbling/scripts/pipeline_dribbling.py", description = "Full dribbling curriculum pipeline (Phase 1 + Phase 2 per stage)" }
+eval-dribbling = { cmd = "python research/dribbling/scripts/evaluate_dribbling.py", description = "Run the dribbling evaluation protocol" }
+
+# ============================================
+# DEFAULT (TRAIN) ENVIRONMENT
+# Requires linux-64 and CUDA 12.0
+# ============================================
+[system-requirements]
+cuda = "12.0"
+
+[dependencies]
+python = "3.11.*"
+ty = ">=0.0.32,<0.0.33"
+pydantic = ">=2.13.3,<3"
+evdev = ">=1.9.3,<2"
+pytest = ">=9.0.3,<10"
+wandb = ">=0.26.1,<0.27"
+ipykernel = ">=7.2.0,<8"
+loguru = ">=0.7.3,<0.8"
+
+[pypi-dependencies]
+colosseum = {path = ".", editable = true}
+mjlab = {git = "https://github.com/neverorfrog/mjlab.git", branch = "main", editable = true}
+gymnasium = {version = "*", extras = ["classic_control"]}
+opencv-python = ">=4.13.0.92, <5"
+up-symk = ">=1.4.2, <2"
+unified-planning = {git = "https://github.com/speckdavid/unified-planning", branch = "master", editable = true}
+tyro = ">=1.0.13, <2"
+
+# ============================================
+# DEPLOY FEATURE
+# linux-64:    sim-to-sim testing (MuJoCo)
+# linux-aarch64: real robot (Booster T1)
+# ============================================
+[feature.deploy]
+platforms = ["linux-64", "linux-aarch64"]
+
+[feature.deploy.dependencies]
+python = "3.11.*"
+onnxruntime = ">=1.22.2,<2"
+
+# [tool.pixi.feature.deploy.pypi-dependencies]
+# colosseum = {path = ".", editable = true}
+
+# [tool.pixi.feature.deploy.target.linux-64.dependencies]
+# pytorch = "*"
+
+# [tool.pixi.feature.deploy.target.linux-64.pypi-dependencies]
+# mujoco = ">=3.4.0,<4"
+
+# [tool.pixi.feature.deploy.target.linux-aarch64.dependencies]
+# booster_robotics_sdk = "==1.5.0"
+# nanobind = ">=2.4,<3"
+
+# [tool.pixi.feature.deploy.target.linux-aarch64.pypi-dependencies]
+# torch = "*"
+# torchvision = "*"
+
+# [tool.pixi.feature.deploy.tasks]
+# deploy = { cmd = "python -m colosseum.scripts.deploy", description = "Deploy trained policy" }
+# gen-booster-stubs = { cmd = "python -m nanobind.stubgen -m booster_robotics_sdk_python -o typings/booster_robotics_sdk_python.pyi", description = "Generate stubs for booster_robotics_sdk_python into typings/" }
+
+# ============================================
+# DOCS FEATURE
+# ============================================
+[feature.docs.dependencies]
+mkdocs-material = ">=9.6.14,<10"
+
+[feature.docs.tasks]
+build-docs = "mkdocs build --strict"
+docs = { cmd = "mkdocs serve", description = "Serve the docs locally" }

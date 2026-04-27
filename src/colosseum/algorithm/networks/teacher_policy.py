@@ -22,8 +22,8 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 
-from colosseum.algorithm.normalization import EmpiricalNormalization
-from colosseum.algorithm.ppo_networks import PpoActor
+from colosseum.algorithm.networks.ppo_networks import PpoActor
+from colosseum.algorithm.utils.normalization import EmpiricalNormalization
 from colosseum.config.types.networks import PpoActorConfig
 
 
@@ -74,6 +74,6 @@ class TeacherPolicy(nn.Module):
     Returns:
         Deterministic action means [num_envs, action_dim]
     """
-    teacher_obs = student_obs[:, self.obs_start_idx:]
+    teacher_obs = student_obs[:, self.obs_start_idx :]
     norm_obs = self.normalizer(teacher_obs)
     return self.actor.forward(norm_obs)

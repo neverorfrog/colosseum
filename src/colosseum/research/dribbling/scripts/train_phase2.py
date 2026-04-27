@@ -48,7 +48,6 @@ from colosseum.utils.logger import (
   teardown_wandb,
 )
 from colosseum.utils.torch import get_device, set_seed
-from colosseum.utils.train.env import make_env
 
 
 @dataclass(frozen=True, config=ConfigDict(arbitrary_types_allowed=True))
@@ -275,7 +274,7 @@ def main() -> None:
     device = get_device(cuda=config.use_cuda, device_id=device_id)
     logger.info(f"Using device: {device}")
 
-    env = make_env(env_cfg=env_cfg, device=str(device))
+    env = env_cfg.class_type(cfg=env_cfg, device=str(device))
 
     import importlib
     module_path, class_name = algo_cfg.target.rsplit(":", 1)

@@ -30,9 +30,6 @@ import colosseum.tasks  # noqa: F401
 from colosseum.algorithm.base_algorithm import get_latest_checkpoint
 from colosseum.config.types.experiment import BaseExperimentConfig
 from colosseum.utils.torch import get_device
-from colosseum.utils.train.env import make_env
-
-
 @dataclass(frozen=True)
 class PlayConfig(BaseExperimentConfig):
     """Play configuration."""
@@ -62,7 +59,7 @@ def _resolve_checkpoint(checkpoint: str | None) -> Path | None:
 
 
 def _make_env(env_cfg: ManagerBasedRlEnvCfg, device: str, render_mode: str | None) -> ManagerBasedRlEnv:
-    return make_env(env_cfg, device, render_mode)
+    return env_cfg.class_type(cfg=env_cfg, device=device, render_mode=render_mode)
 
 
 def _parse_single_cuda_device(cuda_arg: str) -> int:

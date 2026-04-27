@@ -26,14 +26,16 @@ import torch.optim as optim
 from loguru import logger
 from mjlab.envs import ManagerBasedRlEnv
 
-from colosseum.algorithm.base_algorithm import BaseAlgorithm
-from colosseum.algorithm.normalization import EmpiricalNormalization, IdentityNormalizer
-from colosseum.algorithm.ppo_networks import PpoActor, PpoValueNet
-from colosseum.algorithm.rollout_buffer import RolloutBuffer
+from colosseum.algorithm.base_algorithm import BaseAlgorithm, ObsType
+from colosseum.algorithm.networks.ppo_networks import PpoActor, PpoValueNet
+from colosseum.algorithm.utils.normalization import (
+  EmpiricalNormalization,
+  IdentityNormalizer,
+)
+from colosseum.algorithm.utils.rollout_buffer import RolloutBuffer
 from colosseum.config.types.algorithm import PpoConfig, register_algorithm
 from colosseum.utils.logger import extract_episode_metrics
 from colosseum.utils.torch import get_obs_dims
-from colosseum.algorithm.base_algorithm import ObsType
 
 
 @register_algorithm("ppo", config_class=PpoConfig)
@@ -186,7 +188,7 @@ class PPO(BaseAlgorithm):
     # and crashing the adaptive learning rate.
     if self.config.obs_normalization:
       prewarm_actor_obs = self._prewarm_actor_obs(current_actor_obs)
-      self.actor_obs_normalizer.update(prewarm_actor_obs) 
+      self.actor_obs_normalizer.update(prewarm_actor_obs)
       self.critic_obs_normalizer.update(current_critic_obs)
 
     # Randomize initial episode lengths (RSL-RL pattern) so environments
@@ -203,8 +205,10 @@ class PPO(BaseAlgorithm):
       # ============================================
       start_collect = time.perf_counter()
 
-      current_actor_obs, current_critic_obs, current_dones, obs_dict = self._collect_rollout(
-        current_actor_obs, current_critic_obs, current_dones, obs_dict
+      current_actor_obs, current_critic_obs, current_dones, obs_dict = (
+        self._collect_rollout(
+          current_actor_obs, current_critic_obs, current_dones, obs_dict
+        )
       )
 
       collection_time = time.perf_counter() - start_collect
@@ -307,7 +311,9 @@ class PPO(BaseAlgorithm):
         self.episode_length_buf += 1
         episode_done_ids = (dones >= 1.0).nonzero(as_tuple=False).squeeze(-1)
         if len(episode_done_ids) > 0:
-          self.rewbuffer.extend(self.cur_reward_sum[episode_done_ids].cpu().numpy().tolist())
+          self.rewbuffer.extend(
+            self.cur_reward_sum[episode_done_ids].cpu().numpy().tolist()
+          )
           self.cur_reward_sum[episode_done_ids] = 0.0
           self.episode_lengths.extend(
             self.episode_length_buf[episode_done_ids].cpu().numpy().tolist()
@@ -315,7 +321,9 @@ class PPO(BaseAlgorithm):
           self.episode_length_buf[episode_done_ids] = 0
 
         # Update episode tracking
-        hard_terminated = terminated >= 1.0 if terminated.is_floating_point() else terminated
+        hard_terminated = (
+          terminated >= 1.0 if terminated.is_floating_point() else terminated
+        )
         self.update_episode_counts(hard_terminated, truncated)
 
         # Only update episode metrics when episodes actually ended

@@ -1,44 +1,13 @@
-import math
-
 import torch
 from mjlab.envs import ManagerBasedRlEnv
 from mjlab.sensor import ContactSensor
 from mjlab.utils.lab_api.math import quat_apply
 
+from colosseum.mdp.ball_rewards import camera_fov_mask as _camera_fov_mask
 from colosseum.tasks.dribbling.mdp.obstacle_commands import ObstacleCommand
 
 
 _PARK_FAR: float = 1000.0
-
-
-def _camera_fov_mask(
-  env: ManagerBasedRlEnv,
-  pos_w: torch.Tensor,
-  camera_name: str,
-  camera_fovy: float,
-  camera_aspect_ratio: float,
-  depth_clip: float,
-) -> torch.Tensor:
-  """Return (N,) bool: True where pos_w (N, 2) world-XY falls inside camera frustum."""
-  N = env.num_envs
-  device = env.device
-  try:
-    cam_id = env.sim.mj_model.camera(camera_name).id
-  except Exception:
-    return torch.ones(N, dtype=torch.bool, device=device)
-
-  cam_pos = env.sim.data.cam_xpos[:, cam_id, :]
-  cam_mat = env.sim.data.cam_xmat[:, cam_id, :].reshape(-1, 3, 3)
-  pos_3d = torch.cat([pos_w, torch.zeros(N, 1, device=device)], dim=-1)
-  p_rel = pos_3d - cam_pos
-  p_cam = torch.bmm(cam_mat.transpose(1, 2), p_rel.unsqueeze(-1)).squeeze(-1)
-  in_front = p_cam[:, 2] < 0
-  depth = (-p_cam[:, 2]).clamp_min(1e-6)
-  tan_half_v = math.tan(math.radians(camera_fovy / 2))
-  tan_half_h = tan_half_v * camera_aspect_ratio
-  nx = p_cam[:, 0] / (depth * tan_half_h)
-  ny = p_cam[:, 1] / (depth * tan_half_v)
-  return in_front & (nx.abs() <= 1.0) & (ny.abs() <= 1.0) & (depth < depth_clip)
 
 
 def ball_position(env: ManagerBasedRlEnv) -> torch.Tensor:

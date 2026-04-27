@@ -41,11 +41,8 @@ from colosseum.utils.logger import (
   teardown_wandb,
 )
 from colosseum.utils.torch import get_device, set_seed
-from colosseum.utils.train.env import make_env
-
-
 def _make_env(env_cfg: ManagerBasedRlEnvCfg, device: str) -> ManagerBasedRlEnv:
-  return make_env(env_cfg, device)
+  return env_cfg.class_type(cfg=env_cfg, device=device)
 
 
 def _init_distributed(use_cuda: bool) -> tuple[bool, int, int, int]:

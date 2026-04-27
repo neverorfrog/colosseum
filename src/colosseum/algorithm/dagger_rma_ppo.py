@@ -22,10 +22,10 @@ import torch
 import torch.nn.functional as F
 from mjlab.envs import ManagerBasedRlEnv
 
-from colosseum.algorithm.normalization import EmpiricalNormalization
-from colosseum.algorithm.ppo_networks import PpoActor
-from colosseum.algorithm.rollout_buffer import RolloutBuffer
+from colosseum.algorithm.networks.ppo_networks import PpoActor
 from colosseum.algorithm.rma_ppo import RmaPPO
+from colosseum.algorithm.utils.normalization import EmpiricalNormalization
+from colosseum.algorithm.utils.rollout_buffer import RolloutBuffer
 from colosseum.config.types.algorithm import DaggerPpoConfig, register_algorithm
 from colosseum.config.types.networks import PpoActorConfig
 
@@ -165,6 +165,7 @@ class DaggerRmaPPO(RmaPPO):
         self.update_episode_counts(terminated, truncated)
 
         from colosseum.utils.logger import extract_episode_metrics
+
         if "log" in infos and dones.any():
           self.latest_episode_metrics = extract_episode_metrics(infos["log"])
 
@@ -210,9 +211,7 @@ class DaggerRmaPPO(RmaPPO):
     total_imitation_loss = 0.0
     num_updates = 0
 
-    progress = min(
-      self.global_step / max(config.imitation_annealing_steps, 1), 1.0
-    )
+    progress = min(self.global_step / max(config.imitation_annealing_steps, 1), 1.0)
     lam = config.imitation_coef * (1.0 - progress)
 
     generator = self.rollout_buffer.mini_batch_generator(

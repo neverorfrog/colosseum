@@ -34,13 +34,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from colosseum.algorithm.encoders import (
-  BallHead,
-  DepthEncoder,
-  ObstacleHead,
-  PrivilegedEncoder,
-)
+from colosseum.algorithm.networks.privileged_encoder import PrivilegedEncoder
 from colosseum.managers.rma_manager import RmaTerm, RmaTermCfg
+from colosseum.research.dribbling.encoders import BallHead, DepthEncoder, ObstacleHead
 
 if TYPE_CHECKING:
   from mjlab.envs import ManagerBasedRlEnv
@@ -346,7 +342,6 @@ class DribblingRmaTerm(RmaTerm):
     else:
       loss_mask = loss_mask.reshape(B, T).to(dtype=torch.bool)
 
-    # Encode full sequence with depth encoder.
     z_seq, _ = self._depth_encoder.encode_sequence(
       frames,
       hidden=None,
@@ -354,9 +349,7 @@ class DribblingRmaTerm(RmaTerm):
       tbptt_chunk_len=cfg.tbptt_chunk_len,
     )  # (B, T, latent_dim)
 
-    # ------------------------------------------------------------------
     # Latent alignment: push z_depth toward z_priv (main RMA signal).
-    # ------------------------------------------------------------------
     with torch.no_grad():
       gt_ball_flat = gt_ball.reshape(-1, 4)
       if gt_obs is not None:
@@ -370,17 +363,13 @@ class DribblingRmaTerm(RmaTerm):
       z_priv = self._priv_encoder(priv_input).reshape(B, T, -1)
     latent_err = (z_seq - z_priv).pow(2).mean(dim=-1)
 
-    # ------------------------------------------------------------------
     # Ball supervision (BallHead auxiliary).
-    # ------------------------------------------------------------------
     ball_pred = self._ball_head(z_seq)  # (B, T, 4)
     target_ball = (gt_ball - self._ball_mean) / self._ball_std
     pos_err = (ball_pred[:, :, :2] - target_ball[:, :, :2]).pow(2).mean(dim=-1)
     vel_err = (ball_pred[:, :, 2:] - target_ball[:, :, 2:]).pow(2).mean(dim=-1)
 
-    # ------------------------------------------------------------------
     # Obstacle supervision (ObstacleHead auxiliary).
-    # ------------------------------------------------------------------
     obs_losses: dict[str, torch.Tensor] = {}
     if gt_obs is not None:
       obs_pred = self._obstacle_head(z_seq)   # (B, T, K*4)

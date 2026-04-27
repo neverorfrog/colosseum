@@ -26,7 +26,7 @@ from colosseum.tasks.dribbling.mdp.observations import (
   base_height,
   foot_ball_contact_force,
 )
-from colosseum.tasks.maze.mdp.observations import agent_pos_local, agent_to_goal_vector
+from colosseum.mdp.observations import agent_pos_local, agent_to_goal_vector
 from colosseum.tasks.soccer_maze.mdp.observations import (
   ball_vel_command_body,
   ball_vel_xy_body,

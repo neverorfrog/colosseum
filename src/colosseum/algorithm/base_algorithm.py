@@ -20,7 +20,7 @@ from loguru import logger
 from mjlab.envs import ManagerBasedRlEnv
 from mjlab.utils import spaces as mjlab_spaces
 
-from colosseum.algorithm.normalization import ObsNormalizer
+from colosseum.algorithm.utils.normalization import ObsNormalizer
 from colosseum.utils.logger import log_training_step
 
 if TYPE_CHECKING:
@@ -381,10 +381,7 @@ class BaseAlgorithm(ABC):
     if self._last_saved_obstacle_stage_index is None:
       self._last_saved_obstacle_stage_index = stage_index
 
-    if (
-      stage_index is not None
-      and stage_index != self._last_saved_obstacle_stage_index
-    ):
+    if stage_index is not None and stage_index != self._last_saved_obstacle_stage_index:
       self._save_stage_checkpoint(step, stage_index, stage_name)
       self._last_saved_obstacle_stage_index = stage_index
 
@@ -457,7 +454,9 @@ class BaseAlgorithm(ABC):
       if isinstance(curriculum_cfg, dict):
         obstacle_term = curriculum_cfg.get("obstacle")
         obstacle_params = getattr(obstacle_term, "params", None)
-        stages = obstacle_params.get("stages") if isinstance(obstacle_params, dict) else None
+        stages = (
+          obstacle_params.get("stages") if isinstance(obstacle_params, dict) else None
+        )
         if isinstance(stages, list) and stages:
           common_step = int(getattr(self.env.unwrapped, "common_step_counter", 0))
           stage_index = 0
@@ -519,7 +518,9 @@ class BaseAlgorithm(ABC):
 
     obstacle_term = curriculum_cfg.get("obstacle")
     obstacle_params = getattr(obstacle_term, "params", None)
-    stages = obstacle_params.get("stages") if isinstance(obstacle_params, dict) else None
+    stages = (
+      obstacle_params.get("stages") if isinstance(obstacle_params, dict) else None
+    )
     if not isinstance(stages, list) or not stages:
       return curriculum_step, None
 
@@ -535,7 +536,9 @@ class BaseAlgorithm(ABC):
     if next_stage_start <= stage_start:
       return curriculum_step, 100.0
 
-    progress_pct = 100.0 * (curriculum_step - stage_start) / (next_stage_start - stage_start)
+    progress_pct = (
+      100.0 * (curriculum_step - stage_start) / (next_stage_start - stage_start)
+    )
     progress_pct = float(np.clip(progress_pct, 0.0, 100.0))
     return curriculum_step, progress_pct
 
@@ -795,7 +798,9 @@ class BaseAlgorithm(ABC):
     torch.save(cpu_dict, path)
     logger.success(f"Checkpoint saved: {path}")
 
-  def _distributed_average_optimizer_grads(self, optimizer: torch.optim.Optimizer) -> None:
+  def _distributed_average_optimizer_grads(
+    self, optimizer: torch.optim.Optimizer
+  ) -> None:
     """Average gradients across all distributed workers.
 
     This implements synchronous data-parallel optimization without wrapping the
@@ -814,9 +819,7 @@ class BaseAlgorithm(ABC):
           continue
         seen.add(param_id)
 
-        torch.distributed.all_reduce(
-          param.grad.data, op=torch.distributed.ReduceOp.SUM
-        )
+        torch.distributed.all_reduce(param.grad.data, op=torch.distributed.ReduceOp.SUM)
         param.grad.data.div_(self.world_size)
 
   def _distributed_mean_scalar(self, value: float) -> float:

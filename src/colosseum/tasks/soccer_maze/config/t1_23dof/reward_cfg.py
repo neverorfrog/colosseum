@@ -15,18 +15,18 @@ from mjlab.tasks.velocity.mdp import (
   soft_landing,
 )
 
-from colosseum.mdp.rewards import flat_orientation
+from colosseum.mdp.rewards import (
+  feet_distance_penalty,
+  flat_orientation,
+  pose_deviation,
+  stance_phase_schedule,
+  swing_phase_schedule,
+)
 from colosseum.robots.t1_23dof.constants import BASE_BODY_NAME, FOOT_SITE_NAMES
 from colosseum.robots.t1_23dof.sensors import (
   FOOT_FOOT_CONTACT_SENSOR,
   NONFOOT_BALL_CONTACT_SENSOR,
   SELF_COLLISION_SENSOR,
-)
-from colosseum.tasks.dribbling.mdp.rewards import (
-  feet_distance_penalty,
-  pose_deviation,
-  stance_phase_schedule,
-  swing_phase_schedule,
 )
 from colosseum.tasks.maze.mdp.rewards import wall_collisions
 from colosseum.tasks.soccer_maze.mdp.rewards import (
@@ -85,7 +85,7 @@ rewards = {
   "ball_at_final_goal": RewardTermCfg(
     func=ball_at_final_goal,
     weight=100.0,
-    params={"command_name": "goal", "threshold": 0.5},
+    params={"command_name": "goal", "threshold": 0.6},
   ),
   "time_penalty": RewardTermCfg(
     func=time_penalty,

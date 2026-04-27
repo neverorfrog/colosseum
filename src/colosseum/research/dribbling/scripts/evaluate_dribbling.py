@@ -40,8 +40,6 @@ from colosseum.tasks.dribbling.mdp.observations import (
   obstacle_velocity_b,
 )
 from colosseum.utils.torch import get_device, set_seed
-from colosseum.utils.train.env import make_env
-
 from colosseum.scripts.play import (  # reuse checkpoint/action path from play.py
   _parse_single_cuda_device,
   _resolve_checkpoint,
@@ -288,7 +286,7 @@ class ConditionStats:
 
 def _make_env(env_cfg: ManagerBasedRlEnvCfg, device: str) -> ManagerBasedRlEnv:
   _cleanup_runtime_memory()
-  return make_env(env_cfg, device, render_mode=None)
+  return env_cfg.class_type(cfg=env_cfg, device=device)
 
 
 def _make_live_viewer(

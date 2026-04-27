@@ -14,7 +14,7 @@ from mjlab.viewer import ViewerConfig
 
 from colosseum.assets.ball.ball_spec import get_ball_cfg
 from colosseum.config.types.task import TaskConfig, register_task
-from colosseum.envs.constraint_abstraction_env import ConstraintAbstractionBasedEnvCfg
+from colosseum.envs.colosseum_env import ColosseumEnvCfg
 from colosseum.mdp.abstraction.maze.sokoban_grid_abstraction import (
   SokobanGridAbstractionTermCfg,
 )
@@ -113,7 +113,7 @@ def t1_soccer_maze_env_cfg(
   resolution_factor: int = 1,
   wall_center_weight: float = 2.0,
   play: bool = False,
-) -> ConstraintAbstractionBasedEnvCfg:
+) -> ColosseumEnvCfg:
   """Create Booster T1 soccer-maze task configuration.
 
   Args:
@@ -129,7 +129,7 @@ def t1_soccer_maze_env_cfg(
     )
   )
 
-  cfg = ConstraintAbstractionBasedEnvCfg(
+  cfg = ColosseumEnvCfg(
     scene=scene_cfg(maze, num_envs=1 if play else num_envs),
     sim=sim_cfg(),
     viewer=viewer_cfg(),
@@ -160,7 +160,7 @@ def t1_soccer_maze_env_cfg(
 @dataclass(frozen=True)
 class T1SoccerMazeTask(TaskConfig):
   name: str = "t1-soccer-maze"
-  env: ConstraintAbstractionBasedEnvCfg = field(default_factory=t1_soccer_maze_env_cfg)
+  env: ColosseumEnvCfg = field(default_factory=t1_soccer_maze_env_cfg)
 
   @property
   def train_env_cfg(self):

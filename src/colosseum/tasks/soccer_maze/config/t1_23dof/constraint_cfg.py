@@ -4,7 +4,7 @@ from mjlab.managers.scene_entity_config import SceneEntityCfg
 
 from colosseum.managers import ConstraintTermCfg
 from colosseum.robots.t1_23dof.constants import FOOT_SITE_NAMES
-from colosseum.tasks.dribbling.mdp.rewards import feet_distance_penalty
+from colosseum.mdp.rewards import feet_distance_penalty
 
 constraints: dict[str, ConstraintTermCfg] = {
   # Feet crossing: stochastic termination proportional to severity.

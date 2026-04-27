@@ -15,14 +15,16 @@ from colosseum.tasks.dribbling.mdp.observations import (
   base_height,
   foot_ball_contact_force,
 )
-from colosseum.tasks.dribbling.mdp.rewards import (
+from colosseum.mdp.ball_rewards import (
   ball_vel_angle,
   ball_vel_norm,
   ball_vel_tracking,
-  pose_deviation,
   robot_ball_approach_vel,
   robot_ball_distance,
-  robot_ball_yaw,
+  robot_ball_yaw_body as robot_ball_yaw,
+)
+from colosseum.mdp.rewards import (
+  pose_deviation,
   stance_phase_schedule,
   swing_phase_schedule,
 )

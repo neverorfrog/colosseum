@@ -5,7 +5,7 @@ from mjlab.sensor import ContactData, ContactSensor
 
 from colosseum.tasks.dribbling.mdp.obstacle_commands import ObstacleCommand
 
-from .observations import agent_to_goal_vector as goal_to_agent_vector
+from colosseum.mdp.observations import agent_to_goal_vector
 from .rewards import is_healthy
 
 
@@ -34,7 +34,7 @@ def arrived_at_goal(
   Returns:
       Termination tensor (num_envs,) with True for terminated envs
   """
-  agent_to_goal_vec = goal_to_agent_vector(env, asset_cfg)  # [num_envs, 2]
+  agent_to_goal_vec = agent_to_goal_vector(env, asset_cfg)  # [num_envs, 2]
   distance = torch.norm(agent_to_goal_vec, dim=1)  # [num_envs]
   return distance < threshold
 

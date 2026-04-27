@@ -25,7 +25,7 @@ from mjlab.utils.lab_api.math import quat_apply
 
 from colosseum.envs.abstraction_based_env import AbstractionBasedEnv
 from colosseum.mdp.abstraction.maze.grid_abstraction import GridAbstraction
-from colosseum.tasks.maze.mdp.observations import agent_pos_local, agent_vel
+from colosseum.mdp.observations import agent_pos_local, agent_vel
 
 if TYPE_CHECKING:
   from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv

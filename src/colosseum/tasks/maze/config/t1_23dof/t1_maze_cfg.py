@@ -7,7 +7,7 @@ from mjlab.sim import MujocoCfg, SimulationCfg
 from mjlab.viewer import ViewerConfig
 
 from colosseum.config.types.task import TaskConfig, register_task
-from colosseum.envs.abstraction_based_env import AbstractionBasedEnvCfg
+from colosseum.envs.colosseum_env import ColosseumEnvCfg
 from colosseum.managers.abstraction_manager import AbstractionTermCfg
 from colosseum.robots.t1_23dof.constants import BASE_BODY_NAME, get_robot_cfg
 from colosseum.robots.t1_23dof.sensors import (
@@ -94,7 +94,7 @@ def t1_maze_env_cfg(
   resolution_factor: int = 3,
   wall_center_weight: float = 2.0,
   play: bool = False,
-) -> AbstractionBasedEnvCfg:
+) -> ColosseumEnvCfg:
   """Create Booster T1 maze navigation task configuration.
 
   Args:
@@ -109,7 +109,7 @@ def t1_maze_env_cfg(
     )
   )
 
-  cfg = AbstractionBasedEnvCfg(
+  cfg = ColosseumEnvCfg(
     scene=scene_cfg(maze, num_envs=1 if play else num_envs),
     sim=sim_cfg(),
     viewer=viewer_cfg(),
@@ -139,7 +139,7 @@ def t1_maze_env_cfg(
 @dataclass(frozen=True)
 class T1MazeTask(TaskConfig):
   name: str = "t1-maze"
-  env: AbstractionBasedEnvCfg = field(default_factory=t1_maze_env_cfg)
+  env: ColosseumEnvCfg = field(default_factory=t1_maze_env_cfg)
 
   @property
   def train_env_cfg(self):

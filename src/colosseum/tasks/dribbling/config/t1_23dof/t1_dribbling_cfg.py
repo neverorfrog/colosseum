@@ -11,7 +11,7 @@ from mjlab.viewer import ViewerConfig
 
 from colosseum.assets.ball.ball_spec import get_ball_cfg
 from colosseum.config.types.task import TaskConfig, register_task
-from colosseum.envs.constraint_rma_env import ConstraintRmaEnvCfg
+from colosseum.envs.colosseum_env import ColosseumEnvCfg
 from colosseum.robots.t1_23dof.constants import BASE_BODY_NAME, get_robot_cfg
 from colosseum.robots.t1_23dof.sensors import (
   FEET_GROUND_CONTACT_SENSOR,
@@ -25,7 +25,7 @@ from colosseum.robots.t1_23dof.sensors import (
   SELF_COLLISION_SENSOR,
 )
 from colosseum.tasks.dribbling.mdp.obstacle_commands import ObstacleCommandCfg
-from colosseum.tasks.dribbling.mdp.rma_terms import DribblingRmaTermCfg
+from colosseum.research.dribbling.rma_terms import DribblingRmaTermCfg
 from colosseum.tasks.dribbling.obstacle_spec import NUM_OBSTACLES, get_obstacle_cfg
 from colosseum.tasks.dribbling.viz import DribblingViz
 
@@ -135,8 +135,8 @@ def booster_t1_dribbling_env_cfg(
   num_obstacles: int = NUM_OBSTACLES,
   obstacle_stage_index: int = -1,
   ball_spawn_x_range: tuple[float, float] | None = None,
-) -> ConstraintRmaEnvCfg:
-  cfg = ConstraintRmaEnvCfg(
+) -> ColosseumEnvCfg:
+  cfg = ColosseumEnvCfg(
     scene=scene_cfg(
       play, use_depth_camera=use_depth_camera, num_obstacles=num_obstacles
     ),
@@ -206,7 +206,7 @@ def booster_t1_dribbling_env_cfg(
 @dataclass(frozen=True)
 class T1DribblingTask(TaskConfig):
   name: str = "t1-dribbling"
-  env: ConstraintRmaEnvCfg = field(default_factory=booster_t1_dribbling_env_cfg)
+  env: ColosseumEnvCfg = field(default_factory=booster_t1_dribbling_env_cfg)
   use_depth_camera: bool = False
   show_depth: bool = False
   obstacle_stage_index: int = -1

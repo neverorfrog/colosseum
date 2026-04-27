@@ -17,7 +17,7 @@ from mjlab.tasks.velocity.mdp.observations import (
 )
 from mjlab.utils.noise import UniformNoiseCfg as Unoise
 
-from colosseum.tasks.maze.mdp.observations import (
+from colosseum.mdp.observations import (
   agent_pos_local,
   goal_pos_local,
 )

@@ -8,7 +8,7 @@ from loguru import logger
 from mjlab.managers import CommandTerm, CommandTermCfg
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 
-from colosseum.tasks.maze.mdp.observations import agent_pos
+from colosseum.mdp.observations import agent_pos
 from colosseum.tasks.maze.terrain import MazeTerrainEntity
 
 if TYPE_CHECKING:
