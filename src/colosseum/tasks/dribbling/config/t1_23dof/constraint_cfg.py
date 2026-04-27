@@ -61,14 +61,14 @@ dribbling_constraints: dict[str, ConstraintTermCfg] = {
   #   params={"limit": 0.45, "asset_cfg": SceneEntityCfg("robot")},
   # ),
   # Feet too close together (XY plane): replaces feet_distance reward.
-  # "feet_distance": ConstraintTermCfg(
-  #   func=feet_distance_penalty,
-  #   max_p=0.25,
-  #   params={
-  #     "asset_cfg": SceneEntityCfg("robot", site_names=FOOT_SITE_NAMES),
-  #     "min_dist": 0.05,
-  #   },
-  # ),
+  "feet_distance": ConstraintTermCfg(
+    func=feet_distance_penalty,
+    max_p=0.5,
+    params={
+      "asset_cfg": SceneEntityCfg("robot", site_names=FOOT_SITE_NAMES),
+      "min_dist": 0.05,
+    },
+  ),
   # Joint range: hip and knee — 90% of physical range from default.
   # "joint_range_legs": ConstraintTermCfg(
   #   func=constraints.joint_range,

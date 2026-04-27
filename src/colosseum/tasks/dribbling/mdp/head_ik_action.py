@@ -38,9 +38,17 @@ class HeadIKActionCfg(ActionTermCfg):
 
   # Soft joint limits (stay a few degrees inside the hard limits to avoid
   # the joint-limit penalty reward term).
-  yaw_limit: float = 1.5    # joint range ±1.57 rad
+  yaw_limit: float = 1.5  # joint range ±1.57 rad
   pitch_min: float = -0.30  # joint min −0.35 rad
   pitch_max: float = 1.02  # joint max  1.22 rad
+
+  # Periodic scan behaviour: look straight ahead and slightly up for
+  # obstacle awareness. Durations are in seconds (converted to substeps
+  # in __init__ using the physics timestep).
+  scan_yaw: float = 0.0  # look straight ahead (rad)
+  scan_pitch: float = 0.1  # look slightly up (rad, negative = up)
+  track_duration: float = 2.0  # seconds tracking the ball
+  scan_duration: float = 0.3  # seconds looking up
 
   def build(self, env: ManagerBasedRlEnv) -> HeadIKAction:
     return HeadIKAction(self, env)
@@ -79,6 +87,16 @@ class HeadIKAction(ActionTerm):
     # Placeholder so raw_action is always a valid tensor.
     self._dummy = torch.zeros(self.num_envs, 0, device=self.device)
 
+    # Per-env phase counter (in substeps). Each env independently cycles
+    # through [0, track_steps + scan_steps). Scan fires in the last
+    # scan_steps of the cycle. Phase is randomised at init so envs are
+    # desynchronised from the start.
+    dt = env.sim.mj_model.opt.timestep
+    self._track_steps = max(1, round(cfg.track_duration / dt))
+    self._scan_steps = max(1, round(cfg.scan_duration / dt))
+    total = self._track_steps + self._scan_steps
+    self._counter = torch.randint(0, total, (self.num_envs,), device=self.device)
+
   # ------------------------------------------------------------------
   # ActionTerm interface
   # ------------------------------------------------------------------
@@ -90,6 +108,12 @@ class HeadIKAction(ActionTerm):
   @property
   def raw_action(self) -> torch.Tensor:
     return self._dummy
+
+  def reset(self, env_ids: torch.Tensor) -> None:
+    total = self._track_steps + self._scan_steps
+    self._counter[env_ids] = torch.randint(
+      0, total, (len(env_ids),), device=self.device
+    )
 
   def process_actions(self, actions: torch.Tensor) -> None:
     pass  # nothing to process — IK is computed fresh each substep
@@ -122,4 +146,12 @@ class HeadIKAction(ActionTerm):
     pitch = pitch.clamp(self.cfg.pitch_min, self.cfg.pitch_max)
 
     targets = torch.stack([yaw, pitch], dim=-1)  # (N, 2)
+
+    # Advance phase counter and override targets for envs in scan phase.
+    total = self._track_steps + self._scan_steps
+    self._counter = (self._counter + 1) % total
+    in_scan = self._counter >= self._track_steps  # (N,) bool
+    targets[in_scan, 0] = self.cfg.scan_yaw
+    targets[in_scan, 1] = self.cfg.scan_pitch
+
     robot.set_joint_position_target(targets, joint_ids=self._head_ids)

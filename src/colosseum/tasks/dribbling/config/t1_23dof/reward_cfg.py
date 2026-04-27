@@ -12,6 +12,7 @@ from mjlab.tasks.velocity.mdp import (
   feet_swing_height,
   self_collision_cost,
   soft_landing,
+  feet_slip,
 )
 
 from colosseum.mdp.rewards import flat_orientation
@@ -114,7 +115,7 @@ rewards = {
   # ),
   "ball_target_progress": RewardTermCfg(  # Reward moving the ball along the current ball-to-target direction.
     func=ball_target_progress,
-    weight=1.0,
+    weight=2.0,
     params={
       "command_name": "ball_vel",  # Ball command term providing the persistent world-frame target.
       "obstacle_command_name": "adversary",  # Obstacle command term used to detect blocked target neighborhoods.
@@ -129,15 +130,14 @@ rewards = {
   ),
   "ball_target_reached": RewardTermCfg(  # Discrete bonus fired exactly once when the ball crosses the target threshold.
     func=ball_target_reached,
-    weight=10.0,
+    weight=50.0,
     params={"command_name": "ball_vel"},
   ),
   "robot_obstacle_collision": RewardTermCfg(  # Local robot-obstacle safety term.
     func=robot_obstacle_collision,
-    weight=-2.0,
+    weight=-10.0,
     params={
       "command_name": "adversary",  # Obstacle command term providing obstacle positions/velocities.
-      "collision_detection_range": 1.5,  # Collision penalty only inside this robot-obstacle distance.
       "collision_near_distance": 0.5,  # Maximum collision penalty at or below this distance.
       "collision_far_distance": 1.5,  # Collision penalty fades to zero at or above this distance.
     },
@@ -147,28 +147,37 @@ rewards = {
     weight=-10.0,
     params={
       "command_name": "adversary",
-      "collision_detection_range": 1.0,
-      "collision_near_distance": 0.15,
-      "collision_far_distance": 0.6,
+      "collision_near_distance": 0.3,
+      "collision_far_distance": 1.5,
     },
   ),
-  "obstacle_direction": RewardTermCfg(  # Penalize the ball actually moving toward an obstacle on the target path.
-    func=obstacle_direction,
-    weight=-10.0,
-    params={
-      "command_name": "adversary",  # Obstacle command term providing obstacle positions/velocities.
-      "ball_vel_command_name": "ball_vel",  # Ball command term providing the persistent target.
-      "direction_detection_range": 1.5,  # Only obstacles within this forward target-segment range affect direction.
-      "direction_tube_radius": 0.5,  # Direction term only if the obstacle lies close to the ball-target segment.
-      "direction_sharpness": 3.0,  # Larger -> sharper bounded penalty for pushing the ball toward the obstacle.
-      "min_ball_speed": 0.1,  # Below this ball speed the direction penalty is suppressed.
-      "ball_engagement_near_distance": 0.3,  # Full obstacle pressure only when the ball is under close control.
-      "ball_engagement_far_distance": 0.75,  # Obstacle pressure fades out when the ball is not engaged.
-    },
-  ),
+  # "obstacle_direction": RewardTermCfg(  # Penalize the ball actually moving toward an obstacle on the target path.
+  #   func=obstacle_direction,
+  #   weight=-10.0,
+  #   params={
+  #     "command_name": "adversary",  # Obstacle command term providing obstacle positions/velocities.
+  #     "ball_vel_command_name": "ball_vel",  # Ball command term providing the persistent target.
+  #     "direction_detection_range": 1.5,  # Only obstacles within this forward target-segment range affect direction.
+  #     "direction_tube_radius": 0.5,  # Direction term only if the obstacle lies close to the ball-target segment.
+  #     "direction_sharpness": 3.0,  # Larger -> sharper bounded penalty for pushing the ball toward the obstacle.
+  #     "min_ball_speed": 0.1,  # Below this ball speed the direction penalty is suppressed.
+  #     "ball_engagement_near_distance": 0.3,  # Full obstacle pressure only when the ball is under close control.
+  #     "ball_engagement_far_distance": 0.75,  # Obstacle pressure fades out when the ball is not engaged.
+  #   },
+  # ),
   # ------------------------------------------------------------------ #
   # Locomotion regularization                                            #
   # ------------------------------------------------------------------ #
+  "foot_slip": RewardTermCfg(
+    func=feet_slip,
+    weight=-0.1,
+    params={
+      "sensor_name": "feet_ground_contact",
+      "command_name": "ball_vel",
+      "command_threshold": 0.05,
+      "asset_cfg": SceneEntityCfg("robot", site_names=(FOOT_SITE_NAMES)),
+    },
+  ),
   "upright": RewardTermCfg(
     func=flat_orientation,
     weight=1.0,

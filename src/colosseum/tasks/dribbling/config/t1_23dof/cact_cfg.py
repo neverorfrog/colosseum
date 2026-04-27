@@ -18,7 +18,11 @@ from colosseum.tasks.dribbling.mdp.curriculum import (
 from colosseum.tasks.dribbling.mdp.gait_phase_command import GaitPhaseCommandCfg
 from colosseum.tasks.dribbling.mdp.head_ik_action import HeadIKActionCfg
 from colosseum.tasks.dribbling.mdp.obstacle_commands import ObstacleCommandCfg
-from colosseum.tasks.dribbling.mdp.terminations import ball_captured, ball_lost
+from colosseum.tasks.dribbling.mdp.terminations import (
+  ball_captured,
+  ball_lost,
+  ball_target_reached,
+)
 from colosseum.tasks.dribbling.obstacle_spec import NUM_OBSTACLES
 
 _ARM_JOINTS = {
@@ -43,11 +47,11 @@ commands: Dict[str, CommandTermCfg] = {
     robot_entity="robot",
     ball_entity="ball",
     speed_range=(0.2, 1.0),
-    target_distance_range=(2.0, 3.0),
+    target_distance_range=(2.5, 5.0),
     speed_gain=1.0,
     target_reached_threshold=0.5,
     heading_range=math.pi / 4,  # ±45° around the robot forward direction
-    resampling_time_range=(5.0, 10.0),
+    resampling_time_range=(10.0, 10.0),
     debug_vis=True,
   ),
   "gait_phase": GaitPhaseCommandCfg(gait_freq_range=(1.5, 2.5)),
@@ -56,10 +60,11 @@ commands: Dict[str, CommandTermCfg] = {
     num_obstacles=NUM_OBSTACLES,
     num_active=0,
     behavior="none",
-    distance_range=(1.5, 3.0),
+    distance_range=(2.0, 3.0),
     lateral_offset_range=(-0.8, 0.8),
     min_speed=0.0,
     max_speed=0.0,
+    replay_fraction=0.3,
   ),
 }
 
@@ -145,18 +150,18 @@ curriculum = {
           "behavior": "lateral_blocker",
           "lateral_offset_range": (-0.3, 0.3),
           "forward_fraction_range": (0.35, 0.75),
-          "min_speed": 0.05,
-          "max_speed": 0.15,
+          "min_speed": 0.1,
+          "max_speed": 0.4,
           "velocity_resample_time_range": (0.6, 1.2),
         },
         {
           "step": 97_700,
           "num_active": 1,
           "behavior": "ball_attacker",
-          "lateral_offset_range": (-0.3, 0.3),
+          "lateral_offset_range": (-0.5, 0.5),
           "forward_fraction_range": (0.35, 0.75),
-          "min_speed": 0.08,
-          "max_speed": 0.22,
+          "min_speed": 0.1,
+          "max_speed": 0.4,
           "velocity_resample_time_range": (0.4, 0.9),
         },
         {
@@ -165,10 +170,10 @@ curriculum = {
           "behavior": "mixed_attackers",
           # Distractors still use distance_range for their random-angle spawn.
           "distance_range": (2.0, 3.0),
-          "lateral_offset_range": (-0.3, 0.3),
+          "lateral_offset_range": (-1.0, 1.0),
           "forward_fraction_range": (0.35, 0.75),
-          "min_speed": 0.05,
-          "max_speed": 0.22,
+          "min_speed": 0.1,
+          "max_speed": 0.4,
           "velocity_resample_time_range": (0.4, 1.0),
         },
       ],
@@ -182,12 +187,16 @@ terminations = {
     func=bad_orientation,
     params={"limit_angle": math.radians(70.0)},
   ),
+  "ball_target_reached": TerminationTermCfg(
+    func=ball_target_reached,
+    params={"command_name": "ball_vel"},
+  ),
   # "ball_captured": TerminationTermCfg(
   #   func=ball_captured,
   #   params={"command_name": "adversary", "capture_radius": 0.25},
   # ),
-  "ball_lost": TerminationTermCfg(
-    func=ball_lost,
-    params={"max_robot_ball_distance": 2.0},
-  ),
+  # "ball_lost": TerminationTermCfg(
+  #   func=ball_lost,
+  #   params={"max_robot_ball_distance": 3.0},
+  # ),
 }
