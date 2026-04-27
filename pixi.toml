@@ -40,6 +40,9 @@ eval-dribbling = { cmd = "python research/dribbling/scripts/evaluate_dribbling.p
 # DEFAULT (TRAIN) ENVIRONMENT
 # Requires linux-64 and CUDA 12.0
 # ============================================
+[activation.env]
+LD_PRELOAD = "$CONDA_PREFIX/lib/libstdc++.so.6"
+
 [system-requirements]
 cuda = "12.0"
 

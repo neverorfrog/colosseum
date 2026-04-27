@@ -9,7 +9,15 @@ nav:
   - Overview: index.md
   - COLOSSEUM:
       - Getting Started: colosseum/getting_started.md
+      - Training & Evaluation: colosseum/training.md
       - Cartpole: colosseum/cartpole.md
+  - RESEARCH:
+      - Dribbling:
+          - Overview: dribbling/pipeline.md
+          - Training plan: dribbling/training_plan.md
+          - Obstacles: dribbling/obstacles.md
+          - Evaluation: dribbling/evaluation.md
+          - Visual encoder: dribbling/visual_encoder_plan.md
   - MJLAB:
       - Overview: mjlab/overview.md
       - Task Layer: mjlab/task_layer.md
