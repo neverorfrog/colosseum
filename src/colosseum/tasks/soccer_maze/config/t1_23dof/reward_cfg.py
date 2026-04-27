@@ -1,6 +1,7 @@
 """Reward configuration for T1 soccer-maze task."""
 
 import math
+from time import time
 
 from mjlab.envs.mdp import action_rate_l2, joint_pos_limits
 from mjlab.managers import RewardTermCfg
@@ -42,6 +43,7 @@ from colosseum.tasks.soccer_maze.mdp.rewards import (
   robot_ball_yaw_body,
   robot_heading_alignment,
   robot_lin_vel_tracking,
+  time_penalty,
 )
 
 rewards = {
@@ -55,7 +57,7 @@ rewards = {
   ),
   "ball_vel_norm": RewardTermCfg(
     func=ball_vel_norm_body,
-    weight=3.0,
+    weight=2.0,
     params={"command_name": "sokoban", "sharpness": 1.0},
   ),
   "ball_vel_angle": RewardTermCfg(
@@ -82,8 +84,12 @@ rewards = {
   ),
   "ball_at_final_goal": RewardTermCfg(
     func=ball_at_final_goal,
-    weight=20.0,
+    weight=100.0,
     params={"command_name": "goal", "threshold": 0.5},
+  ),
+  "time_penalty": RewardTermCfg(
+    func=time_penalty,
+    weight=1.0,
   ),
   # ------------------------------------------------------------------ #
   # Progress: penalise stalling on a single plan step                   #

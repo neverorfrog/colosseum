@@ -325,6 +325,13 @@ def robot_ball_distance_push(
   return torch.exp(-sharpness * dist_sq) * sokoban.is_push.float()
 
 
+def time_penalty(
+  env: ManagerBasedRlEnv,
+) -> torch.Tensor:
+  """Constant per-step time penalty to encourage faster solutions."""
+  return -torch.ones(env.num_envs, device=env.device)
+
+
 def action_step_timeout_penalty(
   env: ManagerBasedRlEnv,
   abstraction_name: str = "sokoban",

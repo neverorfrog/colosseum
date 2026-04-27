@@ -125,7 +125,7 @@ def t1_soccer_maze_env_cfg(
   """
   maze = Maze(
     MazeCfg(
-      maze_map=MAPS[scenario], cell_size=1.0, wall_height=1.2, wall_size_factor=1.0
+      maze_map=MAPS[scenario], cell_size=1.1, wall_height=1.2, wall_size_factor=1.0
     )
   )
 
