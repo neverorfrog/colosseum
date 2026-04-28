@@ -11,7 +11,7 @@
 This project uses [Pixi](https://pixi.sh) for environment and dependency management.
 
 ```bash
-git clone --recurse-submodules <repo-url>
+git clone https://github.com/neverorfrog/colosseum.git
 cd colosseum
 pixi install
 ```
@@ -46,11 +46,3 @@ The workspace defines three pixi environments:
 | `default` | `pixi run ...` | Training (requires CUDA GPU) |
 | `deploy` | `pixi run -e deploy ...` | Sim-to-sim and real robot deployment |
 | `docs` | `pixi run -e docs mkdocs serve` | Documentation |
-
-## Documentation
-
-Serve the docs site locally:
-
-```bash
-pixi run -e docs docs
-```
