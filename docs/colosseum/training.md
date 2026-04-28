@@ -23,16 +23,6 @@ python -m colosseum.scripts.train task:t1-dribbling
 ```bash
 # Phase 1 — train with privileged observations
 pixi run train task:t1-dribbling
-
-# Phase 2 — train visual adaptation encoder (freeze Phase 1 policy)
-pixi run train-phase2 task:t1-dribbling
-
-# Force a fixed obstacle stage (-1 = use curriculum)
-pixi run train task:t1-dribbling --obstacle-stage-index 0
-pixi run train task:t1-dribbling --obstacle-stage-index 3
-
-# Disable W&B logging
-pixi run train task:t1-dribbling logger:disabled
 ```
 
 ### Common flags
@@ -70,7 +60,7 @@ Logs and checkpoints are saved under `./logs/`. Metrics go to W&B.
 pixi run play task:t1-dribbling --checkpoint ./logs/<run>/checkpoints/latest.pt
 
 # Fix obstacle stage during play
-pixi run play task:t1-dribbling --checkpoint ./logs/<run>/checkpoints/latest.pt --obstacle-stage-index 2
+pixi run play task:t1-dribbling --checkpoint ./logs/<run>/checkpoints/latest.pt
 ```
 
 Play mode uses the task's default `num_envs`. Override with `--num-envs 1` for a single environment.
@@ -81,32 +71,9 @@ Play mode uses the task's default `num_envs`. Override with `--num-envs 1` for a
 pixi run play task:t1-dribbling --checkpoint ... --viewer viser
 ```
 
-#### Troubleshooting: `MjlabViserScene` cannot be instantiated
-
-```
-TypeError: Can't instantiate abstract class MjlabViserScene with abstract method add_rectangle
-```
-
-Known bug in the installed mjlab. Fix: open
-`.pixi/envs/default/lib/python3.12/site-packages/mjlab/viewer/viser/scene.py`
-and add this stub to `MjlabViserScene` just before `clear()` (~line 427):
-
-```python
-@override
-def add_rectangle(self, *args, **kwargs) -> None:  # type: ignore[override]
-    pass
-```
-
 ---
 
-## Multi-GPU Training (GIN — two RTX 4090)
-
-GIN has two RTX 4090 GPUs (24 GB VRAM each).
-
-| Phase | Max envs | VRAM |
-|-------|----------|------|
-| Phase 1 | 20480 (10240/GPU) | ~40 GB |
-| Phase 2 | 2048 (1024/GPU) | ~44 GB |
+## Multi-GPU Training
 
 ```bash
 # Phase 1
