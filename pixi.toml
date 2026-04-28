@@ -35,6 +35,7 @@ export-onnx = { cmd = "python -m colosseum.scripts.export_onnx", description = "
 train-phase2 = { cmd = "python research/dribbling/scripts/train_phase2.py", description = "RMA Phase 2 adaptation encoder training" }
 pipeline-dribbling = { cmd = "python research/dribbling/scripts/pipeline_dribbling.py", description = "Full dribbling curriculum pipeline (Phase 1 + Phase 2 per stage)" }
 eval-dribbling = { cmd = "python research/dribbling/scripts/evaluate_dribbling.py", description = "Run the dribbling evaluation protocol" }
+obstacle-ablation = { cmd = "python research/dribbling/scripts/obstacle_ablation.py", description = "Ablation of obstacle presence in dribbling curriculum" }
 
 # ============================================
 # DEFAULT (TRAIN) ENVIRONMENT
