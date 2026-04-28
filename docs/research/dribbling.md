@@ -55,13 +55,13 @@ src/colosseum/research/dribbling/
 
 ```bash
 # 1. Train nominal dribbling — Phase 1, no obstacles
-pixi run train task:t1-dribbling --obstacle-stage-index 0
+pixi run train task:t1-dribbling --task.obstacle-stage-index 0
 
-# 2. Train obstacle stages with DAgger (Stage-0 checkpoint as teacher)
+# 2. Train obstacle stage i with DAgger (Stage-0 checkpoint as teacher)
 pixi run train task:t1-dribbling \
   --task.use-dagger \
   --task.teacher-checkpoint ./logs/<stage0-run>/checkpoints/latest.pt \
-  --obstacle-stage-index -1   # -1 = automatic curriculum
+  --task.obstacle-stage-index i 
 
 # 3. Train visual adaptation encoder — Phase 2
 pixi run train-phase2 task:t1-dribbling \
