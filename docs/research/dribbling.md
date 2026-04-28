@@ -3,7 +3,7 @@
 > Humanoid robot soccer dribbling with curriculum-based dynamic obstacle avoidance
 > and visual adaptation via RMA (Rapid Motor Adaptation).
 
-**Project page:** https://lab-rococo-sapienza.github.io/learning-to-dribble/
+**Project page:** [lab-rococo-sapienza.github.io/learning-to-dribble](https://lab-rococo-sapienza.github.io/learning-to-dribble/)
 
 ---
 
