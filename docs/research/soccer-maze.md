@@ -1,11 +1,8 @@
 # HumanoidSoccerMaze
 
-> A benchmark requiring a humanoid robot to navigate a maze while dribbling a
-> ball to a distant target in presence of complex obstacle configurations.
-
-**Paper:**
-*HumanoidSoccerMaze: a novel benchmark and a hierarchical solution approach*
-Flavio Maiorana, Daniel Gigliotti, Luca Iocchi
+> A novel benchmark requiring a humanoid robot to navigate a maze while dribbling a
+> ball to a distant target in presence of complex obstacle configurations and 
+> a baseline solution integrating planning and learning, using the Sokoban problem as an abstraction of ball dribbling with obstacles
 
 ---
 
@@ -53,3 +50,11 @@ pixi run train task:t1-soccer-maze
 # Evaluate
 pixi run play task:t1-soccer-maze --checkpoint ./logs/<run>/checkpoints/latest.pt
 ```
+
+## Paper
+
+The paper describes the technical contribution of the benchmark (environment features, performance metrics) and the baseline solution approach. It is under submission at **RoboCup Symposium 2026**.
+
+> **HumanoidSoccerMaze: a novel benchmark and a hierarchical solution approach**  
+> Flavio Maiorana, Daniel Gigliotti, Luca Iocchi  
+> *RoboCup Symposium 2026 (under submission)*
