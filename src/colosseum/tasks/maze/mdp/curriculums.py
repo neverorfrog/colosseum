@@ -1,7 +1,7 @@
 import torch
 from mjlab.envs import ManagerBasedRlEnv
 
-from colosseum.tasks.maze.mdp.abstraction_velocity_command import AbstractionVelocityCommandCfg
+from colosseum.mdp.abstraction.maze.abstraction_velocity_command import AbstractionVelocityCommandCfg
 
 
 def base_velocity_curriculum(

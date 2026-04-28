@@ -11,6 +11,7 @@ Usage:
 
 from __future__ import annotations
 
+import os
 import sys
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -21,7 +22,7 @@ import tyro
 from loguru import logger
 from mjlab.envs import ManagerBasedRlEnv, ManagerBasedRlEnvCfg
 from mjlab.utils.torch import configure_torch_backends
-from mjlab.viewer import NativeMujocoViewer
+from mjlab.viewer import NativeMujocoViewer, ViserPlayViewer
 
 # Import tasks to populate registry
 import colosseum.tasks  # noqa: F401
@@ -29,15 +30,12 @@ import colosseum.tasks  # noqa: F401
 from colosseum.algorithm.base_algorithm import get_latest_checkpoint
 from colosseum.config.types.experiment import BaseExperimentConfig
 from colosseum.utils.torch import get_device
-from colosseum.utils.train.env import make_env
-
-
 @dataclass(frozen=True)
 class PlayConfig(BaseExperimentConfig):
     """Play configuration."""
     agent: Literal["trained", "zero", "random"] = "trained"
     num_envs: int = 1
-    viewer: Literal["native", "auto"] = "auto"
+    viewer: Literal["native", "viser", "auto"] = "auto"
     video: bool = False
     video_length: int = 500
 
@@ -61,21 +59,43 @@ def _resolve_checkpoint(checkpoint: str | None) -> Path | None:
 
 
 def _make_env(env_cfg: ManagerBasedRlEnvCfg, device: str, render_mode: str | None) -> ManagerBasedRlEnv:
-    return make_env(env_cfg, device, render_mode)
+    return env_cfg.class_type(cfg=env_cfg, device=device, render_mode=render_mode)
+
+
+def _parse_single_cuda_device(cuda_arg: str) -> int:
+    parts = [p.strip() for p in str(cuda_arg).split(",") if p.strip()]
+    if len(parts) != 1:
+        raise ValueError(
+            f"play expects a single GPU id for --cuda, got '{cuda_arg}'. "
+            "Use one value, e.g. --cuda 0"
+        )
+    try:
+        device_id = int(parts[0])
+    except ValueError as exc:
+        raise ValueError(f"Invalid --cuda value '{cuda_arg}'. Use an integer like 0") from exc
+    if device_id < 0:
+        raise ValueError(f"--cuda must be >= 0, got {device_id}")
+    return device_id
 
 
 def create_agent(config: PlayConfig, env: ManagerBasedRlEnv, device: torch.device):
     if config.agent == "zero":
         logger.info("Using zero-action agent")
         def zero_agent(obs_dict):
-            obs = obs_dict.get("policy", obs_dict) if isinstance(obs_dict, dict) else obs_dict
+            if isinstance(obs_dict, dict):
+                obs = next(iter(obs_dict.values()))
+            else:
+                obs = obs_dict
             return torch.zeros((obs.shape[0], env.action_manager.total_action_dim), device=device)
         return zero_agent
 
     elif config.agent == "random":
         logger.info("Using random-action agent")
         def random_agent(obs_dict):
-            obs = obs_dict.get("policy", obs_dict) if isinstance(obs_dict, dict) else obs_dict
+            if isinstance(obs_dict, dict):
+                obs = next(iter(obs_dict.values()))
+            else:
+                obs = obs_dict
             return torch.randn((obs.shape[0], env.action_manager.total_action_dim), device=device)
         return random_agent
 
@@ -97,30 +117,28 @@ def create_agent(config: PlayConfig, env: ManagerBasedRlEnv, device: torch.devic
         module = importlib.import_module(module_path)
         algo_class = getattr(module, class_name)
 
-        # Create minimal env just to get observation/action dimensions
-        env_cfg = config.task.env
-        dim_env_cfg = replace(env_cfg, scene=replace(env_cfg.scene, num_envs=1))
-        dim_env = _make_env(dim_env_cfg, str(device), render_mode=None)
-
         algo = algo_class(
             config=algo_cfg,
-            env=dim_env,
+            env=env,
             device=device,
             log_fn=lambda _m, _s: None,
             log_interval=-1,
         )
         state = algo.load(checkpoint_path)
         logger.info(f"Loaded from step {state.get('global_step', 0)}")
-        dim_env.close()
 
         algo.actor.eval()
         algo.actor_obs_normalizer.eval()
+        if hasattr(algo, "rma_manager"):
+            algo.rma_manager.eval()
 
         def trained_agent(obs_dict):
             with torch.no_grad():
                 actor_obs = algo.get_actor_obs(obs_dict)
                 normalized_obs = algo.actor_obs_normalizer(actor_obs)
-                return algo._eval_get_action(normalized_obs)
+                privileged_obs = algo.get_privileged_obs(obs_dict) if hasattr(algo, "get_privileged_obs") else {}
+                composed_obs = algo._compose_actor_input(normalized_obs, privileged_obs)
+                return algo._eval_get_action(composed_obs)
 
         return trained_agent
 
@@ -129,17 +147,19 @@ def create_agent(config: PlayConfig, env: ManagerBasedRlEnv, device: torch.devic
 
 def main() -> None:
     config = tyro.cli(PlayConfig, config=(tyro.conf.CascadeSubcommandArgs,))
+    device_id = _parse_single_cuda_device(config.cuda)
 
     logger.remove()
     logger.add(sys.stderr, format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>", level="DEBUG")
 
     configure_torch_backends()
-    device = get_device(cuda=config.use_cuda, device_id=0)
+    if config.use_cuda:
+        os.environ["MUJOCO_EGL_DEVICE_ID"] = str(device_id)
+    device = get_device(cuda=config.use_cuda, device_id=device_id)
     logger.info(f"Device: {device}")
 
-    env_cfg = config.task.play_env_cfg or config.task.env
-    if config.num_envs != 1:
-        env_cfg = replace(env_cfg, scene=replace(env_cfg.scene, num_envs=config.num_envs))
+    env_cfg = config.task.play_env_cfg or config.task.train_env_cfg
+    env_cfg = replace(env_cfg, scene=replace(env_cfg.scene, num_envs=config.num_envs))
 
     render_mode = "rgb_array" if config.video else None
     env = _make_env(env_cfg=env_cfg, device=str(device), render_mode=render_mode)
@@ -149,6 +169,10 @@ def main() -> None:
 
     if config.video:
         _record_video(config, env, agent)
+    elif config.viewer == "viser":
+        viewer = ViserPlayViewer(env, agent)
+        viewer.run()
+        env.close()
     else:
         viewer = NativeMujocoViewer(env, agent)
         viewer.run()

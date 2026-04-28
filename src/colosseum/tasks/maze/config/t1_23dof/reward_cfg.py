@@ -22,6 +22,7 @@ from colosseum.mdp.rewards import flat_orientation
 from colosseum.robots.t1_23dof.constants import BASE_BODY_NAME, FOOT_SITE_NAMES
 from colosseum.robots.t1_23dof.sensors import SELF_COLLISION_SENSOR
 from colosseum.tasks.maze.mdp.rewards import (
+  heading_alignment,
   wall_collisions,
 )
 
@@ -45,13 +46,18 @@ rewards: dict[str, RewardTermCfg] = {
     weight=2.0,
     params={"command_name": "velocity", "std": math.sqrt(0.25)},
   ),
+  "heading_alignment": RewardTermCfg(
+    func=heading_alignment,
+    weight=1.5,
+    params={"command_name": "velocity"},
+  ),
   "track_angular_velocity": RewardTermCfg(
     func=track_angular_velocity,
-    weight=1.0,
-    params={"command_name": "velocity", "std": math.sqrt(0.25)},
+    weight=1.5,
+    params={"command_name": "velocity" , "std": math.sqrt(0.25)},
   ),
   # ------------------------------------------------------------------ #
-  # Regularization                                                       #
+  # Regularization                                                     #
   # ------------------------------------------------------------------ #
   "pose": RewardTermCfg(
     func=variable_posture,

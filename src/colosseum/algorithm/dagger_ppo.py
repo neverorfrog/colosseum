@@ -32,12 +32,16 @@ from loguru import logger
 from mjlab.envs import ManagerBasedRlEnv
 
 from colosseum.algorithm.base_algorithm import BaseAlgorithm
-from colosseum.algorithm.normalization import EmpiricalNormalization
+from colosseum.algorithm.networks.ppo_networks import PpoActor, PpoValueNet
+from colosseum.algorithm.networks.teacher_policy import TeacherPolicy
 from colosseum.algorithm.ppo import PPO
-from colosseum.algorithm.ppo_networks import PpoActor, PpoValueNet
-from colosseum.algorithm.rollout_buffer import RolloutBuffer
-from colosseum.algorithm.teacher_policy import TeacherPolicy
-from colosseum.config.types.algorithm import DaggerPpoConfig, PpoConfig, register_algorithm
+from colosseum.algorithm.utils.normalization import EmpiricalNormalization
+from colosseum.algorithm.utils.rollout_buffer import RolloutBuffer
+from colosseum.config.types.algorithm import (
+  DaggerPpoConfig,
+  PpoConfig,
+  register_algorithm,
+)
 from colosseum.config.types.networks import PpoActorConfig, PpoCriticConfig
 from colosseum.utils.logger import extract_episode_metrics
 from colosseum.utils.torch import get_obs_dims
@@ -77,10 +81,11 @@ class DaggerPPO(PPO):
   # ------------------------------------------------------------------
 
   def _build_rollout_buffer(self) -> None:
-    assert isinstance(self.config, DaggerPpoConfig)
+    config = self.config
+    assert isinstance(config, DaggerPpoConfig)
     self.rollout_buffer = RolloutBuffer(
       num_envs=self.env.num_envs,
-      num_steps=self.config.num_steps_per_env,
+      num_steps=config.num_steps_per_env,
       actor_obs_dim=self.actor_obs_dim,
       critic_obs_dim=self.critic_obs_dim,
       action_dim=self.action_dim,
@@ -97,13 +102,20 @@ class DaggerPPO(PPO):
     current_actor_obs: torch.Tensor,
     current_critic_obs: torch.Tensor,
     current_dones: torch.Tensor,
-  ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    assert isinstance(self.config, DaggerPpoConfig)
+    obs_dict: torch.Tensor | dict[str, torch.Tensor | dict[str, torch.Tensor]],
+  ) -> tuple[
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor | dict[str, torch.Tensor | dict[str, torch.Tensor]],
+  ]:
+    config = self.config
+    assert isinstance(config, DaggerPpoConfig)
 
     self.rollout_buffer.clear()
 
     with torch.no_grad():
-      for _step in range(self.config.num_steps_per_env):
+      for _step in range(config.num_steps_per_env):
         norm_actor_obs = self.actor_obs_normalizer(current_actor_obs)
         norm_critic_obs = self.critic_obs_normalizer(current_critic_obs)
 
@@ -122,7 +134,7 @@ class DaggerPPO(PPO):
         next_actor_obs = self.get_actor_obs(next_obs_dict)
         next_critic_obs = self.get_critic_obs(next_obs_dict)
 
-        if self.config.obs_normalization:
+        if config.obs_normalization:
           self.actor_obs_normalizer.update(next_actor_obs)
           self.critic_obs_normalizer.update(next_critic_obs)
 
@@ -133,7 +145,7 @@ class DaggerPPO(PPO):
           if truncated_mask.any():
             norm_next_critic = self.critic_obs_normalizer(next_critic_obs)
             truncated_values = self.value_net(norm_next_critic).squeeze(-1)
-            rewards = rewards + self.config.gamma * truncated_values * truncated_mask
+            rewards = rewards + config.gamma * truncated_values * truncated_mask
 
         self.episode_length_buf += 1
         done_ids = dones.nonzero(as_tuple=False).squeeze(-1)
@@ -170,22 +182,23 @@ class DaggerPPO(PPO):
       norm_last_critic = self.critic_obs_normalizer(current_critic_obs)
       last_values = self.value_net(norm_last_critic)
 
-    normalize_globally = not self.config.normalize_advantage_per_mini_batch
+    normalize_globally = not config.normalize_advantage_per_mini_batch
     self.rollout_buffer.compute_returns_and_advantages(
       last_values=last_values,
-      gamma=self.config.gamma,
-      lam=self.config.lam,
+      gamma=config.gamma,
+      lam=config.lam,
       normalize_advantage=normalize_globally,
     )
 
-    return current_actor_obs, current_critic_obs, current_dones
+    return current_actor_obs, current_critic_obs, current_dones, next_obs_dict
 
   # ------------------------------------------------------------------
   # Learning step: PPO losses + annealed imitation loss
   # ------------------------------------------------------------------
 
   def _learning_step(self) -> dict[str, float]:
-    assert isinstance(self.config, DaggerPpoConfig)
+    config = self.config
+    assert isinstance(config, DaggerPpoConfig)
 
     total_surrogate_loss = 0.0
     total_value_loss = 0.0
@@ -195,15 +208,13 @@ class DaggerPPO(PPO):
     num_updates = 0
 
     # Annealing coefficient: linear decay from imitation_coef → 0
-    progress = min(
-      self.global_step / max(self.config.imitation_annealing_steps, 1), 1.0
-    )
-    lam = self.config.imitation_coef * (1.0 - progress)
+    progress = min(self.global_step / max(config.imitation_annealing_steps, 1), 1.0)
+    lam = config.imitation_coef * (1.0 - progress)
 
     generator = self.rollout_buffer.mini_batch_generator(
-      num_mini_batches=self.config.num_mini_batches,
-      num_epochs=self.config.num_learning_epochs,
-      normalize_advantage_per_mini_batch=self.config.normalize_advantage_per_mini_batch,
+      num_mini_batches=config.num_mini_batches,
+      num_epochs=config.num_learning_epochs,
+      normalize_advantage_per_mini_batch=config.normalize_advantage_per_mini_batch,
     )
 
     for batch in generator:
@@ -237,12 +248,12 @@ class DaggerPPO(PPO):
           - 0.5,
           dim=-1,
         )
-        kl_mean = kl.mean().item()
+        kl_mean = self._distributed_mean_scalar(float(kl.mean().item()))
 
-      if self.config.schedule == "adaptive" and self.config.desired_kl is not None:
-        if kl_mean > self.config.desired_kl * 2.0:
+      if config.schedule == "adaptive" and config.desired_kl is not None:
+        if kl_mean > config.desired_kl * 2.0:
           self.learning_rate = max(1e-5, self.learning_rate / 1.5)
-        elif kl_mean < self.config.desired_kl / 2.0 and kl_mean > 0.0:
+        elif kl_mean < config.desired_kl / 2.0 and kl_mean > 0.0:
           self.learning_rate = min(1e-2, self.learning_rate * 1.5)
         for g in self.optimizer.param_groups:
           g["lr"] = self.learning_rate
@@ -252,16 +263,16 @@ class DaggerPPO(PPO):
       ratio = torch.exp(new_log_probs - old_log_probs)
       surrogate = -advantages_squeezed * ratio
       surrogate_clipped = -advantages_squeezed * torch.clamp(
-        ratio, 1.0 - self.config.clip_param, 1.0 + self.config.clip_param
+        ratio, 1.0 - config.clip_param, 1.0 + config.clip_param
       )
       surrogate_loss = torch.max(surrogate, surrogate_clipped).mean()
 
       # --- Value loss ---
-      if self.config.use_clipped_value_loss:
+      if config.use_clipped_value_loss:
         value_clipped = target_values + torch.clamp(
           new_values - target_values,
-          -self.config.clip_param,
-          self.config.clip_param,
+          -config.clip_param,
+          config.clip_param,
         )
         value_loss = torch.max(
           (new_values - returns).pow(2),
@@ -277,18 +288,19 @@ class DaggerPPO(PPO):
       # --- Total loss ---
       loss = (
         surrogate_loss
-        + self.config.value_loss_coef * value_loss
-        - self.config.entropy_coef * entropy.mean()
+        + config.value_loss_coef * value_loss
+        - config.entropy_coef * entropy.mean()
         + lam * imitation_loss
       )
 
       self.optimizer.zero_grad()
       loss.backward()
+      self._distributed_average_optimizer_grads(self.optimizer)
       torch.nn.utils.clip_grad_norm_(
-        self.actor.parameters(), max_norm=self.config.max_grad_norm
+        self.actor.parameters(), max_norm=config.max_grad_norm
       )
       torch.nn.utils.clip_grad_norm_(
-        self.value_net.parameters(), max_norm=self.config.max_grad_norm
+        self.value_net.parameters(), max_norm=config.max_grad_norm
       )
       self.optimizer.step()
 
@@ -298,6 +310,24 @@ class DaggerPPO(PPO):
       total_kl += kl_mean
       total_imitation_loss += imitation_loss.item()
       num_updates += 1
+
+    if self.is_distributed:
+      totals = self._distributed_sum_vector(
+        [
+          total_surrogate_loss,
+          total_value_loss,
+          total_entropy,
+          total_kl,
+          total_imitation_loss,
+          float(num_updates),
+        ]
+      )
+      total_surrogate_loss = totals[0]
+      total_value_loss = totals[1]
+      total_entropy = totals[2]
+      total_kl = totals[3]
+      total_imitation_loss = totals[4]
+      num_updates = int(totals[5])
 
     self.rollout_buffer.clear()
 

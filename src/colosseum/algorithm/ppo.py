@@ -26,9 +26,13 @@ import torch.optim as optim
 from loguru import logger
 from mjlab.envs import ManagerBasedRlEnv
 
-from colosseum.algorithm.base_algorithm import BaseAlgorithm
-from colosseum.algorithm.ppo_networks import PpoActor, PpoValueNet
-from colosseum.algorithm.rollout_buffer import RolloutBuffer
+from colosseum.algorithm.base_algorithm import BaseAlgorithm, ObsType
+from colosseum.algorithm.networks.ppo_networks import PpoActor, PpoValueNet
+from colosseum.algorithm.utils.normalization import (
+  EmpiricalNormalization,
+  IdentityNormalizer,
+)
+from colosseum.algorithm.utils.rollout_buffer import RolloutBuffer
 from colosseum.config.types.algorithm import PpoConfig, register_algorithm
 from colosseum.utils.logger import extract_episode_metrics
 from colosseum.utils.torch import get_obs_dims
@@ -93,7 +97,7 @@ class PPO(BaseAlgorithm):
     self.critic_obs_dim = self.obs_dim["critic"]
     self.action_dim = int(np.prod(self.env.single_action_space.shape))
 
-    self.actor = PpoActor(
+    self.actor: PpoActor = PpoActor(
       self.actor_obs_dim,
       self.action_dim,
       self.config.actor,
@@ -126,19 +130,9 @@ class PPO(BaseAlgorithm):
     )
 
   def _build_normalizer(self) -> None:
-    from colosseum.algorithm.normalization import EmpiricalNormalization
-
     assert isinstance(self.config, PpoConfig)
 
     if not self.config.obs_normalization:
-
-      class IdentityNormalizer(torch.nn.Module):
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-          return x
-
-        def update(self, _x: torch.Tensor) -> None:
-          pass
-
       self.actor_obs_normalizer = IdentityNormalizer()
       self.critic_obs_normalizer = IdentityNormalizer()
     else:
@@ -168,7 +162,6 @@ class PPO(BaseAlgorithm):
     total_timesteps = self.config.learning_steps
     steps_per_iter = self.config.num_steps_per_env * self.env.num_envs
     num_iterations = total_timesteps // steps_per_iter
-    start_iteration = self.global_step // steps_per_iter
 
     # Convert log_interval from env steps → PPO iterations (same unit as SAC's step counter)
     # This makes the W&B x-axis (global_step = total env transitions) consistent with SAC.
@@ -212,8 +205,10 @@ class PPO(BaseAlgorithm):
       # ============================================
       start_collect = time.perf_counter()
 
-      current_actor_obs, current_critic_obs, current_dones = self._collect_rollout(
-        current_actor_obs, current_critic_obs, current_dones
+      current_actor_obs, current_critic_obs, current_dones, obs_dict = (
+        self._collect_rollout(
+          current_actor_obs, current_critic_obs, current_dones, obs_dict
+        )
       )
 
       collection_time = time.perf_counter() - start_collect
@@ -232,14 +227,13 @@ class PPO(BaseAlgorithm):
       learning_time_sum += learning_time
 
       self.global_step += steps_per_iter
+      self._maybe_save_checkpoint(self.global_step)
       self._maybe_evaluate(self.global_step)
 
       # ============================================
       # LOGGING PHASE
       # ============================================
       if iteration % log_interval_iters == 0:
-        # Save checkpoint at log intervals (not every iteration)
-        self._maybe_save_checkpoint(self.global_step)
         # Rolling mean episode return (RSL-RL style)
         if len(self.rewbuffer) > 0:
           losses_buffer["mean_reward"].append(statistics.mean(self.rewbuffer))
@@ -266,7 +260,8 @@ class PPO(BaseAlgorithm):
     current_actor_obs: torch.Tensor,
     current_critic_obs: torch.Tensor,
     current_dones: torch.Tensor,
-  ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    obs_dict: ObsType,
+  ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, ObsType]:
     """Collect num_steps_per_env steps and fill rollout buffer."""
     assert isinstance(self.config, PpoConfig)
 
@@ -274,7 +269,6 @@ class PPO(BaseAlgorithm):
 
     with torch.no_grad():
       for _step in range(self.config.num_steps_per_env):
-        # Normalize observations for forward pass (but store RAW in buffer)
         norm_actor_obs = self.actor_obs_normalizer(current_actor_obs)
         norm_critic_obs = self.critic_obs_normalizer(current_critic_obs)
 
@@ -285,12 +279,15 @@ class PPO(BaseAlgorithm):
         values = self.value_net(norm_critic_obs)
 
         # Step environment (action clipping handled by vecenv_wrapper)
-        next_obs_dict, rewards, terminated, truncated, infos = self.env.step(actions)
-        dones = (terminated | truncated).float()
+        obs_dict, rewards, terminated, truncated, infos = self.env.step(actions)
+        if terminated.is_floating_point():
+          dones = torch.clamp(terminated + truncated.float(), 0.0, 1.0)
+        else:
+          dones = (terminated | truncated).float()
 
         # Extract next observations
-        next_actor_obs = self.get_actor_obs(next_obs_dict)
-        next_critic_obs = self.get_critic_obs(next_obs_dict)
+        next_actor_obs = self.get_actor_obs(obs_dict)
+        next_critic_obs = self.get_critic_obs(obs_dict)
 
         # Update normalizer AFTER env.step on new obs (RSL-RL pattern)
         if self.config.obs_normalization:
@@ -312,24 +309,29 @@ class PPO(BaseAlgorithm):
             truncated_values = self.value_net(norm_next_critic).squeeze(-1)
             rewards = rewards + self.config.gamma * truncated_values * truncated_mask
         self.episode_length_buf += 1
-        done_ids = dones.nonzero(as_tuple=False).squeeze(-1)
-        if len(done_ids) > 0:
-          self.rewbuffer.extend(self.cur_reward_sum[done_ids].cpu().numpy().tolist())
-          self.cur_reward_sum[done_ids] = 0.0
-          self.episode_lengths.extend(
-            self.episode_length_buf[done_ids].cpu().numpy().tolist()
+        episode_done_ids = (dones >= 1.0).nonzero(as_tuple=False).squeeze(-1)
+        if len(episode_done_ids) > 0:
+          self.rewbuffer.extend(
+            self.cur_reward_sum[episode_done_ids].cpu().numpy().tolist()
           )
-          self.episode_length_buf[done_ids] = 0
+          self.cur_reward_sum[episode_done_ids] = 0.0
+          self.episode_lengths.extend(
+            self.episode_length_buf[episode_done_ids].cpu().numpy().tolist()
+          )
+          self.episode_length_buf[episode_done_ids] = 0
 
         # Update episode tracking
-        self.update_episode_counts(terminated, truncated)
+        hard_terminated = (
+          terminated >= 1.0 if terminated.is_floating_point() else terminated
+        )
+        self.update_episode_counts(hard_terminated, truncated)
 
         # Only update episode metrics when episodes actually ended
-        if "log" in infos and dones.any():
+        if "log" in infos and (dones >= 1.0).any():
           self.latest_episode_metrics = extract_episode_metrics(infos["log"])
 
         # Store RAW observations in buffer (RSL-RL pattern)
-        # Normalization happens during learning, not storage
+        # Normalization happens during learning, not storage.
         self.rollout_buffer.add(
           actor_obs=current_actor_obs,
           critic_obs=current_critic_obs,
@@ -360,7 +362,7 @@ class PPO(BaseAlgorithm):
       normalize_advantage=normalize_globally,
     )
 
-    return current_actor_obs, current_critic_obs, current_dones
+    return current_actor_obs, current_critic_obs, current_dones, obs_dict
 
   def _learning_step(self) -> dict[str, float]:
     """Run PPO update epochs over mini-batches. Returns averaged losses."""
@@ -390,9 +392,12 @@ class PPO(BaseAlgorithm):
       old_action_stds = batch["old_action_stds"]
       target_values = batch["values"]
 
-      # Normalize observations during learning (RSL-RL pattern)
-      actor_obs = self.actor_obs_normalizer(actor_obs_raw)
+      actor_obs_norm = self.actor_obs_normalizer(actor_obs_raw)
       critic_obs = self.critic_obs_normalizer(critic_obs_raw)
+
+      # Compose actor input (identity in PPO; RmaPPO overrides to append encoder latents)
+      privileged_obs = batch.get("privileged_obs", {})
+      actor_obs = self._compose_actor_input(actor_obs_norm, privileged_obs)
 
       # Re-evaluate actions with current policy
       new_log_probs, entropy = self.actor.evaluate(actor_obs, actions)
@@ -411,7 +416,7 @@ class PPO(BaseAlgorithm):
           - 0.5,
           dim=-1,
         )
-        kl_mean = kl.mean().item()
+        kl_mean = self._distributed_mean_scalar(float(kl.mean().item()))
 
       # Adaptive KL LR scheduling (RSL-RL pattern: single LR)
       if self.config.schedule == "adaptive" and self.config.desired_kl is not None:
@@ -454,6 +459,7 @@ class PPO(BaseAlgorithm):
       # --- Gradient step (single optimizer, RSL-RL style) ---
       self.optimizer.zero_grad()
       loss.backward()
+      self._distributed_average_optimizer_grads(self.optimizer)
       torch.nn.utils.clip_grad_norm_(
         self.actor.parameters(), max_norm=self.config.max_grad_norm
       )
@@ -469,6 +475,19 @@ class PPO(BaseAlgorithm):
       total_kl += kl_mean
       num_updates += 1
 
+    if self.is_distributed:
+      totals = self._distributed_sum_vector(
+        [
+          total_surrogate_loss,
+          total_value_loss,
+          total_entropy,
+          total_kl,
+          float(num_updates),
+        ]
+      )
+      total_surrogate_loss, total_value_loss, total_entropy, total_kl = totals[:4]
+      num_updates = int(totals[4])
+
     self.rollout_buffer.clear()
 
     return {
@@ -478,6 +497,14 @@ class PPO(BaseAlgorithm):
       "kl": total_kl / max(num_updates, 1),
       "learning_rate": self.learning_rate,
     }
+
+  def _compose_actor_input(
+    self,
+    actor_obs: torch.Tensor,
+    privileged_obs: dict[str, torch.Tensor],
+  ) -> torch.Tensor:
+    """Build the full actor input. Identity in PPO; RmaPPO overrides to append encoder latents."""
+    return actor_obs
 
   def _prewarm_actor_obs(self, actor_obs: torch.Tensor) -> torch.Tensor:
     """Transform actor obs for normalizer pre-warming. Override in subclasses."""

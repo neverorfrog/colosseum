@@ -28,6 +28,7 @@ def register_algorithm(name: str, config_class: Type["AlgorithmConfig"]):
 
     def decorator(cls: Type["BaseAlgorithm"]) -> Type["BaseAlgorithm"]:
         _ALGORITHM_REGISTRY[name] = (cls, config_class)
+        cls._algo_name = name
         return cls
 
     return decorator
@@ -213,3 +214,21 @@ class DaggerPpoConfig(PpoConfig):
 
     imitation_annealing_steps: int = 10_000_000
     """Global steps over which λ is linearly annealed from imitation_coef to 0."""
+
+
+@dataclass(frozen=True)
+class RmaPPOConfig(PpoConfig):
+    """PPO with RMA privileged + adaptation encoder pair.
+
+    Extends PpoConfig with the inference_phase flag, which controls which encoder
+    is used when the policy is run in play/eval mode (not during training).
+    """
+
+    name: str = "RmaPPO"
+    target: str = "colosseum.algorithm.rma_ppo:RmaPPO"
+
+    inference_phase: int = 1
+    """Encoder to use at inference time.
+    1 = privileged encoder (ground-truth obs, default).
+    2 = adaptation encoder (sensor obs, for testing Phase 2 quality).
+    """

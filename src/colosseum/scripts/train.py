@@ -14,33 +14,93 @@ Usage:
 
 from __future__ import annotations
 
+import os
+import signal
+import subprocess
 import sys
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
 import tyro
 import wandb
+import torch
+import torch.distributed as dist
 from loguru import logger
 from mjlab.envs import ManagerBasedRlEnv, ManagerBasedRlEnvCfg
 from mjlab.utils.torch import configure_torch_backends
 
 # Import tasks to populate registry
 import colosseum.tasks  # noqa: F401
-
 from colosseum.config.types.experiment import TrainConfig
 from colosseum.utils.logger import (
-    generate_run_name,
-    save_experiment_config,
-    setup_loguru,
-    setup_wandb,
-    teardown_wandb,
+  generate_run_name,
+  save_experiment_config,
+  setup_loguru,
+  setup_wandb,
+  teardown_wandb,
 )
 from colosseum.utils.torch import get_device, set_seed
-from colosseum.utils.train.env import make_env
-
-
 def _make_env(env_cfg: ManagerBasedRlEnvCfg, device: str) -> ManagerBasedRlEnv:
-    return make_env(env_cfg, device)
+  return env_cfg.class_type(cfg=env_cfg, device=device)
+
+
+def _init_distributed(use_cuda: bool) -> tuple[bool, int, int, int]:
+    """Initialize torch.distributed from torchrun environment variables.
+
+    Returns:
+        (is_distributed, world_size, rank, local_rank)
+    """
+    world_size = int(os.environ.get("WORLD_SIZE", "1"))
+    rank = int(os.environ.get("RANK", "0"))
+    local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+    is_distributed = world_size > 1
+
+    if not is_distributed:
+        return False, 1, 0, 0
+
+    if use_cuda and not torch.cuda.is_available():
+        raise RuntimeError("Distributed training requested but CUDA is not available.")
+
+    if use_cuda:
+        torch.cuda.set_device(local_rank)
+        # Keep MuJoCo EGL device aligned with CUDA rank.
+        os.environ["MUJOCO_EGL_DEVICE_ID"] = str(local_rank)
+
+    if not dist.is_initialized():
+        backend = "nccl" if use_cuda else "gloo"
+        dist.init_process_group(backend=backend, rank=rank, world_size=world_size)
+
+    return True, world_size, rank, local_rank
+
+
+def _teardown_distributed() -> None:
+    if dist.is_available() and dist.is_initialized():
+        dist.destroy_process_group()
+
+
+def _parse_cuda_devices(cuda_arg: str) -> list[int]:
+    """Parse --cuda argument as one or more comma-separated GPU ids."""
+    parts = [p.strip() for p in str(cuda_arg).split(",") if p.strip()]
+    if not parts:
+        raise ValueError("--cuda must contain at least one GPU id, e.g. --cuda 0")
+
+    devices: list[int] = []
+    for part in parts:
+        try:
+            dev = int(part)
+        except ValueError as exc:
+            raise ValueError(
+                f"Invalid --cuda value '{cuda_arg}'. Use integers like 0 or 0,1"
+            ) from exc
+        if dev < 0:
+            raise ValueError(f"--cuda ids must be >= 0, got {dev}")
+        devices.append(dev)
+
+    if len(set(devices)) != len(devices):
+        raise ValueError(f"Duplicate GPU ids in --cuda: {cuda_arg}")
+
+    return devices
 
 
 def main() -> None:
@@ -49,114 +109,220 @@ def main() -> None:
         TrainConfig,
         config=(tyro.conf.CascadeSubcommandArgs,),
     )
+    cuda_devices = _parse_cuda_devices(config.cuda)
 
-    algo_cfg = config.task.algo_cfg
-    assert algo_cfg is not None, (
-        f"Task '{config.task.name}' has no algo_cfg. "
-        "Implement the algo_cfg property in the task's __init__.py."
-    )
+    # For non-distributed launches, support both:
+    # --cuda 1   -> single-GPU run pinned to GPU 1
+    # --cuda 0,1 -> auto-relaunch distributed run over GPUs 0 and 1
+    pre_world_size = int(os.environ.get("WORLD_SIZE", "1"))
+    relaunched = os.environ.get("COLOSSEUM_TRAIN_RELAUNCHED") == "1"
+    if config.use_cuda and pre_world_size <= 1:
+        if len(cuda_devices) == 1:
+            os.environ["CUDA_VISIBLE_DEVICES"] = str(cuda_devices[0])
+        elif not relaunched:
+            env = os.environ.copy()
+            env["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, cuda_devices))
+            env["COLOSSEUM_TRAIN_RELAUNCHED"] = "1"
+            cmd = [
+                sys.executable,
+                "-m",
+                "torch.distributed.run",
+                "--standalone",
+                f"--nproc_per_node={len(cuda_devices)}",
+                "-m",
+                "colosseum.scripts.train",
+                *sys.argv[1:],
+            ]
+            print(
+                f"[INFO] Relaunching with torchrun on GPUs {env['CUDA_VISIBLE_DEVICES']}",
+                flush=True,
+            )
+            proc = subprocess.Popen(cmd, env=env, start_new_session=True)
+            try:
+                raise SystemExit(proc.wait())
+            except KeyboardInterrupt:
+                print("\n[INFO] Ctrl+C received, stopping torchrun workers...", flush=True)
+                try:
+                    os.killpg(proc.pid, signal.SIGTERM)
+                    proc.wait(timeout=10)
+                except Exception:
+                    try:
+                        os.killpg(proc.pid, signal.SIGKILL)
+                    except Exception:
+                        pass
+                raise SystemExit(130)
 
-    env_cfg = config.task.env
-
-    run_name = generate_run_name(
-        task_name=config.task.name,
-        algo_name=algo_cfg.name,
-        seed=config.seed,
-    )
-
-    if config.logger.group is None:
-        from dataclasses import replace
-        config = replace(config, logger=replace(config.logger, group=config.task.name))
+    is_distributed = False
+    world_size = 1
+    rank = 0
+    local_rank = 0
 
     try:
-        wandb_run, run_dir = setup_wandb(
-            config.logger, config.logger.log_dir, run_name, is_main_process=True
+        is_distributed, world_size, rank, local_rank = _init_distributed(config.use_cuda)
+        is_main_process = rank == 0
+
+        algo_cfg = config.task.algo_cfg
+        assert algo_cfg is not None, (
+            f"Task '{config.task.name}' has no algo_cfg. "
+            "Implement the algo_cfg property in the task's __init__.py."
         )
 
-        if run_dir is None:
-            run_dir = Path(config.logger.log_dir) / run_name
-            run_dir.mkdir(parents=True, exist_ok=True)
+        if config.learning_steps is not None:
+            from dataclasses import replace as dc_replace
+            algo_cfg = dc_replace(algo_cfg, learning_steps=config.learning_steps)
 
-        setup_loguru(run_dir, is_main_process=True, console_level=config.logger.console_level)
+        env_cfg = config.task.train_env_cfg
 
-        logger.info("=" * 80)
-        logger.info(f"Task: {config.task.name}")
-        logger.info(f"Algorithm: {algo_cfg.name}")
-        logger.info(f"Seed: {config.seed}")
-        logger.info(f"Num envs: {env_cfg.scene.num_envs}")
-        logger.info(f"Run directory: {run_dir}")
-        logger.info("=" * 80)
+        run_name = config.logger.name or generate_run_name(
+            task_name=config.task.name,
+            algo_name=algo_cfg.name,
+            seed=config.seed,
+        )
 
-        save_experiment_config(config, run_dir, wandb_run)
+        if config.logger.group is None:
+            config = replace(config, logger=replace(config.logger, group=config.task.name))
 
-        def log_fn(metrics: dict[str, float], step: int) -> None:
-            if wandb_run is not None:
-                wandb.log(metrics, step=step)
-
-    except Exception as e:
-        print(f"Failed to set up logging: {e}")
-        sys.exit(1)
-
-    set_seed(config.seed)
-    configure_torch_backends()
-    device = get_device(cuda=config.use_cuda, device_id=0)
-    logger.info(f"Using device: {device}")
-
-    assert env_cfg is not None, "Training env config must be provided in the task config."
-    env = _make_env(env_cfg=env_cfg, device=str(device))
-
-    import importlib
-    module_path, class_name = algo_cfg.target.rsplit(":", 1)
-    module = importlib.import_module(module_path)
-    algo_class = getattr(module, class_name)
-
-    algo = algo_class(
-        config=algo_cfg,
-        env=env,
-        device=device,
-        log_fn=log_fn,
-        log_interval=config.logger.log_interval,
-    )
-
-    algo.attach_metadata(
-        experiment_config=config.to_serializable_dict(),
-        wandb_run_id=wandb_run.id if wandb_run is not None else None,
-        timestamp=datetime.now().isoformat(),
-        seed=config.seed,
-        device=str(device),
-    )
-
-    if run_dir is not None and config.logger.save_interval > 0:
-        ckpt_dir = run_dir / "checkpoints"
-        algo.configure_checkpointing(ckpt_dir, config.logger.save_interval)
-
-    if config.checkpoint is not None:
-        checkpoint_path = Path(config.checkpoint)
-        if not checkpoint_path.exists():
-            logger.error(f"Checkpoint file does not exist: {checkpoint_path}")
-            sys.exit(1)
-        logger.info(f"Resuming from checkpoint: {checkpoint_path}")
-        state = algo.load(checkpoint_path)
-        logger.info(f"Resumed from step {state.get('global_step', 0)}")
-
-    logger.info("Starting training...")
-
-    try:
-        algo.train()
-    except KeyboardInterrupt:
-        logger.warning("Training interrupted by user (Ctrl+C)")
-        assert run_dir is not None
-        interrupt_path = run_dir / "checkpoints" / "interrupted.pt"
-        interrupt_path.parent.mkdir(parents=True, exist_ok=True)
         try:
-            algo.save(interrupt_path, global_step=algo.global_step)
-            logger.success(f"Saved interrupted checkpoint: {interrupt_path}")
-        except Exception as e:
-            logger.error(f"Failed to save checkpoint: {e}")
+            wandb_run, run_dir = setup_wandb(
+                config.logger,
+                config.logger.log_dir,
+                run_name,
+                is_main_process=is_main_process,
+            )
 
-    teardown_wandb()
-    logger.success("Training complete!")
+            if run_dir is None:
+                run_dir = Path(config.logger.log_dir) / run_name
+
+            if is_main_process:
+                run_dir.mkdir(parents=True, exist_ok=True)
+            else:
+                # Use rank-local directory to avoid multi-process file collisions.
+                run_dir = run_dir / f"rank_{rank}"
+                run_dir.mkdir(parents=True, exist_ok=True)
+
+            setup_loguru(
+                run_dir,
+                is_main_process=is_main_process,
+                console_level=config.logger.console_level,
+            )
+
+            logger.info("=" * 80)
+            logger.info(f"Task: {config.task.name}")
+            logger.info(f"Algorithm: {algo_cfg.name}")
+            logger.info(f"Seed: {config.seed}")
+            logger.info(f"Num envs: {env_cfg.scene.num_envs}")
+            logger.info(f"Distributed: {is_distributed} (world_size={world_size}, rank={rank}, local_rank={local_rank})")
+            logger.info(f"Run directory: {run_dir}")
+            logger.info("=" * 80)
+
+            if is_main_process:
+                save_experiment_config(config, run_dir, wandb_run)
+
+            def log_fn(metrics: dict[str, float], step: int) -> None:
+                if is_main_process and wandb_run is not None:
+                    wandb.log(metrics, step=step)
+
+        except Exception as e:
+            print(f"Failed to set up logging: {e}")
+            sys.exit(1)
+
+        # Per-rank seed provides diverse rollout data across GPUs.
+        rank_seed = config.seed + rank
+        set_seed(rank_seed)
+        configure_torch_backends()
+
+        if is_distributed and is_main_process:
+            logger.warning(
+                "Using distributed device assignment via LOCAL_RANK."
+            )
+
+        # Non-distributed mode has a single visible GPU after pinning above,
+        # so always use logical cuda:0.
+        device_id = local_rank if is_distributed else 0
+        if config.use_cuda and not is_distributed:
+            # Keep MuJoCo EGL device aligned with selected CUDA device.
+            os.environ["MUJOCO_EGL_DEVICE_ID"] = str(device_id)
+
+        device = get_device(cuda=config.use_cuda, device_id=device_id)
+        logger.info(f"Using device: {device}")
+
+        assert env_cfg is not None, "Training env config must be provided in the task config."
+        env = _make_env(env_cfg=env_cfg, device=str(device))
+
+        import importlib
+        module_path, class_name = algo_cfg.target.rsplit(":", 1)
+        module = importlib.import_module(module_path)
+        algo_class = getattr(module, class_name)
+
+        algo = algo_class(
+            config=algo_cfg,
+            env=env,
+            device=device,
+            log_fn=log_fn,
+            log_interval=config.logger.log_interval,
+        )
+
+        algo.attach_metadata(
+            experiment_config=config.to_serializable_dict(),
+            wandb_run_id=wandb_run.id if wandb_run is not None else None,
+            timestamp=datetime.now().isoformat(),
+            seed=rank_seed,
+            base_seed=config.seed,
+            device=str(device),
+            rank=rank,
+            local_rank=local_rank,
+            world_size=world_size,
+            phase=1,
+            obstacle_stage_index=getattr(config.task, "obstacle_stage_index", -1),
+        )
+
+        if is_main_process and run_dir is not None and config.logger.save_interval > 0:
+            ckpt_dir = run_dir / "checkpoints"
+            algo.configure_checkpointing(ckpt_dir, config.logger.save_interval)
+
+        if config.warm_start is not None:
+            ws_path = Path(config.warm_start)
+            if not ws_path.exists():
+                logger.error(f"Warm-start checkpoint does not exist: {ws_path}")
+                sys.exit(1)
+            logger.info(f"Warm-starting from: {ws_path}")
+            algo.load(ws_path)
+            algo.global_step = 0
+            logger.info("Weights loaded; global_step reset to 0")
+        elif config.checkpoint is not None:
+            checkpoint_path = Path(config.checkpoint)
+            if not checkpoint_path.exists():
+                logger.error(f"Checkpoint file does not exist: {checkpoint_path}")
+                sys.exit(1)
+            logger.info(f"Resuming from checkpoint: {checkpoint_path}")
+            state = algo.load(checkpoint_path)
+            logger.info(f"Resumed from step {state.get('global_step', 0)}")
+
+        if is_distributed and dist.is_initialized():
+            dist.barrier()
+
+        logger.info("Starting training...")
+
+        try:
+            algo.train()
+        except KeyboardInterrupt:
+            logger.warning("Training interrupted by user (Ctrl+C)")
+            if is_main_process:
+                assert run_dir is not None
+                interrupt_path = run_dir / "checkpoints" / "interrupted.pt"
+                interrupt_path.parent.mkdir(parents=True, exist_ok=True)
+                try:
+                    algo.save(interrupt_path, global_step=algo.global_step)
+                    logger.success(f"Saved interrupted checkpoint: {interrupt_path}")
+                except Exception as e:
+                    logger.error(f"Failed to save checkpoint: {e}")
+
+        if is_main_process:
+            teardown_wandb()
+        logger.success("Training complete!")
+    finally:
+        _teardown_distributed()
 
 
 if __name__ == "__main__":
-    main()
+  main()

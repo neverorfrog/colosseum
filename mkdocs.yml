@@ -1,25 +1,25 @@
 site_name: Colosseum
 site_description: Colosseum Documentation
 copyright: "2025, Colosseum Team"
-site_url: https://mydomain.org/mysite # TODO
+site_url: https://neverorfrog.github.io/colosseum/
 repo_url: https://github.com/neverorfrog/colosseum.git
 repo_name: neverorfrog/colosseum
 
 nav:
   - Overview: index.md
   - COLOSSEUM:
+      - Setup: colosseum/setup.md
       - Getting Started: colosseum/getting_started.md
+      - Training & Evaluation: colosseum/training.md
       - Cartpole: colosseum/cartpole.md
   - MJLAB:
       - Overview: mjlab/overview.md
       - Task Layer: mjlab/task_layer.md
       - Scene Layer: mjlab/scene_layer.md
       - Simulation Layer: mjlab/simulation_layer.md
-  - Deployment:
-      - Overview: deploy/README.md
-      - Architecture: deploy/architecture.md
-      - Guide: deploy/guide.md
-      - Observations: deploy/observations.md
+  - Research:
+      - Dribbling: research/dribbling.md
+      - Soccer Maze: research/soccer-maze.md
 
 theme:
   name: material

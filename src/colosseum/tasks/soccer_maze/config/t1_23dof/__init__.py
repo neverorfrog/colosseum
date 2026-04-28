@@ -1,0 +1,1 @@
+from .t1_soccer_maze_cfg import t1_soccer_maze_env_cfg

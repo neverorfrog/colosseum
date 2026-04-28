@@ -20,7 +20,7 @@ from pydantic.dataclasses import dataclass
 
 from colosseum.algorithm.base_algorithm import get_latest_checkpoint
 from colosseum.config.types.experiment import BaseExperimentConfig
-from colosseum.utils.train.export import export_policy_to_onnx
+from colosseum.utils.export import export_policy_to_onnx
 
 
 def _resolve_checkpoint(checkpoint: str | None) -> Path | None:

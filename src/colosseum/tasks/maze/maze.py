@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 
 import torch
 
-from colosseum.tasks.maze.mdp.grid_frame import GridFrame
+from colosseum.utils.grid_frame import GridFrame
 
 
 class Maze:
@@ -38,7 +38,9 @@ class Maze:
       center_y=0.0,
     )
 
+    self.valid_free_positions_local: list[tuple[float, float]] = []  # all non-wall cells
     self.valid_reset_positions_local: list[tuple[float, float]] = []
+    self.valid_ball_positions_local: list[tuple[float, float]] = []
     self.valid_goal_positions_local: list[tuple[float, float]] = []
     self._extract_valid_positions()
 
@@ -112,8 +114,12 @@ class Maze:
     for i, row in enumerate(self.maze_map):
       for j, cell in enumerate(row):
         x_local, y_local = self.grid_to_local(i, j)
+        if not self.is_wall(i, j):
+          self.valid_free_positions_local.append((x_local, y_local))
         if cell in ("r", "R"):
           self.valid_reset_positions_local.append((x_local, y_local))
+        elif cell in ("b", "B"):
+          self.valid_ball_positions_local.append((x_local, y_local))
         elif cell in ("g", "G"):
           self.valid_goal_positions_local.append((x_local, y_local))
 
@@ -126,7 +132,8 @@ class MazeCfg:
       maze_map: 2D list defining maze structure.
           - 1, '1', 'W', 'w': Wall
           - 0, '0': Empty cell
-          - 'r', 'R': Valid reset position
+          - 'r', 'R': Valid robot reset position
+          - 'b', 'B': Valid ball reset position
           - 'g', 'G': Valid goal position
       cell_size: Size of each cell in meters.
       wall_height: Height of walls in meters.

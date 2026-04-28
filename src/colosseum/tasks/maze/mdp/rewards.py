@@ -8,8 +8,8 @@ from mjlab.managers import SceneEntityCfg
 from mjlab.sensor import ContactSensor
 
 from colosseum.envs.abstraction_based_env import AbstractionBasedEnv
-from colosseum.tasks.maze.mdp.grid_abstraction import GridAbstraction
-from colosseum.tasks.maze.mdp.observations import (
+from colosseum.mdp.abstraction.maze.grid_abstraction import GridAbstraction
+from colosseum.mdp.observations import (
   agent_pos_local,
   agent_to_goal_vector,
   agent_vel,
@@ -36,10 +36,26 @@ def goal_distance_cost(
   return torch.exp(-distance)
 
 
-def wall_collisions(env: ManagerBasedRlEnv, sensor_name: str) -> torch.Tensor:
-  """Penalty: 1.0 for each env colliding with a wall."""
+def wall_collisions(
+  env: ManagerBasedRlEnv,
+  sensor_name: str,
+  min_robot_height: float = 0.3,
+) -> torch.Tensor:
+  """Penalty: 1.0 for each env where a non-foot robot body contacts a wall.
+
+  The sensor has no secondary filter (MuJoCo contact-sensor API only supports
+  a single secondary body), so it fires for any non-foot contact — including
+  ground contact when the robot falls.  We mask out the penalty when the
+  robot's base height is below ``min_robot_height`` to avoid penalising
+  falls as if they were wall collisions.
+  """
   sensor: ContactSensor = env.scene[sensor_name]
-  return sensor.data.found.any(dim=-1).float()
+  has_contact = sensor.data.found.any(dim=-1).float()
+  robot_height = (
+    env.scene["robot"].data.root_link_pos_w[:, 2] - env.scene.env_origins[:, 2]
+  )
+  is_upright = (robot_height > min_robot_height).float()
+  return has_contact * is_upright
 
 
 def contact_force_penalty(env: ManagerBasedRlEnv, sensor_name: str) -> torch.Tensor:
@@ -106,3 +122,28 @@ def track_angular_velocity(
   asset: Entity = env.scene[asset_cfg.name]
   actual_ang_vel = asset.data.root_link_ang_vel_w[:, 2]
   return torch.exp(-torch.square(commanded_ang_vel - actual_ang_vel))
+
+
+def heading_alignment(
+  env: ManagerBasedRlEnv,
+  command_name: str,
+) -> torch.Tensor:
+  """Reward for heading alignment with commanded direction.
+
+  The commanded velocity in body frame encodes heading error:
+    vx_cmd / |v_cmd| = cos(heading_error)
+
+  Returns cos(heading_error) in [-1, 1]:
+    +1 when robot faces the commanded direction (aligned)
+     0 when 90° off
+    -1 when backwards
+
+  This directly breaks the sideways-walking local optimum where the body-frame
+  command adapts to the robot's orientation, making sideways motion appear
+  indistinguishable from forward motion to other reward terms.
+  """
+  command = env.command_manager.get_command(command_name)
+  assert command is not None, f"Command '{command_name}' not found."
+  vel_2d = command[:, :2]  # (vx_cmd, vy_cmd) in body frame
+  vel_norm = vel_2d.norm(dim=-1).clamp(min=1e-6)
+  return vel_2d[:, 0] / vel_norm  # cos(heading_error)

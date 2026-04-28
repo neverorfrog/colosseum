@@ -3,7 +3,9 @@ from mjlab.envs import ManagerBasedRlEnv
 from mjlab.managers import SceneEntityCfg
 from mjlab.sensor import ContactData, ContactSensor
 
-from .observations import agent_to_goal_vector as goal_to_agent_vector
+from colosseum.tasks.dribbling.mdp.obstacle_commands import ObstacleCommand
+
+from colosseum.mdp.observations import agent_to_goal_vector
 from .rewards import is_healthy
 
 
@@ -19,7 +21,6 @@ def is_not_healthy(
 def arrived_at_goal(
   env: ManagerBasedRlEnv,
   threshold: float = 0.2,
-  command_name: str = "goal",
   asset_cfg: SceneEntityCfg = SceneEntityCfg("robot", site_names=("root_site",)),
 ) -> torch.Tensor:
   """Termination condition for arriving at the goal position.
@@ -33,7 +34,7 @@ def arrived_at_goal(
   Returns:
       Termination tensor (num_envs,) with True for terminated envs
   """
-  agent_to_goal_vec = goal_to_agent_vector(env)  # [num_envs, 2]
+  agent_to_goal_vec = agent_to_goal_vector(env, asset_cfg)  # [num_envs, 2]
   distance = torch.norm(agent_to_goal_vec, dim=1)  # [num_envs]
   return distance < threshold
 

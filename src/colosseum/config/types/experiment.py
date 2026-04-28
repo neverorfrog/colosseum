@@ -20,6 +20,7 @@ class BaseExperimentConfig:
     """Base configuration shared between training and playing."""
 
     use_cuda: bool = True
+    cuda: str = "0"
     checkpoint: str | None = None
 
     task: Annotated[
@@ -38,6 +39,13 @@ class TrainConfig(BaseExperimentConfig):
 
     name: str = "EXPERIMENT"
     seed: int = 42
+
+    learning_steps: int | None = None
+    """Override algo_cfg.learning_steps for this run. Useful in pipeline scripts."""
+
+    warm_start: str | None = None
+    """Path to a checkpoint to warm-start from (loads weights, resets step counter).
+    Distinct from --checkpoint which fully resumes including global_step."""
 
     logger: Annotated[
         LoggerConfig,

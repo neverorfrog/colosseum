@@ -6,16 +6,24 @@ from mjlab.managers.event_manager import EventTermCfg
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 
 from colosseum.robots.t1_23dof.constants import BASE_BODY_NAME, FOOT_GEOM_NAMES
-from colosseum.tasks.maze.mdp.events import reset_to_valid_maze_position
+from colosseum.tasks.maze.mdp.events import reset_to_valid_maze_position, reset_wall_positions
 
 events = {
+  "reset_wall_positions_startup": EventTermCfg(
+    func=reset_wall_positions,
+    mode="startup",
+  ),
+  "reset_wall_positions": EventTermCfg(
+    func=reset_wall_positions,
+    mode="reset",
+  ),
   "reset_agent_position": EventTermCfg(
     func=reset_to_valid_maze_position,
     mode="reset",
     params={
       "asset_cfg": SceneEntityCfg("robot"),
       "z_offset": 0.665,  # T1 root (freejoint) height when feet are on ground
-      "yaw_range": (-3.14, 3.14),
+      "yaw_range": (0.0, 0.0),
     },
   ),
   "reset_robot_joints": EventTermCfg(
