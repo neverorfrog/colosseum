@@ -78,7 +78,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#overview" class="md-skip">
+        <a href="#colosseum" class="md-skip">
           Skip to content
         </a>
       
@@ -277,6 +277,24 @@
         
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="." class="md-nav__link md-nav__link--active">
         
   
@@ -293,6 +311,47 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#key-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key features
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-to-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where to start
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -775,6 +834,36 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#key-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key features
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-to-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where to start
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -798,8 +887,58 @@
   
 
 
-<h1 id="overview">Overview</h1>
-<p>Documentation of Colosseum</p>
+<h1 id="colosseum">Colosseum</h1>
+<p><strong>Colosseum</strong> is a research playground for humanoid robot soccer, built on top of
+<a href="mjlab/overview/">mjlab</a> — a GPU-accelerated reinforcement learning framework
+for robotics powered by MuJoCo Warp.</p>
+<p>The primary platform is the <strong>Booster T1</strong> humanoid (23 DOF full body). 
+Training runs thousands of parallel environments on a single GPU,
+enabling fast iteration on complex locomotion and ball-manipulation tasks.</p>
+<hr />
+<h2 id="key-features">Key features</h2>
+<ul>
+<li><strong>Massive parallelization</strong> — 4096+ environments simultaneously on GPU via MuJoCo Warp</li>
+<li><strong>Manager-based configuration</strong> — rewards, observations, actions, and events declared
+  as composable term configs; no boilerplate loops</li>
+<li><strong>Shared training / deployment code</strong> — pure MDP functions are used unchanged
+  in both training and on-robot inference</li>
+<li><strong>Curriculum support</strong> — curricula built into the
+  task layer</li>
+<li><strong>Research-ready</strong> — each project lives in its own <code>research/</code> folder with a
+  dedicated training pipeline and evaluation protocol</li>
+</ul>
+<hr />
+<h2 id="where-to-start">Where to start</h2>
+<table>
+<thead>
+<tr>
+<th>I want to…</th>
+<th>Go to</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Install and run a first training</td>
+<td><a href="colosseum/setup/">Setup</a> → <a href="colosseum/getting_started/">Getting Started</a></td>
+</tr>
+<tr>
+<td>Understand the framework internals</td>
+<td><a href="mjlab/overview/">mjlab Overview</a></td>
+</tr>
+<tr>
+<td>Build a new task from scratch</td>
+<td><a href="colosseum/cartpole/">CartPole tutorial</a></td>
+</tr>
+<tr>
+<td>Read about dribbling with obstacle avoidance</td>
+<td><a href="research/dribbling/">Dribbling</a></td>
+</tr>
+<tr>
+<td>Read about goal-conditioned maze navigation</td>
+<td><a href="research/soccer-maze/">Soccer Maze</a></td>
+</tr>
+</tbody>
+</table>
 
 
 
