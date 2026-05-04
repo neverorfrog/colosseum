@@ -11,12 +11,14 @@ nav:
       - Setup: colosseum/setup.md
       - Getting Started: colosseum/getting_started.md
       - Training & Evaluation: colosseum/training.md
-      - Cartpole: colosseum/cartpole.md
+      - Deployment (Arena): colosseum/deployment.md
+      - Colosseum Internals: colosseum/internals.md
+      - Dribbling Task Tutorial: colosseum/dribbling_tutorial.md
+      - Cartpole Tutorial: colosseum/cartpole.md
   - MJLAB:
       - Overview: mjlab/overview.md
       - Task Layer: mjlab/task_layer.md
-      - Scene Layer: mjlab/scene_layer.md
-      - Simulation Layer: mjlab/simulation_layer.md
+      - Scene & Simulation: mjlab/scene_simulation.md
   - Research:
       - Dribbling: research/dribbling.md
       - Soccer Maze: research/soccer-maze.md
@@ -30,13 +32,11 @@ theme:
     code: JetBrains Mono
 
   palette:
-    # Palette toggle for automatic mode
     - media: "(prefers-color-scheme)"
       toggle:
         icon: material/brightness-auto
         name: Switch to light mode
 
-    # Palette toggle for light mode
     - media: "(prefers-color-scheme: light)"
       scheme: default
       primary: custom
@@ -45,7 +45,6 @@ theme:
         icon: material/brightness-7
         name: Switch to dark mode
 
-    # Palette toggle for dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
       primary: custom
