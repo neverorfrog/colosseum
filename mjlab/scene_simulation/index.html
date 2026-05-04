@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://neverorfrog.github.io/colosseum/mjlab/scene_layer/">
+        <link rel="canonical" href="https://neverorfrog.github.io/colosseum/mjlab/scene_simulation/">
       
       
         <link rel="prev" href="../task_layer/">
       
       
-        <link rel="next" href="../simulation_layer/">
+        <link rel="next" href="../../research/dribbling/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Scene Layer - Colosseum</title>
+        <title>Scene & Simulation - Colosseum</title>
       
     
     
@@ -80,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#deep-dive-scene-layer" class="md-skip">
+        <a href="#scene-simulation" class="md-skip">
           Skip to content
         </a>
       
@@ -115,7 +115,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Scene Layer
+              Scene & Simulation
             
           </span>
         </div>
@@ -433,6 +433,90 @@
   
   
     <li class="md-nav__item">
+      <a href="../../colosseum/deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment (Arena)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../colosseum/internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Colosseum Internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../colosseum/dribbling_tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dribbling Task Tutorial
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../colosseum/cartpole/" class="md-nav__link">
         
   
@@ -440,7 +524,7 @@
   <span class="md-ellipsis">
     
   
-    Cartpole
+    Cartpole Tutorial
   
 
     
@@ -587,6 +671,24 @@
         
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scene & Simulation
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         
   
@@ -594,7 +696,7 @@
   <span class="md-ellipsis">
     
   
-    Scene Layer
+    Scene & Simulation
   
 
     
@@ -604,34 +706,47 @@
 
       </a>
       
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../simulation_layer/" class="md-nav__link">
         
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
   
   
-  <span class="md-ellipsis">
+  
     
   
-    Simulation Layer
   
-
-    
-  </span>
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#quick-orientation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick orientation
+      
+    </span>
+  </a>
   
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#colosseum-specific-scene-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Colosseum-specific scene setup
+      
+    </span>
+  </a>
   
-
-      </a>
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -779,6 +894,36 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#quick-orientation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick orientation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#colosseum-specific-scene-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Colosseum-specific scene setup
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -794,7 +939,7 @@
 
 
   
-    <a href="https://github.com/neverorfrog/colosseum.git/edit/master/docs/mjlab/scene_layer.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/neverorfrog/colosseum.git/edit/master/docs/mjlab/scene_simulation.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75z"/></svg>
     </a>
@@ -802,7 +947,80 @@
   
 
 
-<h1 id="deep-dive-scene-layer">Deep Dive: Scene Layer</h1>
+<h1 id="scene-simulation">Scene &amp; Simulation</h1>
+<p>The scene and simulation layers are documented in full in the
+<strong><a href="https://mujocolab.github.io/mjlab/main/index.html">mjlab documentation</a></strong>.</p>
+<p>Colosseum does not extend these layers — it uses them as-is. The pages below
+cover everything you need:</p>
+<table>
+<thead>
+<tr>
+<th>Topic</th>
+<th>mjlab docs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Entity (robot, terrain, sensors)</td>
+<td><a href="https://mujocolab.github.io/mjlab/main/source/entity/index.html">Entity</a> · <a href="https://mujocolab.github.io/mjlab/main/source/entity/entity_data.html">Entity Data</a></td>
+</tr>
+<tr>
+<td>Actuators</td>
+<td><a href="https://mujocolab.github.io/mjlab/main/source/actuators.html">Actuators</a></td>
+</tr>
+<tr>
+<td>Sensors (contact, RayCast, RGB-D)</td>
+<td><a href="https://mujocolab.github.io/mjlab/main/source/sensors/index.html">Sensors</a></td>
+</tr>
+<tr>
+<td>Scene configuration</td>
+<td><a href="https://mujocolab.github.io/mjlab/main/source/scene.html">Scene</a></td>
+</tr>
+<tr>
+<td>Terrain</td>
+<td><a href="https://mujocolab.github.io/mjlab/main/source/terrain.html">Terrain</a></td>
+</tr>
+<tr>
+<td>GPU-accelerated physics (MuJoCo Warp)</td>
+<td><a href="https://mujocolab.github.io/mjlab/main/source/architecture_overview.html">Architecture Overview</a></td>
+</tr>
+<tr>
+<td>Heterogeneous worlds (per-world mesh)</td>
+<td><a href="https://mujocolab.github.io/mjlab/main/source/entity/per_world_mesh.html">Heterogeneous Worlds</a></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="quick-orientation">Quick orientation</h2>
+<p>The three-layer structure is summarised in the <a href="../overview/">mjlab Overview</a>.
+In short:</p>
+<ul>
+<li><strong>Simulation layer</strong> — MuJoCo Warp runs 4096+ physics environments in
+  parallel on GPU. Colosseum sets <code>timestep=0.005</code> (200 Hz) and uses
+  <code>decimation=4</code>, so the policy runs at 50 Hz.</li>
+<li><strong>Scene layer</strong> — <code>SceneCfg</code> declares entities, terrain, and sensors by
+  name. At compile time MuJoCo assigns global indices; <code>SceneEntityCfg</code>
+  resolves string patterns (e.g. <code>body_names=".*_knee"</code>) to those indices
+  once at init.</li>
+<li><strong>Task layer</strong> — Managers (<code>RewardManager</code>, <code>ObservationManager</code>, …)
+  use pre-resolved indices for fast per-step tensor operations. See
+  <a href="../task_layer/">Task Layer</a> for the colosseum view of this layer, or the
+  <a href="https://mujocolab.github.io/mjlab/main/source/observations.html">mjlab manager docs</a>
+  for the complete API.</li>
+</ul>
+<hr />
+<h2 id="colosseum-specific-scene-setup">Colosseum-specific scene setup</h2>
+<p>The T1 scene used by all humanoid tasks is assembled in
+<code>src/colosseum/robots/t1_23dof/constants.py</code>. The key call is
+<code>get_robot_cfg()</code>, which returns an <code>EntityCfg</code> with:</p>
+<ul>
+<li><strong>XML</strong>: <code>robots/booster_t1/T1_23dof.xml</code></li>
+<li><strong>Actuators</strong>: PDActuator specs from <code>t1_actuators.py</code></li>
+<li><strong>Sensors</strong>: selectable contact and height-scan sensors from <code>t1_sensors.py</code></li>
+<li><strong>Articulation info</strong>: <code>CollisionCfg</code> and armature values</li>
+</ul>
+<p>The dribbling scene additionally includes a soccer ball entity and up to
+three obstacle entities (see <code>tasks/dribbling/config/t1_23dof/t1_dribbling_cfg.py</code>).</p>
 
 
 
@@ -857,13 +1075,13 @@
         
         
           
-          <a href="../simulation_layer/" class="md-footer__link md-footer__link--next" aria-label="Next: Simulation Layer">
+          <a href="../../research/dribbling/" class="md-footer__link md-footer__link--next" aria-label="Next: Dribbling">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Simulation Layer
+                Dribbling
               </div>
             </div>
             <div class="md-footer__button md-icon">

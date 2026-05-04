@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://neverorfrog.github.io/colosseum/mjlab/simulation_layer/">
+        <link rel="canonical" href="https://neverorfrog.github.io/colosseum/colosseum/internals/">
       
       
-        <link rel="prev" href="../scene_layer/">
+        <link rel="prev" href="../deployment/">
       
       
-        <link rel="next" href="../../research/dribbling/">
+        <link rel="next" href="../dribbling_tutorial/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Simulation Layer - Colosseum</title>
+        <title>Colosseum Internals - Colosseum</title>
       
     
     
@@ -80,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#deep-dive-simulation-layer" class="md-skip">
+        <a href="#colosseum-internals" class="md-skip">
           Skip to content
         </a>
       
@@ -115,7 +115,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Simulation Layer
+              Colosseum Internals
             
           </span>
         </div>
@@ -294,8 +294,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -306,11 +308,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
         
           
           <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
@@ -331,7 +333,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
             
@@ -349,7 +351,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../colosseum/setup/" class="md-nav__link">
+      <a href="../setup/" class="md-nav__link">
         
   
   
@@ -377,7 +379,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../colosseum/getting_started/" class="md-nav__link">
+      <a href="../getting_started/" class="md-nav__link">
         
   
   
@@ -405,7 +407,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../colosseum/training/" class="md-nav__link">
+      <a href="../training/" class="md-nav__link">
         
   
   
@@ -433,159 +435,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../colosseum/cartpole/" class="md-nav__link">
+      <a href="../deployment/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Cartpole
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
-    
-  
-  
-  
-    
-    
-    
-    
-      
-        
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
-        
-          
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    MJLAB
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_3">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    MJLAB
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../overview/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Overview
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../task_layer/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Task Layer
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../scene_layer/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Scene Layer
+    Deployment (Arena)
   
 
     
@@ -615,6 +472,24 @@
         
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Colosseum Internals
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         
   
@@ -622,7 +497,7 @@
   <span class="md-ellipsis">
     
   
-    Simulation Layer
+    Colosseum Internals
   
 
     
@@ -632,6 +507,396 @@
 
       </a>
       
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#colosseumenv" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ColosseumEnv
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ColosseumEnv">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step order
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reset-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reset order
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rmamanager" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RmaManager
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="RmaManager">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#concept" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Concept
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#term-interface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Term interface
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#wiring-into-the-algorithm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wiring into the algorithm
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#abstractionmanager" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AbstractionManager
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="AbstractionManager">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#concept_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Concept
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#term-interface_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Term interface
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#abstractionsettings-and-change-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AbstractionSettings and change detection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-gridabstractionterm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The GridAbstractionTerm
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-a-new-manager" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding a new manager
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dribbling_tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dribbling Task Tutorial
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cartpole/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cartpole Tutorial
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MJLAB
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    MJLAB
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mjlab/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mjlab/task_layer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Task Layer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mjlab/scene_simulation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scene & Simulation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -779,6 +1044,186 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#colosseumenv" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ColosseumEnv
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ColosseumEnv">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step order
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reset-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reset order
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rmamanager" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RmaManager
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="RmaManager">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#concept" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Concept
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#term-interface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Term interface
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#wiring-into-the-algorithm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wiring into the algorithm
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#abstractionmanager" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AbstractionManager
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="AbstractionManager">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#concept_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Concept
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#term-interface_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Term interface
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#abstractionsettings-and-change-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AbstractionSettings and change detection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-gridabstractionterm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The GridAbstractionTerm
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-a-new-manager" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding a new manager
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -794,7 +1239,7 @@
 
 
   
-    <a href="https://github.com/neverorfrog/colosseum.git/edit/master/docs/mjlab/simulation_layer.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/neverorfrog/colosseum.git/edit/master/docs/colosseum/internals.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75z"/></svg>
     </a>
@@ -802,7 +1247,181 @@
   
 
 
-<h1 id="deep-dive-simulation-layer">Deep Dive: Simulation Layer</h1>
+<h1 id="colosseum-internals">Colosseum Internals</h1>
+<p>Colosseum extends mjlab's <code>ManagerBasedRlEnv</code> with three optional managers
+that are not part of mjlab itself. All of them live in <code>src/colosseum/managers/</code>
+and are activated automatically by <code>ColosseumEnv</code> based on the task config.</p>
+<hr />
+<h2 id="colosseumenv">ColosseumEnv</h2>
+<p><code>ColosseumEnv</code> is the single environment class used by every colosseum task.
+It conditionally loads managers depending on which config sections are non-empty.</p>
+<pre><code class="language-python">@dataclass(kw_only=True)
+class ColosseumEnvCfg(ManagerBasedRlEnvCfg):
+    encoders:     dict[str, RmaTermCfg]         = field(default_factory=dict)
+    abstractions: dict[str, AbstractionTermCfg] = field(default_factory=dict)
+    constraints:  dict[str, ConstraintTermCfg]  = field(default_factory=dict)
+    use_depth_camera: bool = False
+</code></pre>
+<p>A manager is only instantiated when its dict is non-empty:</p>
+<table>
+<thead>
+<tr>
+<th>Config field</th>
+<th>Manager created</th>
+<th>When to use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>encoders</code></td>
+<td><code>RmaManager</code></td>
+<td>Phase 1 / Phase 2 RMA training</td>
+</tr>
+<tr>
+<td><code>abstractions</code></td>
+<td><code>AbstractionManager</code></td>
+<td>Planning-guided guidance signals (Soccer Maze)</td>
+</tr>
+<tr>
+<td><code>constraints</code></td>
+<td><code>ConstraintManager</code></td>
+<td>CaT soft constraints (experimental)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="step-order">Step order</h3>
+<p>Every <code>env.step()</code> runs in this order:</p>
+<pre><code>1.  ManagerBasedRlEnv.step()      ← physics + rewards + default managers (mjlab)
+2.  rma_manager.update()          ← encoder forward pass (if present)
+3.  constraint_manager.compute()  ← scale rewards, soft terminations (if present)
+4.  abstraction_manager.compute() ← update guidance signals for NEXT step (if present)
+</code></pre>
+<h3 id="reset-order">Reset order</h3>
+<pre><code>1.  Snapshot episode lengths       ← before super() zeros them
+2.  ManagerBasedRlEnv._reset_idx() ← standard mjlab reset
+3.  abstraction_manager.reset()
+4.  constraint_manager.reset()     ← receives pre-reset episode lengths
+5.  rma_manager.reset()
+</code></pre>
+<hr />
+<h2 id="rmamanager">RmaManager</h2>
+<p><code>RmaManager</code> implements the two-phase
+<a href="https://arxiv.org/abs/2107.04034">Rapid Motor Adaptation</a> training paradigm.</p>
+<h3 id="concept">Concept</h3>
+<p>The actor network takes as input <code>[proprioceptive_obs, latent_z]</code>. The latent
+<code>z</code> is produced by one of two encoders depending on the training phase:</p>
+<ul>
+<li><strong>Phase 1</strong> — a <strong>privileged encoder</strong> (small MLP) reads ground-truth
+  observations that are not available at deployment (ball position, obstacle
+  states). The policy and encoder train jointly via PPO.</li>
+<li><strong>Phase 2</strong> — an <strong>adaptation encoder</strong> (CNN + GRU for depth) reads only
+  sensor observations. Its output is supervised to match the Phase 1 latent
+  via MSE regression. The policy and privileged encoder are frozen.</li>
+</ul>
+<h3 id="term-interface">Term interface</h3>
+<pre><code class="language-python">@dataclass(kw_only=True)
+class RmaTermCfg(ABC):
+    privileged_obs_group: str        # GT obs group (always present)
+    adaptation_obs_group: str | None # Sensor obs group (Phase 2 only)
+    latent_dim: int = 8
+    latent_noise_std: float = 0.0    # Phase 1 noise for Phase 2 robustness
+
+    @abstractmethod
+    def build(self, env) -&gt; RmaTerm: ...
+</code></pre>
+<p>Each <code>RmaTerm</code> owns both encoders and is responsible for:</p>
+<ul>
+<li><code>encode_privileged(obs_dict)</code> — GT obs → latent (Phase 1 forward pass)</li>
+<li><code>encode_adaptation(obs_dict)</code> — sensor obs → latent (Phase 2 forward pass)</li>
+<li><code>update()</code> — called every env step by <code>RmaManager</code></li>
+<li><code>reset(env_ids)</code> — reset recurrent state (e.g. GRU hidden) for terminated envs</li>
+</ul>
+<h3 id="wiring-into-the-algorithm">Wiring into the algorithm</h3>
+<p><code>RmaPPO</code> (in <code>src/colosseum/algorithm/rma_ppo.py</code>) reads the manager to:</p>
+<ol>
+<li>Widen the actor input by <code>rma_manager.total_latent_dim</code>.</li>
+<li>Add encoder parameters to the Phase 1 optimizer.</li>
+<li>Switch to the adaptation encoder for Phase 2 inference.</li>
+</ol>
+<p>The dribbling task uses one term (<code>DribblingRmaTermCfg</code>) with a 64-dimensional
+latent encoding ball position/velocity and obstacle state. See
+<a href="../../research/dribbling/">Dribbling</a> for details.</p>
+<h3 id="configuration-example">Configuration example</h3>
+<pre><code class="language-python">encoders = {
+    &quot;dribbling&quot;: DribblingRmaTermCfg(
+        privileged_obs_group=&quot;privileged_ball&quot;,
+        obstacle_privileged_obs_group=&quot;privileged_obstacles&quot;,
+        adaptation_obs_group=&quot;depth_frames&quot;,  # None during Phase 1
+        latent_dim=64,
+        latent_noise_std=0.1,
+    ),
+}
+</code></pre>
+<hr />
+<h2 id="abstractionmanager">AbstractionManager</h2>
+<p><code>AbstractionManager</code> provides symbolic guidance signals derived from a
+higher-level planner. It is used by the Soccer Maze task to supply a
+direction vector from the current robot position to the next waypoint in a
+discrete grid plan.</p>
+<h3 id="concept_1">Concept</h3>
+<p>The manager holds a collection of <code>AbstractionTerm</code> instances. Each term
+maintains a cache of guidance signals (e.g. cost maps, direction maps) and
+rebuilds them lazily when the underlying settings change (e.g. goal cell or
+maze layout changes).</p>
+<p>The term lifecycle follows a change-detection pattern:</p>
+<pre><code>reset(env_ids)
+  └─ _update_settings(env_ids)   ← read goal/map from env
+  └─ _maybe_rebuild(env_ids)     ← rebuild cost/direction map if settings changed
+
+compute(dt)
+  └─ _update_signals(all_envs)   ← read current robot pos, look up direction
+</code></pre>
+<h3 id="term-interface_1">Term interface</h3>
+<pre><code class="language-python">@dataclass(kw_only=True)
+class AbstractionTermCfg(ABC):
+    debug_vis: bool = False
+
+    @abstractmethod
+    def build(self, env) -&gt; AbstractionTerm: ...
+</code></pre>
+<p>Concrete subclasses expose their signals as methods (e.g.
+<code>term.direction_map</code>, <code>term.cost_map</code>). Observation functions retrieve the
+term from the manager and call those methods directly:</p>
+<pre><code class="language-python">def maze_direction(env, abstraction_name: str) -&gt; torch.Tensor:
+    term = env.abstraction_manager.get_term(abstraction_name)
+    return term.direction_at_pos(env.scene[&quot;robot&quot;].data.root_pos_w[:, :2])
+</code></pre>
+<h3 id="abstractionsettings-and-change-detection">AbstractionSettings and change detection</h3>
+<p><code>AbstractionSettings</code> is an immutable frozen dataclass that snapshots the
+inputs that drive a rebuild. Subclasses add exactly the fields that, when
+changed, should invalidate the cached plan:</p>
+<pre><code class="language-python">@dataclass(frozen=True, eq=False)
+class GridAbstractionSettings(AbstractionSettings):
+    goal_cell: tuple[int, int]
+    map: torch.Tensor   # object identity used for equality (no tensor copy)
+</code></pre>
+<p>This avoids redundant replanning across the thousands of parallel envs that
+share the same goal and map.</p>
+<h3 id="the-gridabstractionterm">The GridAbstractionTerm</h3>
+<p>The concrete implementation used by Soccer Maze is <code>GridAbstractionTerm</code>
+(in <code>src/colosseum/mdp/abstraction/maze/grid_abstraction.py</code>). It computes:</p>
+<ul>
+<li>A <strong>cost map</strong> via Dijkstra / harmonic potential over the discrete grid.</li>
+<li>A <strong>direction map</strong> pointing each cell toward the goal.</li>
+</ul>
+<p>Both are cached per unique <code>(goal_cell, map)</code> pair and reused across envs
+with the same goal.</p>
+<hr />
+<h2 id="adding-a-new-manager">Adding a new manager</h2>
+<p>All three managers follow the same term-based pattern as mjlab's built-in
+managers. To add your own:</p>
+<ol>
+<li>Subclass <code>AbstractionTermCfg</code> (or <code>RmaTermCfg</code>) and implement <code>build()</code>.</li>
+<li>Implement the corresponding <code>AbstractionTerm</code> (or <code>RmaTerm</code>) subclass.</li>
+<li>Add the term to <code>ColosseumEnvCfg.abstractions</code> (or <code>.encoders</code>) in your
+   task config.</li>
+</ol>
+<p><code>ColosseumEnv</code> will instantiate the manager automatically.</p>
 
 
 
@@ -840,7 +1459,7 @@
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../scene_layer/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Scene Layer">
+          <a href="../deployment/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Deployment (Arena)">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -850,20 +1469,20 @@
                 Previous
               </span>
               <div class="md-ellipsis">
-                Scene Layer
+                Deployment (Arena)
               </div>
             </div>
           </a>
         
         
           
-          <a href="../../research/dribbling/" class="md-footer__link md-footer__link--next" aria-label="Next: Dribbling">
+          <a href="../dribbling_tutorial/" class="md-footer__link md-footer__link--next" aria-label="Next: Dribbling Task Tutorial">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Dribbling
+                Dribbling Task Tutorial
               </div>
             </div>
             <div class="md-footer__button md-icon">

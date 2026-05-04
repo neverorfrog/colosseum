@@ -431,6 +431,90 @@
   
   
     <li class="md-nav__item">
+      <a href="../../colosseum/deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment (Arena)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../colosseum/internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Colosseum Internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../colosseum/dribbling_tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dribbling Task Tutorial
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../colosseum/cartpole/" class="md-nav__link">
         
   
@@ -438,7 +522,7 @@
   <span class="md-ellipsis">
     
   
-    Cartpole
+    Cartpole Tutorial
   
 
     
@@ -574,42 +658,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../mjlab/scene_layer/" class="md-nav__link">
+      <a href="../../mjlab/scene_simulation/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Scene Layer
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../mjlab/simulation_layer/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Simulation Layer
+    Scene & Simulation
   
 
     
@@ -790,6 +846,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-planninglearning-interface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The planning–learning interface
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#task-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Task structure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#code-structure" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -876,6 +954,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-planninglearning-interface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The planning–learning interface
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#task-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Task structure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#code-structure" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -935,12 +1035,21 @@
 
 <h1 id="humanoidsoccermaze">HumanoidSoccerMaze</h1>
 <blockquote>
-<p>A novel benchmark requiring a humanoid robot to navigate a maze while dribbling a
-ball to a distant target in presence of complex obstacle configurations and 
-a baseline solution integrating planning and learning, using the Sokoban problem as an abstraction of ball dribbling with obstacles</p>
+<p>A novel benchmark requiring a humanoid robot to navigate a maze while
+dribbling a ball to a distant target, with a baseline solution that
+integrates planning and learned locomotion.</p>
 </blockquote>
 <hr />
-<p>This is an example of a evaluation after approximately 200 million steps of training on a RTX 4090 in approximately 3 hours. </p>
+<h2 id="what-this-is">What this is</h2>
+<p>HumanoidSoccerMaze tests a Booster T1 humanoid on goal-conditioned maze
+navigation combined with ball dribbling. The robot must find a path through
+a maze with walls and obstacles, and execute it using a learned
+locomotion-dribbling policy.</p>
+<p>The benchmark is built on <a href="https://github.com/mujocolab/mjlab">mjlab</a>
+(GPU-accelerated RL via MuJoCo Warp) and uses the
+<a href="https://www.boostspace.com/">Booster T1</a> 23-DOF humanoid — the platform used
+in the <a href="https://www.robocup.org/leagues/35">RoboCup Humanoid Soccer League</a>.</p>
+<p>An example of evaluation after approximately 200 million steps of training on a RTX 4090 in approximately 3 hours:</p>
 <p><iframe
   src="https://drive.google.com/file/d/1CgFFBQNQtTevHFo_cPRcrJF6HEFSO9g2/preview"
   width="720" height="405"
@@ -949,21 +1058,59 @@ a baseline solution integrating planning and learning, using the Sokoban problem
 ></iframe>
 </p>
 <hr />
-<h2 id="what-this-is">What this is</h2>
-<p>The benchmark tests a Booster T1 humanoid on goal-conditioned maze navigation
-combined with ball dribbling. The robot must plan a path through a maze and
-execute it with a learned locomotion-dribbling policy.</p>
-<p>The baseline solution integrates planning and learning, using the Sokoban
-problem as an abstraction of ball dribbling with obstacles.</p>
-<p>The benchmark is built on <a href="https://github.com/neverorfrog/mjlab">mjlab</a>
-(GPU-accelerated RL via MuJoCo Warp) and uses the
-<a href="https://www.boostspace.com/">Booster T1</a> 23-DoF humanoid — the platform used
-in the <a href="https://www.robocup.org/leagues/35">RoboCup Humanoid Soccer League</a>.</p>
+<h2 id="the-planninglearning-interface">The planning–learning interface</h2>
+<p>The core challenge is that a low-level dribbling policy cannot reason about
+walls several meters away, while a planner cannot control 23 joints to keep
+the ball moving smoothly. The solution couples them through a shared
+<strong>direction signal</strong>.</p>
+<pre><code>┌─────────────────┐          direction vector         ┌──────────────────────┐
+│    Planner      │  ─────────────────────────────&gt;   │  Dribbling Policy    │
+│  (discrete,     │                                   │  (continuous,        │
+│   global)       │  &lt;─────────────────────────────   │   local)             │
+│                 │     current robot/ball position   │                      │
+└─────────────────┘                                   └──────────────────────┘
+</code></pre>
+<p><strong>Planner side</strong> — a classical planner solves the maze using a Sokoban
+abstraction: it models the ball-dribbling problem as a discrete push-planning
+problem on a grid. Given the current ball cell and the goal cell, it computes
+a feasible path through free cells considering the Sokoban constraints (
+the ball can only be pushed, not pulled). The planner outputs a direction
+vector pointing from the robot's current cell toward the next cell in the plan.</p>
+<p><strong>Learning side</strong> — the dribbling policy (trained as in the dribbling task)
+observes a local direction vector pointing toward the next waypoint in the
+plan. It uses this to steer its dribbling (or just walking).</p>
+<p><strong>AbstractionManager bridge</strong> — at each environment step, the
+<code>GridAbstractionTerm</code> re-reads the robot position and ball position, maps them
+to grid cells, looks up the pre-computed cost map, and provides a
+<code>direction_at_pos()</code> signal to observation functions. The planner only
+replans when the goal cell or map layout changes (change-detection via
+<code>AbstractionSettings</code>), avoiding expensive replanning every step.</p>
+<pre><code>env step:
+  abstraction_manager.compute(dt)
+    └── GridAbstractionTerm._update_signals()
+          └── look up direction_map at current robot cell
+                → feeds &quot;maze_direction&quot; observation term
+</code></pre>
+<p>The maze layout and goal are provided as part of the environment config and
+can be randomised across episodes for generalisation.</p>
+<hr />
+<h2 id="task-structure">Task structure</h2>
+<p>The environment extends the standard dribbling task:</p>
+<ul>
+<li><strong>Same robot and ball setup</strong> as <code>t1-dribbling</code>.</li>
+<li><strong>Additional scene elements</strong>: maze walls encoded as a binary occupancy grid.</li>
+<li><strong>Additional observation term</strong>: <code>maze_direction</code> — a 2D unit vector in robot
+  body frame pointing toward the next grid waypoint.</li>
+<li><strong>Same reward structure</strong>: ball velocity tracking + locomotion regularization.
+  The planner direction acts as a soft constraint through the observation, not
+  as a separate reward term.</li>
+</ul>
 <hr />
 <h2 id="code-structure">Code structure</h2>
-<pre><code>src/colosseum/tasks/soccer_maze/    # Benchmark environment (scene, MDP, rewards)
-src/colosseum/research/soccer-maze/ # Paper scripts and experiment configs
-└── scripts/                        # Evaluation and ablation scripts
+<pre><code>src/colosseum/tasks/soccer_maze/     # Benchmark environment (scene, MDP, rewards)
+
+src/colosseum/mdp/abstraction/maze/
+└── grid_abstraction.py              # GridAbstractionTerm — planner + signal cache
 </code></pre>
 <hr />
 <h2 id="quick-start">Quick start</h2>
@@ -973,6 +1120,7 @@ pixi run train task:t1-soccer-maze
 # Evaluate
 pixi run play task:t1-soccer-maze --checkpoint ./logs/&lt;run&gt;/checkpoints/latest.pt
 </code></pre>
+<hr />
 <h2 id="paper">Paper</h2>
 <p>The paper describes the technical contribution of the benchmark (environment features, performance metrics) and the baseline solution approach. It is under submission at <strong>RoboCup Symposium 2026</strong>.</p>
 <blockquote>

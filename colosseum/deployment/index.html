@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://neverorfrog.github.io/colosseum/research/dribbling/">
+        <link rel="canonical" href="https://neverorfrog.github.io/colosseum/colosseum/deployment/">
       
       
-        <link rel="prev" href="../../mjlab/scene_simulation/">
+        <link rel="prev" href="../training/">
       
       
-        <link rel="next" href="../soccer-maze/">
+        <link rel="next" href="../internals/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Dribbling - Colosseum</title>
+        <title>Deployment (Arena) - Colosseum</title>
       
     
     
@@ -80,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#dribbling-with-obstacle-avoidance" class="md-skip">
+        <a href="#deployment-arena" class="md-skip">
           Skip to content
         </a>
       
@@ -115,7 +115,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Dribbling
+              Deployment (Arena)
             
           </span>
         </div>
@@ -294,8 +294,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -306,11 +308,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
         
           
           <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
@@ -331,7 +333,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
             
@@ -349,7 +351,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../colosseum/setup/" class="md-nav__link">
+      <a href="../setup/" class="md-nav__link">
         
   
   
@@ -377,7 +379,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../colosseum/getting_started/" class="md-nav__link">
+      <a href="../getting_started/" class="md-nav__link">
         
   
   
@@ -405,7 +407,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../colosseum/training/" class="md-nav__link">
+      <a href="../training/" class="md-nav__link">
         
   
   
@@ -430,10 +432,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../colosseum/deployment/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment (Arena)
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -449,6 +478,181 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#step-1-export-to-onnx" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 1 — Export to ONNX
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-2-arena-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2 — Arena overview
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Step 2 — Arena overview">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#backends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backends
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#running-in-simulation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running in simulation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#running-on-the-robot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running on the robot
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#iportal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        IPortal
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Policy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#taskconfig-and-robotconfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TaskConfig and RobotConfig
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inference-engines" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inference engines
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#action-decoding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Action decoding
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#control-loop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Control loop
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-a-new-task" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding a new task
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -461,7 +665,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../colosseum/internals/" class="md-nav__link">
+      <a href="../internals/" class="md-nav__link">
         
   
   
@@ -489,7 +693,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../colosseum/dribbling_tutorial/" class="md-nav__link">
+      <a href="../dribbling_tutorial/" class="md-nav__link">
         
   
   
@@ -517,7 +721,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../colosseum/cartpole/" class="md-nav__link">
+      <a href="../cartpole/" class="md-nav__link">
         
   
   
@@ -692,8 +896,6 @@
       
   
   
-    
-  
   
   
     
@@ -706,11 +908,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
         
           
           <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
@@ -731,7 +933,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -746,37 +948,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Dribbling
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../research/dribbling/" class="md-nav__link">
         
   
   
@@ -792,81 +967,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#what-this-is" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What this is
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#key-design-choices" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Key design choices
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#observation-and-action-space" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Observation and action space
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#code-structure" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Code structure
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#quick-start" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Quick start
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -879,7 +979,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../soccer-maze/" class="md-nav__link">
+      <a href="../../research/soccer-maze/" class="md-nav__link">
         
   
   
@@ -934,10 +1034,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#what-this-is" class="md-nav__link">
+  <a href="#step-1-export-to-onnx" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What this is
+        Step 1 — Export to ONNX
       
     </span>
   </a>
@@ -945,10 +1045,132 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#key-design-choices" class="md-nav__link">
+  <a href="#step-2-arena-overview" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Key design choices
+        Step 2 — Arena overview
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Step 2 — Arena overview">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#backends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backends
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#running-in-simulation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running in simulation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#running-on-the-robot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running on the robot
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#iportal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        IPortal
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Policy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#taskconfig-and-robotconfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TaskConfig and RobotConfig
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inference-engines" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inference engines
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#action-decoding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Action decoding
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#control-loop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Control loop
       
     </span>
   </a>
@@ -956,32 +1178,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#observation-and-action-space" class="md-nav__link">
+  <a href="#adding-a-new-task" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Observation and action space
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#code-structure" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Code structure
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#quick-start" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Quick start
+        Adding a new task
       
     </span>
   </a>
@@ -1005,7 +1205,7 @@
 
 
   
-    <a href="https://github.com/neverorfrog/colosseum.git/edit/master/docs/research/dribbling.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/neverorfrog/colosseum.git/edit/master/docs/colosseum/deployment.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75z"/></svg>
     </a>
@@ -1013,165 +1213,195 @@
   
 
 
-<h1 id="dribbling-with-obstacle-avoidance">Dribbling with Obstacle Avoidance</h1>
-<blockquote>
-<p>Humanoid robot soccer dribbling with curriculum-based dynamic obstacle avoidance
-and visual adaptation via RMA (Rapid Motor Adaptation).</p>
-</blockquote>
-<p><strong>Project page:</strong> <a href="https://lab-rococo-sapienza.github.io/learning-to-dribble/">lab-rococo-sapienza.github.io/learning-to-dribble</a></p>
+<h1 id="deployment-arena">Deployment (Arena)</h1>
+<p>Deploying a trained policy to the Booster T1 involves two steps:</p>
+<ol>
+<li><strong>Export</strong> — convert the PyTorch checkpoint to ONNX from colosseum (Python).</li>
+<li><strong>Run</strong> — load the ONNX model and drive the robot with arena (C++).</li>
+</ol>
+<p>Arena is the C++ runtime that runs on both a development PC (MuJoCo sim)
+and directly on the robot (Booster SDK).</p>
 <hr />
-<h2 id="what-this-is">What this is</h2>
-<p>The dribbling project trains a Booster T1 humanoid to dribble a soccer ball
-toward a persistent world-frame target while avoiding moving obstacles.</p>
-<p>Training uses a two-phase RMA pipeline:</p>
+<h2 id="step-1-export-to-onnx">Step 1 — Export to ONNX</h2>
+<p>From the colosseum repo, after training:</p>
+<pre><code class="language-bash">pixi run export-onnx task:t1-dribbling \
+    --checkpoint ./logs/&lt;run&gt;/checkpoints/latest.pt \
+    --output-dir ./models/
+</code></pre>
+<p>This traces the policy network (actor + privileged encoder frozen in Phase 1
+weights, or adaptation encoder for Phase 2) and writes a <code>.onnx</code> file.</p>
+<p>The exported model has a fixed input shape matching the training observation
+layout (e.g. 82 floats for T1 23-DOF velocity flat). The arena <code>Policy</code>
+class validates this at load time.</p>
+<hr />
+<h2 id="step-2-arena-overview">Step 2 — Arena overview</h2>
+<p>Arena is a standalone C++ executable that implements the policy control loop.
+It lives in its own repository (<a href="https://github.com/neverorfrog/arena">github.com/neverorfrog/arena</a>) and consumes colosseum's exported ONNX models, as well as policy contracts defined in language-agnostic YAML files.</p>
+<h3 id="backends">Backends</h3>
+<p>Arena supports three backends, selected at runtime with <code>--backend</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Backend</th>
+<th>Flag</th>
+<th>Use case</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mujoco</code></td>
+<td><code>--backend mujoco</code></td>
+<td>Sim-to-sim testing on dev PC (requires MuJoCo + GLFW build)</td>
+</tr>
+<tr>
+<td><code>booster</code></td>
+<td><code>--backend booster</code></td>
+<td>Real Booster T1 robot (via Booster SDK / DDS)</td>
+</tr>
+<tr>
+<td><code>circus</code></td>
+<td><code>--backend circus</code></td>
+<td>Remote robot via the Circus bridge</td>
+</tr>
+</tbody>
+</table>
+<h3 id="running-in-simulation">Running in simulation</h3>
+<p>Build arena with MuJoCo support (<code>mujoco</code> and <code>glfw</code> present in the pixi env):</p>
+<pre><code class="language-bash">pixi run compile          # CMake build, outputs arena binary
+pixi run arena --backend mujoco --task t1-velocity-flat
+</code></pre>
+<p>A GLFW window opens showing the T1 in its default XML scene. The policy
+runs at 50 Hz; physics steps at 200 Hz (decimation = 4). You can interact
+with the robot using a joystick or keyboard.</p>
+<h3 id="running-on-the-robot">Running on the robot</h3>
+<pre><code class="language-bash"># On dev PC: build and deploy to robot
+scripts/deploy.sh --ip 192.168.10.102
+
+# On robot:
+cd ~/arena &amp;&amp; ./run.sh run --task t1-velocity-flat
+</code></pre>
+<p><code>deploy.sh</code> builds an aarch64 conda package, transfers it to the robot over
+SSH, and installs it into a self-contained pixi environment. No dev
+dependencies are needed on the robot.</p>
+<hr />
+<h2 id="architecture">Architecture</h2>
+<pre><code>┌─────────────────────────────────────────────────────────┐
+│                        main.cpp                         │
+│  parse flags → TaskRegistry::create() → IPortal::run()  │
+└───────────┬─────────────────────────┬───────────────────┘
+            │                         │
+     ┌──────▼──────┐           ┌──────▼──────────┐
+     │   Policy    │           │    IPortal      │
+     │ (per-task)  │           │  (per-backend)  │
+     └──────┬──────┘           └──────┬──────────┘
+            │                         │
+     ┌──────▼──────┐    ┌─────────────▼────────────────┐
+     │IInference   │    │ MujocoPortal  │  RobotPortal │
+     │Engine       │    │ (sim-to-sim)  │  (real robot)│
+     │(ONNX / TRT) │    └───────────────┴──────────────┘
+     └─────────────┘
+</code></pre>
+<h3 id="iportal">IPortal</h3>
+<p>The portal abstracts the hardware backend. Its interface is:</p>
+<pre><code class="language-cpp">class IPortal {
+    void initialize();             // one-time setup
+    bool hasState() const;         // true once first state arrives
+    const RobotState&amp; getState();  // joint pos/vel, IMU, projected gravity
+    void updateState();            // re-read from source
+    void publishCommand(          // send PD targets
+        const float* targets,
+        const float* kp,
+        const float* kd);
+    void tick();                   // sleep until next 50 Hz tick (+ physics steps for MuJoCo)
+    bool shouldContinue() const;   // false when viewer window is closed
+};
+</code></pre>
+<p><strong>MujocoPortal</strong> loads the robot XML, merges it with a scene XML, sets
+armature and PD gains programmatically (guaranteeing they match training),
+and renders via GLFW.</p>
+<p><strong>RobotPortal</strong> connects to the Booster SDK via DDS, puts the robot into
+Custom mode, runs the <code>prepare</code> pose for 3 s, then hands control to the
+policy loop.</p>
+<h3 id="policy">Policy</h3>
+<p><code>Policy</code> is the abstract C++ base class for task-specific inference:</p>
+<pre><code class="language-cpp">class Policy {
+    void reset();   // zero last_action before first step
+    std::array&lt;float, NUM_JOINTS&gt; get_action(const RobotState&amp; state);
+
+protected:
+    virtual void update_input() {}                          // read joystick/keyboard
+    virtual void build_observation(const RobotState&amp;) = 0; // fill `observation`
+
+    TaskConfig config_;
+    RobotData&lt;NUM_JOINTS&gt; robot_data_;   // handles sim↔hardware joint remapping
+    float last_action[NUM_JOINTS]{};     // in sim order, used next step
+    std::vector&lt;float&gt; observation;
+    std::unique_ptr&lt;IInferenceEngine&gt; engine_;
+    std::unique_ptr&lt;IInputSource&gt; input_source_;
+};
+</code></pre>
+<p>Subclasses implement <code>build_observation()</code> to match the exact observation
+layout used during Python training. The sim→hardware joint remapping is
+handled by <code>RobotData</code> using the <code>sim2real</code> index array computed from
+<code>RobotConfig::sim_joint_names</code> vs <code>joint_names</code>.</p>
+<h3 id="taskconfig-and-robotconfig">TaskConfig and RobotConfig</h3>
+<p><code>TaskConfig</code> carries task-level settings:</p>
+<pre><code class="language-cpp">struct TaskConfig {
+    std::string task_name;
+    std::string model_path;         // path to .onnx
+    float       policy_dt = 0.02f; // 50 Hz
+    float       action_scale = 0.25f;
+    std::string inference_backend = &quot;onnx&quot;;  // or &quot;trt&quot;
+    RobotConfig&lt;NUM_JOINTS&gt; robot;
+    std::string scene_mjcf_path;
+};
+</code></pre>
+<p><code>RobotConfig</code> holds hardware specs: joint names (hardware order and MuJoCo
+compiled order), PD gains, default pose, effort limits, armature values, and
+the prepare-state configuration used before switching to Custom mode.</p>
+<h3 id="inference-engines">Inference engines</h3>
+<p>The <code>IInferenceEngine</code> interface supports two backends:</p>
 <ul>
-<li><strong>Phase 1</strong> — policy trained with privileged observations (ball position,
-  obstacle states) across a staged obstacle curriculum (0 → 4 obstacle stages).</li>
-<li><strong>Phase 2</strong> — visual adaptation encoder trained on top of the frozen Phase 1
-  policy, replacing privileged inputs with depth-camera features.</li>
+<li><strong>ONNX Runtime</strong> (<code>OnnxInferenceEngine</code>) — default, works everywhere.</li>
+<li><strong>TensorRT</strong> — optional, enabled at build time if <code>nvinfer</code> is found. Gives
+  faster inference on NVIDIA hardware (relevant on the robot's Jetson).</li>
 </ul>
-<hr />
-<h2 id="key-design-choices">Key design choices</h2>
-<p><strong>Target-driven ball command</strong> — a persistent world-frame target is sampled
-each episode from the current ball position at a random distance and heading.
-The desired ball velocity is recomputed every step from <code>ball → target</code>. This
-gives the policy a stable long-horizon objective throughout each episode,
-rather than a free velocity that can be satisfied trivially in any direction.</p>
-<p><strong>Closest-obstacle representation</strong> — the policy tracks only the single nearest
-active obstacle (position + velocity in robot body frame). Up to three physical
-obstacles exist in the scene; only the closest one is exposed. This
-representation is compact and generalises across different numbers of active
-obstacles.</p>
-<p><strong>DAgger teacher</strong> — the Stage-0 (no obstacles) PPO checkpoint acts as a
-teacher for later curriculum stages. The student minimises a mix of PPO loss
-and imitation loss toward the teacher's action distribution. This keeps the
-nominal dribbling gait stable while the student learns avoidance behaviour.</p>
-<p><strong>Relaxed tracking near obstacles</strong> — the ball-velocity tracking reward is
-scaled down when an obstacle is blocking the direct path to the target. This
-prevents the policy from being penalised for detours that are necessary for
-avoidance.</p>
-<hr />
-<h2 id="observation-and-action-space">Observation and action space</h2>
-<p><strong>Actor observations</strong> (proprioceptive, available at deployment):</p>
-<table>
-<thead>
-<tr>
-<th>Group</th>
-<th>Terms</th>
-<th>Dim</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Base state</td>
-<td>lin_vel, ang_vel, projected_gravity</td>
-<td>9</td>
-</tr>
-<tr>
-<td>Joints</td>
-<td>pos_rel, vel_rel</td>
-<td>46</td>
-</tr>
-<tr>
-<td>Last action</td>
-<td>—</td>
-<td>23</td>
-</tr>
-<tr>
-<td>Ball velocity command</td>
-<td>—</td>
-<td>3</td>
-</tr>
-<tr>
-<td>RMA latent</td>
-<td>from encoder</td>
-<td>64</td>
-</tr>
-<tr>
-<td><strong>Total</strong></td>
-<td></td>
-<td><strong>145</strong></td>
-</tr>
-</tbody>
-</table>
-<p><strong>Privileged observations</strong> (Phase 1 only):</p>
-<table>
-<thead>
-<tr>
-<th>Group</th>
-<th>Terms</th>
-<th>Dim</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>privileged_ball</code></td>
-<td>ball pos + vel in robot frame</td>
-<td>4</td>
-</tr>
-<tr>
-<td><code>privileged_obstacles</code></td>
-<td>nearest obstacle pos + vel in robot frame</td>
-<td>4</td>
-</tr>
-</tbody>
-</table>
-<p><strong>Actions</strong>: 23-DOF joint position targets</p>
-<hr />
-<h2 id="code-structure">Code structure</h2>
-<pre><code>src/colosseum/tasks/dribbling/
-├── config/t1_23dof/
-│   ├── t1_dribbling_cfg.py     # ColosseumEnvCfg assembly + task registration
-│   ├── scene_cfg.py            # robot + ball + obstacles
-│   ├── observation_cfg.py      # actor, privileged_ball, privileged_obstacles, depth_frames
-│   ├── reward_cfg.py           # ball tracking + locomotion regularization
-│   ├── event_cfg.py            # ball + obstacle reset events
-│   └── command_cfg.py          # BallVelocityCommand, AdversaryCommand, GaitPhaseCommand
-└── mdp/
-    ├── rewards.py              # ball_vel_tracking_relaxed, robot_ball_distance, ...
-    ├── observations.py         # ball_pos_robot_frame, obstacle_pos_robot_frame, ...
-    ├── ball_velocity_command.py # BallVelocityCommand (persistent target)
-    └── adversary_command.py    # AdversaryCommand (obstacle position/velocity)
-
-src/colosseum/research/dribbling/
-├── encoders.py                 # DepthEncoder, BallHead, ObstacleHead
-├── rma_terms.py                # DribblingRmaTerm, DribblingRmaTermCfg
-└── scripts/
-    ├── pipeline_dribbling.py   # Full curriculum (Phase 1 + Phase 2 per stage)
-    ├── train_phase2.py         # Phase 2 visual encoder training
-    ├── evaluate_dribbling.py   # Evaluation protocol runner
-    └── obstacle_ablation.py    # Ablation of obstacle presence
+<p>Select at runtime: <code>arena --inference trt --task t1-velocity-flat</code></p>
+<h3 id="action-decoding">Action decoding</h3>
+<p>The policy network outputs actions in <strong>MuJoCo (sim) joint order</strong>. Arena
+decodes them to hardware targets:</p>
+<pre><code>target[i] = net_out[sim2real[i]] * action_scale + default_joint_pos[i]
 </code></pre>
+<p>For the T1, <code>sim2real</code> is the identity (MuJoCo's alphabetical order matches
+hardware order), so the permutation is a no-op.</p>
 <hr />
-<h2 id="quick-start">Quick start</h2>
-<pre><code class="language-bash"># 1. Train nominal dribbling — Phase 1, no obstacles
-pixi run train task:t1-dribbling --task.obstacle-stage-index 0
-
-# 2. Train obstacle stage i with DAgger (Stage-0 checkpoint as teacher)
-pixi run train task:t1-dribbling \
-  --task.use-dagger \
-  --task.teacher-checkpoint ./logs/&lt;stage0-run&gt;/checkpoints/latest.pt \
-  --task.obstacle-stage-index i
-
-# 3. Train visual adaptation encoder — Phase 2
-pixi run train-phase2 task:t1-dribbling \
-  --checkpoint ./logs/&lt;phase1-run&gt;/checkpoints/latest.pt
-
-# 4. Full curriculum pipeline (Phase 1 + Phase 2 per stage, automated)
-pixi run pipeline-dribbling
-
-# 5. Evaluate across all obstacle conditions
-pixi run eval-dribbling task:t1-dribbling \
-  --checkpoint ./logs/&lt;run&gt;/checkpoints/latest.pt \
-  --episodes-per-condition 1000 --num-envs 128
-
-# 6. Obstacle presence ablation
-pixi run obstacle-ablation
-
-# 7. Export for deployment
-pixi run export-onnx task:t1-dribbling \
-  --checkpoint ./logs/&lt;run&gt;/checkpoints/latest.pt
+<h2 id="control-loop">Control loop</h2>
+<pre><code class="language-cpp">policy-&gt;reset();
+while (!terminated &amp;&amp; portal-&gt;shouldContinue()) {
+    portal-&gt;updateState();
+    auto targets = policy-&gt;get_action(portal-&gt;getState());
+    portal-&gt;publishCommand(targets.data(), cfg.robot.joint_stiffness.data(),
+                           cfg.robot.joint_damping.data());
+    portal-&gt;tick();  // sleeps until next 50 Hz slot (MuJoCo: also steps physics)
+}
 </code></pre>
+<p><code>tick()</code> on <code>RobotPortal</code> is a simple <code>sleep_until</code> to the next 20 ms
+boundary. On <code>MujocoPortal</code> it additionally runs <code>decimation</code> MuJoCo physics
+steps and syncs the GLFW viewer.</p>
+<hr />
+<h2 id="adding-a-new-task">Adding a new task</h2>
+<ol>
+<li>Create a subclass of <code>Policy</code> in <code>src/tasks/&lt;task_name&gt;/</code>:</li>
+<li>Implement <code>build_observation()</code> matching the Python training layout.</li>
+<li>Optionally override <code>update_input()</code> to read velocity commands from
+     joystick/keyboard.</li>
+<li>Register the task with <code>TaskRegistry</code>:
+   <code>cpp
+   REGISTER_TASK("my-task", MyPolicy, MyTaskConfig{});</code></li>
+<li>Export the ONNX model from colosseum and point <code>TaskConfig::model_path</code>
+   at it (or use <code>ModelRegistry</code> for automatic path resolution).</li>
+<li>Build arena and test with <code>--backend mujoco</code> before deploying to hardware.</li>
+</ol>
 
 
 
@@ -1209,7 +1439,7 @@ pixi run export-onnx task:t1-dribbling \
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../../mjlab/scene_simulation/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Scene &amp; Simulation">
+          <a href="../training/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Training &amp; Evaluation">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -1219,20 +1449,20 @@ pixi run export-onnx task:t1-dribbling \
                 Previous
               </span>
               <div class="md-ellipsis">
-                Scene & Simulation
+                Training & Evaluation
               </div>
             </div>
           </a>
         
         
           
-          <a href="../soccer-maze/" class="md-footer__link md-footer__link--next" aria-label="Next: Soccer Maze">
+          <a href="../internals/" class="md-footer__link md-footer__link--next" aria-label="Next: Colosseum Internals">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Soccer Maze
+                Colosseum Internals
               </div>
             </div>
             <div class="md-footer__button md-icon">

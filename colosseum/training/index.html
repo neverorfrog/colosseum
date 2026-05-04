@@ -16,7 +16,7 @@
         <link rel="prev" href="../getting_started/">
       
       
-        <link rel="next" href="../cartpole/">
+        <link rel="next" href="../deployment/">
       
       
         
@@ -506,6 +506,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#wb-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        W&amp;B metrics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#evaluation-play" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -530,6 +541,17 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exporting-to-onnx" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exporting to ONNX
+      
+    </span>
+  </a>
   
 </li>
       
@@ -588,6 +610,90 @@
   
   
     <li class="md-nav__item">
+      <a href="../deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment (Arena)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Colosseum Internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dribbling_tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dribbling Task Tutorial
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../cartpole/" class="md-nav__link">
         
   
@@ -595,7 +701,7 @@
   <span class="md-ellipsis">
     
   
-    Cartpole
+    Cartpole Tutorial
   
 
     
@@ -731,42 +837,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../mjlab/scene_layer/" class="md-nav__link">
+      <a href="../../mjlab/scene_simulation/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Scene Layer
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../mjlab/simulation_layer/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Simulation Layer
+    Scene & Simulation
   
 
     
@@ -968,6 +1046,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#wb-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        W&amp;B metrics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#evaluation-play" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -992,6 +1081,17 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exporting-to-onnx" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exporting to ONNX
+      
+    </span>
+  </a>
   
 </li>
       
@@ -1098,17 +1198,94 @@ pixi run train task:t1-dribbling
 </code></pre>
 <p>Logs and checkpoints are saved under <code>./logs/</code>. Metrics go to W&amp;B.</p>
 <hr />
+<h2 id="wb-metrics">W&amp;B metrics</h2>
+<p>The most useful metrics to watch during a training run:</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>What it means</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>train/episode_return</code></td>
+<td>Mean cumulative reward per episode. Should rise steadily.</td>
+</tr>
+<tr>
+<td><code>train/episode_length</code></td>
+<td>Mean episode length in steps. Short episodes early on → terminations are triggered frequently.</td>
+</tr>
+<tr>
+<td><code>train/value_loss</code></td>
+<td>Critic loss. Should decrease and stabilize. Spikes indicate instability.</td>
+</tr>
+<tr>
+<td><code>train/surrogate_loss</code></td>
+<td>PPO policy loss. Erratic oscillation → learning rate too high.</td>
+</tr>
+<tr>
+<td><code>terminations/&lt;name&gt;</code></td>
+<td>Per-term termination rate. Useful to see <em>why</em> episodes end (fall, timeout, joint limits).</td>
+</tr>
+<tr>
+<td><code>rewards/&lt;name&gt;</code></td>
+<td>Per-term episode sum. Watch the task reward rise and regularization terms stay bounded.</td>
+</tr>
+<tr>
+<td><code>curriculum/level</code></td>
+<td>Current terrain/obstacle difficulty level (if curriculum is active).</td>
+</tr>
+</tbody>
+</table>
+<p>For the dribbling task specifically:</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>What to look for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>rewards/ball_vel_tracking</code></td>
+<td>Primary signal — should dominate the return.</td>
+</tr>
+<tr>
+<td><code>rewards/upright</code></td>
+<td>Should be high (close to max) throughout; large drops signal falling.</td>
+</tr>
+<tr>
+<td><code>terminations/base_contact</code></td>
+<td>Should fall toward zero as the robot learns not to fall.</td>
+</tr>
+<tr>
+<td><code>train/episode_length</code></td>
+<td>Should approach <code>episode_length_s / step_dt</code> (20 s × 50 Hz = 1000 steps).</td>
+</tr>
+</tbody>
+</table>
+<hr />
 <h2 id="evaluation-play">Evaluation (Play)</h2>
-<pre><code class="language-bash"># Run a trained checkpoint
-pixi run play task:t1-dribbling --checkpoint ./logs/&lt;run&gt;/checkpoints/latest.pt
-
-# Fix obstacle stage during play
+<pre><code class="language-bash"># Run a trained checkpoint in the viewer
 pixi run play task:t1-dribbling --checkpoint ./logs/&lt;run&gt;/checkpoints/latest.pt
 </code></pre>
-<p>Play mode uses the task's default <code>num_envs</code>. Override with <code>--num-envs 1</code> for a single environment.</p>
+<p>Play mode uses the task's default <code>num_envs</code>. Override with <code>--num-envs 1</code> for a
+single environment, which is easier to watch.</p>
 <h3 id="viser-viewer">Viser viewer</h3>
 <pre><code class="language-bash">pixi run play task:t1-dribbling --checkpoint ... --viewer viser
 </code></pre>
+<hr />
+<h2 id="exporting-to-onnx">Exporting to ONNX</h2>
+<p>Once training is complete, export the policy for deployment with arena:</p>
+<pre><code class="language-bash">pixi run export-onnx task:t1-dribbling \
+    --checkpoint ./logs/&lt;run&gt;/checkpoints/latest.pt \
+    --output-dir ./models/
+</code></pre>
+<p>This traces the policy (actor network + encoder in their Phase 1 or Phase 2
+configuration) and writes a <code>.onnx</code> file with a fixed input shape matching
+the training observation layout. See <a href="../deployment/">Deployment (Arena)</a> for
+how to use the exported model.</p>
 <hr />
 <h2 id="multi-gpu-training">Multi-GPU Training</h2>
 <pre><code class="language-bash"># Phase 1
@@ -1118,24 +1295,20 @@ pixi run train task:t1-dribbling --task.env.scene.num-envs 10240 --cuda 0,1
 pixi run train-phase2 task:t1-dribbling --task.env.scene.num-envs 1024 --cuda 0,1 \
   --checkpoint checkpoints/dribbling_phase_1.pt
 </code></pre>
-<p><code>--task.env.scene.num-envs</code> is <strong>per process</strong>, so two ranks × 10240 = 20480 total environments.</p>
+<p><code>--task.env.scene.num-envs</code> is <strong>per process</strong>, so two ranks × 10240 = 20480
+total environments.</p>
 <p>Equivalent explicit <code>torchrun</code> invocation:</p>
 <pre><code class="language-bash">CUDA_VISIBLE_DEVICES=0,1 pixi run torchrun \
     --standalone --nproc_per_node=2 \
     -m colosseum.scripts.train task:t1-dribbling
 </code></pre>
 <h3 id="wb-in-multi-gpu">W&amp;B in multi-GPU</h3>
-<ul>
-<li>Only rank 0 creates the W&amp;B run and uploads checkpoints.</li>
-<li>Use <code>logger:disabled</code> to suppress W&amp;B entirely.</li>
-</ul>
+<p>Only rank 0 creates the W&amp;B run and uploads checkpoints. Use <code>logger:disabled</code>
+to suppress W&amp;B entirely.</p>
 <h3 id="checkpoints-in-multi-gpu">Checkpoints in multi-GPU</h3>
-<ul>
-<li>Written to <code>logs/&lt;run&gt;/checkpoints/</code> by rank 0 only.</li>
-<li><code>latest.pt</code> always points to the newest checkpoint.</li>
-<li><code>interrupted.pt</code> is written on Ctrl+C.</li>
-<li>All ranks load the same checkpoint path on resume.</li>
-</ul>
+<p>Written to <code>logs/&lt;run&gt;/checkpoints/</code> by rank 0 only. <code>latest.pt</code> always
+points to the newest checkpoint. <code>interrupted.pt</code> is written on Ctrl+C. All
+ranks load the same checkpoint path on resume.</p>
 
 
 
@@ -1190,13 +1363,13 @@ pixi run train-phase2 task:t1-dribbling --task.env.scene.num-envs 1024 --cuda 0,
         
         
           
-          <a href="../cartpole/" class="md-footer__link md-footer__link--next" aria-label="Next: Cartpole">
+          <a href="../deployment/" class="md-footer__link md-footer__link--next" aria-label="Next: Deployment (Arena)">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Cartpole
+                Deployment (Arena)
               </div>
             </div>
             <div class="md-footer__button md-icon">
