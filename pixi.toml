@@ -20,7 +20,6 @@ version = "*"
 
 [environments]
 default = { solve-group = "default" }
-deploy = { features = ["deploy"], no-default-feature = true }
 docs = { features = ["docs"], no-default-feature = true, solve-group = "docs" }
 
 [tasks]
@@ -65,39 +64,6 @@ opencv-python = ">=4.13.0.92, <5"
 up-symk = ">=1.4.2, <2"
 unified-planning = {git = "https://github.com/speckdavid/unified-planning", branch = "master", editable = true}
 tyro = ">=1.0.13, <2"
-
-# ============================================
-# DEPLOY FEATURE
-# linux-64:    sim-to-sim testing (MuJoCo)
-# linux-aarch64: real robot (Booster T1)
-# ============================================
-[feature.deploy]
-platforms = ["linux-64", "linux-aarch64"]
-
-[feature.deploy.dependencies]
-python = "3.11.*"
-onnxruntime = ">=1.22.2,<2"
-
-# [tool.pixi.feature.deploy.pypi-dependencies]
-# colosseum = {path = ".", editable = true}
-
-# [tool.pixi.feature.deploy.target.linux-64.dependencies]
-# pytorch = "*"
-
-# [tool.pixi.feature.deploy.target.linux-64.pypi-dependencies]
-# mujoco = ">=3.4.0,<4"
-
-# [tool.pixi.feature.deploy.target.linux-aarch64.dependencies]
-# booster_robotics_sdk = "==1.5.0"
-# nanobind = ">=2.4,<3"
-
-# [tool.pixi.feature.deploy.target.linux-aarch64.pypi-dependencies]
-# torch = "*"
-# torchvision = "*"
-
-# [tool.pixi.feature.deploy.tasks]
-# deploy = { cmd = "python -m colosseum.scripts.deploy", description = "Deploy trained policy" }
-# gen-booster-stubs = { cmd = "python -m nanobind.stubgen -m booster_robotics_sdk_python -o typings/booster_robotics_sdk_python.pyi", description = "Generate stubs for booster_robotics_sdk_python into typings/" }
 
 # ============================================
 # DOCS FEATURE

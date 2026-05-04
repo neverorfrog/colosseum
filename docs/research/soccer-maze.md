@@ -6,6 +6,8 @@
 
 ---
 
+This is an example of a evaluation after approximately 200 million steps of training on a RTX 4090 in approximately 3 hours. 
+
 <iframe
   src="https://drive.google.com/file/d/1CgFFBQNQtTevHFo_cPRcrJF6HEFSO9g2/preview"
   width="720" height="405"
