@@ -3,6 +3,7 @@ __pycache__/
 **/__pycache__/
 *.py[cod]
 *$py.class
+*.json
 
 # Ignore virtual environment directories
 venv/
@@ -11,8 +12,9 @@ env/
 .venv/
 env.bak/
 venv.bak/
-external/
 */.clangd
+resources/
+external/TensorRT
 
 # Ignore distribution/build directories and files
 build/
