@@ -35,6 +35,8 @@ train-phase2 = { cmd = "python research/dribbling/scripts/train_phase2.py", desc
 pipeline-dribbling = { cmd = "python research/dribbling/scripts/pipeline_dribbling.py", description = "Full dribbling curriculum pipeline (Phase 1 + Phase 2 per stage)" }
 eval-dribbling = { cmd = "python research/dribbling/scripts/evaluate_dribbling.py", description = "Run the dribbling evaluation protocol" }
 obstacle-ablation = { cmd = "python research/dribbling/scripts/obstacle_ablation.py", description = "Ablation of obstacle presence in dribbling curriculum" }
+cleanup-run = { cmd = "python -m colosseum.scripts.cleanup_run", description = "Delete a run from local disk and W&B" }
+model-registry = { cmd = "python -m colosseum.scripts.model_registry_cli", description = "Manage the model registry" }
 
 # ============================================
 # DEFAULT (TRAIN) ENVIRONMENT
@@ -64,6 +66,7 @@ opencv-python = ">=4.13.0.92, <5"
 up-symk = ">=1.4.2, <2"
 unified-planning = {git = "https://github.com/speckdavid/unified-planning", branch = "master", editable = true}
 tyro = ">=1.0.13, <2"
+onnxruntime = ">=1.22.2,<2"
 
 # ============================================
 # DOCS FEATURE

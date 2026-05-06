@@ -1,0 +1,8 @@
+t1-velocity:
+  models:
+    v0:
+      file: v0/t1-velocity_ppo_v0.onnx
+      run: t1-velocity_PPO_42_20260506_150747
+      step: 156240000
+      created: '2026-05-06T13:54:24.355033+00:00'
+  default: v0
