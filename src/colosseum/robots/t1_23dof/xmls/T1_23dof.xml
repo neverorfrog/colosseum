@@ -96,7 +96,7 @@
         <joint axis="1 0 0" range="-0.44 0.44" damping="0.15" armature="0.3" frictionloss="0.1"/>
       </default>
 
-      <position inheritrange="1" kp="75" kv="5"/>
+      <position kp="75" kv="5"/>
     </default>
   </default>
 
