@@ -429,14 +429,6 @@ class BaseAlgorithm(ABC):
         except Exception:
           pass
 
-      # Track with W&B if available so it appears in Files
-      try:
-        import wandb  # type: ignore
-
-        if getattr(wandb, "run", None) is not None:
-          wandb.save(str(ckpt_path), policy="now")
-      except Exception:
-        pass
     except Exception as e:
       logger.error(f"Failed to save checkpoint at step {step}: {e}")
 
@@ -497,10 +489,8 @@ class BaseAlgorithm(ABC):
     phase_index: int | None,
     stage_index: int | None,
   ) -> str:
-    """Build a checkpoint filename with step, phase, and obstacle stage."""
+    """Build a checkpoint filename with step and obstacle stage."""
     parts = [f"model_{step:07d}"]
-    if phase_index is not None:
-      parts.append(f"phase{phase_index}")
     if stage_index is not None:
       parts.append(f"stage{stage_index}")
     return "_".join(parts) + ".pt"
@@ -568,13 +558,6 @@ class BaseAlgorithm(ABC):
         obstacle_stage_name=stage_name,
       )
 
-      try:
-        import wandb  # type: ignore
-
-        if getattr(wandb, "run", None) is not None:
-          wandb.save(str(ckpt_path), policy="now")
-      except Exception:
-        pass
       logger.info(
         f"Saved stage-transition checkpoint: {ckpt_path.name} "
         f"(stage {stage_index}: {stage_name}, step {step})"
@@ -713,6 +696,7 @@ class BaseAlgorithm(ABC):
     self.actor_obs_normalizer.eval()
 
     wrapper = nn.Sequential(self.actor_obs_normalizer, self.actor).cpu()
+    wrapper.eval()
     obs_dim = self.env.observation_manager.group_obs_dim["actor"][0]
     dummy = torch.zeros(1, obs_dim)
 
@@ -724,7 +708,6 @@ class BaseAlgorithm(ABC):
       opset_version=18,
       input_names=["obs"],
       output_names=["actions"],
-      dynamic_axes={},
     )
 
     if was_training:

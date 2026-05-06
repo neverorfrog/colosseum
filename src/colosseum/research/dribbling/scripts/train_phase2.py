@@ -209,9 +209,12 @@ def main() -> None:
       seed=config.seed,
     )
 
-    logger_cfg = config.logger
-    if logger_cfg.group is None:
-      logger_cfg = replace(logger_cfg, group=config.task.name)
+    logger_cfg = replace(
+        config.logger,
+        project=f"colosseum-{config.task.name}",
+        group=f"{algo_cfg.name}_phase2",
+        job_type=f"{algo_cfg.name}_phase2_{config.task.name}",
+    )
 
     try:
       wandb_run, run_dir = setup_wandb(

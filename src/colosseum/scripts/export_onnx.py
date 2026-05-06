@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
-"""Export a colosseum PPO checkpoint to ONNX.
+"""Export a colosseum checkpoint to ONNX. Every export is registered.
 
-Output is placed next to the checkpoint as <task_name>_<algo_name>.onnx.
-
-Usage:
-    pixi run -e train export-onnx task:t1-velocity-flat
-    pixi run -e train export-onnx task:t1-velocity-rough --checkpoint ./wandb/latest-run/files/model_16000.pt
+  pixi run export-onnx task:t1-velocity --name v1 --run-name t1-vel_ppo_20260101_120000
+  pixi run export-onnx task:t1-velocity --name v1 --checkpoint path/to/model_1000.pt
 """
 
 from __future__ import annotations
 
+import shutil
 import sys
 from pathlib import Path
 
@@ -18,23 +16,31 @@ from loguru import logger
 from pydantic import ConfigDict
 from pydantic.dataclasses import dataclass
 
-from colosseum.algorithm.base_algorithm import get_latest_checkpoint
 from colosseum.config.types.experiment import BaseExperimentConfig
+from colosseum.utils.checkpoint import resolve_checkpoint
 from colosseum.utils.export import export_policy_to_onnx
+from colosseum.utils.model_registry import ModelRegistry
 
 
-def _resolve_checkpoint(checkpoint: str | None) -> Path | None:
-  """Resolve checkpoint path, supporting 'latest', directories, and direct paths."""
-  if not checkpoint or checkpoint.lower() == "latest":
-    ckpt_dir = Path("./logs/wandb/latest-run/checkpoints")
-    if ckpt_dir.exists():
-      return get_latest_checkpoint(ckpt_dir.resolve())
+def _set_default_symlink(task_dir: Path, rel_file: str) -> None:
+  """Point <task_dir>/default.onnx -> rel_file."""
+  link = task_dir / "default.onnx"
+  if link.is_symlink() or link.exists():
+    link.unlink()
+  link.symlink_to(rel_file)
+
+
+def _run_name_from_ckpt(ckpt: Path, log_dir: str = "./logs") -> str | None:
+  """Extract run directory name from checkpoint path."""
+  ckpt = ckpt.resolve()
+  try:
+    ckpt.relative_to(Path(log_dir).resolve())
+  except ValueError:
     return None
-
-  p = Path(checkpoint)
-  if p.is_dir():
-    return get_latest_checkpoint(p.resolve())
-  return p.resolve() if p.exists() else None
+  for parent in ckpt.parents:
+    if parent.name == "checkpoints":
+      return parent.parent.name
+  return None
 
 
 @dataclass(frozen=True, config=ConfigDict(arbitrary_types_allowed=True))
@@ -42,47 +48,84 @@ class ExportConfig(BaseExperimentConfig):
   """Export configuration."""
 
   checkpoint: str = "latest"
+  """Checkpoint path or 'latest'."""
+
+  run_name: str | None = None
+  """Run name to export from (looks in ./logs/<run_name>/checkpoints/)."""
+
+  name: str = ""
+  """Registration name (e.g. 'v1'). Required."""
+
+  out_dir: str | None = None
+  """Output directory (default: models/<task_name>/)."""
 
 
 def main() -> None:
   """Export a trained policy checkpoint to ONNX."""
   config = tyro.cli(ExportConfig, config=(tyro.conf.CascadeSubcommandArgs,))
 
-  ckpt = _resolve_checkpoint(config.checkpoint)
+  ckpt = resolve_checkpoint(config.checkpoint, config.run_name)
   if ckpt is None or not ckpt.exists():
-    logger.error(f"No checkpoint found for: {config.checkpoint}")
+    display = f"run_name={config.run_name}" if config.run_name else f"checkpoint={config.checkpoint}"
+    logger.error(f"No checkpoint found for {display}")
     sys.exit(1)
 
-  # Export to project-level models/ directory
-  models_dir = Path("models")
-  models_dir.mkdir(exist_ok=True)
+  task_name = config.task.name
 
-  # Resolve symlinks so we get the real checkpoint name (e.g. latest.pt → model_0099483648.pt)
-  ckpt = ckpt.resolve()
-  stem = ckpt.stem
-  step = stem.split("_")[-1] if "_" in stem else stem
   algo_cfg = config.task.algo_cfg
   assert algo_cfg is not None, (
-    f"Task '{config.task.name}' has no algo_cfg. "
+    f"Task '{task_name}' has no algo_cfg. "
     "Implement the algo_cfg property in the task's __init__.py."
   )
-  base_name = f"{config.task.name}_{algo_cfg.name.lower()}"
-  filename = f"{base_name}_{step}.onnx"
-  output_path = models_dir / filename
+  algo = algo_cfg.name.lower()
+  ckpt = ckpt.resolve()
+
+  stem = ckpt.stem
+  step_str = stem.split("_")[-1] if "_" in stem else stem
+  try:
+    step = int(step_str)
+  except ValueError:
+    step = -1
+
+  if not config.name:
+    logger.error("--name is required (e.g. --name v1)")
+    sys.exit(1)
+
+  filename = f"{task_name}_{algo}_{config.name}.onnx"
+
+  task_dir = Path(config.out_dir) if config.out_dir else Path("models") / task_name
+  out_dir = task_dir / config.name
+  out_dir.mkdir(parents=True, exist_ok=True)
+  output_path = out_dir / filename
 
   result = export_policy_to_onnx(config, ckpt, output_path)
 
-  # Create a stable latest symlink for deploy configs to reference
-  latest_link = models_dir / f"{base_name}_latest.onnx"
-  try:
-    if latest_link.exists() or latest_link.is_symlink():
-      latest_link.unlink()
-    latest_link.symlink_to(result.name)
-    logger.info(f"Symlink: {latest_link.name} -> {result.name}")
-  except OSError:
-    pass
+  # Copy .pt checkpoint into the subfolder
+  pt_name = result.stem + ".pt"
+  shutil.copy2(ckpt, out_dir / pt_name)
+  logger.info(f"Copied checkpoint: {out_dir / pt_name}")
 
-  logger.success(f"Exported: {result}")
+  # Copy config.yaml from the run directory
+  run_dir = _run_name_from_ckpt(ckpt)
+  if run_dir:
+    config_path = Path("./logs") / run_dir / "config.yaml"
+    if config_path.exists():
+      shutil.copy2(config_path, out_dir / "config.yaml")
+      logger.info(f"Copied config: {out_dir / 'config.yaml'}")
+
+  # Register in models/registry.yaml
+  rel_file = f"{config.name}/{result.name}"
+  run_name = config.run_name or _run_name_from_ckpt(ckpt) or ""
+  ModelRegistry.register(
+    task=task_name,
+    name=config.name,
+    file=rel_file,
+    run=run_name,
+    step=step if step >= 0 else 0,
+  )
+  _set_default_symlink(task_dir, rel_file)
+
+  logger.success(f"Exported + registered '{config.name}': {result}")
 
 
 if __name__ == "__main__":

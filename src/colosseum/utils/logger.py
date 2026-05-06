@@ -206,6 +206,9 @@ def setup_wandb(
 
     if run is not None:
         run_dir = base_log_dir / run_name
+        run_dir.mkdir(parents=True, exist_ok=True)
+        # Persist wandb run ID so it can be looked up later
+        (run_dir / "wandb_id.txt").write_text(run.id)
         logger.info(f"W&B initialized: {run.url}")
         logger.info(f"Run directory: {run_dir}")
         return run, run_dir
@@ -269,6 +272,14 @@ def teardown_wandb() -> None:
             wandb.finish()
     except ImportError:
         pass
+
+
+def get_wandb_id(run_name: str, log_dir: str = "./logs") -> str | None:
+    """Look up the wandb run ID for a local run by name."""
+    path = Path(log_dir) / run_name / "wandb_id.txt"
+    if path.exists():
+        return path.read_text().strip()
+    return None
 
 
 @contextmanager
