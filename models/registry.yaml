@@ -13,6 +13,6 @@ t1-velocity:
     v2:
       file: v2/t1-velocity_ppo_v2.onnx
       run: t1-velocity_PPO_42_20260507_140826
-      step: 431161344
-      created: '2026-05-07T14:14:26.251468+00:00'
+      step: 696877056
+      created: '2026-05-07T15:31:38.131700+00:00'
   default: v0
