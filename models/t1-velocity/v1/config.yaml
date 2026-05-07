@@ -6,7 +6,7 @@ task:
   env:
     decimation: 10
     scene:
-      num_envs: 5000
+      num_envs: 4096
       env_spacing: 2.0
       terrain:
         init_state:
@@ -787,8 +787,8 @@ task:
       reset_robot_joints:
         params:
           position_range:
-          - 0.0
-          - 0.0
+          - -0.05
+          - 0.05
           velocity_range:
           - 0.0
           - 0.0
@@ -834,7 +834,7 @@ task:
         mode: interval
         interval_range_s:
         - 5.0
-        - 10.0
+        - 15.0
         is_global_time: false
         min_step_count_between_reset: 0
       foot_friction:
@@ -874,10 +874,10 @@ task:
             material_names: null
             pair_names: null
             preserve_order: false
-          operation: abs
           ranges:
           - 0.3
           - 1.2
+          operation: abs
           shared_random: true
         mode: startup
         interval_range_s: null
@@ -910,7 +910,8 @@ task:
           asset_cfg:
             name: robot
             joint_names: null
-            body_names: Trunk
+            body_names:
+            - Trunk
             geom_names: null
             site_names: null
             actuator_names: null
@@ -931,6 +932,102 @@ task:
             2:
             - -0.03
             - 0.03
+        mode: startup
+        interval_range_s: null
+        is_global_time: false
+        min_step_count_between_reset: 0
+      base_mass:
+        params:
+          asset_cfg:
+            name: robot
+            joint_names: null
+            body_names:
+            - Trunk
+            geom_names: null
+            site_names: null
+            actuator_names: null
+            tendon_names: null
+            camera_names: null
+            light_names: null
+            material_names: null
+            pair_names: null
+            preserve_order: false
+          ranges:
+          - 0.8
+          - 1.2
+          operation: scale
+        mode: startup
+        interval_range_s: null
+        is_global_time: false
+        min_step_count_between_reset: 0
+      joint_damping:
+        params:
+          asset_cfg:
+            name: robot
+            joint_names:
+            - .*
+            body_names: null
+            geom_names: null
+            site_names: null
+            actuator_names: null
+            tendon_names: null
+            camera_names: null
+            light_names: null
+            material_names: null
+            pair_names: null
+            preserve_order: false
+          ranges:
+          - 0.9
+          - 1.1
+          operation: scale
+        mode: startup
+        interval_range_s: null
+        is_global_time: false
+        min_step_count_between_reset: 0
+      joint_friction:
+        params:
+          asset_cfg:
+            name: robot
+            joint_names:
+            - .*
+            body_names: null
+            geom_names: null
+            site_names: null
+            actuator_names: null
+            tendon_names: null
+            camera_names: null
+            light_names: null
+            material_names: null
+            pair_names: null
+            preserve_order: false
+          ranges:
+          - 1.0
+          - 20.0
+          operation: scale
+        mode: startup
+        interval_range_s: null
+        is_global_time: false
+        min_step_count_between_reset: 0
+      joint_armature:
+        params:
+          asset_cfg:
+            name: robot
+            joint_names:
+            - .*
+            body_names: null
+            geom_names: null
+            site_names: null
+            actuator_names: null
+            tendon_names: null
+            camera_names: null
+            light_names: null
+            material_names: null
+            pair_names: null
+            preserve_order: false
+          ranges:
+          - 0.9
+          - 1.1
+          operation: scale
         mode: startup
         interval_range_s: null
         is_global_time: false
@@ -1117,6 +1214,8 @@ task:
         params:
           phase_command_name: gait_phase
           sensor_name: feet_ground_contact
+          command_name: twist
+          command_threshold: 0.05
         weight: 3.0
       stance_phase:
         params:
@@ -1136,6 +1235,8 @@ task:
             material_names: null
             pair_names: null
             preserve_order: false
+          command_name: twist
+          command_threshold: 0.05
         weight: 2.0
       foot_slip:
         params:

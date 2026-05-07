@@ -1,4 +1,4 @@
-from mjlab.envs.mdp.dr import body_com_offset, encoder_bias, geom_friction
+from mjlab.envs.mdp import dr
 from mjlab.envs.mdp.events import (
   push_by_setting_velocity,
   reset_joints_by_offset,
@@ -10,6 +10,9 @@ from mjlab.managers.scene_entity_config import SceneEntityCfg
 from colosseum.robots.t1_23dof.constants import BASE_BODY_NAME, FOOT_GEOM_NAMES
 
 events = {
+  # ------------------------------------------------------------------ #
+  # RESET — initial conditions                                          #
+  # ------------------------------------------------------------------ #
   "reset_base": EventTermCfg(
     func=reset_root_state_uniform,
     mode="reset",
@@ -27,15 +30,18 @@ events = {
     func=reset_joints_by_offset,
     mode="reset",
     params={
-      "position_range": (0.0, 0.0),
+      "position_range": (-0.05, 0.05),
       "velocity_range": (0.0, 0.0),
       "asset_cfg": SceneEntityCfg("robot", joint_names=(".*",)),
     },
   ),
+  # ------------------------------------------------------------------ #
+  # INTERVAL — disturbances                                             #
+  # ------------------------------------------------------------------ #
   "push_robot": EventTermCfg(
     func=push_by_setting_velocity,
     mode="interval",
-    interval_range_s=(1.0, 3.0),
+    interval_range_s=(5.0, 15.0),
     params={
       "velocity_range": {
         "x": (-0.5, 0.5),
@@ -47,19 +53,22 @@ events = {
       },
     },
   ),
+  # ------------------------------------------------------------------ #
+  # STARTUP — persistent per-env physics randomization                  #
+  # ------------------------------------------------------------------ #
   "foot_friction": EventTermCfg(
     mode="startup",
-    func=geom_friction,
+    func=dr.geom_friction,
     params={
       "asset_cfg": SceneEntityCfg("robot", geom_names=FOOT_GEOM_NAMES),
-      "operation": "abs",
       "ranges": (0.3, 1.2),
-      "shared_random": True,  # All foot geoms share the same friction.
+      "operation": "abs",
+      "shared_random": True,
     },
   ),
   "encoder_bias": EventTermCfg(
     mode="startup",
-    func=encoder_bias,
+    func=dr.encoder_bias,
     params={
       "asset_cfg": SceneEntityCfg("robot"),
       "bias_range": (-0.015, 0.015),
@@ -67,15 +76,51 @@ events = {
   ),
   "base_com": EventTermCfg(
     mode="startup",
-    func=body_com_offset,
+    func=dr.body_com_offset,
     params={
-      "asset_cfg": SceneEntityCfg("robot", body_names=(BASE_BODY_NAME)),
+      "asset_cfg": SceneEntityCfg("robot", body_names=(BASE_BODY_NAME,)),
       "operation": "add",
       "ranges": {
         0: (-0.025, 0.025),
         1: (-0.025, 0.025),
         2: (-0.03, 0.03),
       },
+    },
+  ),
+  "base_mass": EventTermCfg(
+    mode="startup",
+    func=dr.body_mass,
+    params={
+      "asset_cfg": SceneEntityCfg("robot", body_names=(BASE_BODY_NAME,)),
+      "ranges": (0.8, 1.2),
+      "operation": "scale",
+    },
+  ),
+  "joint_damping": EventTermCfg(
+    mode="startup",
+    func=dr.joint_damping,
+    params={
+      "asset_cfg": SceneEntityCfg("robot", joint_names=(".*",)),
+      "ranges": (0.9, 1.1),
+      "operation": "scale",
+    },
+  ),
+  "joint_friction": EventTermCfg(
+    mode="startup",
+    func=dr.joint_friction,
+    params={
+      "asset_cfg": SceneEntityCfg("robot", joint_names=(".*",)),
+      "ranges": (1.0, 20.0),  # ankle: 0.1 Nm × [1, 20] = 0.1–2.0 Nm
+      "operation": "scale",
+    },
+  ),
+  "joint_armature": EventTermCfg(
+    mode="startup",
+    func=dr.joint_armature,
+    params={
+      "asset_cfg": SceneEntityCfg("robot", joint_names=(".*",)),
+      "ranges": (0.9, 1.1),
+      "operation": "scale",
     },
   ),
 }

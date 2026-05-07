@@ -5,9 +5,11 @@ per-env frequency sampled at each episode reset.  The policy observes
 [cos(φ_L), cos(φ_R), sin(φ_L), sin(φ_R)] — 4 values that encode the
 current expected stance/swing state of each foot.
 
-Phase convention (same as DeepMind T1 joystick reference):
-  - Left foot starts at φ=0,  right foot at φ=π  (half-period offset).
-  - Phase is wrapped to [-π, π].
+Phase convention:
+  - Walking: left foot starts at φ=0, right foot at φ=π (half-period offset).
+  - Standing: both feet are snapped to φ=π every step when ‖cmd_xy‖ < threshold
+    AND |ω_z| < threshold. At π the cubic Bézier profile in feet_phase evaluates
+    to 0, driving both feet to the ground. The observation becomes [-1, -1, 0, 0].
   - κ = (1 + cos(φ)) / 2  ∈ [0, 1] is the smooth stance indicator
     (κ≈1 = full stance, κ≈0 = full swing); used by phase-schedule rewards.
 """
@@ -34,11 +36,10 @@ class GaitPhaseCommand(CommandTerm):
   def __init__(self, cfg: GaitPhaseCommandCfg, env: ManagerBasedRlEnv):
     super().__init__(cfg, env)
     N = env.num_envs
-    # [φ_left, φ_right], initialised with half-period offset
     self._phase = torch.zeros((N, 2), device=env.device)
     self._phase[:, 1] = math.pi
-    # Per-env phase increment (rad / control step)
     self._phase_dt = torch.zeros(N, device=env.device)
+    self._gate_cmd = cfg.gate_command_name
 
   # ------------------------------------------------------------------
   # CommandTerm interface
@@ -46,7 +47,12 @@ class GaitPhaseCommand(CommandTerm):
 
   @property
   def command(self) -> torch.Tensor:
-    """[cos(φ_L), cos(φ_R), sin(φ_L), sin(φ_R)]. Shape (N, 4)."""
+    """[cos(φ_L), cos(φ_R), sin(φ_L), sin(φ_R)]. Shape (N, 4).
+
+    Standing envs have phase snapped to π in _update_command, so they
+    produce [-1, -1, 0, 0] — a stable signal the policy learns to associate
+    with both feet on the ground. No gating needed here.
+    """
     return torch.cat([torch.cos(self._phase), torch.sin(self._phase)], dim=-1)
 
   @property
@@ -65,14 +71,22 @@ class GaitPhaseCommand(CommandTerm):
     lo, hi = self.cfg.gait_freq_range
     gait_freq = torch.rand(n, device=device) * (hi - lo) + lo
     self._phase_dt[env_ids] = 2.0 * math.pi * self._env.step_dt * gait_freq
-    # Reset to standard initial offset
     self._phase[env_ids, 0] = 0.0
     self._phase[env_ids, 1] = math.pi
 
   def _update_command(self) -> None:
-    self._phase += self._phase_dt.unsqueeze(-1)
-    # Wrap to [-π, π]
+    advance = self._phase_dt.unsqueeze(-1)
+    standing: torch.Tensor | None = None
+    if self._gate_cmd is not None:
+      cmd = self._env.command_manager.get_command(self._gate_cmd)
+      thr = self.cfg.gate_speed_threshold
+      moving = (torch.norm(cmd[:, :2], dim=-1) > thr) | (torch.abs(cmd[:, 2]) > thr)
+      advance = advance * moving.float().unsqueeze(-1)
+      standing = ~moving
+    self._phase += advance
     self._phase = (self._phase + math.pi) % (2.0 * math.pi) - math.pi
+    if standing is not None and standing.any():
+      self._phase[standing] = math.pi
 
   def _update_metrics(self) -> None:
     pass
@@ -87,11 +101,12 @@ class GaitPhaseCommandCfg(CommandTermCfg):
 
   class_type: type[CommandTerm] = GaitPhaseCommand
 
-  # Gait frequency sampled per episode (Hz).  Reference: U(1.25, 1.75).
   gait_freq_range: tuple[float, float] = (1.25, 1.75)
 
-  # Never resample mid-episode — frequency is fixed per episode.
   resampling_time_range: tuple[float, float] = (1e9, 1e9)
+
+  gate_command_name: str | None = None
+  gate_speed_threshold: float = 0.05
 
   def build(self, env: ManagerBasedRlEnv) -> GaitPhaseCommand:
     return GaitPhaseCommand(self, env)

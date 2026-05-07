@@ -5,29 +5,34 @@ from mjlab.envs.mdp.actions import JointPositionActionCfg
 from mjlab.envs.mdp.terminations import bad_orientation, time_out
 from mjlab.managers import CommandTermCfg
 from mjlab.managers.action_manager import ActionTermCfg
-from mjlab.managers.curriculum_manager import CurriculumTermCfg
 from mjlab.managers.termination_manager import TerminationTermCfg
 from mjlab.tasks.velocity.mdp import UniformVelocityCommandCfg
-from mjlab.tasks.velocity.mdp.curriculums import commands_vel
 
 from colosseum.robots.t1_23dof.constants import ACTION_SCALE
+from colosseum.tasks.dribbling.mdp.gait_phase_command import GaitPhaseCommandCfg
 
 commands: Dict[str, CommandTermCfg] = {
   "twist": UniformVelocityCommandCfg(
     entity_name="robot",
-    rel_standing_envs=0.1,
+    rel_standing_envs=0.3,
     rel_heading_envs=0.3,
+    rel_forward_envs=0.1,
     heading_command=True,
     heading_control_stiffness=0.5,
     debug_vis=True,
-    resampling_time_range=(0.5, 5.0),
+    resampling_time_range=(5.0, 10.0),
     ranges=UniformVelocityCommandCfg.Ranges(
       lin_vel_x=(-2.0, 2.0),
       lin_vel_y=(-0.5, 0.5),
       ang_vel_z=(-1.0, 1.0),
       heading=(-math.pi, math.pi),
     ),
-  )
+  ),
+  "gait_phase": GaitPhaseCommandCfg(
+    gait_freq_range=(1.5, 2.5),
+    gate_command_name="twist",
+    gate_speed_threshold=0.05,
+  ),
 }
 
 actions: dict[str, ActionTermCfg] = {
@@ -37,35 +42,6 @@ actions: dict[str, ActionTermCfg] = {
     scale=ACTION_SCALE,
     use_default_offset=True,
   )
-}
-
-curriculum = {
-  "command_vel": CurriculumTermCfg(
-    func=commands_vel,
-    params={
-      "command_name": "twist",
-      "velocity_stages": [
-        {
-          "step": 0,
-          "lin_vel_x": (-1.0, 1.0),
-          "lin_vel_y": (-0.5, 0.5),
-          "ang_vel_z": (-0.5, 0.5),
-        },
-        {
-          "step": 5000 * 24,
-          "lin_vel_x": (-1.5, 2.0),
-          "lin_vel_y": (-1.0, 1.0),
-          "ang_vel_z": (-0.7, 0.7),
-        },
-        {
-          "step": 10000 * 24,
-          "lin_vel_x": (-2.0, 3.0),
-          "lin_vel_y": (-2.0, 2.0),
-          "ang_vel_z": (-1.0, 1.0),
-        },
-      ],
-    },
-  ),
 }
 
 terminations = {

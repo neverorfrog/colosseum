@@ -1,12 +1,12 @@
 from dataclasses import dataclass, field
 
-from mjlab.envs import ManagerBasedRlEnvCfg
 from mjlab.scene import SceneCfg
 from mjlab.sim import MujocoCfg, SimulationCfg
 from mjlab.terrains import TerrainEntityCfg
 from mjlab.viewer import ViewerConfig
 
 from colosseum.config.types.task import TaskConfig, register_task
+from colosseum.envs.colosseum_env import ColosseumEnvCfg
 from colosseum.robots.t1_23dof.constants import BASE_BODY_NAME, get_robot_cfg
 from colosseum.robots.t1_23dof.sensors import (
   FEET_GROUND_CONTACT_SENSOR,
@@ -16,7 +16,8 @@ from colosseum.robots.t1_23dof.sensors import (
 )
 
 from .algo_cfg import booster_t1_ppo_cfg
-from .cact_cfg import actions, commands, curriculum, terminations
+from .cat_cfg import actions, commands, terminations
+from .curriculum_cfg import curriculum
 from .event_cfg import events
 from .observation_cfg import observations
 from .reward_cfg import rewards
@@ -62,14 +63,8 @@ def sim_cfg() -> SimulationCfg:
   )
 
 
-def booster_t1_velocity_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
-  """Create Booster T1 dribbling task configuration.
-
-  Starts from the flat velocity config and:
-  - Adds a soccer ball as a free-floating scene entity.
-  - Adds a reset event that respawns the ball at a random position each episode.
-  """
-  cfg = ManagerBasedRlEnvCfg(
+def booster_t1_velocity_env_cfg(play: bool = False) -> ColosseumEnvCfg:
+  cfg = ColosseumEnvCfg(
     scene=scene_cfg(play),
     observations=observations,
     actions=actions,
@@ -82,7 +77,7 @@ def booster_t1_velocity_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
     viewer=viewer_cfg(),
     sim=sim_cfg(),
     decimation=4,
-    episode_length_s=20.0,
+    episode_length_s=30.0,
   )
 
   if cfg.scene.terrain is not None and cfg.scene.terrain.terrain_generator is not None:
@@ -108,7 +103,7 @@ def booster_t1_velocity_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
 @dataclass(frozen=True)
 class T1VelocityTask(TaskConfig):
   name: str = "t1-velocity"
-  env: ManagerBasedRlEnvCfg = field(default_factory=booster_t1_velocity_env_cfg)
+  env: ColosseumEnvCfg = field(default_factory=booster_t1_velocity_env_cfg)
 
   @property
   def train_env_cfg(self):

@@ -38,6 +38,10 @@ actor_terms = {
     func=generated_commands,
     params={"command_name": "twist"},
   ),
+  "gait_phase": ObservationTermCfg(
+    func=generated_commands,
+    params={"command_name": "gait_phase"},
+  ),
 }
 
 critic_terms = {

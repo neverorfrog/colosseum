@@ -274,4 +274,6 @@ FOOT_GEOM_NAMES = (
 
 FOOT_SITE_NAMES = ("left_foot", "right_foot")
 
+FOOT_BODY_NAMES = ("left_foot_link", "right_foot_link")
+
 BASE_BODY_NAME = "Trunk"
