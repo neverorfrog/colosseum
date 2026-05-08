@@ -25,8 +25,11 @@ class MazeGoalCommand(CommandTerm):
     super().__init__(cfg, env)
     self.env = env
 
-    assert isinstance(env.scene.terrain, MazeTerrainEntity)
-    self.valid_goal_positions = env.scene.terrain.valid_goal_positions_local
+    if self.cfg.goals is not None:
+      self.valid_goal_positions = self.cfg.goals.to(device=env.device)
+    else:
+      assert isinstance(env.scene.terrain, MazeTerrainEntity)
+      self.valid_goal_positions = env.scene.terrain.valid_goal_positions_local
 
     self.goal_position = torch.zeros((env.num_envs, 2), device=env.device)
 
@@ -95,12 +98,17 @@ class MazeGoalCommandCfg(CommandTermCfg):
                    and keeps the same goal for the entire training run.
                    Useful when abstraction computations (e.g. Dijkstra) are
                    expensive and depend on goal position. Default True.
+      goals: Optional [K, 2] tensor of local-frame goal positions to use
+             instead of reading 'g' cells from the terrain. When set,
+             goals are randomly sampled from this list at each reset
+             (or fixed for all envs if len(goals) == 1).
   """
 
   class_type: type[CommandTerm] = MazeGoalCommand
   resampling_time_range: tuple[float, float] = (1e9, 1e9)
   debug_vis: bool = True
   static_goals: bool = True
+  goals: torch.Tensor | None = None
 
   def build(self, env: ManagerBasedRlEnv) -> MazeGoalCommand:
     return MazeGoalCommand(self, env)
