@@ -2,7 +2,7 @@ import math
 from typing import Dict
 
 from mjlab.envs.mdp.actions import JointPositionActionCfg
-from mjlab.envs.mdp.terminations import bad_orientation, time_out
+from mjlab.envs.mdp.terminations import bad_orientation, nan_detection, time_out
 from mjlab.managers import CommandTermCfg
 from mjlab.managers.action_manager import ActionTermCfg
 from mjlab.managers.termination_manager import TerminationTermCfg
@@ -16,7 +16,7 @@ commands: Dict[str, CommandTermCfg] = {
     entity_name="robot",
     rel_standing_envs=0.3,
     rel_heading_envs=0.3,
-    rel_forward_envs=0.1,
+    rel_forward_envs=0.3,
     heading_command=True,
     heading_control_stiffness=0.5,
     debug_vis=True,
@@ -50,4 +50,5 @@ terminations = {
     func=bad_orientation,
     params={"limit_angle": math.radians(70.0)},
   ),
+  "nan": TerminationTermCfg(func=nan_detection),
 }

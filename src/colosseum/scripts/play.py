@@ -46,6 +46,10 @@ class PlayConfig(BaseExperimentConfig):
     """Run name to load checkpoint from (looks in ./logs/<run_name>/checkpoints/)."""
     onnx: str | None = None
     """ONNX model name, path, or 'default' (looks up in models/registry.yaml)."""
+    debug_vel: bool = False
+    """Print component-wise velocity tracking errors every debug_vel_every steps."""
+    debug_vel_every: int = 20
+    """How often (in steps) to print velocity debug info when --debug-vel is set."""
 
 
 
@@ -215,6 +219,48 @@ def create_agent(config: PlayConfig, env: ManagerBasedRlEnv, device: torch.devic
     raise ValueError(f"Unknown agent: {config.agent}")
 
 
+def _wrap_agent_with_vel_debug(
+    agent,
+    env: ManagerBasedRlEnv,
+    every: int = 20,
+):
+    """Wrap an agent to periodically print component-wise velocity tracking info.
+
+    All quantities are in the robot body frame (x=forward, y=left, z=up).
+    Reports for env 0 only.
+    """
+    step_counter = [0]
+
+    def wrapped(obs_dict):
+        actions = agent(obs_dict)
+
+        step_counter[0] += 1
+        if step_counter[0] % every != 0:
+            return actions
+
+        robot = env.scene["robot"]
+        cmd = env.command_manager.get_command("twist")[0]  # (3,)
+        act_lin = robot.data.root_link_lin_vel_b[0]        # (3,)
+        act_ang = robot.data.root_link_ang_vel_b[0]        # (3,)
+        heading = robot.data.heading_w[0].item()           # scalar (rad)
+
+        cmd_vx, cmd_vy, cmd_wz = cmd[0].item(), cmd[1].item(), cmd[2].item()
+        act_vx, act_vy = act_lin[0].item(), act_lin[1].item()
+        act_wz = act_ang[2].item()
+
+        import math
+        print(
+            f"[vel] step={step_counter[0]:>5d} | "
+            f"cmd: vx={cmd_vx:+.2f}  vy={cmd_vy:+.2f}  wz={cmd_wz:+.2f} | "
+            f"act: vx={act_vx:+.2f}  vy={act_vy:+.2f}  wz={act_wz:+.2f} | "
+            f"err: vx={cmd_vx-act_vx:+.2f}  vy={cmd_vy-act_vy:+.2f}  wz={cmd_wz-act_wz:+.2f} | "
+            f"heading={math.degrees(heading):+.1f}°"
+        )
+        return actions
+
+    return wrapped
+
+
 def main() -> None:
     config = tyro.cli(PlayConfig, config=(tyro.conf.CascadeSubcommandArgs,))
     device_id = _parse_single_cuda_device(config.cuda)
@@ -236,6 +282,8 @@ def main() -> None:
     env.reset()
 
     agent = create_agent(config, env, device)
+    if config.debug_vel:
+        agent = _wrap_agent_with_vel_debug(agent, env, every=config.debug_vel_every)
 
     if config.video:
         _record_video(config, env, agent)

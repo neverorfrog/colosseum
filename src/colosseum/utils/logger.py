@@ -43,7 +43,7 @@ def generate_run_name(
         seed: Optional seed for reproducibility
 
     Returns:
-        Run name in format: <task>_<algo>_<scenario>_<seed>_YYYYMMDD_HHMMSS
+        Run name in format: <task>-<algo>-<scenario>-<seed>-YYYYMMDD-HHMMSS
     """
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -54,7 +54,7 @@ def generate_run_name(
         parts.append(str(seed))
     parts.append(timestamp)
 
-    return "_".join(parts)
+    return "-".join(parts)
 
 
 def setup_loguru(

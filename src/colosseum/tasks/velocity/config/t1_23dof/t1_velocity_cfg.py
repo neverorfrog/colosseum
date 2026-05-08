@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from mjlab.scene import SceneCfg
 from mjlab.sim import MujocoCfg, SimulationCfg
 from mjlab.terrains import TerrainEntityCfg
+from mjlab.utils.nan_guard import NanGuardCfg
 from mjlab.viewer import ViewerConfig
 
 from colosseum.config.types.task import TaskConfig, register_task
@@ -35,6 +36,7 @@ def scene_cfg(play: bool = False) -> SceneCfg:
     ),
     num_envs=1,
     extent=10.0,
+    env_spacing=10.0,
   )
 
 
@@ -60,6 +62,7 @@ def sim_cfg() -> SimulationCfg:
       ls_iterations=20,
       ccd_iterations=500,
     ),
+    nan_guard=NanGuardCfg(enabled=True),
   )
 
 

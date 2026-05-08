@@ -84,7 +84,18 @@ def quat_apply_inverse(quat: torch.Tensor, vec: torch.Tensor) -> torch.Tensor:
     return lab_math.quat_apply_inverse(quat, vec)
 
 
+def base_height(
+  env: ManagerBasedRlEnv,
+  asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+  """Base link height above the terrain floor (env origin Z). Returns [num_envs, 1]."""
+  asset: Entity = env.scene[asset_cfg.name]
+  height = asset.data.root_link_pos_w[:, 2] - env.scene.env_origins[:, 2]
+  return height.unsqueeze(-1)
+
+
 __all__ = [
+  "base_height",
   "compute_projected_gravity",
   "quat_apply_inverse",
   "agent_pos",

@@ -41,11 +41,11 @@ events = {
   "push_robot": EventTermCfg(
     func=push_by_setting_velocity,
     mode="interval",
-    interval_range_s=(5.0, 15.0),
+    interval_range_s=(5.0, 10.0),
     params={
       "velocity_range": {
-        "x": (-0.5, 0.5),
-        "y": (-0.5, 0.5),
+        "x": (-1.0, 1.0),
+        "y": (-1.0, 1.0),
         "z": (-0.4, 0.4),
         "roll": (-0.52, 0.52),
         "pitch": (-0.52, 0.52),
@@ -81,9 +81,9 @@ events = {
       "asset_cfg": SceneEntityCfg("robot", body_names=(BASE_BODY_NAME,)),
       "operation": "add",
       "ranges": {
-        0: (-0.025, 0.025),
-        1: (-0.025, 0.025),
-        2: (-0.03, 0.03),
+        0: (-0.05, 0.05),
+        1: (-0.05, 0.05),
+        2: (-0.1, 0.1),
       },
     },
   ),

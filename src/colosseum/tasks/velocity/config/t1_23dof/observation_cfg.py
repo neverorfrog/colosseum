@@ -15,6 +15,8 @@ from mjlab.tasks.velocity.mdp.observations import (
 )
 from mjlab.utils.noise import UniformNoiseCfg as Unoise
 
+from colosseum.mdp.observations import base_height
+
 actor_terms = {
   "base_ang_vel": ObservationTermCfg(
     func=builtin_sensor,
@@ -50,6 +52,10 @@ critic_terms = {
     func=builtin_sensor,
     params={"sensor_name": "robot/imu_lin_vel"},
     noise=Unoise(n_min=-0.5, n_max=0.5),
+  ),
+  "base_height": ObservationTermCfg(
+    func=base_height,
+    noise=Unoise(n_min=-0.02, n_max=0.02),
   ),
   "foot_height": ObservationTermCfg(
     func=foot_height,

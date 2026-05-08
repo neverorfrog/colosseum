@@ -38,10 +38,10 @@ FEET_SELF_COLLISION = CollisionCfg(
 # - No self-collisions between robot parts
 # - Good for general tasks
 FULL_COLLISION_WITHOUT_SELF = CollisionCfg(
-  geom_names_expr=(".*_collision",),
+  geom_names_expr=(r".+",),  # Named geoms only; visual geoms are unnamed in this XML
   contype=0,
   conaffinity=1,
-  condim={r"^(left|right)_foot.*": 3, ".*_collision": 1},
+  condim={r"^(left|right)_foot.*": 3, r".*": 1},
   priority={r"^(left|right)_foot.*": 1},
   friction={r"^(left|right)_foot.*": (0.6,)},
 )
@@ -51,10 +51,40 @@ FULL_COLLISION_WITHOUT_SELF = CollisionCfg(
 # - Self-collisions enabled between robot parts
 # - Most realistic but can be unstable for training
 FULL_COLLISION = CollisionCfg(
-  geom_names_expr=(".*_collision",),
-  condim={r"^(left|right)_foot.*": 3, ".*_collision": 1},
+  geom_names_expr=(r".+",),  # Named geoms only; visual geoms are unnamed in this XML
+  condim={r"^(left|right)_foot.*": 3, r".*": 1},
   priority={r"^(left|right)_foot.*": 1},
   friction={r"^(left|right)_foot.*": (0.6,)},
+)
+
+# Feet + forearm/hand vs lower-body self-collision (for locomotion with arm penalty)
+# - Foot spheres collide with terrain via bit 0 (contype=0 so they can only be hit)
+# - Forearms/hands and lower-body geoms share bit 1 so they only collide with each
+#   other, not with the terrain or any other body part
+_FOREARM_HAND = r"^(AL3|AR3|left_hand_link|right_hand_link)$"
+_LOWER_BODY = r"^(Waist|Hip_Pitch_Left|Hip_Roll_Left|Hip_Yaw_Left|Shank_Left|Hip_Pitch_Right|Hip_Roll_Right|Hip_Yaw_Right|Shank_Right)$"
+FEET_FOREARM_WAIST_COLLISION = CollisionCfg(
+  geom_names_expr=(
+    r"^(left|right)_foot_sphere.*link$",
+    _FOREARM_HAND,
+    _LOWER_BODY,
+  ),
+  contype={
+    r"^(left|right)_foot_sphere.*link$": 0,
+    _FOREARM_HAND: 2,
+    _LOWER_BODY: 2,
+  },
+  conaffinity={
+    r"^(left|right)_foot_sphere.*link$": 1,
+    _FOREARM_HAND: 2,
+    _LOWER_BODY: 2,
+  },
+  condim={
+    r"^(left|right)_foot_sphere.*link$": 3,
+    r".*": 1,
+  },
+  priority={r"^(left|right)_foot_sphere.*link$": 1},
+  friction={r"^(left|right)_foot_sphere.*link$": (0.6,)},
 )
 
 # Hands and feet collision (for manipulation tasks)

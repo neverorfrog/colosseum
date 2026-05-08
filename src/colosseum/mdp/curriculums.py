@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import torch
+
+from mjlab.tasks.velocity.mdp import UniformVelocityCommandCfg
 
 if TYPE_CHECKING:
   from mjlab.envs import ManagerBasedRlEnv
@@ -283,4 +285,120 @@ class penalty_curriculum:
     return {
       "penalty_scale": torch.tensor(self._current_scale),
       "avg_episode_length": torch.tensor(self._avg_episode_length),
+    }
+
+
+# ---------------------------------------------------------------------------
+# command_vel_curriculum  (transition-based, num_envs-invariant)
+# ---------------------------------------------------------------------------
+
+
+class command_vel_curriculum:
+  """Transition-based velocity command range curriculum.
+
+  Drop-in replacement for mjlab's ``commands_vel`` that uses total agent
+  transitions (``common_step_counter * num_envs``) instead of raw policy
+  steps, making the schedule invariant to ``num_envs``.
+
+  Example::
+
+    CurriculumTermCfg(
+      func=command_vel_curriculum,
+      params={
+        "command_name": "twist",
+        "velocity_stages": [
+          {"transitions": 0,           "lin_vel_x": (-0.5, 0.5), "ang_vel_z": (-0.5, 0.5)},
+          {"transitions": 75_000_000,  "lin_vel_x": (-1.0, 1.0), "ang_vel_z": (-0.75, 0.75)},
+          {"transitions": 150_000_000, "lin_vel_x": (-2.0, 2.0), "ang_vel_z": (-1.0, 1.0)},
+        ],
+      },
+    )
+  """
+
+  def __init__(self, cfg: CurriculumTermCfg, env: ManagerBasedRlEnv):
+    params = cfg.params
+    command_name: str = params["command_name"]
+    self._stages: list[dict[str, Any]] = params["velocity_stages"]
+    self._num_envs = env.num_envs
+    command_term = env.command_manager.get_term(command_name)
+    assert command_term is not None, f"Command term '{command_name}' not found."
+    self._cfg = cast(UniformVelocityCommandCfg, command_term.cfg)
+
+  def __call__(
+    self,
+    env: ManagerBasedRlEnv,
+    env_ids: torch.Tensor,
+    command_name: str,
+    velocity_stages: list[dict[str, Any]],
+  ) -> dict[str, torch.Tensor]:
+    del env_ids, command_name, velocity_stages
+    total = env.common_step_counter * self._num_envs
+    for stage in self._stages:
+      if total >= stage["transitions"]:
+        if "lin_vel_x" in stage and stage["lin_vel_x"] is not None:
+          self._cfg.ranges.lin_vel_x = stage["lin_vel_x"]
+        if "lin_vel_y" in stage and stage["lin_vel_y"] is not None:
+          self._cfg.ranges.lin_vel_y = stage["lin_vel_y"]
+        if "ang_vel_z" in stage and stage["ang_vel_z"] is not None:
+          self._cfg.ranges.ang_vel_z = stage["ang_vel_z"]
+    return {
+      "lin_vel_x_max": torch.tensor(self._cfg.ranges.lin_vel_x[1]),
+      "lin_vel_y_max": torch.tensor(self._cfg.ranges.lin_vel_y[1]),
+      "ang_vel_z_max": torch.tensor(self._cfg.ranges.ang_vel_z[1]),
+    }
+
+
+# ---------------------------------------------------------------------------
+# push_curriculum_by_transitions
+# ---------------------------------------------------------------------------
+
+
+class push_curriculum_by_transitions:
+  """Gradually increase push disturbance magnitude over total agent transitions.
+
+  Each stage specifies a ``velocity_range`` dict that overwrites the push event
+  term's params directly, ramping up the disturbance as the robot gets better.
+
+  Example::
+
+    CurriculumTermCfg(
+      func=push_curriculum_by_transitions,
+      params={
+        "event_name": "push_robot",
+        "stages": [
+          {"transitions": 0,           "velocity_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5)}},
+          {"transitions": 50_000_000,  "velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0)}},
+          {"transitions": 150_000_000, "velocity_range": {"x": (-1.5, 1.5), "y": (-1.5, 1.5)}},
+        ],
+      },
+    )
+  """
+
+  def __init__(self, cfg: CurriculumTermCfg, env: ManagerBasedRlEnv):
+    params = cfg.params
+    event_name: str = params["event_name"]
+    self._stages: list[dict[str, Any]] = params["stages"]
+    self._num_envs = env.num_envs
+    event_term_cfg = env.event_manager.get_term_cfg(event_name)
+    self._event_params: dict[str, Any] = event_term_cfg.params
+    # Apply stage 0 immediately so early training starts with small pushes.
+    if self._stages:
+      self._event_params["velocity_range"] = dict(self._stages[0]["velocity_range"])
+
+  def __call__(
+    self,
+    env: ManagerBasedRlEnv,
+    env_ids: torch.Tensor,
+    event_name: str,
+    stages: list[dict[str, Any]],
+  ) -> dict[str, torch.Tensor]:
+    del env_ids, event_name, stages
+    total = env.common_step_counter * self._num_envs
+    for stage in self._stages:
+      if total >= stage["transitions"]:
+        self._event_params["velocity_range"] = dict(stage["velocity_range"])
+    vr = self._event_params["velocity_range"]
+    return {
+      "push_vel_x_max": torch.tensor(float(vr.get("x", (0.0, 0.0))[1])),
+      "push_vel_y_max": torch.tensor(float(vr.get("y", (0.0, 0.0))[1])),
     }

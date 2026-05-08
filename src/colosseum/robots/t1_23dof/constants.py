@@ -5,6 +5,7 @@ guarded so deploy can import this module without mjlab installed.
 """
 
 import mujoco
+import numpy as np
 
 try:  # pragma: no cover - train-only dependency
   from mjlab.entity import EntityArticulationInfoCfg, EntityCfg
@@ -25,7 +26,11 @@ if _MJLAB_AVAILABLE:
     T1_ACTUATOR_NECK,
     T1_ACTUATOR_WAIST,
   )
-  from colosseum.robots.t1_23dof.collisions import FEET_ONLY_COLLISION, FEET_SELF_COLLISION
+  from colosseum.robots.t1_23dof.collisions import (
+    FEET_FOREARM_WAIST_COLLISION,
+    FEET_ONLY_COLLISION,
+    FEET_SELF_COLLISION,
+  )
 from colosseum.utils import src_dir
 
 ##
@@ -55,8 +60,6 @@ HEAD_CAMERA_WIDTH = 1280
 HEAD_CAMERA_HEIGHT = 720
 
 # RealSense D455 calibrated intrinsics.
-import numpy as np
-
 HEAD_CAMERA_K = np.array(
   [
     [646.0612, 0.0, 644.3064],
@@ -217,9 +220,15 @@ if _MJLAB_AVAILABLE:
 
   def get_robot_cfg(
     foot_self_collision: bool = False,
+    self_collision: bool = False,
     with_head_camera: bool = False,
   ) -> EntityCfg:
-    collision = FEET_SELF_COLLISION if foot_self_collision else FEET_ONLY_COLLISION
+    if self_collision:
+      collision = FEET_FOREARM_WAIST_COLLISION
+    elif foot_self_collision:
+      collision = FEET_SELF_COLLISION
+    else:
+      collision = FEET_ONLY_COLLISION
     spec_fn = get_spec_with_head_camera if with_head_camera else get_spec
     return EntityCfg(
       init_state=EntityCfg.InitialStateCfg(

@@ -21,6 +21,21 @@ if TYPE_CHECKING:
 _DEFAULT_ASSET_CFG = SceneEntityCfg("robot")
 
 
+def base_height_penalty(
+  env: ManagerBasedRlEnv,
+  target_height: float,
+  asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+) -> torch.Tensor:
+  """Penalize base height deviation from a target (use negative weight).
+
+  Quadratic: (base_height - target_height)². Unbounded — keeps gradient even
+  at large deviations. Height is measured above the env origin (terrain floor).
+  """
+  asset: Entity = env.scene[asset_cfg.name]
+  base_height = asset.data.root_link_pos_w[:, 2] - env.scene.env_origins[:, 2]
+  return torch.square(base_height - target_height)
+
+
 def flat_orientation(
   env: ManagerBasedRlEnv,
   std: float,
@@ -58,6 +73,24 @@ def pose_deviation(
   q = asset.data.joint_pos[:, asset_cfg.joint_ids]
   q_default = asset.data.default_joint_pos[:, asset_cfg.joint_ids]
   return torch.exp(-torch.mean(torch.square(q - q_default) / (std**2), dim=1))
+
+
+def pose_deviation_penalty(
+  env: ManagerBasedRlEnv,
+  asset_cfg: SceneEntityCfg,
+  pose_weights: list[float],
+) -> torch.Tensor:
+  """Penalize joint deviation from default pose with per-joint weights (use negative weight).
+
+  Weighted sum of squared errors: sum(w_i * (q_i - q_default_i)²).
+  Unlike exp-based formulations, this is a true penalty — always pushes toward
+  default regardless of how far the joint has drifted.
+  """
+  asset: Entity = env.scene[asset_cfg.name]
+  q = asset.data.joint_pos[:, asset_cfg.joint_ids]
+  q_default = asset.data.default_joint_pos[:, asset_cfg.joint_ids]
+  weights = torch.tensor(pose_weights, device=q.device, dtype=torch.float32)
+  return torch.sum(torch.square(q - q_default) * weights, dim=1)
 
 
 def feet_distance_penalty(
@@ -218,3 +251,22 @@ def stance_phase_schedule(
     moving = (torch.norm(cmd[:, :2], dim=-1) > command_threshold).float()
     reward = reward * moving
   return reward
+
+
+def static_stance(
+  env: ManagerBasedRlEnv,
+  asset_cfg: SceneEntityCfg,
+  command_name: str,
+  command_threshold: float = 0.05,
+) -> torch.Tensor:
+  """Penalize foot XY sliding when velocity command ≈ 0 (use negative weight).
+
+  Complement to stance_phase_schedule, which gates on moving envs. Pose
+  deviation is already covered by penalty_pose_deviation (variable_posture).
+  """
+  cmd = env.command_manager.get_command(command_name)
+  standing = (torch.norm(cmd[:, :2], dim=-1) <= command_threshold).float()
+  asset: Entity = env.scene[asset_cfg.name]
+  foot_vel_xy = asset.data.site_lin_vel_w[:, asset_cfg.site_ids, :2]  # (N, 2, 2)
+  vel_sq = (foot_vel_xy**2).sum(dim=-1).mean(dim=-1)  # (N,) mean over feet
+  return vel_sq * standing
