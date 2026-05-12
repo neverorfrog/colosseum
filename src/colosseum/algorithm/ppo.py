@@ -75,14 +75,37 @@ class PPO(BaseAlgorithm):
     )
 
     self._build_networks()
+
+    # Separate adaptive LRs for actor and critic (holosoma style)
+    # Must be set before _build_optimizers which uses them.
+    self.actor_learning_rate = float(config.actor_learning_rate)
+    self.critic_learning_rate = float(config.critic_learning_rate)
+    self.max_actor_learning_rate = (
+      config.max_actor_learning_rate
+      if config.max_actor_learning_rate is not None
+      else max(self.actor_learning_rate, 1e-2)
+    )
+    self.min_actor_learning_rate = (
+      config.min_actor_learning_rate
+      if config.min_actor_learning_rate is not None
+      else min(self.actor_learning_rate, 1e-5)
+    )
+    self.max_critic_learning_rate = (
+      config.max_critic_learning_rate
+      if config.max_critic_learning_rate is not None
+      else max(self.critic_learning_rate, 1e-2)
+    )
+    self.min_critic_learning_rate = (
+      config.min_critic_learning_rate
+      if config.min_critic_learning_rate is not None
+      else min(self.critic_learning_rate, 1e-5)
+    )
+
     self._build_optimizers()
     self._build_rollout_buffer()
     self._build_normalizer()
 
     self.episode_length_buf = torch.zeros(self.env.num_envs, device=self.device)
-
-    # Adaptive LR state (single LR for joint optimizer, RSL-RL style)
-    self.learning_rate = float(config.learning_rate)
 
     # Rolling mean episode return (RSL-RL style): accumulate per-env reward each step,
     # push the episode total to a deque when the episode ends.
@@ -109,13 +132,18 @@ class PPO(BaseAlgorithm):
     ).to(self.device)
 
   def _build_optimizers(self) -> None:
-    """Single joint optimizer for actor+critic (RSL-RL style)."""
+    """Separate AdamW optimizers for actor and critic (holosoma style)."""
     assert isinstance(self.config, PpoConfig)
-    from itertools import chain
 
-    self.optimizer = optim.Adam(
-      chain(self.actor.parameters(), self.value_net.parameters()),
-      lr=self.config.learning_rate,
+    self.actor_optimizer = optim.AdamW(
+      self.actor.parameters(),
+      lr=self.actor_learning_rate,
+      weight_decay=self.config.weight_decay,
+    )
+    self.critic_optimizer = optim.AdamW(
+      self.value_net.parameters(),
+      lr=self.critic_learning_rate,
+      weight_decay=self.config.weight_decay,
     )
 
   def _build_rollout_buffer(self) -> None:
@@ -418,14 +446,26 @@ class PPO(BaseAlgorithm):
         )
         kl_mean = self._distributed_mean_scalar(float(kl.mean().item()))
 
-      # Adaptive KL LR scheduling (RSL-RL pattern: single LR)
+      # Adaptive KL LR scheduling (holosoma pattern: separate actor/critic LRs)
       if self.config.schedule == "adaptive" and self.config.desired_kl is not None:
         if kl_mean > self.config.desired_kl * 2.0:
-          self.learning_rate = max(1e-5, self.learning_rate / 1.5)
+          self.actor_learning_rate = max(
+            self.min_actor_learning_rate, self.actor_learning_rate / 1.5
+          )
+          self.critic_learning_rate = max(
+            self.min_critic_learning_rate, self.critic_learning_rate / 1.5
+          )
         elif kl_mean < self.config.desired_kl / 2.0 and kl_mean > 0.0:
-          self.learning_rate = min(1e-2, self.learning_rate * 1.5)
-        for g in self.optimizer.param_groups:
-          g["lr"] = self.learning_rate
+          self.actor_learning_rate = min(
+            self.max_actor_learning_rate, self.actor_learning_rate * 1.5
+          )
+          self.critic_learning_rate = min(
+            self.max_critic_learning_rate, self.critic_learning_rate * 1.5
+          )
+        for g in self.actor_optimizer.param_groups:
+          g["lr"] = self.actor_learning_rate
+        for g in self.critic_optimizer.param_groups:
+          g["lr"] = self.critic_learning_rate
 
       # --- Surrogate loss (PPO-clip) ---
       advantages_squeezed = advantages.squeeze(-1)
@@ -456,17 +496,20 @@ class PPO(BaseAlgorithm):
         - self.config.entropy_coef * entropy.mean()
       )
 
-      # --- Gradient step (single optimizer, RSL-RL style) ---
-      self.optimizer.zero_grad()
+      # --- Gradient step (separate optimizers, holosoma style) ---
+      self.actor_optimizer.zero_grad()
+      self.critic_optimizer.zero_grad()
       loss.backward()
-      self._distributed_average_optimizer_grads(self.optimizer)
+      self._distributed_average_optimizer_grads(self.actor_optimizer)
+      self._distributed_average_optimizer_grads(self.critic_optimizer)
       torch.nn.utils.clip_grad_norm_(
         self.actor.parameters(), max_norm=self.config.max_grad_norm
       )
       torch.nn.utils.clip_grad_norm_(
         self.value_net.parameters(), max_norm=self.config.max_grad_norm
       )
-      self.optimizer.step()
+      self.actor_optimizer.step()
+      self.critic_optimizer.step()
 
       # Accumulate for logging
       total_surrogate_loss += surrogate_loss.item()
@@ -495,7 +538,8 @@ class PPO(BaseAlgorithm):
       "value_loss": total_value_loss / max(num_updates, 1),
       "entropy": total_entropy / max(num_updates, 1),
       "kl": total_kl / max(num_updates, 1),
-      "learning_rate": self.learning_rate,
+      "actor_learning_rate": self.actor_learning_rate,
+      "critic_learning_rate": self.critic_learning_rate,
     }
 
   def _compose_actor_input(
@@ -522,11 +566,13 @@ class PPO(BaseAlgorithm):
     state_dict = {
       "actor_state_dict": self.actor.state_dict(),
       "value_net_state_dict": self.value_net.state_dict(),
-      "optimizer_state_dict": self.optimizer.state_dict(),
+      "actor_optimizer_state_dict": self.actor_optimizer.state_dict(),
+      "critic_optimizer_state_dict": self.critic_optimizer.state_dict(),
       "actor_obs_normalizer_state_dict": self.actor_obs_normalizer.state_dict(),
       "critic_obs_normalizer_state_dict": self.critic_obs_normalizer.state_dict(),
       "global_step": extra_state["global_step"],
-      "learning_rate": self.learning_rate,
+      "actor_learning_rate": self.actor_learning_rate,
+      "critic_learning_rate": self.critic_learning_rate,
       "config": self.config,
     }
 
@@ -542,7 +588,8 @@ class PPO(BaseAlgorithm):
 
     self.actor.load_state_dict(checkpoint["actor_state_dict"])
     self.value_net.load_state_dict(checkpoint["value_net_state_dict"])
-    self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+    self.actor_optimizer.load_state_dict(checkpoint["actor_optimizer_state_dict"])
+    self.critic_optimizer.load_state_dict(checkpoint["critic_optimizer_state_dict"])
     self.actor_obs_normalizer.load_state_dict(
       checkpoint["actor_obs_normalizer_state_dict"]
     )
@@ -551,7 +598,12 @@ class PPO(BaseAlgorithm):
     )
 
     self.global_step = checkpoint["global_step"]
-    self.learning_rate = checkpoint.get("learning_rate", self.learning_rate)
+    self.actor_learning_rate = checkpoint.get(
+      "actor_learning_rate", self.actor_learning_rate
+    )
+    self.critic_learning_rate = checkpoint.get(
+      "critic_learning_rate", self.critic_learning_rate
+    )
     self._restore_env_step_counter()
 
     return {

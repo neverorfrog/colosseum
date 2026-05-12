@@ -24,7 +24,7 @@ class NetworkConfig:
 class PpoActorConfig(NetworkConfig):
     """Configuration for PPO actor (Gaussian policy) network."""
 
-    init_noise_std: float = 1.0
+    init_noise_std: float = 0.8
     """Initial standard deviation of the action noise (state-independent)."""
 
     min_noise_std: float = 0.01

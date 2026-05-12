@@ -252,11 +252,23 @@ class DaggerPPO(PPO):
 
       if config.schedule == "adaptive" and config.desired_kl is not None:
         if kl_mean > config.desired_kl * 2.0:
-          self.learning_rate = max(1e-5, self.learning_rate / 1.5)
+          self.actor_learning_rate = max(
+            self.min_actor_learning_rate, self.actor_learning_rate / 1.5
+          )
+          self.critic_learning_rate = max(
+            self.min_critic_learning_rate, self.critic_learning_rate / 1.5
+          )
         elif kl_mean < config.desired_kl / 2.0 and kl_mean > 0.0:
-          self.learning_rate = min(1e-2, self.learning_rate * 1.5)
-        for g in self.optimizer.param_groups:
-          g["lr"] = self.learning_rate
+          self.actor_learning_rate = min(
+            self.max_actor_learning_rate, self.actor_learning_rate * 1.5
+          )
+          self.critic_learning_rate = min(
+            self.max_critic_learning_rate, self.critic_learning_rate * 1.5
+          )
+        for g in self.actor_optimizer.param_groups:
+          g["lr"] = self.actor_learning_rate
+        for g in self.critic_optimizer.param_groups:
+          g["lr"] = self.critic_learning_rate
 
       # --- Surrogate loss ---
       advantages_squeezed = advantages.squeeze(-1)
@@ -293,16 +305,19 @@ class DaggerPPO(PPO):
         + lam * imitation_loss
       )
 
-      self.optimizer.zero_grad()
+      self.actor_optimizer.zero_grad()
+      self.critic_optimizer.zero_grad()
       loss.backward()
-      self._distributed_average_optimizer_grads(self.optimizer)
+      self._distributed_average_optimizer_grads(self.actor_optimizer)
+      self._distributed_average_optimizer_grads(self.critic_optimizer)
       torch.nn.utils.clip_grad_norm_(
         self.actor.parameters(), max_norm=config.max_grad_norm
       )
       torch.nn.utils.clip_grad_norm_(
         self.value_net.parameters(), max_norm=config.max_grad_norm
       )
-      self.optimizer.step()
+      self.actor_optimizer.step()
+      self.critic_optimizer.step()
 
       total_surrogate_loss += surrogate_loss.item()
       total_value_loss += value_loss.item()
@@ -338,5 +353,6 @@ class DaggerPPO(PPO):
       "kl": total_kl / max(num_updates, 1),
       "imitation_loss": total_imitation_loss / max(num_updates, 1),
       "imitation_coef": lam,
-      "learning_rate": self.learning_rate,
+      "actor_learning_rate": self.actor_learning_rate,
+      "critic_learning_rate": self.critic_learning_rate,
     }

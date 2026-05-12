@@ -33,8 +33,8 @@ done
 [[ -n "$DEST"    ]] || { echo "Missing --destination-root"; usage; }
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REGISTRY="$SCRIPT_DIR/../models/registry.yaml"
-MODELS_ROOT="$SCRIPT_DIR/../models"
+REGISTRY="$SCRIPT_DIR/../../../models/registry.yaml"
+MODELS_ROOT="$SCRIPT_DIR/../../../models"
 
 if [[ ! -f "$REGISTRY" ]]; then
     echo "Registry not found: $REGISTRY"

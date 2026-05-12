@@ -136,7 +136,7 @@ class PpoConfig(AlgorithmConfig):
     """Coefficient for entropy bonus (encourages exploration)."""
 
     # Update epochs and mini-batches
-    num_learning_epochs: int = 5
+    num_learning_epochs: int = 8
     """Number of PPO update epochs per rollout."""
 
     num_mini_batches: int = 4
@@ -146,9 +146,27 @@ class PpoConfig(AlgorithmConfig):
     max_grad_norm: float = 1.0
     """Maximum gradient norm for clipping."""
 
-    # Learning rate (single optimizer, RSL-RL style)
-    learning_rate: float = 1e-3
-    """Learning rate for the joint actor+critic optimizer (RSL-RL style)."""
+    # Learning rates (separate actor/critic, holosoma style)
+    actor_learning_rate: float = 1e-5
+    """Learning rate for the actor optimizer."""
+
+    critic_learning_rate: float = 1e-5
+    """Learning rate for the critic optimizer."""
+
+    max_actor_learning_rate: float | None = None
+    """Maximum actor learning rate for adaptive KL scheduling (None = max(actor_lr, 1e-2))."""
+
+    min_actor_learning_rate: float | None = None
+    """Minimum actor learning rate for adaptive KL scheduling (None = min(actor_lr, 1e-5))."""
+
+    max_critic_learning_rate: float | None = None
+    """Maximum critic learning rate for adaptive KL scheduling (None = max(critic_lr, 1e-2))."""
+
+    min_critic_learning_rate: float | None = None
+    """Minimum critic learning rate for adaptive KL scheduling (None = min(critic_lr, 1e-5))."""
+
+    weight_decay: float = 0.001
+    """Weight decay for AdamW optimizer (holosoma default)."""
 
     # Adaptive KL learning rate scheduling (RSL-RL/holosoma style)
     desired_kl: float | None = 0.01
