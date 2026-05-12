@@ -10,8 +10,8 @@ Phase convention:
   - Standing: both feet are snapped to φ=π every step when ‖cmd_xy‖ < threshold
     AND |ω_z| < threshold. At π the cubic Bézier profile in feet_phase evaluates
     to 0, driving both feet to the ground. The observation becomes [-1, -1, 0, 0].
-  - κ = (1 + cos(φ)) / 2  ∈ [0, 1] is the smooth stance indicator
-    (κ≈1 = full stance, κ≈0 = full swing); used by phase-schedule rewards.
+  - κ = (1 + cos(φ)) / 2  ∈ [0, 1] is the smooth swing indicator
+    (κ≈1 = full swing at φ≈0, κ≈0 = full stance at φ≈π); used by phase-schedule rewards.
 """
 
 from __future__ import annotations
@@ -61,8 +61,11 @@ class GaitPhaseCommand(CommandTerm):
     return self._phase
 
   @property
-  def stance_indicator(self) -> torch.Tensor:
-    """κ = (1 + cos(φ)) / 2 ∈ [0, 1] per foot. Shape (N, 2)."""
+  def swing_indicator(self) -> torch.Tensor:
+    """κ = (1 + cos(φ)) / 2 ∈ [0, 1] per foot. Shape (N, 2).
+
+    κ≈1 at φ≈0 (peak swing), κ≈0 at φ≈π (stance / standing snap).
+    """
     return (1.0 + torch.cos(self._phase)) / 2.0
 
   def _resample_command(self, env_ids: torch.Tensor) -> None:

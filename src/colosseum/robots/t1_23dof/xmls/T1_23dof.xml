@@ -45,7 +45,7 @@
     <default class="t1">
       <geom condim="1" contype="0" conaffinity="0" material="medium_gray"/>
       <site rgba="1 0 0 1" size="0.01" group="5"/>
-      <joint frictionloss="0.1" armature="0.005"/>
+      <joint/>
 
       <default class="visual">
         <geom type="mesh" contype="0" conaffinity="0" group="2"/>
@@ -55,45 +55,45 @@
         <geom group="3" contype="1" conaffinity="1"/>
       </default>
 
-      <!-- Joint type classes with motor properties -->
+      <!-- Joint type classes (axis + range only, no passive dynamics) -->
       <default class="head_yaw">
-        <joint axis="0 0 1" range="-1.57 1.57" damping="0.15" armature="0.3" frictionloss="0.2"/>
+        <joint axis="0 0 1" range="-1.57 1.57"/>
       </default>
       <default class="head_pitch">
-        <joint axis="0 1 0" range="-0.35 1.22" damping="0.15" armature="0.3" frictionloss="0.2"/>
+        <joint axis="0 1 0" range="-0.35 1.22"/>
       </default>
       <default class="shoulder_pitch">
-        <joint axis="0 1 0" range="-3.31 1.22" damping="0.15" armature="0.3" frictionloss="0.2"/>
+        <joint axis="0 1 0" range="-3.31 1.22"/>
       </default>
       <default class="shoulder_roll">
-        <joint axis="1 0 0" damping="0.15" armature="0.3" frictionloss="0.2"/>
+        <joint axis="1 0 0"/>
       </default>
       <default class="elbow_pitch">
-        <joint axis="0 1 0" range="-2.27 2.27" damping="0.15" armature="0.3" frictionloss="0.2"/>
+        <joint axis="0 1 0" range="-2.27 2.27"/>
       </default>
       <default class="elbow_yaw">
-        <joint axis="0 0 1" damping="0.15" armature="0.3" frictionloss="0.2"/>
+        <joint axis="0 0 1"/>
       </default>
       <default class="waist">
-        <joint axis="0 0 1" range="-1.57 1.57" damping="0.15" armature="0.3" frictionloss="0.2"/>
+        <joint axis="0 0 1" range="-1.57 1.57"/>
       </default>
       <default class="hip_pitch">
-        <joint axis="0 1 0" range="-1.8 1.57" damping="0.15" armature="0.3" frictionloss="0.2"/>
+        <joint axis="0 1 0" range="-1.8 1.57"/>
       </default>
       <default class="hip_roll">
-        <joint axis="1 0 0" damping="0.15" armature="0.3" frictionloss="0.2"/>
+        <joint axis="1 0 0"/>
       </default>
       <default class="hip_yaw">
-        <joint axis="0 0 1" range="-1 1" damping="0.15" armature="0.3" frictionloss="0.2"/>
+        <joint axis="0 0 1" range="-1 1"/>
       </default>
       <default class="knee">
-        <joint axis="0 1 0" range="0 2.34" damping="0.15" armature="0.3" frictionloss="0.2"/>
+        <joint axis="0 1 0" range="0 2.34"/>
       </default>
       <default class="ankle_pitch">
-        <joint axis="0 1 0" range="-0.87 0.35" damping="0.15" armature="0.3" frictionloss="0.1"/>
+        <joint axis="0 1 0" range="-0.87 0.35"/>
       </default>
       <default class="ankle_roll">
-        <joint axis="1 0 0" range="-0.44 0.44" damping="0.15" armature="0.3" frictionloss="0.1"/>
+        <joint axis="1 0 0" range="-0.44 0.44"/>
       </default>
 
       <position kp="75" kv="5"/>
@@ -232,7 +232,7 @@
                   <geom name="Ankle_Cross_Left" class="collision" type="mesh" mesh="Ankle_Cross_Left"/>
 
                   <body name="left_foot_link" pos="0 0.00025 -0.012">
-                    <inertial pos="-0.000249 0 -0.00914" quat="0 0.620755 0 0.784005" mass="0.685" diaginertia="0.00269786 0.002385 0.00218714"/>
+                    <inertial pos="-0.000249 0 -0.00914" quat="0 0.651138 0 0.75896" mass="0.685" diaginertia="0.00269361 0.002385 0.00171539"/>
                     <joint name="Left_Ankle_Roll" actuatorfrcrange="-15 15" class="ankle_roll"/>
                     <site name="left_foot" pos="0 0 -0.02"/>
                     <geom class="visual" mesh="left_foot_link"/>
@@ -319,7 +319,7 @@
                   <geom name="Ankle_Cross_Right" class="collision" type="mesh" mesh="Ankle_Cross_Right"/>
 
                   <body name="right_foot_link" pos="0 -0.00025 -0.012">
-                    <inertial pos="-0.000248 0 -0.00914" quat="0 0.620755 0 0.784005" mass="0.685" diaginertia="0.00269786 0.002385 0.00218714"/>
+                    <inertial pos="-0.000248 0 -0.00914" quat="0 0.651138 0 0.75896" mass="0.685" diaginertia="0.00269361 0.002385 0.00171539"/>
                     <joint name="Right_Ankle_Roll" actuatorfrcrange="-15 15" class="ankle_roll"/>
                     <site name="right_foot" pos="0 0 -0.02"/>
                     <geom class="visual" mesh="right_foot_link"/>
