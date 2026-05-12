@@ -46,11 +46,15 @@ class BallVelocityCommand(CommandTerm):
     self.velocity_command = torch.zeros((env.num_envs, 3), device=env.device)
     self.target_position = torch.zeros((env.num_envs, 2), device=env.device)
     self.sampled_target_distance = torch.zeros(env.num_envs, device=env.device)
-    self.target_reached_mask = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
+    self.target_reached_mask = torch.zeros(
+      env.num_envs, dtype=torch.bool, device=env.device
+    )
     self.metrics["ball_distance"] = torch.zeros(env.num_envs, device=env.device)
     self.metrics["cmd_ball_vel_error"] = torch.zeros(env.num_envs, device=env.device)
     self.metrics["target_distance"] = torch.zeros(env.num_envs, device=env.device)
-    self.metrics["sampled_target_distance"] = torch.zeros(env.num_envs, device=env.device)
+    self.metrics["sampled_target_distance"] = torch.zeros(
+      env.num_envs, device=env.device
+    )
 
     # Commands must be valid from the very first reset/step. Otherwise some
     # envs would keep the zero target at the global origin, which is disastrous
@@ -157,7 +161,9 @@ class BallVelocityCommand(CommandTerm):
       self._resample_obstacles(invalid_env_ids)
       target_distance = (self.target_position - ball_pos).norm(dim=-1)
 
-    reached_env_ids = torch.where(target_distance <= self.cfg.target_reached_threshold)[0]
+    reached_env_ids = torch.where(target_distance <= self.cfg.target_reached_threshold)[
+      0
+    ]
     if len(reached_env_ids) > 0:
       self.target_reached_mask[reached_env_ids] = True
       self._resample(reached_env_ids)
@@ -191,7 +197,9 @@ class BallVelocityCommand(CommandTerm):
       label=f"ball_cmd |v|={vel_2d.norm():.2f}",
     )
 
-    real_vel_2d = self._env.scene[self.cfg.ball_entity].data.root_link_lin_vel_w[batch, :2]
+    real_vel_2d = self._env.scene[self.cfg.ball_entity].data.root_link_lin_vel_w[
+      batch, :2
+    ]
     real_vel_3d = torch.cat([real_vel_2d, torch.zeros(1, device=real_vel_2d.device)])
     visualizer.add_arrow(
       start=ball_pos.cpu().numpy(),
@@ -206,7 +214,7 @@ class BallVelocityCommand(CommandTerm):
       [target_pos, torch.tensor([0.05], device=target_pos.device)]
     )
     target_color = (0.1, 1.0, 0.1, 0.9) if reached else (0.2, 0.4, 1.0, 0.65)
-    target_radius = 0.25 if reached else 0.05
+    target_radius = 0.5 if reached else 0.75
     live_target_distance = (target_pos - ball_pos[:2]).norm().item()
     sampled_target_distance = self.sampled_target_distance[batch].item()
     target_label = (
@@ -255,7 +263,7 @@ class BallVelocityCommandCfg(CommandTermCfg):
   speed_gain: float = 1.0
 
   # Resample immediately when the ball is this close to the target.
-  target_reached_threshold: float = 0.25
+  target_reached_threshold: float = 0.5
 
   # Half-width of the heading range around the robot forward direction.
   heading_range: float = math.pi / 8

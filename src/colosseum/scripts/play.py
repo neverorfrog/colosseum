@@ -33,7 +33,7 @@ import colosseum.tasks  # noqa: F401
 from colosseum.config.types.experiment import BaseExperimentConfig
 from colosseum.utils.checkpoint import resolve_checkpoint
 from colosseum.utils.model_registry import ModelRegistry
-from colosseum.utils.torch import get_device
+from colosseum.utils.torch import get_device, set_seed
 @dataclass(frozen=True)
 class PlayConfig(BaseExperimentConfig):
     """Play configuration."""
@@ -42,6 +42,10 @@ class PlayConfig(BaseExperimentConfig):
     viewer: Literal["native", "viser", "auto"] = "auto"
     video: bool = False
     video_length: int = 500
+    video_height: int = 720
+    video_width: int = 1280
+    video_path: str | None = None
+    """Output video path. Defaults to videos/<task>-<algo>.mp4."""
     run_name: str | None = None
     """Run name to load checkpoint from (looks in ./logs/<run_name>/checkpoints/)."""
     onnx: str | None = None
@@ -50,6 +54,8 @@ class PlayConfig(BaseExperimentConfig):
     """Print component-wise velocity tracking errors every debug_vel_every steps."""
     debug_vel_every: int = 20
     """How often (in steps) to print velocity debug info when --debug-vel is set."""
+    seed: int = 42
+    """Random seed for reproducibility of obstacle placement and other RNG."""
 
 
 
@@ -274,8 +280,13 @@ def main() -> None:
     device = get_device(cuda=config.use_cuda, device_id=device_id)
     logger.info(f"Device: {device}")
 
+    set_seed(config.seed)
+    logger.info(f"Random seed: {config.seed}")
+
     env_cfg = config.task.play_env_cfg or config.task.train_env_cfg
     env_cfg = replace(env_cfg, scene=replace(env_cfg.scene, num_envs=config.num_envs))
+    if config.video:
+        env_cfg = replace(env_cfg, viewer=replace(env_cfg.viewer, height=config.video_height, width=config.video_width))
 
     render_mode = "rgb_array" if config.video else None
     env = _make_env(env_cfg=env_cfg, device=str(device), render_mode=render_mode)
@@ -303,16 +314,20 @@ def _record_video(config: PlayConfig, env, agent) -> None:
 
     video_dir = Path("./videos")
     video_dir.mkdir(parents=True, exist_ok=True)
-    algo_cfg = config.task.algo_cfg
-    algo_name = algo_cfg.name if algo_cfg is not None else "unknown"
-    video_path = video_dir / f"{config.task.name}-{algo_name}.mp4"
-    logger.info(f"Recording {config.video_length} steps to {video_path}")
+    if config.video_path:
+        video_path = Path(config.video_path)
+        video_path.parent.mkdir(parents=True, exist_ok=True)
+    else:
+        algo_cfg = config.task.algo_cfg
+        algo_name = algo_cfg.name if algo_cfg is not None else "unknown"
+        video_path = video_dir / f"{config.task.name}-{algo_name}.mp4"
+    logger.info(f"Recording episode to {video_path}")
 
     obs, _ = env.reset()
     frames = []
     for _ in range(config.video_length):
         actions = agent(obs)
-        obs, _, _, _, _ = env.step(actions)
+        obs, _, terminated, _, _ = env.step(actions)
         frame = env.render()
         if frame is not None:
             if isinstance(frame, np.ndarray) and frame.ndim == 4:
@@ -320,6 +335,8 @@ def _record_video(config: PlayConfig, env, agent) -> None:
             if frame.dtype != np.uint8:
                 frame = (np.clip(frame, 0, 1) * 255).astype(np.uint8)
             frames.append(frame)
+        if terminated[0]:
+            break
 
     if frames:
         fps = env.metadata.get("render_fps", 30)

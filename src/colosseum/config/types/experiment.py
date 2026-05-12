@@ -101,7 +101,12 @@ class TrainConfig(BaseExperimentConfig):
             else:
                 return obj
 
-        return cast(dict, convert(self))
+        result = cast(dict, convert(self))
+
+        if self.task.algo_cfg is not None:
+            result["algo_cfg"] = convert(self.task.algo_cfg)
+
+        return result
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "TrainConfig":
@@ -116,6 +121,8 @@ class TrainConfig(BaseExperimentConfig):
 
         if "logger" in data:
             data["logger"] = LoggerConfig(**data["logger"])
+
+        data.pop("algo_cfg", None)
 
         return cls(**data)
 
