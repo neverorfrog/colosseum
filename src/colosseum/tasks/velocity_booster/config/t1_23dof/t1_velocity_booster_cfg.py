@@ -18,6 +18,8 @@ from colosseum.robots.t1_23dof.sensors import (
     SELF_COLLISION_SENSOR,
 )
 
+from colosseum.tasks.dribbling.mdp.gait_phase_command import GaitPhaseCommandCfg
+
 from .algo_cfg import booster_t1_ppo_cfg, booster_t1_rsl_rl_runner_cfg
 from .cat_cfg import actions, commands, terminations
 from .curriculum_cfg import curriculum
@@ -105,6 +107,10 @@ def booster_t1_velocity_env_cfg(play: bool = False) -> ColosseumEnvCfg:
         twist.rel_heading_envs = 1.0
         twist.ranges.heading = (-math.pi / 3, math.pi / 3)
         twist.heading_control_stiffness = 0.5
+
+        gait = cfg.commands["gait_phase"]
+        assert isinstance(gait, GaitPhaseCommandCfg)
+        gait.randomize_phase = False
 
         if cfg.scene.terrain is not None:
             if cfg.scene.terrain.terrain_generator is not None:

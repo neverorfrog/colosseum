@@ -1,3 +1,9 @@
+"""T1 velocity task with holosoma-style left-right symmetry.
+
+Same scene, rewards, commands, and curriculum as t1-velocity,
+but with MirrorableObservationTermCfg and symmetry loss enabled in PPO.
+"""
+
 import math
 from dataclasses import dataclass, field
 
@@ -11,19 +17,23 @@ from mjlab.viewer import ViewerConfig
 from colosseum.config.types.task import TaskConfig, register_task
 from colosseum.envs.colosseum_env import ColosseumEnvCfg
 from colosseum.robots.t1_23dof.constants import BASE_BODY_NAME, get_robot_cfg
+from colosseum.tasks.dribbling.mdp.gait_phase_command import GaitPhaseCommandCfg
+from colosseum.tasks.velocity.config.t1_23dof.cat_cfg import actions, commands, terminations
+from colosseum.tasks.velocity.config.t1_23dof.curriculum_cfg import curriculum
+from colosseum.tasks.velocity.config.t1_23dof.event_cfg import events
+from colosseum.tasks.velocity.config.t1_23dof.reward_cfg import rewards
+
+# Symmetry-specific imports
+from .algo_cfg import booster_t1_symmetric_ppo_cfg, booster_t1_symmetric_rsl_rl_runner_cfg
+from .observation_cfg import observations
+
+# Re-use robot sensors from velocity task
 from colosseum.robots.t1_23dof.sensors import (
   FEET_GROUND_CONTACT_SENSOR,
   FOOT_HEIGHT_SCAN,
   NONFOOT_GROUND_CONTACT_SENSOR,
   SELF_COLLISION_SENSOR,
 )
-
-from .algo_cfg import booster_t1_ppo_cfg, booster_t1_rsl_rl_runner_cfg
-from .cat_cfg import actions, commands, terminations
-from .curriculum_cfg import curriculum
-from .event_cfg import events
-from .observation_cfg import observations
-from .reward_cfg import rewards
 
 
 def scene_cfg(play: bool = False) -> SceneCfg:
@@ -68,7 +78,7 @@ def sim_cfg() -> SimulationCfg:
   )
 
 
-def booster_t1_velocity_env_cfg(play: bool = False) -> ColosseumEnvCfg:
+def booster_t1_velocity_symmetric_env_cfg(play: bool = False) -> ColosseumEnvCfg:
   cfg = ColosseumEnvCfg(
     scene=scene_cfg(play),
     observations=observations,
@@ -103,6 +113,10 @@ def booster_t1_velocity_env_cfg(play: bool = False) -> ColosseumEnvCfg:
     twist.ranges.heading = (-math.pi / 3, math.pi / 3)
     twist.heading_control_stiffness = 0.5
 
+    gait = cfg.commands["gait_phase"]
+    assert isinstance(gait, GaitPhaseCommandCfg)
+    gait.randomize_phase = False
+
     if cfg.scene.terrain is not None:
       if cfg.scene.terrain.terrain_generator is not None:
         cfg.scene.terrain.terrain_generator.curriculum = False
@@ -113,11 +127,11 @@ def booster_t1_velocity_env_cfg(play: bool = False) -> ColosseumEnvCfg:
   return cfg
 
 
-@register_task("t1-velocity")
+@register_task("t1-velocity-symmetric")
 @dataclass(frozen=True)
-class T1VelocityTask(TaskConfig):
-  name: str = "t1-velocity"
-  env: ColosseumEnvCfg = field(default_factory=booster_t1_velocity_env_cfg)
+class T1VelocitySymmetricTask(TaskConfig):
+  name: str = "t1-velocity-symmetric"
+  env: ColosseumEnvCfg = field(default_factory=booster_t1_velocity_symmetric_env_cfg)
 
   @property
   def train_env_cfg(self):
@@ -125,12 +139,12 @@ class T1VelocityTask(TaskConfig):
 
   @property
   def play_env_cfg(self):
-    return booster_t1_velocity_env_cfg(play=True)
+    return booster_t1_velocity_symmetric_env_cfg(play=True)
 
   @property
   def algo_cfg(self):
-    return booster_t1_ppo_cfg()
+    return booster_t1_symmetric_ppo_cfg()
 
   @property
   def rl_cfg(self):
-    return booster_t1_rsl_rl_runner_cfg()
+    return booster_t1_symmetric_rsl_rl_runner_cfg()

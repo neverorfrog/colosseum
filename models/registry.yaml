@@ -25,4 +25,45 @@ t1-velocity:
       run: t1-velocity-PPO-42-20260508_144349
       step: 140378112
       created: '2026-05-08T13:28:10.387482+00:00'
+    v8:
+      file: v8/t1-velocity_ppo_v8.onnx
+      run: t1-velocity-symmetric-PPO-42-20260513_022410
+      step: 997687296
+      created: '2026-05-13T08:47:07.381099+00:00'
+    v9:
+      file: v9/t1-velocity_ppo_v9.onnx
+      run: ''
+      step: 0
+      created: '2026-05-13T08:46:48.570837+00:00'
   default: v0
+t1-velocity-booster:
+  models:
+    v9:
+      file: v9/t1-velocity-booster_ppo_v9.onnx
+      run: ''
+      step: 0
+      created: '2026-05-13T08:46:30.935360+00:00'
+  default: v9
+t1-velocity-symmetric:
+  models:
+    v8:
+      file: v8/t1-velocity-symmetric_ppo_v8.onnx
+      run: t1-velocity-symmetric-PPO-42-20260513_114119
+      step: 20054016
+      created: '2026-05-13T09:49:59.601305+00:00'
+    v1:
+      file: v1/t1-velocity-symmetric_ppo_v1.onnx
+      run: t1-velocity-symmetric-PPO-42-20260513_114119
+      step: 190513152
+      created: '2026-05-13T10:54:41.332798+00:00'
+    v2:
+      file: v2/t1-velocity-symmetric_ppo_v2.onnx
+      run: t1-velocity-symmetric-PPO-42-20260513_114119
+      step: 686850048
+      created: '2026-05-13T13:50:32.920296+00:00'
+    v3:
+      file: v3/t1-velocity-symmetric_ppo_v3.onnx
+      run: t1-velocity-symmetric-PPO-42-20260513_164810
+      step: 325877760
+      created: '2026-05-13T17:01:45.827644+00:00'
+  default: v8

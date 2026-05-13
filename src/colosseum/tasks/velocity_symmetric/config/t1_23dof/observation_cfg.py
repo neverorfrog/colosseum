@@ -1,3 +1,9 @@
+"""Observation config for T1 velocity task with symmetry mirroring.
+
+Uses MirrorableObservationTermCfg so the PPO algorithm can apply
+left-right mirror augmentation and symmetry loss during training.
+"""
+
 from mjlab.envs.mdp.observations import (
   builtin_sensor,
   generated_commands,
@@ -16,42 +22,61 @@ from mjlab.tasks.velocity.mdp.observations import (
 from mjlab.utils.noise import UniformNoiseCfg as Unoise
 
 from colosseum.mdp.observations import base_height
+from colosseum.mdp.symmetry import (
+  MirrorableObservationTermCfg,
+  mirror_ang_vel,
+  mirror_base_lin_vel,
+  mirror_gait_phase,
+  mirror_projected_gravity,
+  mirror_velocity_command,
+)
+from colosseum.robots.t1_23dof.mdp.symmetry import mirror_joints
 
 actor_terms = {
-  "base_ang_vel": ObservationTermCfg(
+  "base_ang_vel": MirrorableObservationTermCfg(
     func=builtin_sensor,
     params={"sensor_name": "robot/imu_ang_vel"},
     noise=Unoise(n_min=-0.2, n_max=0.2),
+    mirror_fn=mirror_ang_vel,
   ),
-  "projected_gravity": ObservationTermCfg(
+  "projected_gravity": MirrorableObservationTermCfg(
     func=projected_gravity,
     noise=Unoise(n_min=-0.05, n_max=0.05),
+    mirror_fn=mirror_projected_gravity,
   ),
-  "joint_pos": ObservationTermCfg(
+  "joint_pos": MirrorableObservationTermCfg(
     func=joint_pos_rel,
     noise=Unoise(n_min=-0.01, n_max=0.01),
+    mirror_fn=mirror_joints,
   ),
-  "joint_vel": ObservationTermCfg(
+  "joint_vel": MirrorableObservationTermCfg(
     func=joint_vel_rel,
-    noise=Unoise(n_min=-1.5, n_max=1.5),
+    noise=Unoise(n_min=-0.05, n_max=0.05),
+    mirror_fn=mirror_joints,
   ),
-  "actions": ObservationTermCfg(func=last_action),
-  "command": ObservationTermCfg(
+  "actions": MirrorableObservationTermCfg(
+    func=last_action,
+    mirror_fn=mirror_joints,
+  ),
+  "command": MirrorableObservationTermCfg(
     func=generated_commands,
     params={"command_name": "twist"},
+    mirror_fn=mirror_velocity_command,
   ),
-  "gait_phase": ObservationTermCfg(
+  "gait_phase": MirrorableObservationTermCfg(
     func=generated_commands,
     params={"command_name": "gait_phase"},
+    mirror_fn=mirror_gait_phase,
   ),
 }
 
 critic_terms = {
   **actor_terms,
-  "base_lin_vel": ObservationTermCfg(
+  "base_lin_vel": MirrorableObservationTermCfg(
     func=builtin_sensor,
     params={"sensor_name": "robot/imu_lin_vel"},
     noise=Unoise(n_min=-0.5, n_max=0.5),
+    mirror_fn=mirror_base_lin_vel,
   ),
   "base_height": ObservationTermCfg(
     func=base_height,
