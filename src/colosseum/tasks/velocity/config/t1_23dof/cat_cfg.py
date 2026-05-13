@@ -33,18 +33,8 @@ commands: Dict[str, CommandTermCfg] = {
     ),
 }
 
-ARM_JOINT_NAMES = {
-    "Left_Shoulder_Pitch",
-    "Left_Shoulder_Roll",
-    "Left_Elbow_Pitch",
-    "Left_Elbow_Yaw",
-    "Right_Shoulder_Pitch",
-    "Right_Shoulder_Roll",
-    "Right_Elbow_Pitch",
-    "Right_Elbow_Yaw",
-}
 VELOCITY_ACTION_SCALE = {
-    k: (0.01 if k in ARM_JOINT_NAMES else v) for k, v in ACTION_SCALE.items()
+    k: v for k, v in ACTION_SCALE.items()
 }
 
 actions: dict[str, ActionTermCfg] = {

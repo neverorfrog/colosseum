@@ -25,6 +25,9 @@ def booster_t1_ppo_cfg() -> PpoConfig:
         desired_kl=0.01,
         schedule="adaptive",
         obs_normalization=True,
+        symmetry_loss_coef=2.0,
+        symmetry_critic_coef=0.0,
+        symmetry_data_augmentation=True,
         actor=PpoActorConfig(
             hidden_layers=[512, 256, 128],
             activation="elu",
@@ -69,7 +72,7 @@ def booster_t1_rsl_rl_runner_cfg():
             desired_kl=0.01,
             max_grad_norm=1.0,
         ),
-        experiment_name="t1_velocity",
+        experiment_name="t1_velocity_booster",
         save_interval=50,
         num_steps_per_env=24,
         max_iterations=30_000,
