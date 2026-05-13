@@ -39,11 +39,9 @@ curriculum = {
         params={
             "command_name": "twist",
             "stages": [
-                {"transitions": 0, "rel_standing_envs": 0.5},
-                {"transitions": 100_000_000, "rel_standing_envs": 0.4},
+                {"transitions": 0, "rel_standing_envs": 0.4},
                 {"transitions": 200_000_000, "rel_standing_envs": 0.3},
                 {"transitions": 300_000_000, "rel_standing_envs": 0.2},
-                {"transitions": 500_000_000, "rel_standing_envs": 0.1},
             ],
         },
     ),
@@ -98,6 +96,9 @@ curriculum = {
                 "penalty_feet_distance",
                 "penalty_feet_ori",
                 "penalty_pose_deviation",
+                "penalty_feet_yaw_diff",
+                "penalty_feet_yaw_mean",
+                "arm_swing",
             ],
             "initial_scale": 0.1,
             "min_scale": 0.01,

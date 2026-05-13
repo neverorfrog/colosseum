@@ -3,7 +3,10 @@ import math
 from mjlab.envs.mdp import (
     action_rate_l2,
     is_alive,
+    joint_acc_l2,
     joint_pos_limits,
+    joint_torques_l2,
+    joint_vel_l2,
 )
 from mjlab.managers import RewardTermCfg
 from mjlab.managers.scene_entity_config import SceneEntityCfg
@@ -25,6 +28,8 @@ from colosseum.tasks.velocity_booster.mdp.rewards import (
     arm_swing,
     feet_slip,
     feet_swing,
+    feet_yaw_diff,
+    feet_yaw_mean,
 )
 from colosseum.robots.t1_23dof.constants import (
     BASE_BODY_NAME,

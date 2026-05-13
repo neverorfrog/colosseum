@@ -14,6 +14,7 @@ import torch
 from mjlab.entity import Entity
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.sensor import ContactSensor
+from mjlab.utils.lab_api.math import quat_apply
 
 if TYPE_CHECKING:
   from mjlab.envs import ManagerBasedRlEnv
@@ -125,3 +126,59 @@ def feet_slip(
   first_step = env.episode_length_buf <= 1
   slip = slip * (~first_step).float()
   return slip
+
+
+def _body_yaw_from_quat(
+  quat_w: torch.Tensor,  # (N, 4) w-last or w-first
+) -> torch.Tensor:
+  """Extract yaw angle from body quaternion using forward-vector projection."""
+  forward_w = torch.tensor([1.0, 0.0, 0.0], device=quat_w.device)
+  fwd = quat_apply(quat_w, forward_w)  # (N, 3)
+  return torch.atan2(fwd[:, 1], fwd[:, 0])
+
+
+def feet_yaw_diff(
+  env: ManagerBasedRlEnv,
+  asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+  """Penalize feet pointing in different directions.
+
+  Booster_gym's _reward_feet_yaw_diff: keeps feet parallel.
+  Squared wrapped angle difference between the two foot yaws.
+
+  Args:
+      asset_cfg: Must resolve body_ids for exactly 2 foot bodies.
+  """
+  asset: Entity = env.scene[asset_cfg.name]
+  foot_quats = asset.data.body_link_quat_w[:, asset_cfg.body_ids, :]  # (N, 2, 4)
+  yaw = _body_yaw_from_quat(foot_quats.flatten(0, 1))  # (N*2,)
+  yaw = yaw.view(-1, 2)  # (N, 2)
+  diff = (yaw[:, 1] - yaw[:, 0] + math.pi) % (2 * math.pi) - math.pi
+  return diff.square()
+
+
+def feet_yaw_mean(
+  env: ManagerBasedRlEnv,
+  asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+  """Penalize mean foot yaw deviating from body yaw.
+
+  Booster_gym's _reward_feet_yaw_mean: keeps feet aligned with body heading.
+  Squared wrapped angle difference between average foot yaw and base yaw.
+
+  Args:
+      asset_cfg: Must resolve body_ids for exactly 2 foot bodies.
+  """
+  asset: Entity = env.scene[asset_cfg.name]
+  foot_quats = asset.data.body_link_quat_w[:, asset_cfg.body_ids, :]  # (N, 2, 4)
+  yaw = _body_yaw_from_quat(foot_quats.flatten(0, 1))  # (N*2,)
+  yaw = yaw.view(-1, 2)  # (N, 2)
+
+  # Handle wrap-around for mean: add π when diff > π (same as booster_gym)
+  diff_abs = (yaw[:, 1] - yaw[:, 0]).abs()
+  wrap_correction = math.pi * (diff_abs > math.pi).float()
+  mean_yaw = yaw.mean(dim=-1) + wrap_correction
+
+  base_yaw = _body_yaw_from_quat(asset.data.root_link_quat_w)
+  diff = (base_yaw - mean_yaw + math.pi) % (2 * math.pi) - math.pi
+  return diff.square()
