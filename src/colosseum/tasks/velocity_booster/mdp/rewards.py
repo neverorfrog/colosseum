@@ -14,7 +14,6 @@ import torch
 from mjlab.entity import Entity
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.sensor import ContactSensor
-from mjlab.utils.lab_api.math import quat_apply
 
 if TYPE_CHECKING:
   from mjlab.envs import ManagerBasedRlEnv
@@ -132,9 +131,14 @@ def _body_yaw_from_quat(
   quat_w: torch.Tensor,  # (N, 4) w-last or w-first
 ) -> torch.Tensor:
   """Extract yaw angle from body quaternion using forward-vector projection."""
-  forward_w = torch.tensor([1.0, 0.0, 0.0], device=quat_w.device)
-  fwd = quat_apply(quat_w, forward_w)  # (N, 3)
-  return torch.atan2(fwd[:, 1], fwd[:, 0])
+  # Direct yaw extraction from quaternion (avoids mjlab quat_apply batch bug).
+  q_w = quat_w[:, 0]
+  q_x = quat_w[:, 1]
+  q_y = quat_w[:, 2]
+  q_z = quat_w[:, 3]
+  fx = 1 - 2 * (q_y**2 + q_z**2)
+  fy = 2 * (q_x * q_y + q_w * q_z)
+  return torch.atan2(fy, fx)
 
 
 def feet_yaw_diff(

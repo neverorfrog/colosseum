@@ -1,4 +1,4 @@
 try:
-  import colosseum.tasks.velocity_booster.config.t1_23dof.t1_velocity_cfg  # noqa: F401
+    import colosseum.tasks.velocity_booster.config.t1_23dof.t1_velocity_booster_cfg  # noqa: F401
 except ImportError:
-  pass
+    pass
