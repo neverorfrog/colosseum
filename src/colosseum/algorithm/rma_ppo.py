@@ -201,13 +201,17 @@ class RmaPPO(PPO):
       norm_last_critic = self.critic_obs_normalizer(current_critic_obs)
       last_values = self.value_net(norm_last_critic)
 
-    normalize_globally = not self.config.normalize_advantage_per_mini_batch
     self.rollout_buffer.compute_returns_and_advantages(
       last_values=last_values,
       gamma=self.config.gamma,
       lam=self.config.lam,
-      normalize_advantage=normalize_globally,
+      normalize_advantage=False,
     )
+
+    if not self.config.normalize_advantage_per_mini_batch:
+      self.rollout_buffer.advantages = self._normalize_advantages_multi_gpu(
+        self.rollout_buffer.advantages
+      )
 
     return current_actor_obs, current_critic_obs, current_dones, obs_dict
 

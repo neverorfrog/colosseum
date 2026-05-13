@@ -82,8 +82,9 @@ class EmpiricalNormalization(ObsNormalizer):
     if self.until is not None and self.count >= self.until:
       return
 
-    # Compute batch moments. In distributed mode we aggregate moments across
-    # workers so all ranks keep identical normalization statistics.
+    # Compute batch moments. In distributed mode we aggregate across workers
+    # in a single all_reduce call (holosoma-style optimisation) so all ranks
+    # keep identical normalization statistics.
     count_x = torch.tensor(x.shape[0], dtype=torch.long, device=x.device)
     sum_x = torch.sum(x, dim=0, keepdim=True)
     sum_x2 = torch.sum(x * x, dim=0, keepdim=True)
@@ -93,9 +94,14 @@ class EmpiricalNormalization(ObsNormalizer):
       and torch.distributed.is_initialized()
       and torch.distributed.get_world_size() > 1
     ):
-      torch.distributed.all_reduce(count_x, op=torch.distributed.ReduceOp.SUM)
-      torch.distributed.all_reduce(sum_x, op=torch.distributed.ReduceOp.SUM)
-      torch.distributed.all_reduce(sum_x2, op=torch.distributed.ReduceOp.SUM)
+      world_size = torch.distributed.get_world_size()
+
+      stats_to_sync = torch.cat([sum_x, sum_x2], dim=0)
+      torch.distributed.all_reduce(stats_to_sync, op=torch.distributed.ReduceOp.SUM)
+      sum_x = stats_to_sync[:1]
+      sum_x2 = stats_to_sync[1:]
+
+      count_x = count_x * world_size
 
     if count_x.item() <= 0:
       return

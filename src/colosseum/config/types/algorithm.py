@@ -179,6 +179,19 @@ class PpoConfig(AlgorithmConfig):
     normalize_advantage_per_mini_batch: bool = False
     """If True, normalize advantages per mini-batch. If False, normalize globally."""
 
+    # Symmetry loss (holosoma-style left-right mirror equivariance)
+    symmetry_loss_coef: float = 0.0
+    """Coefficient for the actor symmetry loss. 0.0 disables it entirely.
+    Requires actor obs terms to use MirrorableObservationTermCfg with mirror_fn set."""
+
+    symmetry_critic_coef: float = 0.0
+    """Coefficient for the critic symmetry loss (MSE between V(obs) and V(mirror(obs))).
+    Requires critic obs terms with mirror_fn set."""
+
+    symmetry_data_augmentation: bool = False
+    """If True, double the minibatch via observation/action mirroring during PPO update.
+    The policy sees both original and mirrored transitions during training."""
+
     # Network configs
     actor: PpoActorConfig = PpoActorConfig()
     """Configuration for the PPO actor network."""

@@ -34,6 +34,13 @@ from colosseum.algorithm.utils.normalization import (
 )
 from colosseum.algorithm.utils.rollout_buffer import RolloutBuffer
 from colosseum.config.types.algorithm import PpoConfig, register_algorithm
+from colosseum.mdp.symmetry import (
+  TermMirrorSpec,
+  augment_actions,
+  augment_obs,
+  build_symmetry_spec,
+  mirror_obs,
+)
 from colosseum.utils.logger import extract_episode_metrics
 from colosseum.utils.torch import get_obs_dims
 
@@ -75,6 +82,7 @@ class PPO(BaseAlgorithm):
     )
 
     self._build_networks()
+    self._synchronize_model_weights(self.actor, self.value_net)
 
     # Separate adaptive LRs for actor and critic (holosoma style)
     # Must be set before _build_optimizers which uses them.
@@ -104,6 +112,25 @@ class PPO(BaseAlgorithm):
     self._build_optimizers()
     self._build_rollout_buffer()
     self._build_normalizer()
+
+    # Symmetry (holosoma-style left-right mirror equivariance)
+    self._actor_sym_spec: list[TermMirrorSpec] | None = None
+    self._critic_sym_spec: list[TermMirrorSpec] | None = None
+    self._action_mirror_fn = None
+    self._use_symmetry = False
+
+    if (
+      config.symmetry_loss_coef > 0.0
+      or config.symmetry_critic_coef > 0.0
+      or config.symmetry_data_augmentation
+    ):
+      self._use_symmetry = True
+      obs_manager = self.env.observation_manager
+      self._actor_sym_spec = build_symmetry_spec(obs_manager, "actor")
+      self._critic_sym_spec = build_symmetry_spec(obs_manager, "critic")
+      if "actions" in obs_manager.active_terms.get("actor", []):
+        actions_cfg = obs_manager.get_term_cfg("actor", "actions")
+        self._action_mirror_fn = getattr(actions_cfg, "mirror_fn", None)
 
     self.episode_length_buf = torch.zeros(self.env.num_envs, device=self.device)
 
@@ -381,14 +408,20 @@ class PPO(BaseAlgorithm):
       norm_last_critic = self.critic_obs_normalizer(current_critic_obs)
       last_values = self.value_net(norm_last_critic)
 
-    # Compute GAE
-    normalize_globally = not self.config.normalize_advantage_per_mini_batch
+    # Compute GAE (without normalization in the buffer)
     self.rollout_buffer.compute_returns_and_advantages(
       last_values=last_values,
       gamma=self.config.gamma,
       lam=self.config.lam,
-      normalize_advantage=normalize_globally,
+      normalize_advantage=False,
     )
+
+    # Multi-GPU advantage normalization (holosoma style).
+    # Global mean/std across all GPUs ensures consistent advantage scaling.
+    if not self.config.normalize_advantage_per_mini_batch:
+      self.rollout_buffer.advantages = self._normalize_advantages_multi_gpu(
+        self.rollout_buffer.advantages
+      )
 
     return current_actor_obs, current_critic_obs, current_dones, obs_dict
 
@@ -400,6 +433,8 @@ class PPO(BaseAlgorithm):
     total_value_loss = 0.0
     total_entropy = 0.0
     total_kl = 0.0
+    total_symmetry_actor_loss = 0.0
+    total_symmetry_critic_loss = 0.0
     num_updates = 0
 
     generator = self.rollout_buffer.mini_batch_generator(
@@ -427,19 +462,58 @@ class PPO(BaseAlgorithm):
       privileged_obs = batch.get("privileged_obs", {})
       actor_obs = self._compose_actor_input(actor_obs_norm, privileged_obs)
 
+      # --- Symmetry data augmentation (holosoma style) ---
+      # Double the minibatch by mirroring observations and actions.
+      original_batch_size = actor_obs.shape[0]
+      if (
+        self._use_symmetry
+        and self.config.symmetry_data_augmentation
+        and self._action_mirror_fn is not None
+      ):
+        actor_obs = augment_obs(actor_obs, self._actor_sym_spec)
+        actions = augment_actions(actions, self._action_mirror_fn)
+        critic_obs = augment_obs(critic_obs, self._critic_sym_spec)
+        old_log_probs = old_log_probs.repeat(2)
+        target_values = target_values.repeat(2, 1)
+        advantages = advantages.repeat(2, 1)
+        returns = returns.repeat(2, 1)
+        old_action_means = old_action_means.repeat(2, 1)
+        old_action_stds = old_action_stds.repeat(2, 1)
+
       # Re-evaluate actions with current policy
-      new_log_probs, entropy = self.actor.evaluate(actor_obs, actions)
+      new_log_probs, entropy_all = self.actor.evaluate(actor_obs, actions)
       new_values = self.value_net(critic_obs)
 
+      # Entropy: only from original batch (holosoma convention)
+      if (
+        self._use_symmetry
+        and self.config.symmetry_data_augmentation
+        and self._action_mirror_fn is not None
+      ):
+        entropy = entropy_all[:original_batch_size]
+      else:
+        entropy = entropy_all
+
       # --- KL divergence (RSL-RL analytical formula) ---
+      # Computed on original batch only, even when augmented (holosoma convention).
       with torch.inference_mode():
         mu_batch = self.actor.forward(actor_obs)
+        _old_means = old_action_means
+        _old_stds = old_action_stds
+        if (
+          self._use_symmetry
+          and self.config.symmetry_data_augmentation
+          and self._action_mirror_fn is not None
+        ):
+          mu_batch = mu_batch[:original_batch_size]
+          _old_means = _old_means[:original_batch_size]
+          _old_stds = _old_stds[:original_batch_size]
         sigma_batch = torch.clamp(
           self.actor.std, min=self.actor.min_noise_std
         ).expand_as(mu_batch)
         kl = torch.sum(
-          torch.log(sigma_batch / old_action_stds + 1e-5)
-          + (old_action_stds.pow(2) + (old_action_means - mu_batch).pow(2))
+          torch.log(sigma_batch / _old_stds + 1e-5)
+          + (_old_stds.pow(2) + (_old_means - mu_batch).pow(2))
           / (2.0 * sigma_batch.pow(2))
           - 0.5,
           dim=-1,
@@ -489,11 +563,55 @@ class PPO(BaseAlgorithm):
       else:
         value_loss = (returns - new_values).pow(2).mean()
 
+      # --- Symmetry loss (holosoma style) ---
+      symmetry_actor_loss = torch.tensor(0.0, device=self.device)
+      symmetry_critic_loss = torch.tensor(0.0, device=self.device)
+      if self._use_symmetry and self._action_mirror_fn is not None:
+        if self.config.symmetry_loss_coef > 0.0:
+          if (
+            self.config.symmetry_data_augmentation
+          ):
+            mu_full = self.actor.forward(actor_obs.detach())
+            mu_original = mu_full[:original_batch_size]
+            mu_mirrored = mu_full[original_batch_size:]
+            symmetry_actor_loss = torch.nn.functional.mse_loss(
+              mu_mirrored, self._action_mirror_fn(mu_original)
+            )
+          else:
+            mu_original = self.actor.forward(actor_obs.detach())
+            mirrored_actor_obs = mirror_obs(
+              actor_obs.detach(), self._actor_sym_spec
+            )
+            mu_mirrored = self.actor.forward(mirrored_actor_obs)
+            symmetry_actor_loss = torch.nn.functional.mse_loss(
+              mu_mirrored, self._action_mirror_fn(mu_original)
+            )
+
+        if self.config.symmetry_critic_coef > 0.0:
+          if (
+            self.config.symmetry_data_augmentation
+          ):
+            val_original = new_values[:original_batch_size]
+            val_mirrored = new_values[original_batch_size:]
+            symmetry_critic_loss = torch.nn.functional.mse_loss(
+              val_original, val_mirrored
+            )
+          else:
+            mirrored_critic_obs = mirror_obs(
+              critic_obs.detach(), self._critic_sym_spec
+            )
+            val_mirrored = self.value_net(mirrored_critic_obs)
+            symmetry_critic_loss = torch.nn.functional.mse_loss(
+              new_values, val_mirrored
+            )
+
       # --- Total loss (single combined, RSL-RL style) ---
       loss = (
         surrogate_loss
         + self.config.value_loss_coef * value_loss
         - self.config.entropy_coef * entropy.mean()
+        + self.config.symmetry_loss_coef * symmetry_actor_loss
+        + self.config.symmetry_critic_coef * symmetry_critic_loss
       )
 
       # --- Gradient step (separate optimizers, holosoma style) ---
@@ -516,6 +634,8 @@ class PPO(BaseAlgorithm):
       total_value_loss += value_loss.item()
       total_entropy += entropy.mean().item()
       total_kl += kl_mean
+      total_symmetry_actor_loss += symmetry_actor_loss.item()
+      total_symmetry_critic_loss += symmetry_critic_loss.item()
       num_updates += 1
 
     if self.is_distributed:
@@ -525,15 +645,24 @@ class PPO(BaseAlgorithm):
           total_value_loss,
           total_entropy,
           total_kl,
+          total_symmetry_actor_loss,
+          total_symmetry_critic_loss,
           float(num_updates),
         ]
       )
-      total_surrogate_loss, total_value_loss, total_entropy, total_kl = totals[:4]
-      num_updates = int(totals[4])
+      (
+        total_surrogate_loss,
+        total_value_loss,
+        total_entropy,
+        total_kl,
+        total_symmetry_actor_loss,
+        total_symmetry_critic_loss,
+      ) = totals[:6]
+      num_updates = int(totals[6])
 
     self.rollout_buffer.clear()
 
-    return {
+    loss_dict: dict[str, float] = {
       "surrogate_loss": total_surrogate_loss / max(num_updates, 1),
       "value_loss": total_value_loss / max(num_updates, 1),
       "entropy": total_entropy / max(num_updates, 1),
@@ -541,6 +670,10 @@ class PPO(BaseAlgorithm):
       "actor_learning_rate": self.actor_learning_rate,
       "critic_learning_rate": self.critic_learning_rate,
     }
+    if self._use_symmetry:
+      loss_dict["symmetry_actor_loss"] = total_symmetry_actor_loss / max(num_updates, 1)
+      loss_dict["symmetry_critic_loss"] = total_symmetry_critic_loss / max(num_updates, 1)
+    return loss_dict
 
   def _compose_actor_input(
     self,

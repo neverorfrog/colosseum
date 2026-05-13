@@ -125,8 +125,22 @@ if _MJLAB_AVAILABLE:
 # Actuator config.
 ##
 
-# Booster T1 23-DOF joint names (extracted from XML)
+# Booster T1 23-DOF joint names (MuJoCo XML depth-first order, matches arena sim_joint_names).
 JOINT_NAMES = [
+    # Head - 2 DOF
+    "AAHead_yaw",
+    "Head_pitch",
+    # Upper body (arms) - 8 DOF
+    "Left_Shoulder_Pitch",
+    "Left_Shoulder_Roll",
+    "Left_Elbow_Pitch",
+    "Left_Elbow_Yaw",
+    "Right_Shoulder_Pitch",
+    "Right_Shoulder_Roll",
+    "Right_Elbow_Pitch",
+    "Right_Elbow_Yaw",
+    # Torso - 1 DOF
+    "Waist",
     # Lower body (legs) - 12 DOF
     "Left_Hip_Pitch",
     "Left_Hip_Roll",
@@ -140,20 +154,6 @@ JOINT_NAMES = [
     "Right_Knee_Pitch",
     "Right_Ankle_Pitch",
     "Right_Ankle_Roll",
-    # Torso - 1 DOF
-    "Waist",
-    # Upper body (arms) - 8 DOF
-    "Left_Shoulder_Pitch",
-    "Left_Shoulder_Roll",
-    "Left_Elbow_Pitch",
-    "Left_Elbow_Yaw",
-    "Right_Shoulder_Pitch",
-    "Right_Shoulder_Roll",
-    "Right_Elbow_Pitch",
-    "Right_Elbow_Yaw",
-    # Head - 2 DOF
-    "AAHead_yaw",
-    "Head_pitch",
 ]
 
 
@@ -242,6 +242,55 @@ if _MJLAB_AVAILABLE:
 
     # Convenience shorthand
     ROBOT_CFG = get_robot_cfg()
+
+##
+# Symmetry configuration (left-right mirror about sagittal plane)
+##
+
+# Joint name pairs for left-right mirroring. Central joints map to themselves.
+# Matches holosoma's symmetry_joint_names convention.
+SYMMETRY_JOINT_NAMES: dict[str, str] = {
+    "Left_Hip_Pitch": "Right_Hip_Pitch",
+    "Left_Hip_Roll": "Right_Hip_Roll",
+    "Left_Hip_Yaw": "Right_Hip_Yaw",
+    "Left_Knee_Pitch": "Right_Knee_Pitch",
+    "Left_Ankle_Pitch": "Right_Ankle_Pitch",
+    "Left_Ankle_Roll": "Right_Ankle_Roll",
+    "Right_Hip_Pitch": "Left_Hip_Pitch",
+    "Right_Hip_Roll": "Left_Hip_Roll",
+    "Right_Hip_Yaw": "Left_Hip_Yaw",
+    "Right_Knee_Pitch": "Left_Knee_Pitch",
+    "Right_Ankle_Pitch": "Left_Ankle_Pitch",
+    "Right_Ankle_Roll": "Left_Ankle_Roll",
+    "Left_Shoulder_Pitch": "Right_Shoulder_Pitch",
+    "Left_Shoulder_Roll": "Right_Shoulder_Roll",
+    "Left_Elbow_Pitch": "Right_Elbow_Pitch",
+    "Left_Elbow_Yaw": "Right_Elbow_Yaw",
+    "Right_Shoulder_Pitch": "Left_Shoulder_Pitch",
+    "Right_Shoulder_Roll": "Left_Shoulder_Roll",
+    "Right_Elbow_Pitch": "Left_Elbow_Pitch",
+    "Right_Elbow_Yaw": "Left_Elbow_Yaw",
+    "Waist": "Waist",
+    "AAHead_yaw": "AAHead_yaw",
+    "Head_pitch": "Head_pitch",
+}
+
+# Joints whose sign flips under left-right mirroring (roll/yaw axes are pseudovectors).
+# Matches holosoma's flip_sign_joint_names convention.
+FLIP_SIGN_JOINT_NAMES: list[str] = [
+    "Left_Hip_Roll",
+    "Left_Hip_Yaw",
+    "Right_Hip_Roll",
+    "Right_Hip_Yaw",
+    "Left_Ankle_Roll",
+    "Right_Ankle_Roll",
+    "Waist",
+    "Left_Shoulder_Roll",
+    "Left_Elbow_Yaw",
+    "Right_Shoulder_Roll",
+    "Right_Elbow_Yaw",
+    "AAHead_yaw",
+]
 
 ##
 # Action Scale (uniform for all joints, matching mjlab)
