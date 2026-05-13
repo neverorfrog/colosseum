@@ -24,17 +24,17 @@ from colosseum.mdp.rewards import (
     foot_orientation_penalty,
     orientation_penalty,
 )
+from colosseum.robots.t1_23dof.constants import (
+    BASE_BODY_NAME,
+    FOOT_BODY_NAMES,
+    FOOT_SITE_NAMES,
+)
 from colosseum.tasks.velocity_booster.mdp.rewards import (
     arm_swing,
     feet_slip,
     feet_swing,
     feet_yaw_diff,
     feet_yaw_mean,
-)
-from colosseum.robots.t1_23dof.constants import (
-    BASE_BODY_NAME,
-    FOOT_BODY_NAMES,
-    FOOT_SITE_NAMES,
 )
 
 rewards = {
@@ -133,10 +133,15 @@ rewards = {
         func=arm_swing,
         weight=-2.0,
         params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=(
-                "Left_Shoulder_Pitch", "Left_Hip_Pitch",
-                "Right_Shoulder_Pitch", "Right_Hip_Pitch",
-            )),
+            "asset_cfg": SceneEntityCfg(
+                "robot",
+                joint_names=(
+                    "Left_Shoulder_Pitch",
+                    "Left_Hip_Pitch",
+                    "Right_Shoulder_Pitch",
+                    "Right_Hip_Pitch",
+                ),
+            ),
             "command_name": "twist",
         },
     ),
@@ -147,6 +152,31 @@ rewards = {
             "asset_cfg": SceneEntityCfg("robot", site_names=FOOT_SITE_NAMES),
             "sensor_name": "feet_ground_contact",
         },
+    ),
+    # =========================
+    # Motion smoothing micro-penalties (booster_gym style)
+    # =========================
+    "penalty_torques": RewardTermCfg(
+        func=joint_torques_l2, weight=-2e-4, params={}
+    ),
+    "penalty_dof_vel": RewardTermCfg(
+        func=joint_vel_l2, weight=-1e-4, params={}
+    ),
+    "penalty_dof_acc": RewardTermCfg(
+        func=joint_acc_l2, weight=-1e-7, params={}
+    ),
+    # =========================
+    # Foot yaw alignment (prevents veering / involuntary body yaw)
+    # =========================
+    "penalty_feet_yaw_diff": RewardTermCfg(
+        func=feet_yaw_diff,
+        weight=-1.0,
+        params={"asset_cfg": SceneEntityCfg("robot", body_names=FOOT_BODY_NAMES)},
+    ),
+    "penalty_feet_yaw_mean": RewardTermCfg(
+        func=feet_yaw_mean,
+        weight=-1.0,
+        params={"asset_cfg": SceneEntityCfg("robot", body_names=FOOT_BODY_NAMES)},
     ),
 }
 
