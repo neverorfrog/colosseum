@@ -104,12 +104,19 @@ class pose_deviation_penalty:
         env: ManagerBasedRlEnv,
         asset_cfg: SceneEntityCfg,
         pose_weights: dict[str, float],
+        command_name: str | None = None,
+        command_threshold: float = 0.05,
     ) -> torch.Tensor:
         del pose_weights
         asset: Entity = env.scene[asset_cfg.name]
         q = asset.data.joint_pos[:, asset_cfg.joint_ids]
         q_default = asset.data.default_joint_pos[:, asset_cfg.joint_ids]
-        return torch.sum(torch.square(q - q_default) * self.weights, dim=1)
+        penalty = torch.sum(torch.square(q - q_default) * self.weights, dim=1)
+        if command_name is not None:
+            cmd = env.command_manager.get_command(command_name)
+            standing = (torch.norm(cmd[:, :2], dim=-1) <= command_threshold).float()
+            penalty = penalty * standing
+        return penalty
 
 
 def feet_distance_penalty(
@@ -300,3 +307,100 @@ def static_stance(
     foot_vel_xy = asset.data.site_lin_vel_w[:, asset_cfg.site_ids, :2]  # (N, 2, 2)
     vel_sq = (foot_vel_xy**2).sum(dim=-1).mean(dim=-1)  # (N,) mean over feet
     return vel_sq * standing
+
+
+class arm_swing_penalty:
+  """Penalize arm motion that is not anti-phase with hip motion.
+
+  For each side: (shoulder_pitch_offset + hip_pitch_offset)²
+  Scaled by forward speed command so the penalty is stronger at higher speeds
+  and zero at standstill.
+
+  This encourages natural arm swing: when the hip pitches forward, the
+  shoulder pitches backward (opposite direction), like human walking.
+  """
+
+  def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRlEnv):
+    asset: Entity = env.scene[cfg.params["asset_cfg"].name]
+    jids = cfg.params["asset_cfg"].joint_ids
+    if isinstance(jids, slice):
+      jids = list(range(jids.start or 0, jids.stop or len(asset.joint_names)))
+    joint_names = [asset.joint_names[i] for i in jids]
+    name_to_local = {n: i for i, n in enumerate(joint_names)}
+
+    _, lsp = asset.find_joints("Left_Shoulder_Pitch", joint_names)
+    _, lhp = asset.find_joints("Left_Hip_Pitch", joint_names)
+    _, rsp = asset.find_joints("Right_Shoulder_Pitch", joint_names)
+    _, rhp = asset.find_joints("Right_Hip_Pitch", joint_names)
+
+    self.ls_idx = name_to_local[lsp[0]]
+    self.lh_idx = name_to_local[lhp[0]]
+    self.rs_idx = name_to_local[rsp[0]]
+    self.rh_idx = name_to_local[rhp[0]]
+
+  def __call__(
+    self,
+    env: ManagerBasedRlEnv,
+    asset_cfg: SceneEntityCfg,
+    command_name: str,
+    command_threshold: float = 0.05,
+  ) -> torch.Tensor:
+    del command_threshold
+    asset: Entity = env.scene[asset_cfg.name]
+    q = asset.data.joint_pos[:, asset_cfg.joint_ids]
+    q_default = asset.data.default_joint_pos[:, asset_cfg.joint_ids]
+
+    ls_off = q[:, self.ls_idx] - q_default[:, self.ls_idx]
+    lh_off = q[:, self.lh_idx] - q_default[:, self.lh_idx]
+    rs_off = q[:, self.rs_idx] - q_default[:, self.rs_idx]
+    rh_off = q[:, self.rh_idx] - q_default[:, self.rh_idx]
+
+    left_error = torch.square(ls_off + lh_off)
+    right_error = torch.square(rs_off + rh_off)
+
+    cmd = env.command_manager.get_command(command_name)
+    speed = torch.abs(cmd[:, 0])
+
+    return (left_error + right_error) * speed
+
+
+def arm_phase(
+  env: ManagerBasedRlEnv,
+  phase_command_name: str,
+  asset_cfg: SceneEntityCfg,
+  swing_amplitude: float = 0.25,
+  tracking_sigma: float = 0.05,
+  command_name: str | None = None,
+  command_threshold: float = 0.05,
+) -> torch.Tensor:
+  """Reward shoulder pitch tracking a cosine arm-swing profile.
+
+  Contralateral coupling: left arm tracks right foot phase, right arm tracks
+  left foot phase.
+      target = default_shoulder_pitch - swing_amplitude * cos(phi_contralateral)
+  When the right foot is at peak swing (phi_right=0), the left arm pitches
+  forward (target = default + A). When the right foot is in stance (phi_right=pi),
+  the left arm pitches backward.
+
+  asset_cfg must resolve [Left_Shoulder_Pitch, Right_Shoulder_Pitch] in
+  that order, matching gait phase order (left=0, right=1).
+  Gated on walking: zeroed when ||cmd_xy|| <= command_threshold.
+  """
+  gait_term = env.command_manager.get_term(phase_command_name)
+  phi = gait_term.phase  # (N, 2): col0=left foot, col1=right foot
+
+  asset: Entity = env.scene[asset_cfg.name]
+  q = asset.data.joint_pos[:, asset_cfg.joint_ids]  # (N, 2): col0=left shoulder, col1=right shoulder
+  q_default = asset.data.default_joint_pos[:, asset_cfg.joint_ids]  # (N, 2)
+
+  # Contralateral coupling: left arm tracks right foot, right arm tracks left foot.
+  phi_contra = phi[:, [1, 0]]
+  target = q_default - swing_amplitude * torch.cos(phi_contra)
+  error = torch.sum(torch.square(q - target), dim=-1)
+  reward = torch.exp(-error / tracking_sigma)
+
+  if command_name is not None:
+    cmd = env.command_manager.get_command(command_name)
+    moving = (torch.norm(cmd[:, :2], dim=-1) > command_threshold).float()
+    reward = reward * moving
+  return reward

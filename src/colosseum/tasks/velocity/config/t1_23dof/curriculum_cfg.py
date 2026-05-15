@@ -15,20 +15,20 @@ curriculum = {
             "velocity_stages": [
                 {
                     "transitions": 0,
-                    "lin_vel_x": (-0.5, 0.5),
+                    "lin_vel_x": (-0.2, 0.5),
                     "lin_vel_y": (-0.2, 0.2),
                     "ang_vel_z": (-0.5, 0.5),
                 },
                 {
                     "transitions": 200_000_000,
-                    "lin_vel_x": (-1.0, 1.0),
-                    "lin_vel_y": (-0.3, 0.3),
+                    "lin_vel_x": (-0.3, 0.75),
+                    "lin_vel_y": (-0.5, 0.5),
                     "ang_vel_z": (-0.75, 0.75),
                 },
                 {
                     "transitions": 400_000_000,
-                    "lin_vel_x": (-1.5, 1.5),
-                    "lin_vel_y": (-0.5, 0.5),
+                    "lin_vel_x": (-0.5, 1.0),
+                    "lin_vel_y": (-0.8, 0.8),
                     "ang_vel_z": (-1.0, 1.0),
                 },
             ],

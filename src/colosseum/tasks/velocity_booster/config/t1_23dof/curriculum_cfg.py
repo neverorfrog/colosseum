@@ -98,7 +98,7 @@ curriculum = {
                 "penalty_pose_deviation",
                 "penalty_feet_yaw_diff",
                 "penalty_feet_yaw_mean",
-                "arm_swing",
+                "penalty_upper_posture_standing",
             ],
             "initial_scale": 0.1,
             "min_scale": 0.01,

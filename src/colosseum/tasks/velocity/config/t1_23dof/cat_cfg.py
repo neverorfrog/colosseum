@@ -20,7 +20,7 @@ commands: Dict[str, CommandTermCfg] = {
         debug_vis=True,
         resampling_time_range=(7.0, 10.0),
         ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-1.0, 1.0),
+            lin_vel_x=(-0.5, 1.0),
             lin_vel_y=(-0.8, 0.8),
             ang_vel_z=(-1.0, 1.0),
             heading=(-math.pi, math.pi),
@@ -33,9 +33,7 @@ commands: Dict[str, CommandTermCfg] = {
     ),
 }
 
-VELOCITY_ACTION_SCALE = {
-    k: v for k, v in ACTION_SCALE.items()
-}
+VELOCITY_ACTION_SCALE = {k: v for k, v in ACTION_SCALE.items()}
 
 actions: dict[str, ActionTermCfg] = {
     "joint_pos": JointPositionActionCfg(

@@ -15,12 +15,14 @@ from mjlab.tasks.velocity.mdp import (
 )
 
 from colosseum.mdp.rewards import (
+    arm_phase,
     base_height_penalty,
     feet_distance_penalty,
     feet_phase,
     flat_orientation,
     foot_orientation_penalty,
     orientation_penalty,
+    pose_deviation_penalty,
     static_stance,
 )
 from colosseum.robots.t1_23dof.constants import (
@@ -107,26 +109,59 @@ rewards = {
             "min_dist": 0.15,
         },
     ),
-    # =========================
-    # Foot trajectory Rewards
-    # =========================
-    "feet_phase": RewardTermCfg(
-        func=feet_phase,
-        weight=3.0,
-        params={
-            "phase_command_name": "gait_phase",
-            "height_sensor_name": "foot_height_scan",
-            "swing_height": 0.08,
-            "tracking_sigma": 0.008,
-            "command_name": "twist",
-            "command_threshold": 0.05,
-        },
-    ),
     "static_stance": RewardTermCfg(
         func=static_stance,
         weight=-1.0,
         params={
             "asset_cfg": SceneEntityCfg("robot", site_names=(FOOT_SITE_NAMES)),
+            "command_name": "twist",
+            "command_threshold": 0.05,
+        },
+    ),
+    "penalty_upper_posture_standing": RewardTermCfg(
+        func=pose_deviation_penalty,
+        weight=-2.0,
+        params={
+            "asset_cfg": SceneEntityCfg(
+                "robot",
+                joint_names=(r"(?i).*shoulder.*", r"(?i).*elbow.*", r"(?i).*head.*"),
+            ),
+            "pose_weights": {
+                r"(?i).*shoulder_roll.*": 10.0,
+                r"(?i).*shoulder_pitch.*": 3.0,
+                r"(?i).*elbow.*": 2.0,
+                r"(?i).*head.*": 0.2,
+            },
+            "command_name": "twist",
+            "command_threshold": 0.05,
+        },
+    ),
+    # =========================
+    # Gait Phase Rewards
+    # =========================
+    "feet_phase": RewardTermCfg(
+        func=feet_phase,
+        weight=4.0,
+        params={
+            "phase_command_name": "gait_phase",
+            "height_sensor_name": "foot_height_scan",
+            "swing_height": 0.05,
+            "tracking_sigma": 0.008,
+            "command_name": "twist",
+            "command_threshold": 0.05,
+        },
+    ),
+    "arm_phase": RewardTermCfg(
+        func=arm_phase,
+        weight=0.5,
+        params={
+            "phase_command_name": "gait_phase",
+            "asset_cfg": SceneEntityCfg(
+                "robot",
+                joint_names=("Left_Shoulder_Pitch", "Right_Shoulder_Pitch"),
+            ),
+            "swing_amplitude": 0.2,
+            "tracking_sigma": 0.25,
             "command_name": "twist",
             "command_threshold": 0.05,
         },
@@ -142,7 +177,7 @@ rewards["penalty_pose_deviation"].params["std_walking"] = {
     r"(?i).*ankle_pitch.*": 0.25,
     r"(?i).*ankle_roll.*": 0.1,
     r"Waist": 0.1,
-    r"(?i).*shoulder_pitch.*": 0.15,
+    r"(?i).*shoulder_pitch.*": 0.4,
     r"(?i).*shoulder_roll.*": 0.15,
     r"(?i).*elbow.*": 0.15,
     r"(?i).*head.*": 0.2,
