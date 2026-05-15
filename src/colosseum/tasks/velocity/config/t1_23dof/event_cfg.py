@@ -61,7 +61,7 @@ events = {
         func=dr.geom_friction,
         params={
             "asset_cfg": SceneEntityCfg("robot", geom_names=FOOT_GEOM_NAMES),
-            "ranges": (0.2, 1.2),
+            "ranges": (0.4, 1.2),
             "operation": "abs",
             "shared_random": True,
         },
@@ -83,7 +83,7 @@ events = {
             "ranges": {
                 0: (-0.05, 0.05),
                 1: (-0.05, 0.05),
-                2: (-0.1, 0.1),
+                2: (-0.05, 0.05),
             },
         },
     ),
@@ -109,8 +109,17 @@ events = {
         mode="startup",
         func=dr.joint_friction,
         params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=(".*",)),
+            "asset_cfg": SceneEntityCfg("robot", joint_names=(".*(Hip|Knee|Ankle|Waist|Head).*",)),
             "ranges": (1.0, 20.0),  # ankle: 0.1 Nm × [1, 20] = 0.1–2.0 Nm
+            "operation": "scale",
+        },
+    ),
+    "arm_joint_friction": EventTermCfg(
+        mode="startup",
+        func=dr.joint_friction,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=(".*(Shoulder|Elbow).*",)),
+            "ranges": (1.0, 5.0),
             "operation": "scale",
         },
     ),
