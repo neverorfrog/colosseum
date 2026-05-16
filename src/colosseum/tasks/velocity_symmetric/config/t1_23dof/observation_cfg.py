@@ -41,12 +41,12 @@ actor_terms = {
   ),
   "projected_gravity": MirrorableObservationTermCfg(
     func=projected_gravity,
-    noise=Unoise(n_min=-0.05, n_max=0.05),
+    noise=Unoise(n_min=-0.1, n_max=0.1),
     mirror_fn=mirror_projected_gravity,
   ),
   "joint_pos": MirrorableObservationTermCfg(
     func=joint_pos_rel,
-    noise=Unoise(n_min=-0.01, n_max=0.01),
+    noise=Unoise(n_min=-0.05, n_max=0.05),
     mirror_fn=mirror_joints,
   ),
   "joint_vel": MirrorableObservationTermCfg(
