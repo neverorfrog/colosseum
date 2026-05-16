@@ -30,7 +30,7 @@ events = {
     func=reset_joints_by_offset,
     mode="reset",
     params={
-      "position_range": (-0.05, 0.05),
+      "position_range": (-0.1, 0.1),
       "velocity_range": (0.0, 0.0),
       "asset_cfg": SceneEntityCfg("robot", joint_names=(".*",)),
     },
@@ -81,19 +81,10 @@ events = {
       "asset_cfg": SceneEntityCfg("robot", body_names=(BASE_BODY_NAME,)),
       "operation": "add",
       "ranges": {
-        0: (-0.05, 0.05),
-        1: (-0.05, 0.05),
-        2: (-0.05, 0.05),
+        0: (-0.02, 0.02),
+        1: (-0.02, 0.02),
+        2: (-0.02, 0.02),
       },
-    },
-  ),
-  "base_mass": EventTermCfg(
-    mode="startup",
-    func=dr.body_mass,
-    params={
-      "asset_cfg": SceneEntityCfg("robot", body_names=(BASE_BODY_NAME,)),
-      "ranges": (0.8, 1.2),
-      "operation": "scale",
     },
   ),
   "joint_damping": EventTermCfg(
@@ -112,7 +103,7 @@ events = {
       "asset_cfg": SceneEntityCfg(
         "robot", joint_names=(".*(Hip|Knee|Ankle|Waist|Head).*",)
       ),
-      "ranges": (1.0, 20.0),  # ankle: 0.1 Nm × [1, 20] = 0.1–2.0 Nm
+      "ranges": (1.0, 5.0),
       "operation": "scale",
     },
   ),
@@ -132,6 +123,44 @@ events = {
       "asset_cfg": SceneEntityCfg("robot", joint_names=(".*",)),
       "ranges": (0.9, 1.1),
       "operation": "scale",
+    },
+  ),
+  "pd_gains": EventTermCfg(
+    mode="startup",
+    func=dr.pd_gains,
+    params={
+      "asset_cfg": SceneEntityCfg("robot"),
+      "kp_range": (0.9, 1.1),
+      "kd_range": (0.9, 1.1),
+      "operation": "scale",
+    },
+  ),
+  "effort_limits": EventTermCfg(
+    mode="startup",
+    func=dr.effort_limits,
+    params={
+      "asset_cfg": SceneEntityCfg("robot"),
+      "effort_limit_range": (0.8, 1.0),
+      "operation": "scale",
+    },
+  ),
+  # link_inertia runs first (all bodies ≈ ±10% mass+inertia), then base_inertia
+  # overwrites the base with higher variation (≈ ±20%). Both read from default
+  # model values so they do not compound — the second write wins for the base.
+  "link_inertia": EventTermCfg(
+    mode="startup",
+    func=dr.pseudo_inertia,
+    params={
+      "asset_cfg": SceneEntityCfg("robot", body_names=(".*",)),
+      "alpha_range": (-0.05, 0.05),
+    },
+  ),
+  "base_inertia": EventTermCfg(
+    mode="startup",
+    func=dr.pseudo_inertia,
+    params={
+      "asset_cfg": SceneEntityCfg("robot", body_names=(BASE_BODY_NAME,)),
+      "alpha_range": (-0.1, 0.1),
     },
   ),
 }

@@ -33,7 +33,7 @@ actor_terms = {
   ),
   "joint_vel": ObservationTermCfg(
     func=joint_vel_rel,
-    noise=Unoise(n_min=-1.5, n_max=1.5),
+    noise=Unoise(n_min=-0.1, n_max=0.1),
   ),
   "actions": ObservationTermCfg(func=last_action),
   "command": ObservationTermCfg(
