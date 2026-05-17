@@ -42,4 +42,14 @@ t1-velocity-symmetric:
       run: t1-velocity-symmetric-PPO-42-20260515_174910
       step: 0
       created: '2026-05-15T16:34:50.634590+00:00'
+    v3:
+      file: v3/t1-velocity-symmetric_ppo_v3.onnx
+      run: t1-velocity-symmetric-PPO-42-20260516_164354
+      step: 0
+      created: '2026-05-16T21:15:12.905861+00:00'
+    v4:
+      file: v4/t1-velocity-symmetric_ppo_v4.onnx
+      run: t1-velocity-symmetric-PPO-42-20260516_232616
+      step: 0
+      created: '2026-05-17T08:21:45.428269+00:00'
   default: v0
