@@ -37,12 +37,12 @@ rewards = {
   "track_linear_velocity": RewardTermCfg(
     func=track_linear_velocity,
     weight=4.0,
-    params={"command_name": "twist", "std": math.sqrt(0.2)},
+    params={"command_name": "twist", "std": math.sqrt(0.15)},
   ),
   "track_angular_velocity": RewardTermCfg(
     func=track_angular_velocity,
     weight=3.0,
-    params={"command_name": "twist", "std": math.sqrt(0.2)},
+    params={"command_name": "twist", "std": math.sqrt(0.15)},
   ),
   # =========================
   # Survival rewards
@@ -141,8 +141,8 @@ rewards = {
         "robot",
         joint_names=("Left_Shoulder_Pitch", "Right_Shoulder_Pitch"),
       ),
-      "swing_amplitude": 0.2,
-      "tracking_sigma": 0.25,
+      "swing_amplitude": 0.25,
+      "tracking_sigma": 0.15,
       "command_name": "twist",
       "command_threshold": 0.05,
     },

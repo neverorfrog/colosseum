@@ -62,7 +62,7 @@ curriculum = {
           },
         },
         {
-          "transitions": 300_000_000,
+          "transitions": 500_000_000,
           "velocity_range": {
             "x": (-0.5, 0.5),
             "y": (-0.5, 0.5),
@@ -73,7 +73,7 @@ curriculum = {
           },
         },
         {
-          "transitions": 500_000_000,
+          "transitions": 700_000_000,
           "velocity_range": {
             "x": (-1.0, 1.0),
             "y": (-1.0, 1.0),

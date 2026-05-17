@@ -6,20 +6,21 @@ from mjlab.envs.mdp.terminations import bad_orientation, nan_detection, time_out
 from mjlab.managers import CommandTermCfg
 from mjlab.managers.action_manager import ActionTermCfg
 from mjlab.managers.termination_manager import TerminationTermCfg
-from mjlab.tasks.velocity.mdp import UniformVelocityCommandCfg
 
+from colosseum.mdp.velocity_command import TrueErrorVelocityCommandCfg
 from colosseum.robots.t1_23dof.constants import ACTION_SCALE
 from colosseum.tasks.dribbling.mdp.gait_phase_command import GaitPhaseCommandCfg
 
 commands: Dict[str, CommandTermCfg] = {
-  "twist": UniformVelocityCommandCfg(
+  "twist": TrueErrorVelocityCommandCfg(
     entity_name="robot",
     rel_forward_envs=0.3,
+    rel_heading_envs=0.5,
     heading_command=True,
     heading_control_stiffness=0.5,
     debug_vis=True,
     resampling_time_range=(7.0, 10.0),
-    ranges=UniformVelocityCommandCfg.Ranges(
+    ranges=TrueErrorVelocityCommandCfg.Ranges(
       lin_vel_x=(-0.5, 1.0),
       lin_vel_y=(-0.8, 0.8),
       ang_vel_z=(-1.0, 1.0),
