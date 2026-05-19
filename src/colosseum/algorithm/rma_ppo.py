@@ -18,6 +18,7 @@ Phase 2: call ``build_adaptation_optimizer()`` then use ``adaptation_learning_st
 
 from __future__ import annotations
 
+import enum
 import time
 from collections import defaultdict
 from itertools import chain
@@ -35,6 +36,19 @@ from colosseum.algorithm.utils.rollout_buffer import RolloutBuffer
 from colosseum.config.types.algorithm import PpoConfig, register_algorithm
 from colosseum.managers.rma_manager import RmaManager
 from colosseum.utils.logger import extract_episode_metrics
+
+
+class RmaPhase(enum.Enum):
+  """Training phase for RMA-PPO.
+
+  PRIVILEGED:      Phase 1 — PPO with privileged encoder; latent noise during learning.
+  ADAPT_TRAIN:     Phase 2 — MSE regression for adaptation encoder; policy frozen.
+  POLICY_FINETUNE: Phase 3 — PPO with frozen adaptation encoder; closes sim2real gap.
+  """
+
+  PRIVILEGED = "privileged"
+  ADAPT_TRAIN = "adapt_train"
+  POLICY_FINETUNE = "finetune"
 
 
 @register_algorithm("rma_ppo", config_class=PpoConfig)
@@ -56,10 +70,7 @@ class RmaPPO(PPO):
     # Resolve rma_manager before super().__init__ so _build_networks can use it
     unwrapped = getattr(env, "unwrapped", env)
     self.rma_manager: RmaManager = unwrapped.rma_manager
-    self._phase: int = 1  # 1 = PPO (default), 2 = adaptation encoder regression
-    # Inference phase: controls which encoder _compose_actor_input uses at eval time.
-    # Reads from config.inference_phase if present (RmaPPOConfig), else defaults to 1.
-    self._inference_phase: int = getattr(config, "inference_phase", 1)
+    self.phase: RmaPhase = RmaPhase.PRIVILEGED
     super().__init__(
       config=config, env=env, device=device, log_fn=log_fn, log_interval=log_interval
     )
@@ -84,15 +95,15 @@ class RmaPPO(PPO):
     ).to(self.device)
 
   def _build_optimizers(self) -> None:
-    """Single optimizer for actor + critic + all encoders."""
+    """Phase 1: actor + privileged encoders share one optimizer; critic has its own."""
     assert isinstance(self.config, PpoConfig)
-    self.optimizer = optim.Adam(
-      chain(
-        self.actor.parameters(),
-        self.value_net.parameters(),
-        self.rma_manager.parameters(),
-      ),
-      lr=self.config.learning_rate,
+    self.actor_optimizer = optim.Adam(
+      chain(self.actor.parameters(), self.rma_manager.privileged_parameters()),
+      lr=self.actor_learning_rate,
+    )
+    self.critic_optimizer = optim.Adam(
+      self.value_net.parameters(),
+      lr=self.critic_learning_rate,
     )
 
   def _build_rollout_buffer(self) -> None:
@@ -220,10 +231,10 @@ class RmaPPO(PPO):
   # ------------------------------------------------------------------
 
   def train(self) -> None:
-    if self._phase == 1:
-      super().train()
-    else:
+    if self.phase == RmaPhase.ADAPT_TRAIN:
       self._train_phase2()
+    else:
+      super().train()  # PRIVILEGED and POLICY_FINETUNE both use the PPO loop
 
   def _train_phase2(self) -> None:
     """Phase 2 outer loop: adaptation encoder regression.
@@ -436,6 +447,37 @@ class RmaPPO(PPO):
         "on at least one RmaTerm."
       )
     self._adaptation_optimizer = optim.Adam(adapt_params, lr=lr)
+    self.phase = RmaPhase.ADAPT_TRAIN
+
+  def build_phase3_optimizer(
+    self,
+    actor_lr: float | None = None,
+    critic_lr: float | None = None,
+  ) -> None:
+    """Prepare for Phase 3: freeze encoders, rebuild optimizers for actor+critic only.
+
+    Call this after loading a Phase 2 checkpoint. Freezes both privileged and
+    adaptation encoders; unfreezes actor and critic; rebuilds actor/critic
+    optimizers with no encoder parameters.
+    """
+    for p in self.rma_manager.privileged_parameters():
+      p.requires_grad_(False)
+    for p in self.rma_manager.adaptation_parameters():
+      p.requires_grad_(False)
+    for p in self.actor.parameters():
+      p.requires_grad_(True)
+    for p in self.value_net.parameters():
+      p.requires_grad_(True)
+
+    self.actor_optimizer = optim.Adam(
+      self.actor.parameters(),
+      lr=actor_lr or self.actor_learning_rate,
+    )
+    self.critic_optimizer = optim.Adam(
+      self.value_net.parameters(),
+      lr=critic_lr or self.critic_learning_rate,
+    )
+    self.phase = RmaPhase.POLICY_FINETUNE
 
   def adaptation_learning_step(
     self,
@@ -506,27 +548,124 @@ class RmaPPO(PPO):
   ) -> torch.Tensor:
     """Concatenate normalised proprio with encoder latents.
 
-    During training (_phase drives the training loop) this is always called
-    with privileged_obs and runs phase=1. At inference time _inference_phase
-    controls which encoder is used: 1=privileged (default), 2=adaptation.
+    Phase dispatch:
+      PRIVILEGED:      privileged encoder; noise applied only when gradients
+                       are enabled (i.e. the learning step, not collection).
+      ADAPT_TRAIN:     privileged encoder, no noise (policy frozen, rollout only).
+      POLICY_FINETUNE: adaptation encoder, no noise (encoder frozen).
 
     Args:
       actor_obs:      (N, actor_obs_dim) normalised proprioceptive obs.
-      privileged_obs: Dict of GT privileged groups for the encoders.
+      privileged_obs: Dict of GT privileged groups (unused in POLICY_FINETUNE).
 
     Returns:
       (N, actor_obs_dim + total_latent_dim) actor input tensor.
     """
-    if self._inference_phase == 2 and not self.actor.training:
+    if self.phase == RmaPhase.POLICY_FINETUNE:
+      # NOTE: Phase 3 with shuffled PPO mini-batches requires pre-stored
+      # adaptation obs (see build_phase3_optimizer). For now we snapshot the
+      # current term buffers, which is correct during sequential collection
+      # but not during the randomised learning step.
       adapt_obs = self.rma_manager.get_adaptation_obs()
-      z = self.rma_manager.encode_phase2_with_fallback(privileged_obs, adapt_obs)
+      z = self.rma_manager.encode(adapt_obs, use_adaptation=True, apply_noise=False)
     else:
-      z = self.rma_manager.encode(privileged_obs)
+      # Noise only during the Phase 1 learning step (gradients enabled).
+      apply_noise = torch.is_grad_enabled() and self.phase == RmaPhase.PRIVILEGED
+      z = self.rma_manager.encode(privileged_obs, apply_noise=apply_noise)
     return torch.cat([actor_obs, z], dim=-1)
 
   # ------------------------------------------------------------------
   # Checkpoint
   # ------------------------------------------------------------------
+
+  def export_onnx(self, path: str | Path) -> Path:
+    """Export RMA policy to ONNX, matching the encoder path used at inference.
+
+    Phase 1 (PRIVILEGED): uses the trained privileged encoder.
+      Extra inputs are the privileged obs groups (e.g. "env_params", 2-D).
+      play.py reads them from obs_dict by name each step.
+
+    Phase 2/3: uses the trained adaptation encoder with a stateful window.
+      The window is both an input and output (different names: "<g>" / "<g>_out")
+      so the caller can feed it back generically without any model knowledge.
+      play.py pairs extra inputs with extra outputs positionally.
+    """
+    import torch.nn as nn
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    self.actor.eval()
+    self.actor_obs_normalizer.eval()
+    self.rma_manager.eval()
+
+    obs_normalizer = self.actor_obs_normalizer
+    actor = self.actor
+    rma_manager = self.rma_manager
+
+    if self.phase == RmaPhase.PRIVILEGED:
+      raise RuntimeError(
+        "ONNX export requires a Phase 2 or Phase 3 checkpoint. "
+        "Phase 1 uses the privileged encoder which needs ground-truth physics "
+        "parameters unavailable on the real robot. Run Phase 2 (adaptation "
+        "training) first, then export."
+      )
+    else:
+      # --- Phase 2/3: adaptation encoder with stateful rolling window ---
+      adapt_info: list[tuple[str, nn.Module, tuple[int, ...]]] = []
+      for term in rma_manager._terms.values():
+        if term.adaptation_encoder is not None and term.cfg.adaptation_obs_group is not None:
+          adapt_info.append((
+            term.cfg.adaptation_obs_group,
+            term.adaptation_encoder,
+            tuple(term._window.shape),
+          ))
+
+      class _AdaptWrapper(nn.Module):
+        def __init__(self) -> None:
+          super().__init__()
+          self.obs_normalizer = obs_normalizer
+          self.actor = actor
+          self.encoders = nn.ModuleList([enc for _, enc, _ in adapt_info])
+
+        def forward(
+          self, actor_obs: torch.Tensor, *windows_in: torch.Tensor
+        ) -> tuple[torch.Tensor, ...]:
+          latents = []
+          windows_out = []
+          for i in range(len(adapt_info)):
+            w_out = torch.cat([windows_in[i][:, 1:, :], actor_obs.unsqueeze(1)], dim=1)
+            windows_out.append(w_out)
+            latents.append(self.encoders[i](w_out))
+          z = torch.cat(latents, dim=-1)
+          norm_obs = self.obs_normalizer(actor_obs)
+          actions = self.actor(torch.cat([norm_obs, z], dim=-1))
+          return (actions, *windows_out)
+
+      wrapper = _AdaptWrapper().cpu()
+      wrapper.eval()
+
+      actor_obs_dummy = torch.zeros(1, self.actor_obs_dim)
+      window_dummies = tuple(
+        torch.zeros(1, shape[1], shape[2]) for _, _, shape in adapt_info
+      )
+      state_names = [name for name, _, _ in adapt_info]
+      torch.onnx.export(
+        wrapper,
+        (actor_obs_dummy,) + window_dummies,
+        str(path),
+        export_params=True,
+        opset_version=18,
+        input_names=["obs"] + state_names,
+        output_names=["actions"] + [n + "_out" for n in state_names],
+      )
+      for _, enc, _ in adapt_info:
+        enc.to(self.device)
+
+    self.actor.to(self.device)
+    self.actor_obs_normalizer.to(self.device)
+    logger.success(f"ONNX exported (phase={self.phase.value}): {path}")
+    return path
 
   def save(self, path: str | Path, **extra_state: Any) -> None:
     """Save PPO checkpoint including encoder state dicts."""
@@ -536,12 +675,13 @@ class RmaPPO(PPO):
     state_dict = {
       "actor_state_dict": self.actor.state_dict(),
       "value_net_state_dict": self.value_net.state_dict(),
-      "optimizer_state_dict": self.optimizer.state_dict(),
+      "actor_optimizer_state_dict": self.actor_optimizer.state_dict(),
+      "critic_optimizer_state_dict": self.critic_optimizer.state_dict(),
       "actor_obs_normalizer_state_dict": self.actor_obs_normalizer.state_dict(),
       "critic_obs_normalizer_state_dict": self.critic_obs_normalizer.state_dict(),
       "rma_manager_state_dict": self.rma_manager.state_dict(),
       "global_step": extra_state["global_step"],
-      "learning_rate": self.learning_rate,
+      "phase": self.phase.value,
       "config": self.config,
     }
     for key, value in extra_state.items():
@@ -555,7 +695,9 @@ class RmaPPO(PPO):
 
     self.actor.load_state_dict(checkpoint["actor_state_dict"])
     self.value_net.load_state_dict(checkpoint["value_net_state_dict"])
-    self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+    if "actor_optimizer_state_dict" in checkpoint:
+      self.actor_optimizer.load_state_dict(checkpoint["actor_optimizer_state_dict"])
+      self.critic_optimizer.load_state_dict(checkpoint["critic_optimizer_state_dict"])
     self.actor_obs_normalizer.load_state_dict(
       checkpoint["actor_obs_normalizer_state_dict"]
     )
@@ -566,15 +708,17 @@ class RmaPPO(PPO):
       self.rma_manager.load_state_dict(checkpoint["rma_manager_state_dict"])
 
     self.global_step = checkpoint["global_step"]
-    self.learning_rate = checkpoint.get("learning_rate", self.learning_rate)
     self._restore_env_step_counter()
 
-    metadata = checkpoint.get("metadata", {})
-    if metadata.get("phase") == 2:
-      self._inference_phase = 2
+    phase_str = checkpoint.get("phase")
+    if phase_str:
+      try:
+        self.phase = RmaPhase(phase_str)
+      except ValueError:
+        pass
 
     return {
       "global_step": checkpoint["global_step"],
-      "metadata": metadata,
+      "metadata": checkpoint.get("metadata", {}),
       "config": checkpoint.get("config"),
     }

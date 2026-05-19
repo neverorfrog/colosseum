@@ -34,7 +34,8 @@ export-model = { cmd = "src/colosseum/scripts/export_model.sh", description = "E
 import-run = { cmd = "python -m colosseum.scripts.import_run", description = "Import a run from W&B into the model registry" }
 
 # Dribbling tasks
-train-phase2 = { cmd = "python research/dribbling/scripts/train_phase2.py", description = "RMA Phase 2 adaptation encoder training" }
+train-phase2 = { cmd = "python -m colosseum.scripts.train_phase2", description = "RMA Phase 2 adaptation encoder training" }
+train-phase2-dribbling = { cmd = "python research/dribbling/scripts/train_phase2.py", description = "RMA Phase 2 adaptation encoder training (dribbling-specific)" }
 pipeline-dribbling = { cmd = "python research/dribbling/scripts/pipeline_dribbling.py", description = "Full dribbling curriculum pipeline (Phase 1 + Phase 2 per stage)" }
 eval-dribbling = { cmd = "python research/dribbling/scripts/evaluate_dribbling.py", description = "Run the dribbling evaluation protocol" }
 obstacle-ablation = { cmd = "python research/dribbling/scripts/obstacle_ablation.py", description = "Ablation of obstacle presence in dribbling curriculum" }

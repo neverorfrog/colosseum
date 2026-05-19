@@ -458,19 +458,17 @@ class PPO(BaseAlgorithm):
       actor_obs_norm = self.actor_obs_normalizer(actor_obs_raw)
       critic_obs = self.critic_obs_normalizer(critic_obs_raw)
 
-      # Compose actor input (identity in PPO; RmaPPO overrides to append encoder latents)
-      privileged_obs = batch.get("privileged_obs", {})
-      actor_obs = self._compose_actor_input(actor_obs_norm, privileged_obs)
-
       # --- Symmetry data augmentation (holosoma style) ---
-      # Double the minibatch by mirroring observations and actions.
-      original_batch_size = actor_obs.shape[0]
+      # Augment BEFORE compose so only proprio is mirrored, not any appended
+      # encoder latents (subclasses like RmaPPO append latents in _compose_actor_input).
+      original_batch_size = actor_obs_norm.shape[0]
+      privileged_obs = batch.get("privileged_obs", {})
       if (
         self._use_symmetry
         and self.config.symmetry_data_augmentation
         and self._action_mirror_fn is not None
       ):
-        actor_obs = augment_obs(actor_obs, self._actor_sym_spec)
+        actor_obs_norm = augment_obs(actor_obs_norm, self._actor_sym_spec)
         actions = augment_actions(actions, self._action_mirror_fn)
         critic_obs = augment_obs(critic_obs, self._critic_sym_spec)
         old_log_probs = old_log_probs.repeat(2)
@@ -479,6 +477,14 @@ class PPO(BaseAlgorithm):
         returns = returns.repeat(2, 1)
         old_action_means = old_action_means.repeat(2, 1)
         old_action_stds = old_action_stds.repeat(2, 1)
+        # Repeat privileged obs so _compose_actor_input sees a consistent batch.
+        # Latent z is left-right symmetric (physics scalars don't flip under mirroring).
+        privileged_obs = {
+          k: v.repeat(2, *([1] * (v.dim() - 1))) for k, v in privileged_obs.items()
+        }
+
+      # Compose actor input (identity in PPO; RmaPPO overrides to append encoder latents)
+      actor_obs = self._compose_actor_input(actor_obs_norm, privileged_obs)
 
       # Re-evaluate actions with current policy
       new_log_probs, entropy_all = self.actor.evaluate(actor_obs, actions)
@@ -579,8 +585,8 @@ class PPO(BaseAlgorithm):
             )
           else:
             mu_original = self.actor.forward(actor_obs.detach())
-            mirrored_actor_obs = mirror_obs(
-              actor_obs.detach(), self._actor_sym_spec
+            mirrored_actor_obs = self._mirror_actor_input(
+              actor_obs_norm.detach(), privileged_obs
             )
             mu_mirrored = self.actor.forward(mirrored_actor_obs)
             symmetry_actor_loss = torch.nn.functional.mse_loss(
@@ -682,6 +688,15 @@ class PPO(BaseAlgorithm):
   ) -> torch.Tensor:
     """Build the full actor input. Identity in PPO; RmaPPO overrides to append encoder latents."""
     return actor_obs
+
+  def _mirror_actor_input(
+    self,
+    actor_obs_norm: torch.Tensor,
+    privileged_obs: dict[str, torch.Tensor],
+  ) -> torch.Tensor:
+    """Mirror actor_obs_norm then recompose. Used by the non-augmentation symmetry loss path."""
+    mirrored_norm = mirror_obs(actor_obs_norm, self._actor_sym_spec)
+    return self._compose_actor_input(mirrored_norm, privileged_obs)
 
   def _prewarm_actor_obs(self, actor_obs: torch.Tensor) -> torch.Tensor:
     """Transform actor obs for normalizer pre-warming. Override in subclasses."""

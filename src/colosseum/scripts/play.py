@@ -192,6 +192,7 @@ def create_agent(config: PlayConfig, env: ManagerBasedRlEnv, device: torch.devic
             sys.exit(1)
         logger.info(f"Loading ONNX: {onnx_path}")
 
+        import numpy as np
         import onnxruntime as ort
         session = ort.InferenceSession(str(onnx_path))
 
@@ -213,12 +214,25 @@ def create_agent(config: PlayConfig, env: ManagerBasedRlEnv, device: torch.devic
             log_interval=-1,
         )
 
+        # Generic stateful pattern: extra inputs (beyond "obs") are recurrent
+        # state; the model outputs updated state after "actions", positionally paired.
+        state_input_names = [inp.name for inp in session.get_inputs() if inp.name != "obs"]
+        state_bufs: list[np.ndarray] = []
+        for inp in session.get_inputs():
+            if inp.name != "obs":
+                shape = tuple(d if isinstance(d, int) else 1 for d in inp.shape)
+                state_bufs.append(np.zeros(shape, dtype=np.float32))
+
         def onnx_agent(obs_dict):
             with torch.no_grad():
-                actor_obs = algo.get_actor_obs(obs_dict)
-                actor_obs_np = actor_obs.cpu().numpy()
-                actions_np = session.run(None, {"obs": actor_obs_np})[0]
-                return torch.from_numpy(actions_np).to(device)
+                actor_obs_np = algo.get_actor_obs(obs_dict).cpu().numpy()
+                feed: dict[str, np.ndarray] = {"obs": actor_obs_np}
+                for name, buf in zip(state_input_names, state_bufs):
+                    feed[name] = buf
+                outputs = session.run(None, feed)
+                for i in range(len(state_bufs)):
+                    state_bufs[i] = outputs[i + 1]
+                return torch.from_numpy(outputs[0]).to(device)
 
         return onnx_agent
 
