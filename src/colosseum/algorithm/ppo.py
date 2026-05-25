@@ -617,9 +617,22 @@ class PPO(BaseAlgorithm):
       # --- Gradient step (separate optimizers, holosoma style) ---
       self.actor_optimizer.zero_grad()
       self.critic_optimizer.zero_grad()
+
+      # Guard: NaN/Inf loss (from NaN rewards/advantages) would corrupt params.
+      # Skip this minibatch instead of propagating NaN through the network.
+      if not torch.isfinite(loss):
+        continue
+
       loss.backward()
       self._distributed_average_optimizer_grads(self.actor_optimizer)
       self._distributed_average_optimizer_grads(self.critic_optimizer)
+      # Second-layer guard: sanitize any residual NaN gradients before clipping.
+      for p in self.actor.parameters():
+        if p.grad is not None:
+          p.grad.nan_to_num_(nan=0.0, posinf=0.0, neginf=0.0)
+      for p in self.value_net.parameters():
+        if p.grad is not None:
+          p.grad.nan_to_num_(nan=0.0, posinf=0.0, neginf=0.0)
       torch.nn.utils.clip_grad_norm_(
         self.actor.parameters(), max_norm=self.config.max_grad_norm
       )
