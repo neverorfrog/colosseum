@@ -358,9 +358,9 @@ def static_stance(
   cmd = env.command_manager.get_command(command_name)
   standing = (torch.norm(cmd[:, :2], dim=-1) <= command_threshold).float()
   asset: Entity = env.scene[asset_cfg.name]
-  foot_vel_xy = asset.data.site_lin_vel_w[:, asset_cfg.site_ids, :2]  # (N, n_feet, 2)
-  vel_norm = torch.norm(foot_vel_xy, dim=-1)  # (N, n_feet)
-  return torch.sum(vel_norm, dim=-1) * standing
+  foot_vel_xy = asset.data.site_lin_vel_w[:, asset_cfg.site_ids, :2]  # (N, 2, 2)
+  vel_sq = (foot_vel_xy**2).sum(dim=-1).mean(dim=-1)  # (N,) mean over feet
+  return vel_sq * standing
 
 
 class arm_swing_penalty:
