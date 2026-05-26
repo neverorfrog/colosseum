@@ -36,22 +36,22 @@ actor_terms = {
   "base_ang_vel": MirrorableObservationTermCfg(
     func=builtin_sensor,
     params={"sensor_name": "robot/imu_ang_vel"},
-    noise=Unoise(n_min=-0.2, n_max=0.2),
+    noise=Unoise(n_min=-0.1, n_max=0.1),
     mirror_fn=mirror_ang_vel,
   ),
   "projected_gravity": MirrorableObservationTermCfg(
     func=projected_gravity,
-    noise=Unoise(n_min=-0.1, n_max=0.1),
+    noise=Unoise(n_min=-0.05, n_max=0.05),
     mirror_fn=mirror_projected_gravity,
   ),
   "joint_pos": MirrorableObservationTermCfg(
     func=joint_pos_rel,
-    noise=Unoise(n_min=-0.05, n_max=0.05),
+    noise=Unoise(n_min=-0.01, n_max=0.01),
     mirror_fn=mirror_joints,
   ),
   "joint_vel": MirrorableObservationTermCfg(
     func=joint_vel_rel,
-    noise=Unoise(n_min=-0.05, n_max=0.05),
+    noise=Unoise(n_min=-0.1, n_max=0.1),
     mirror_fn=mirror_joints,
   ),
   "actions": MirrorableObservationTermCfg(
@@ -75,7 +75,7 @@ critic_terms = {
   "base_lin_vel": MirrorableObservationTermCfg(
     func=builtin_sensor,
     params={"sensor_name": "robot/imu_lin_vel"},
-    noise=Unoise(n_min=-0.5, n_max=0.5),
+    noise=Unoise(n_min=-0.1, n_max=0.1),
     mirror_fn=mirror_base_lin_vel,
   ),
   "base_height": ObservationTermCfg(

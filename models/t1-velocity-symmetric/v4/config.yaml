@@ -1,5 +1,5 @@
 use_cuda: true
-cuda: '1'
+cuda: 0,1
 checkpoint: null
 task:
   name: t1-velocity-symmetric
@@ -1427,7 +1427,7 @@ task:
         heading_command: true
         heading_control_stiffness: 0.5
         rel_standing_envs: 0.0
-        rel_heading_envs: 1.0
+        rel_heading_envs: 0.5
         rel_world_envs: 0.0
         rel_forward_envs: 0.3
         init_velocity_prob: 0.0
@@ -1528,7 +1528,7 @@ task:
               yaw:
               - 0.0
               - 0.0
-          - transitions: 300000000
+          - transitions: 500000000
             velocity_range:
               x:
               - -0.5
@@ -1548,7 +1548,7 @@ task:
               yaw:
               - -0.3
               - 0.3
-          - transitions: 500000000
+          - transitions: 700000000
             velocity_range:
               x:
               - -1.0

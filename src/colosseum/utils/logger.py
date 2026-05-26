@@ -12,7 +12,7 @@ import time
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import torch
 from loguru import logger
@@ -22,8 +22,10 @@ from rich.table import Table
 from rich.text import Text
 
 import wandb
-from colosseum.config.types.experiment import BaseExperimentConfig
 from colosseum.config.types.logger import LoggerConfig
+
+if TYPE_CHECKING:
+  from colosseum.config.types.experiment import BaseExperimentConfig
 
 console = Console()
 

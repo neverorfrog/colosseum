@@ -21,7 +21,6 @@ from __future__ import annotations
 import enum
 import time
 from collections import defaultdict
-from itertools import chain
 from pathlib import Path
 from typing import Any, Callable
 
@@ -104,6 +103,10 @@ class RmaPPO(PPO):
     self.critic_optimizer = optim.Adam(
       self.value_net.parameters(),
       lr=self.critic_learning_rate,
+    """PPO optimisers + encoder params in the actor optimiser."""
+    super()._build_optimizers()
+    self.actor_optimizer.add_param_group(
+      {"params": self.rma_manager.parameters()}
     )
 
   def _build_rollout_buffer(self) -> None:
@@ -681,7 +684,8 @@ class RmaPPO(PPO):
       "critic_obs_normalizer_state_dict": self.critic_obs_normalizer.state_dict(),
       "rma_manager_state_dict": self.rma_manager.state_dict(),
       "global_step": extra_state["global_step"],
-      "phase": self.phase.value,
+      "actor_learning_rate": self.actor_learning_rate,
+      "critic_phase": self.critic_phase.value,
       "config": self.config,
     }
     for key, value in extra_state.items():
@@ -708,6 +712,12 @@ class RmaPPO(PPO):
       self.rma_manager.load_state_dict(checkpoint["rma_manager_state_dict"])
 
     self.global_step = checkpoint["global_step"]
+    self.actor_learning_rate = checkpoint.get(
+      "actor_learning_rate", self.actor_learning_rate
+    )
+    self.critic_learning_rate = checkpoint.get(
+      "critic_learning_rate", self.critic_learning_rate
+    )
     self._restore_env_step_counter()
 
     phase_str = checkpoint.get("phase")

@@ -51,27 +51,57 @@ t1-velocity-symmetric:
       file: v4/t1-velocity-symmetric_ppo_v4.onnx
       run: t1-velocity-symmetric-PPO-42-20260517_105551
       step: 0
-      created: "2026-05-17T14:20:35.856835+00:00"
+      created: '2026-05-17T14:20:35.856835+00:00'
     v5:
       file: v5/t1-velocity-symmetric_ppo_v5.onnx
       run: t1-velocity-symmetric-PPO-42-20260517_164543
       step: 0
-      created: "2026-05-17T15:22:03.629769+00:00"
+      created: '2026-05-17T15:22:03.629769+00:00'
     v6:
       file: v6/t1-velocity-symmetric_ppo_v6.onnx
       run: t1-velocity-symmetric-PPO-42-20260517_164543
       step: 0
-      created: "2026-05-18T09:05:16.924433+00:00"
+      created: '2026-05-18T09:05:16.924433+00:00'
     v7:
       file: v7/t1-velocity-symmetric_ppo_v7.onnx
       run: t1-velocity-symmetric-PPO-42-20260518_174447
       step: 997687296
-      created: "2026-05-19T00:32:21.139973+00:00"
+      created: '2026-05-19T00:32:21.139973+00:00'
     v8:
       file: v8/t1-velocity-symmetric_ppo_v8.onnx
-      run: t1-velocity-symmetric-PPO-42-20260519_034410
-      step: 10027008
-      created: "2026-05-19T01:50:20.105848+00:00"
+      run: t1-velocity-symmetric-PPO-42-20260519_121140
+      step: 745920000
+      created: '2026-05-19T19:41:21.316693+00:00'
+    v9:
+      file: v9/t1-velocity-symmetric_ppo_v9.onnx
+      run: t1-velocity-symmetric-PPO-42-20260520_093458
+      step: 468720000
+      created: '2026-05-20T11:00:13.993404+00:00'
+    v10:
+      file: v10/t1-velocity-symmetric_ppo_v10.onnx
+      run: t1-velocity-symmetric-PPO-5-20260521_002204
+      step: 745920000
+      created: '2026-05-21T06:39:43.981847+00:00'
+    v11:
+      file: v11/t1-velocity-symmetric_ppo_v11.onnx
+      run: t1-velocity-symmetric-PPO-5-20260521_084429
+      step: 745920000
+      created: '2026-05-22T06:47:22.821484+00:00'
+    v12:
+      file: v12/t1-velocity-symmetric_ppo_v12.onnx
+      run: t1-velocity-symmetric-PPO-5-20260525_183549
+      step: 201600000
+      created: '2026-05-25T21:01:00.899554+00:00'
+    v13:
+      file: v13/t1-velocity-symmetric_ppo_v13.onnx
+      run: t1-velocity-symmetric-PPO-5-20260525_233257
+      step: 0
+      created: '2026-05-26T08:21:25.871263+00:00'
+    v14:
+      file: v14/t1-velocity-symmetric_ppo_v14.onnx
+      run: t1-velocity-symmetric-PPO-5-20260526_105110
+      step: 65520000
+      created: '2026-05-26T09:21:48.608622+00:00'
   default: v0
 t1-velocity-rma:
   models:
@@ -95,4 +125,12 @@ t1-velocity-rma:
       run: t1-velocity-rma-RmaPPO_phase2-42-20260518_134933
       step: 0
       created: "2026-05-18T11:56:07.290493+00:00"
+  default: v0
+t1-velocity-symmetric-rough:
+  models:
+    v0:
+      file: v0/t1-velocity-symmetric-rough_ppo_v0.onnx
+      run: t1-velocity-symmetric-rough-PPO-5-20260522_104224
+      step: 65175552
+      created: '2026-05-22T09:58:01.710587+00:00'
   default: v0

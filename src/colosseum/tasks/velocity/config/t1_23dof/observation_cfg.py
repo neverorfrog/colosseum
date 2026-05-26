@@ -8,7 +8,6 @@ from mjlab.envs.mdp.observations import (
 )
 from mjlab.managers.observation_manager import ObservationGroupCfg, ObservationTermCfg
 from mjlab.tasks.velocity.mdp.observations import (
-  foot_air_time,
   foot_contact,
   foot_contact_forces,
   foot_height,
