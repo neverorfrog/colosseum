@@ -28,6 +28,13 @@ from colosseum.algorithm.utils.normalization import EmpiricalNormalization
 from colosseum.algorithm.utils.rollout_buffer import RolloutBuffer
 from colosseum.config.types.algorithm import DaggerPpoConfig, register_algorithm
 from colosseum.config.types.networks import PpoActorConfig
+from colosseum.mdp.symmetry import (
+  TermMirrorSpec,
+  augment_actions,
+  augment_obs,
+  build_symmetry_spec,
+  mirror_obs,
+)
 
 
 @register_algorithm("dagger_rma_ppo", config_class=DaggerPpoConfig)
@@ -213,6 +220,8 @@ class DaggerRmaPPO(RmaPPO):
     total_entropy = 0.0
     total_kl = 0.0
     total_imitation_loss = 0.0
+    total_symmetry_actor_loss = 0.0
+    total_symmetry_critic_loss = 0.0
     num_updates = 0
 
     progress = min(self.global_step / max(config.imitation_annealing_steps, 1), 1.0)
@@ -241,17 +250,54 @@ class DaggerRmaPPO(RmaPPO):
       critic_obs = self.critic_obs_normalizer(critic_obs_raw)
       actor_input = self._compose_actor_input(actor_obs, privileged_obs)
 
-      new_log_probs, entropy = self.actor.evaluate(actor_input, actions)
+      # --- Symmetry data augmentation (holosoma style) ---
+      original_batch_size = actor_input.shape[0]
+      if (
+        self._use_symmetry
+        and config.symmetry_data_augmentation
+        and self._action_mirror_fn is not None
+      ):
+        actor_input = augment_obs(actor_input, self._actor_sym_spec)
+        actions = augment_actions(actions, self._action_mirror_fn)
+        critic_obs = augment_obs(critic_obs, self._critic_sym_spec)
+        old_log_probs = old_log_probs.repeat(2)
+        target_values = target_values.repeat(2, 1)
+        advantages = advantages.repeat(2, 1)
+        returns = returns.repeat(2, 1)
+        old_action_means = old_action_means.repeat(2, 1)
+        old_action_stds = old_action_stds.repeat(2, 1)
+        teacher_actions = teacher_actions.repeat(2, 1)
+
+      new_log_probs, entropy_all = self.actor.evaluate(actor_input, actions)
       new_values = self.value_net(critic_obs)
+
+      if (
+        self._use_symmetry
+        and config.symmetry_data_augmentation
+        and self._action_mirror_fn is not None
+      ):
+        entropy = entropy_all[:original_batch_size]
+      else:
+        entropy = entropy_all
 
       with torch.inference_mode():
         mu_batch = self.actor.forward(actor_input)
+        _old_means = old_action_means
+        _old_stds = old_action_stds
+        if (
+          self._use_symmetry
+          and config.symmetry_data_augmentation
+          and self._action_mirror_fn is not None
+        ):
+          mu_batch = mu_batch[:original_batch_size]
+          _old_means = _old_means[:original_batch_size]
+          _old_stds = _old_stds[:original_batch_size]
         sigma_batch = torch.clamp(
           self.actor.std, min=self.actor.min_noise_std
         ).expand_as(mu_batch)
         kl = torch.sum(
-          torch.log(sigma_batch / old_action_stds + 1e-5)
-          + (old_action_stds.pow(2) + (old_action_means - mu_batch).pow(2))
+          torch.log(sigma_batch / _old_stds + 1e-5)
+          + (_old_stds.pow(2) + (_old_means - mu_batch).pow(2))
           / (2.0 * sigma_batch.pow(2))
           - 0.5,
           dim=-1,
@@ -260,11 +306,23 @@ class DaggerRmaPPO(RmaPPO):
 
       if config.schedule == "adaptive" and config.desired_kl is not None:
         if kl_mean > config.desired_kl * 2.0:
-          self.learning_rate = max(1e-5, self.learning_rate / 1.5)
+          self.actor_learning_rate = max(
+            self.min_actor_learning_rate, self.actor_learning_rate / 1.5
+          )
+          self.critic_learning_rate = max(
+            self.min_critic_learning_rate, self.critic_learning_rate / 1.5
+          )
         elif kl_mean < config.desired_kl / 2.0 and kl_mean > 0.0:
-          self.learning_rate = min(1e-2, self.learning_rate * 1.5)
-        for g in self.optimizer.param_groups:
-          g["lr"] = self.learning_rate
+          self.actor_learning_rate = min(
+            self.max_actor_learning_rate, self.actor_learning_rate * 1.5
+          )
+          self.critic_learning_rate = min(
+            self.max_critic_learning_rate, self.critic_learning_rate * 1.5
+          )
+        for g in self.actor_optimizer.param_groups:
+          g["lr"] = self.actor_learning_rate
+        for g in self.critic_optimizer.param_groups:
+          g["lr"] = self.critic_learning_rate
 
       advantages_squeezed = advantages.squeeze(-1)
       ratio = torch.exp(new_log_probs - old_log_probs)
@@ -288,31 +346,86 @@ class DaggerRmaPPO(RmaPPO):
         value_loss = (returns - new_values).pow(2).mean()
 
       student_means = self.actor.forward(actor_input)
-      imitation_loss = F.mse_loss(student_means, teacher_actions)
+      imitation_loss = F.mse_loss(student_means[:original_batch_size], teacher_actions[:original_batch_size])
+
+      # --- Symmetry loss (holosoma style) ---
+      symmetry_actor_loss = torch.tensor(0.0, device=self.device)
+      symmetry_critic_loss = torch.tensor(0.0, device=self.device)
+      if self._use_symmetry and self._action_mirror_fn is not None:
+        if config.symmetry_loss_coef > 0.0:
+          if config.symmetry_data_augmentation:
+            mu_full = self.actor.forward(actor_input.detach())
+            mu_original = mu_full[:original_batch_size]
+            mu_mirrored = mu_full[original_batch_size:]
+            symmetry_actor_loss = F.mse_loss(
+              mu_mirrored, self._action_mirror_fn(mu_original)
+            )
+          else:
+            mu_original = self.actor.forward(actor_input.detach())
+            mirrored_actor_obs = mirror_obs(
+              actor_input.detach(), self._actor_sym_spec
+            )
+            mu_mirrored = self.actor.forward(mirrored_actor_obs)
+            symmetry_actor_loss = F.mse_loss(
+              mu_mirrored, self._action_mirror_fn(mu_original)
+            )
+
+        if config.symmetry_critic_coef > 0.0:
+          if config.symmetry_data_augmentation:
+            val_original = new_values[:original_batch_size]
+            val_mirrored = new_values[original_batch_size:]
+            symmetry_critic_loss = F.mse_loss(
+              val_original, val_mirrored
+            )
+          else:
+            mirrored_critic_obs = mirror_obs(
+              critic_obs.detach(), self._critic_sym_spec
+            )
+            val_mirrored = self.value_net(mirrored_critic_obs)
+            symmetry_critic_loss = F.mse_loss(
+              new_values, val_mirrored
+            )
 
       loss = (
         surrogate_loss
         + config.value_loss_coef * value_loss
         - config.entropy_coef * entropy.mean()
         + lam * imitation_loss
+        + config.symmetry_loss_coef * symmetry_actor_loss
+        + config.symmetry_critic_coef * symmetry_critic_loss
       )
 
-      self.optimizer.zero_grad()
+      self.actor_optimizer.zero_grad()
+      self.critic_optimizer.zero_grad()
+
+      if not torch.isfinite(loss):
+        continue
+
       loss.backward()
-      self._distributed_average_optimizer_grads(self.optimizer)
+      self._distributed_average_optimizer_grads(self.actor_optimizer)
+      self._distributed_average_optimizer_grads(self.critic_optimizer)
+      for p in self.actor.parameters():
+        if p.grad is not None:
+          p.grad.nan_to_num_(nan=0.0, posinf=0.0, neginf=0.0)
+      for p in self.value_net.parameters():
+        if p.grad is not None:
+          p.grad.nan_to_num_(nan=0.0, posinf=0.0, neginf=0.0)
       torch.nn.utils.clip_grad_norm_(
         self.actor.parameters(), max_norm=config.max_grad_norm
       )
       torch.nn.utils.clip_grad_norm_(
         self.value_net.parameters(), max_norm=config.max_grad_norm
       )
-      self.optimizer.step()
+      self.actor_optimizer.step()
+      self.critic_optimizer.step()
 
       total_surrogate_loss += surrogate_loss.item()
       total_value_loss += value_loss.item()
       total_entropy += entropy.mean().item()
       total_kl += kl_mean
       total_imitation_loss += imitation_loss.item()
+      total_symmetry_actor_loss += symmetry_actor_loss.item()
+      total_symmetry_critic_loss += symmetry_critic_loss.item()
       num_updates += 1
 
     if self.is_distributed:
@@ -323,6 +436,8 @@ class DaggerRmaPPO(RmaPPO):
           total_entropy,
           total_kl,
           total_imitation_loss,
+          total_symmetry_actor_loss,
+          total_symmetry_critic_loss,
           float(num_updates),
         ]
       )
@@ -331,16 +446,23 @@ class DaggerRmaPPO(RmaPPO):
       total_entropy = totals[2]
       total_kl = totals[3]
       total_imitation_loss = totals[4]
-      num_updates = int(totals[5])
+      total_symmetry_actor_loss = totals[5]
+      total_symmetry_critic_loss = totals[6]
+      num_updates = int(totals[7])
 
     self.rollout_buffer.clear()
 
-    return {
+    result: dict[str, float] = {
       "surrogate_loss": total_surrogate_loss / max(num_updates, 1),
       "value_loss": total_value_loss / max(num_updates, 1),
       "entropy": total_entropy / max(num_updates, 1),
       "kl": total_kl / max(num_updates, 1),
       "imitation_loss": total_imitation_loss / max(num_updates, 1),
       "imitation_coef": lam,
-      "learning_rate": self.learning_rate,
+      "actor_learning_rate": self.actor_learning_rate,
+      "critic_learning_rate": self.critic_learning_rate,
     }
+    if self._use_symmetry:
+      result["symmetry_actor_loss"] = total_symmetry_actor_loss / max(num_updates, 1)
+      result["symmetry_critic_loss"] = total_symmetry_critic_loss / max(num_updates, 1)
+    return result

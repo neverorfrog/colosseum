@@ -59,7 +59,7 @@ rewards = {
   ),
   "arm_phase": RewardTermCfg(
     func=arm_phase,
-    weight=2.5,
+    weight=1.0,
     params={
       "phase_command_name": "gait_phase",
       "asset_cfg": SceneEntityCfg(
@@ -131,10 +131,9 @@ rewards = {
   ),
   "static_stance": RewardTermCfg(
     func=static_stance,
-    weight=-20.0,
+    weight=-2.0,
     params={
       "asset_cfg": SceneEntityCfg("robot", site_names=(FOOT_SITE_NAMES)),
-      "sensor_name": "feet_ground_contact",
       "command_name": "twist",
       "command_threshold": 0.05,
     },
@@ -159,9 +158,9 @@ rewards["penalty_pose_deviation"].params["weights_standing"] = {
   r"(?i).*elbow.pitch": 50.0,
   r"(?i).*elbow.yaw": 5.0,
   r"Waist": 50.0,
-  r"(?i).*hip_pitch.*": 25.0,
-  r"(?i).*hip_roll.*": 25.0,
-  r"(?i).*hip_yaw.*": 25.0,
+  r"(?i).*hip_pitch.*": 5.0,
+  r"(?i).*hip_roll.*": 7.5,
+  r"(?i).*hip_yaw.*": 7.5,
   r"(?i).*knee.*": 5.0,
   r"(?i).*ankle.*": 7.5,
 }
@@ -174,22 +173,22 @@ rewards["penalty_pose_deviation"].params["weights_walking"] = {
   r"(?i).*elbow.yaw": 3.0,
   r"Waist": 10.0,
   r"(?i).*hip_pitch.*": 3.0,
-  r"(?i).*hip_roll.*": 15.0,
-  r"(?i).*hip_yaw.*": 15.0,
+  r"(?i).*hip_roll.*": 5.0,
+  r"(?i).*hip_yaw.*": 5.0,
   r"(?i).*knee.*": 3.0,
   r"(?i).*ankle.*": 5.0,
 }
 # Running: same as walking — legs already nearly unconstrained.
 rewards["penalty_pose_deviation"].params["weights_running"] = {
   r"(?i).*head.*": 50.0,
-  r"(?i).*shoulder_pitch.*": 1.0,
+  r"(?i).*shoulder_pitch.*": 50.0,
   r"(?i).*shoulder_roll.*": 50.0,
   r"(?i).*elbow.pitch": 50.0,
-  r"(?i).*elbow.yaw": 1.0,
-  r"Waist": 10.0,
-  r"(?i).*hip_pitch.*": 1.0,
-  r"(?i).*hip_roll.*": 5.0,
-  r"(?i).*hip_yaw.*": 5.0,
-  r"(?i).*knee.*": 1.0,
-  r"(?i).*ankle.*": 5.0,
+  r"(?i).*elbow.yaw": 50.0,
+  r"Waist": 5.0,
+  r"(?i).*hip_pitch.*": 0.1,
+  r"(?i).*hip_roll.*": 1.0,
+  r"(?i).*hip_yaw.*": 1.0,
+  r"(?i).*knee.*": 0.1,
+  r"(?i).*ankle.*": 1.0,
 }

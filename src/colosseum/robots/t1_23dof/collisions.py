@@ -17,7 +17,7 @@ FEET_ONLY_COLLISION = CollisionCfg(
   conaffinity=1,
   condim=4,
   priority=1,
-  friction=(0.75, 0.05),
+  friction=(0.6, 0.04),
 )
 
 # Feet collision with inter-foot contacts enabled (for dribbling)

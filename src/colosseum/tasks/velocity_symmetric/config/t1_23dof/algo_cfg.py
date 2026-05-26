@@ -25,7 +25,7 @@ def booster_t1_symmetric_ppo_cfg() -> PpoConfig:
     desired_kl=0.01,
     schedule="adaptive",
     obs_normalization=True,
-    symmetry_loss_coef=2.0,
+    symmetry_loss_coef=1.0,
     symmetry_critic_coef=0.0,
     symmetry_data_augmentation=True,
     actor=PpoActorConfig(

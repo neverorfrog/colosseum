@@ -9,7 +9,10 @@ import math
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from mjlab.envs.mdp.events import reset_joints_by_offset
 from mjlab.managers.curriculum_manager import CurriculumTermCfg
+from mjlab.managers.event_manager import EventTermCfg
+from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.scene import SceneCfg
 from mjlab.sim import MujocoCfg, SimulationCfg
 from mjlab.tasks.velocity.mdp.curriculums import terrain_levels_vel
@@ -118,7 +121,16 @@ def booster_t1_velocity_symmetric_env_cfg(play: bool = False) -> ColosseumEnvCfg
     cfg.sim.contact_sensor_maxmatch = 64
     cfg.sim.mujoco.ccd_iterations = 50
     cfg.observations["actor"].enable_corruption = False
-    cfg.events.pop("push_robot", None)
+    cfg.events = {}
+    cfg.events["reset_robot_joints"] = EventTermCfg(
+      func=reset_joints_by_offset,
+      mode="reset",
+      params={
+        "position_range": (0.0, 0.0),
+        "velocity_range": (0.0, 0.0),
+        "asset_cfg": SceneEntityCfg("robot", joint_names=(".*",)),
+      },
+    )
     cfg.curriculum = {}
     twist = cfg.commands["twist"]
     assert isinstance(twist, UniformVelocityCommandCfg)

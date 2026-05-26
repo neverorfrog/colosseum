@@ -347,23 +347,20 @@ def static_stance(
   env: ManagerBasedRlEnv,
   asset_cfg: SceneEntityCfg,
   command_name: str,
-  sensor_name: str,
   command_threshold: float = 0.05,
 ) -> torch.Tensor:
   """Penalize foot XY sliding when velocity command ≈ 0 (use negative weight).
 
-  Gates on foot contact so airborne feet don't contribute. Uses L1 norm so
-  that slow gradual drift produces a meaningful signal (squared norm kills
-  the gradient for small velocities).
+  Penalizes all foot velocity regardless of contact state. The outer `standing`
+  gate already zeroes this during walking, so the contact gate is not needed —
+  and would create a perverse incentive to lift feet while standing.
   """
   cmd = env.command_manager.get_command(command_name)
   standing = (torch.norm(cmd[:, :2], dim=-1) <= command_threshold).float()
   asset: Entity = env.scene[asset_cfg.name]
-  contact_sensor = env.scene[sensor_name]
-  in_contact = (contact_sensor.data.found > 0).float()  # (N, n_feet)
   foot_vel_xy = asset.data.site_lin_vel_w[:, asset_cfg.site_ids, :2]  # (N, n_feet, 2)
   vel_norm = torch.norm(foot_vel_xy, dim=-1)  # (N, n_feet)
-  return torch.sum(vel_norm * in_contact, dim=-1) * standing
+  return torch.sum(vel_norm, dim=-1) * standing
 
 
 class arm_swing_penalty:
@@ -463,7 +460,9 @@ def arm_phase(
     speed = torch.norm(cmd[:, :2], dim=-1)  # (N,)
     speed_scale = torch.clamp(speed / max_speed, 0.0, 1.0)  # (N,)
     effective_amplitude = (swing_amplitude * speed_scale).unsqueeze(-1)  # (N, 1)
-    effective_sigma = tracking_sigma / (1.0 + speed_scale)  # (N,), tighter at high speed
+    effective_sigma = tracking_sigma / (
+      1.0 + speed_scale
+    )  # (N,), tighter at high speed
     effective_center = (swing_center * speed_scale).unsqueeze(-1)  # (N, 1)
   else:
     effective_amplitude = swing_amplitude

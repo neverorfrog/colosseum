@@ -31,19 +31,22 @@ events = {
     mode="reset",
     params={
       "position_range": (-0.1, 0.1),
-      "velocity_range": (0.0, 0.0),
+      "velocity_range": (-0.05, 0.05),
       "asset_cfg": SceneEntityCfg("robot", joint_names=(".*",)),
     },
   ),
-  "foot_friction": EventTermCfg(
+  "reset_ball": EventTermCfg(
+    func=reset_root_state_uniform,
     mode="reset",
-    func=dr.geom_friction,
     params={
-      "asset_cfg": SceneEntityCfg("robot", geom_names=FOOT_GEOM_NAMES),
-      "ranges": {0: (0.2, 2.0), 1: (0.02, 0.05)},
-      "axes": [0, 1],
-      "operation": "abs",
-      "shared_random": True,
+      "asset_cfg": SceneEntityCfg("ball"),
+      # Random XY offset from env origin; Z fixed at ball radius (on the ground).
+      "pose_range": {
+        "x": (0.5, 1.0),
+        "y": (-0.2, 0.2),
+        "z": (0.1, 0.1),
+      },
+      "velocity_range": {},
     },
   ),
   # ------------------------------------------------------------------ #
@@ -64,24 +67,39 @@ events = {
       },
     },
   ),
+  "push_ball": EventTermCfg(
+    func=push_by_setting_velocity,
+    mode="interval",
+    interval_range_s=(3.0, 8.0),
+    params={
+      "asset_cfg": SceneEntityCfg("ball"),
+      # Small bumps: starts at ~0.3 m/s max, widened by push_ball_curriculum.
+      "velocity_range": {
+        "x": (-0.3, 0.3),
+        "y": (-0.3, 0.3),
+      },
+    },
+  ),
   # ------------------------------------------------------------------ #
   # STARTUP — persistent per-env physics randomization                 #
   # ------------------------------------------------------------------ #
+  "foot_friction": EventTermCfg(
+    mode="startup",
+    func=dr.geom_friction,
+    params={
+      "asset_cfg": SceneEntityCfg("robot", geom_names=FOOT_GEOM_NAMES),
+      "ranges": {0: (0.3, 3.0), 1: (0.005, 0.3)},
+      "axes": [0, 1],
+      "operation": "abs",
+      "shared_random": True,
+    },
+  ),
   "encoder_bias": EventTermCfg(
     mode="startup",
     func=dr.encoder_bias,
     params={
       "asset_cfg": SceneEntityCfg("robot"),
       "bias_range": (-0.015, 0.015),
-    },
-  ),
-  "joint_default_pos": EventTermCfg(
-    mode="startup",
-    func=dr.joint_default_pos,
-    params={
-      "asset_cfg": SceneEntityCfg("robot", joint_names=(".*",)),
-      "ranges": (-0.01, 0.01),
-      "operation": "add",
     },
   ),
   "base_com": EventTermCfg(
@@ -97,41 +115,30 @@ events = {
       },
     },
   ),
-  "trunk_inertia": EventTermCfg(
-    mode="startup",
-    func=dr.pseudo_inertia,
-    params={
-      "asset_cfg": SceneEntityCfg("robot", body_names=(BASE_BODY_NAME,)),
-      "alpha_range": (-0.1, 0.1),
-      "t_range": (-0.02, 0.02),
-    },
-  ),
-  "link_inertia": EventTermCfg(
-    mode="startup",
-    func=dr.pseudo_inertia,
-    params={
-      "asset_cfg": SceneEntityCfg("robot", body_names=(".*",)),
-      "alpha_range": (-0.2, 0.2),
-      "d1_range": (-0.1, 0.1),
-      "d2_range": (-0.15, 0.15),
-      "d3_range": (-0.15, 0.15),
-    },
-  ),
-  "joint_friction": EventTermCfg(
-    mode="startup",
-    func=dr.joint_friction,
-    params={
-      "asset_cfg": SceneEntityCfg("robot", joint_names=(".*",)),
-      "ranges": (1.0, 20.0),
-      "operation": "scale",
-    },
-  ),
   "joint_damping": EventTermCfg(
     mode="startup",
     func=dr.joint_damping,
     params={
       "asset_cfg": SceneEntityCfg("robot", joint_names=(".*",)),
       "ranges": (0.9, 1.1),
+      "operation": "scale",
+    },
+  ),
+  "lower_joint_friction": EventTermCfg(
+    mode="startup",
+    func=dr.joint_friction,
+    params={
+      "asset_cfg": SceneEntityCfg("robot", joint_names=(".*(Hip|Knee|Ankle|Waist).*",)),
+      "ranges": (1.0, 20.0),
+      "operation": "scale",
+    },
+  ),
+  "upper_joint_friction": EventTermCfg(
+    mode="startup",
+    func=dr.joint_friction,
+    params={
+      "asset_cfg": SceneEntityCfg("robot", joint_names=(".*(Shoulder|Elbow|Head).*",)),
+      "ranges": (1.0, 5.0),
       "operation": "scale",
     },
   ),
@@ -161,6 +168,14 @@ events = {
       "asset_cfg": SceneEntityCfg("robot"),
       "effort_limit_range": (0.8, 1.0),
       "operation": "scale",
+    },
+  ),
+  "link_inertia": EventTermCfg(
+    mode="startup",
+    func=dr.pseudo_inertia,
+    params={
+      "asset_cfg": SceneEntityCfg("robot", body_names=(".*",)),
+      "alpha_range": (-0.1, 0.1),
     },
   ),
 }

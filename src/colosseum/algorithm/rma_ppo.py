@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import time
 from collections import defaultdict
-from itertools import chain
 from pathlib import Path
 from typing import Any, Callable
 
@@ -84,15 +83,10 @@ class RmaPPO(PPO):
     ).to(self.device)
 
   def _build_optimizers(self) -> None:
-    """Single optimizer for actor + critic + all encoders."""
-    assert isinstance(self.config, PpoConfig)
-    self.optimizer = optim.Adam(
-      chain(
-        self.actor.parameters(),
-        self.value_net.parameters(),
-        self.rma_manager.parameters(),
-      ),
-      lr=self.config.learning_rate,
+    """PPO optimisers + encoder params in the actor optimiser."""
+    super()._build_optimizers()
+    self.actor_optimizer.add_param_group(
+      {"params": self.rma_manager.parameters()}
     )
 
   def _build_rollout_buffer(self) -> None:
@@ -536,12 +530,14 @@ class RmaPPO(PPO):
     state_dict = {
       "actor_state_dict": self.actor.state_dict(),
       "value_net_state_dict": self.value_net.state_dict(),
-      "optimizer_state_dict": self.optimizer.state_dict(),
+      "actor_optimizer_state_dict": self.actor_optimizer.state_dict(),
+      "critic_optimizer_state_dict": self.critic_optimizer.state_dict(),
       "actor_obs_normalizer_state_dict": self.actor_obs_normalizer.state_dict(),
       "critic_obs_normalizer_state_dict": self.critic_obs_normalizer.state_dict(),
       "rma_manager_state_dict": self.rma_manager.state_dict(),
       "global_step": extra_state["global_step"],
-      "learning_rate": self.learning_rate,
+      "actor_learning_rate": self.actor_learning_rate,
+      "critic_learning_rate": self.critic_learning_rate,
       "config": self.config,
     }
     for key, value in extra_state.items():
@@ -555,7 +551,8 @@ class RmaPPO(PPO):
 
     self.actor.load_state_dict(checkpoint["actor_state_dict"])
     self.value_net.load_state_dict(checkpoint["value_net_state_dict"])
-    self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+    self.actor_optimizer.load_state_dict(checkpoint["actor_optimizer_state_dict"])
+    self.critic_optimizer.load_state_dict(checkpoint["critic_optimizer_state_dict"])
     self.actor_obs_normalizer.load_state_dict(
       checkpoint["actor_obs_normalizer_state_dict"]
     )
@@ -566,7 +563,12 @@ class RmaPPO(PPO):
       self.rma_manager.load_state_dict(checkpoint["rma_manager_state_dict"])
 
     self.global_step = checkpoint["global_step"]
-    self.learning_rate = checkpoint.get("learning_rate", self.learning_rate)
+    self.actor_learning_rate = checkpoint.get(
+      "actor_learning_rate", self.actor_learning_rate
+    )
+    self.critic_learning_rate = checkpoint.get(
+      "critic_learning_rate", self.critic_learning_rate
+    )
     self._restore_env_step_counter()
 
     metadata = checkpoint.get("metadata", {})

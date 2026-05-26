@@ -40,8 +40,9 @@ curriculum = {
       "command_name": "twist",
       "stages": [
         {"transitions": 0, "rel_standing_envs": 0.4},
-        {"transitions": 50_000_000, "rel_standing_envs": 0.2},
-        {"transitions": 100_000_000, "rel_standing_envs": 0.1},
+        {"transitions": 50_000_000, "rel_standing_envs": 0.3},
+        {"transitions": 100_000_000, "rel_standing_envs": 0.2},
+        {"transitions": 150_000_000, "rel_standing_envs": 0.1},
       ],
     },
   ),
