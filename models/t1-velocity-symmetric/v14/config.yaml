@@ -6,7 +6,7 @@ task:
   env:
     decimation: 4
     scene:
-      num_envs: 5000
+      num_envs: 10420
       env_spacing: 10.0
       terrain:
         init_state:
@@ -1072,8 +1072,8 @@ task:
             pair_names: null
             preserve_order: false
           ranges:
-          - 0.9
-          - 1.1
+          - 0.85
+          - 1.15
           operation: scale
         mode: startup
         interval_range_s: null
@@ -1096,8 +1096,8 @@ task:
             pair_names: null
             preserve_order: false
           ranges:
-          - 0.9
-          - 1.1
+          - 0.85
+          - 1.15
           operation: scale
         mode: startup
         interval_range_s: null
@@ -1119,11 +1119,11 @@ task:
             pair_names: null
             preserve_order: false
           kp_range:
-          - 0.9
-          - 1.1
+          - 0.85
+          - 1.15
           kd_range:
-          - 0.9
-          - 1.1
+          - 0.85
+          - 1.15
           operation: scale
         mode: startup
         interval_range_s: null
@@ -1145,7 +1145,7 @@ task:
             pair_names: null
             preserve_order: false
           effort_limit_range:
-          - 0.8
+          - 0.75
           - 1.0
           operation: scale
         mode: startup
