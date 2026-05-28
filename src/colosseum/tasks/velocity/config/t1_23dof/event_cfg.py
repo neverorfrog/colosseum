@@ -1,5 +1,6 @@
 from mjlab.envs.mdp import dr
 from mjlab.envs.mdp.events import (
+  apply_body_impulse,
   push_by_setting_velocity,
   reset_joints_by_offset,
   reset_root_state_uniform,
@@ -49,19 +50,28 @@ events = {
   # ------------------------------------------------------------------ #
   # INTERVAL — disturbances                                            #
   # ------------------------------------------------------------------ #
-  "push_robot": EventTermCfg(
+  # Small, frequent micro-perturbations (always active, no curriculum).
+  "kick_robot": EventTermCfg(
     func=push_by_setting_velocity,
     mode="interval",
-    interval_range_s=(5.0, 10.0),
+    interval_range_s=(1.0, 3.0),
     params={
       "velocity_range": {
-        "x": (-1.0, 1.0),
-        "y": (-1.0, 1.0),
-        "z": (-0.4, 0.4),
-        "roll": (-0.52, 0.52),
-        "pitch": (-0.52, 0.52),
-        "yaw": (-0.78, 0.78),
+        "x": (-0.1, 0.1),
+        "y": (-0.1, 0.1),
       },
+    },
+  ),
+  # Large, infrequent sustained impacts — magnitude controlled by push_curriculum.
+  "push_robot": EventTermCfg(
+    func=apply_body_impulse,
+    mode="step",
+    params={
+      "force_range": (0.0, 0.0),
+      "torque_range": (0.0, 0.0),
+      "duration_s": (0.3, 1.0),
+      "cooldown_s": (5.0, 10.0),
+      "asset_cfg": SceneEntityCfg("robot", body_names=(BASE_BODY_NAME,)),
     },
   ),
   # ------------------------------------------------------------------ #

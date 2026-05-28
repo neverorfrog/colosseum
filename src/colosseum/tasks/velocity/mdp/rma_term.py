@@ -13,7 +13,7 @@ Phase 3: Policy fine-tuned with frozen ProprioWindowEncoder predictions.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import torch
 import torch.nn as nn
@@ -22,6 +22,19 @@ from mjlab.envs import ManagerBasedRlEnv
 from colosseum.algorithm.networks.privileged_encoder import PrivilegedEncoder
 from colosseum.algorithm.networks.proprio_encoder import ProprioWindowEncoder
 from colosseum.managers.rma_manager import RmaTerm, RmaTermCfg
+
+
+class OdomHead(nn.Module):
+  def __init__(self, latent_dim: int, hidden_dim: int = 64) -> None:
+    super().__init__()
+    self.net = nn.Sequential(
+      nn.Linear(latent_dim, hidden_dim),
+      nn.ELU(),
+      nn.Linear(hidden_dim, 2),
+    )
+
+  def forward(self, z: torch.Tensor) -> torch.Tensor:
+    return self.net(z)
 
 
 @dataclass(kw_only=True)
@@ -36,10 +49,12 @@ class VelocityRmaTermCfg(RmaTermCfg):
 
   privileged_obs_group: str = "env_params"
   adaptation_obs_group: str = "proprio_window"
+  odom_obs_group: str = "odom"
   latent_dim: int = 8
   latent_noise_std: float = 0.05
   window_size: int = 50
   hidden_dim: int = 64
+  lambda_odom: float = 1.0
 
   def build(self, env: ManagerBasedRlEnv) -> VelocityRmaTerm:
     return VelocityRmaTerm(cfg=self, env=env)
@@ -58,7 +73,9 @@ class VelocityRmaTerm(RmaTerm):
     super().__init__(cfg, env)
     device = env.device
 
-    priv_obs_dim: int = env.observation_manager.group_obs_dim[cfg.privileged_obs_group][0]
+    priv_obs_dim: int = env.observation_manager.group_obs_dim[cfg.privileged_obs_group][
+      0
+    ]
     actor_obs_dim: int = env.observation_manager.group_obs_dim["actor"][0]
 
     self._priv_enc = PrivilegedEncoder(
@@ -73,6 +90,13 @@ class VelocityRmaTerm(RmaTerm):
       window_size=cfg.window_size,
     ).to(device)
 
+    self._odom_head = OdomHead(
+      latent_dim=cfg.latent_dim,
+      hidden_dim=cfg.hidden_dim,
+    ).to(device)
+
+    self._adapt_enc_module = nn.ModuleList([self._adapt_enc, self._odom_head]).to(device)
+
     # Rolling buffer: (N, W, D_actor)
     self._window = torch.zeros(
       env.num_envs, cfg.window_size, actor_obs_dim, device=device
@@ -83,12 +107,16 @@ class VelocityRmaTerm(RmaTerm):
   # ------------------------------------------------------------------
 
   @property
+  def privileged_group_names(self) -> list[str]:
+    return [self.cfg.privileged_obs_group, self.cfg.odom_obs_group]
+
+  @property
   def privileged_encoder(self) -> nn.Module:
     return self._priv_enc
 
   @property
   def adaptation_encoder(self) -> nn.Module:
-    return self._adapt_enc
+    return self._adapt_enc_module
 
   # ------------------------------------------------------------------
   # Encoding interface
@@ -117,6 +145,38 @@ class VelocityRmaTerm(RmaTerm):
   # Lifecycle
   # ------------------------------------------------------------------
 
+  def compute_loss(
+    self,
+    privileged_obs: dict[str, torch.Tensor],
+    adaptation_obs: dict[str, torch.Tensor],
+    mask: torch.Tensor | None = None,
+  ) -> dict[str, torch.Tensor] | None:
+    cfg = self.cfg
+    env_params = privileged_obs[cfg.privileged_obs_group]  # (B, T, D_priv)
+    B, T = env_params.shape[0], env_params.shape[1]
+
+    with torch.no_grad():
+      z_priv = self._priv_enc(env_params.reshape(B * T, -1)).reshape(B, T, cfg.latent_dim)
+
+    z_adapt = self.encode_adaptation(adaptation_obs)  # (B, T, latent_dim)
+    latent_err = (z_adapt - z_priv).pow(2).mean(dim=-1)  # (B, T)
+
+    gt_vel = privileged_obs[cfg.odom_obs_group]  # (B, T, 3)
+    odom_pred = self._odom_head(z_adapt)          # (B, T, 2)
+    odom_err = (odom_pred - gt_vel[..., :2]).pow(2).mean(dim=-1)  # (B, T)
+
+    if mask is not None:
+      latent_loss = latent_err[mask].mean()
+      odom_loss = odom_err[mask].mean()
+    else:
+      latent_loss = latent_err.mean()
+      odom_loss = odom_err.mean()
+
+    return {
+      "latent_mse": latent_loss,
+      "odom": cfg.lambda_odom * odom_loss,
+    }
+
   def update(self) -> None:
     """Roll the proprio window and push the latest actor obs."""
     obs_buf = self._env.observation_manager.compute()
@@ -128,9 +188,11 @@ class VelocityRmaTerm(RmaTerm):
     """Fill all window slots for reset envs with the current actor obs."""
     if env_ids is None:
       return
-    ids = env_ids if not isinstance(env_ids, slice) else torch.arange(
-      self._env.num_envs, device=self._window.device
-    )[env_ids]
+    ids = (
+      env_ids
+      if not isinstance(env_ids, slice)
+      else torch.arange(self._env.num_envs, device=self._window.device)[env_ids]
+    )
     if len(ids) == 0:
       return
     obs_buf = self._env.observation_manager.compute()

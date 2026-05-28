@@ -37,13 +37,13 @@ rewards = {
   # =======================
   "track_linear_velocity": RewardTermCfg(
     func=track_linear_velocity,
-    weight=4.0,
-    params={"command_name": "twist", "std": math.sqrt(0.15)},
+    weight=3.0,
+    params={"command_name": "twist", "std": math.sqrt(0.2)},
   ),
   "track_angular_velocity": RewardTermCfg(
     func=track_angular_velocity,
-    weight=4.0,
-    params={"command_name": "twist", "std": math.sqrt(0.15)},
+    weight=2.5,
+    params={"command_name": "twist", "std": math.sqrt(0.2)},
   ),
   "feet_phase": RewardTermCfg(
     func=feet_phase,
@@ -59,7 +59,7 @@ rewards = {
   ),
   "arm_phase": RewardTermCfg(
     func=arm_phase,
-    weight=1.0,
+    weight=2.0,
     params={
       "phase_command_name": "gait_phase",
       "asset_cfg": SceneEntityCfg(
@@ -75,7 +75,7 @@ rewards = {
   ),
   "alive": RewardTermCfg(
     func=is_alive,
-    weight=0.25,
+    weight=0.5,
   ),
   # =========================
   # Regularization penalties
@@ -104,7 +104,7 @@ rewards = {
     weight=-5.0,
     params={"asset_cfg": SceneEntityCfg("robot", body_names=(FOOT_BODY_NAMES))},
   ),
-  "penalty_action_rate": RewardTermCfg(func=action_rate_l2, weight=-1.5),
+  "penalty_action_rate": RewardTermCfg(func=action_rate_l2, weight=-1.0),
   "penalty_pose_deviation": RewardTermCfg(
     func=pose_deviation_penalty,
     weight=-0.5,
@@ -121,7 +121,7 @@ rewards = {
   "dof_pos_limits": RewardTermCfg(func=joint_pos_limits, weight=-1.0),
   "penalty_feet_distance": RewardTermCfg(
     func=feet_distance_penalty,
-    weight=-5.0,
+    weight=-3.0,
     params={
       "asset_cfg": SceneEntityCfg("robot", site_names=(FOOT_SITE_NAMES)),
       "min_dist": 0.2,
@@ -131,7 +131,7 @@ rewards = {
   ),
   "static_stance": RewardTermCfg(
     func=static_stance,
-    weight=-5.0,
+    weight=-1.0,
     params={
       "asset_cfg": SceneEntityCfg("robot", site_names=(FOOT_SITE_NAMES)),
       "command_name": "twist",

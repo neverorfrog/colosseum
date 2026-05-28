@@ -96,13 +96,6 @@ class RmaPPO(PPO):
   def _build_optimizers(self) -> None:
     """Phase 1: actor + privileged encoders share one optimizer; critic has its own."""
     assert isinstance(self.config, PpoConfig)
-    self.actor_optimizer = optim.Adam(
-      chain(self.actor.parameters(), self.rma_manager.privileged_parameters()),
-      lr=self.actor_learning_rate,
-    )
-    self.critic_optimizer = optim.Adam(
-      self.value_net.parameters(),
-      lr=self.critic_learning_rate,
     """PPO optimisers + encoder params in the actor optimiser."""
     super()._build_optimizers()
     self.actor_optimizer.add_param_group(
@@ -685,7 +678,7 @@ class RmaPPO(PPO):
       "rma_manager_state_dict": self.rma_manager.state_dict(),
       "global_step": extra_state["global_step"],
       "actor_learning_rate": self.actor_learning_rate,
-      "critic_phase": self.critic_phase.value,
+      "phase": self.phase.value,
       "config": self.config,
     }
     for key, value in extra_state.items():

@@ -402,3 +402,58 @@ class push_curriculum_by_transitions:
       "push_vel_x_max": torch.tensor(float(vr.get("x", (0.0, 0.0))[1])),
       "push_vel_y_max": torch.tensor(float(vr.get("y", (0.0, 0.0))[1])),
     }
+
+
+# push_force_curriculum_by_transitions
+# ---------------------------------------------------------------------------
+
+
+class push_force_curriculum_by_transitions:
+  """Gradually increase force-based push disturbance over total agent transitions.
+
+  Each stage specifies ``force_range`` and ``torque_range`` tuples that overwrite
+  the ``apply_body_impulse`` event params directly.
+
+  Example::
+
+    CurriculumTermCfg(
+      func=push_force_curriculum_by_transitions,
+      params={
+        "event_name": "push_robot",
+        "stages": [
+          {"transitions": 0,           "force_range": (0.0, 0.0),   "torque_range": (0.0, 0.0)},
+          {"transitions": 100_000_000, "force_range": (-50.0, 50.0), "torque_range": (-5.0, 5.0)},
+          {"transitions": 200_000_000, "force_range": (-100.0, 100.0), "torque_range": (-10.0, 10.0)},
+        ],
+      },
+    )
+  """
+
+  def __init__(self, cfg: CurriculumTermCfg, env: ManagerBasedRlEnv):
+    params = cfg.params
+    event_name: str = params["event_name"]
+    self._stages: list[dict[str, Any]] = params["stages"]
+    self._num_envs = env.num_envs
+    event_term_cfg = env.event_manager.get_term_cfg(event_name)
+    self._event_params: dict[str, Any] = event_term_cfg.params
+    if self._stages:
+      self._event_params["force_range"] = self._stages[0]["force_range"]
+      self._event_params["torque_range"] = self._stages[0]["torque_range"]
+
+  def __call__(
+    self,
+    env: ManagerBasedRlEnv,
+    env_ids: torch.Tensor,
+    event_name: str,
+    stages: list[dict[str, Any]],
+  ) -> dict[str, torch.Tensor]:
+    del env_ids, event_name, stages
+    total = env.common_step_counter * self._num_envs
+    for stage in self._stages:
+      if total >= stage["transitions"]:
+        self._event_params["force_range"] = stage["force_range"]
+        self._event_params["torque_range"] = stage["torque_range"]
+    return {
+      "push_force_max": torch.tensor(float(self._event_params["force_range"][1])),
+      "push_torque_max": torch.tensor(float(self._event_params["torque_range"][1])),
+    }

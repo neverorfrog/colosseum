@@ -3,7 +3,7 @@ from mjlab.managers.curriculum_manager import CurriculumTermCfg
 from colosseum.mdp.curriculums import (
   command_vel_curriculum,
   penalty_curriculum,
-  push_curriculum_by_transitions,
+  push_force_curriculum_by_transitions,
   standing_curriculum_by_transitions,
 )
 
@@ -47,42 +47,20 @@ curriculum = {
     },
   ),
   "push_curriculum": CurriculumTermCfg(
-    func=push_curriculum_by_transitions,
+    func=push_force_curriculum_by_transitions,
     params={
       "event_name": "push_robot",
       "stages": [
-        {
-          "transitions": 0,
-          "velocity_range": {
-            "x": (0.0, 0.0),
-            "y": (0.0, 0.0),
-            "z": (0.0, 0.0),
-            "roll": (0.0, 0.0),
-            "pitch": (0.0, 0.0),
-            "yaw": (0.0, 0.0),
-          },
-        },
+        {"transitions": 0, "force_range": (0.0, 0.0), "torque_range": (0.0, 0.0)},
         {
           "transitions": 300_000_000,
-          "velocity_range": {
-            "x": (-0.75, 0.75),
-            "y": (-0.75, 0.75),
-            "z": (-0.25, 0.25),
-            "roll": (-0.35, 0.35),
-            "pitch": (-0.35, 0.35),
-            "yaw": (-0.5, 0.5),
-          },
+          "force_range": (-10.0, 10.0),
+          "torque_range": (-2.0, 2.0),
         },
         {
           "transitions": 400_000_000,
-          "velocity_range": {
-            "x": (-1.5, 1.5),
-            "y": (-1.5, 1.5),
-            "z": (-0.5, 0.5),
-            "roll": (-0.75, 0.75),
-            "pitch": (-0.75, 0.75),
-            "yaw": (-1.0, 1.0),
-          },
+          "force_range": (-20.0, 20.0),
+          "torque_range": (-4.0, 4.0),
         },
       ],
     },

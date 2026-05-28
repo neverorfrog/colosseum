@@ -1,4 +1,4 @@
-"""Algorithm configurations for Booster T1 velocity task."""
+"""Algorithm config for t1-velocity (Phase 1: PPO with privileged encoders)."""
 
 from colosseum.config.types.algorithm import PpoConfig
 from colosseum.config.types.networks import PpoActorConfig, PpoCriticConfig
@@ -6,9 +6,9 @@ from colosseum.config.types.networks import PpoActorConfig, PpoCriticConfig
 
 def booster_t1_ppo_cfg() -> PpoConfig:
   return PpoConfig(
-    name="PPO",
-    target="colosseum.algorithm.ppo:PPO",
-    learning_steps=500_000_000,
+    name="RmaPPO",
+    target="colosseum.algorithm.rma_ppo:RmaPPO",
+    learning_steps=1_000_000_000,
     num_steps_per_env=24,
     gamma=0.99,
     lam=0.95,
@@ -25,6 +25,9 @@ def booster_t1_ppo_cfg() -> PpoConfig:
     desired_kl=0.01,
     schedule="adaptive",
     obs_normalization=True,
+    symmetry_loss_coef=1.0,
+    symmetry_critic_coef=0.0,
+    symmetry_data_augmentation=True,
     actor=PpoActorConfig(
       hidden_layers=[512, 256, 128],
       activation="elu",
@@ -36,7 +39,7 @@ def booster_t1_ppo_cfg() -> PpoConfig:
 
 
 def booster_t1_rsl_rl_runner_cfg():
-  """RSL-RL runner config for use with train_rsl_rl.py."""
+  """RSL-RL runner config (without symmetry, since RSL-RL doesn't support it)."""
   from mjlab.rl import RslRlModelCfg, RslRlOnPolicyRunnerCfg, RslRlPpoAlgorithmCfg
 
   return RslRlOnPolicyRunnerCfg(
@@ -69,7 +72,7 @@ def booster_t1_rsl_rl_runner_cfg():
       desired_kl=0.01,
       max_grad_norm=1.0,
     ),
-    experiment_name="t1_velocity",
+    experiment_name="t1_velocity_symmetric",
     save_interval=50,
     num_steps_per_env=24,
     max_iterations=30_000,
