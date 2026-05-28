@@ -39,7 +39,7 @@ curriculum = {
     params={
       "command_name": "twist",
       "stages": [
-        {"transitions": 0, "rel_standing_envs": 0.4},
+        {"transitions": 0, "rel_standing_envs": 0.5},
         {"transitions": 50_000_000, "rel_standing_envs": 0.3},
         {"transitions": 100_000_000, "rel_standing_envs": 0.2},
         {"transitions": 150_000_000, "rel_standing_envs": 0.1},
@@ -51,16 +51,17 @@ curriculum = {
     params={
       "event_name": "push_robot",
       "stages": [
-        {"transitions": 0, "force_range": (0.0, 0.0), "torque_range": (0.0, 0.0)},
+        # Reference-matched: gaussian std 10N/2Nm ≈ uniform ±17/±3.5 (a = std·√3).
         {
-          "transitions": 300_000_000,
-          "force_range": (-10.0, 10.0),
-          "torque_range": (-2.0, 2.0),
+          "transitions": 0,
+          "force_range": (-17.0, 17.0),
+          "torque_range": (-3.5, 3.5),
         },
+        # Headroom beyond the reference's gaussian tail for extra robustness.
         {
-          "transitions": 400_000_000,
-          "force_range": (-20.0, 20.0),
-          "torque_range": (-4.0, 4.0),
+          "transitions": 200_000_000,
+          "force_range": (-25.0, 25.0),
+          "torque_range": (-5.0, 5.0),
         },
       ],
     },
@@ -78,6 +79,7 @@ curriculum = {
         "penalty_landing",
         "penalty_dof_vel",
         "penalty_dof_acc",
+        "feet_slip",
       ],
       "initial_scale": 0.1,
       "min_scale": 0.01,

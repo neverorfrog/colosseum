@@ -59,6 +59,10 @@ events = {
       "velocity_range": {
         "x": (-0.1, 0.1),
         "y": (-0.1, 0.1),
+        "z": (-0.1, 0.1),
+        "roll": (-0.04, 0.04),
+        "pitch": (-0.04, 0.04),
+        "yaw": (-0.04, 0.04),
       },
     },
   ),
@@ -69,8 +73,8 @@ events = {
     params={
       "force_range": (0.0, 0.0),
       "torque_range": (0.0, 0.0),
-      "duration_s": (0.3, 1.0),
-      "cooldown_s": (5.0, 10.0),
+      "duration_s": (0.8, 1.0),
+      "cooldown_s": (4.0, 6.0),
       "asset_cfg": SceneEntityCfg("robot", body_names=(BASE_BODY_NAME,)),
     },
   ),

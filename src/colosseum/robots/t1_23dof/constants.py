@@ -185,30 +185,30 @@ HOME_QPOS: dict[str, float] = {
   "AAHead_yaw": 0.0,
   "Head_pitch": 0.0,
   # Left arm (manufacturer's deployment values)
-  "Left_Shoulder_Pitch": 0.1,
+  "Left_Shoulder_Pitch": 0.05,
   "Left_Shoulder_Roll": -1.4,
   "Left_Elbow_Pitch": 0.0,
   "Left_Elbow_Yaw": -0.2,
   # Right arm (manufacturer's deployment values)
-  "Right_Shoulder_Pitch": 0.1,
+  "Right_Shoulder_Pitch": 0.05,
   "Right_Shoulder_Roll": 1.4,
   "Right_Elbow_Pitch": 0.0,
   "Right_Elbow_Yaw": 0.2,
   # Waist
   "Waist": 0.0,
   # Left leg
-  "Left_Hip_Pitch": -0.38,
+  "Left_Hip_Pitch": -0.32,
   "Left_Hip_Roll": 0.0,
   "Left_Hip_Yaw": 0.0,
-  "Left_Knee_Pitch": 0.8,
-  "Left_Ankle_Pitch": -0.43,
+  "Left_Knee_Pitch": 0.6,
+  "Left_Ankle_Pitch": -0.28,
   "Left_Ankle_Roll": 0.0,
   # Right leg
-  "Right_Hip_Pitch": -0.38,
+  "Right_Hip_Pitch": -0.32,
   "Right_Hip_Roll": 0.0,
   "Right_Hip_Yaw": 0.0,
-  "Right_Knee_Pitch": 0.8,
-  "Right_Ankle_Pitch": -0.43,
+  "Right_Knee_Pitch": 0.6,
+  "Right_Ankle_Pitch": -0.28,
   "Right_Ankle_Roll": 0.0,
 }
 
@@ -235,7 +235,7 @@ if _MJLAB_AVAILABLE:
     spec_fn = get_spec_with_head_camera if with_head_camera else get_spec
     return EntityCfg(
       init_state=EntityCfg.InitialStateCfg(
-        pos=(0, 0, 0.64),
+        pos=(0, 0, 0.66),
         joint_pos=HOME_QPOS,
         joint_vel={".*": 0.0},
       ),

@@ -103,7 +103,7 @@ class RmaPPO(PPO):
     )
 
   def _build_rollout_buffer(self) -> None:
-    """Allocate buffer with privileged obs storage per encoder group."""
+    """Allocate buffer with privileged obs and adaptation obs storage."""
     assert isinstance(self.config, PpoConfig)
 
     obs_mgr = self.env.observation_manager
@@ -111,6 +111,19 @@ class RmaPPO(PPO):
       group: obs_mgr.group_obs_dim[group][0]
       for group in self.rma_manager.privileged_group_names
     }
+
+    # Pre-compute adaptation window shapes for Phase 3 reshape.
+    # Stored as flat [N, W*D] in the buffer; reshaped at learning time.
+    self._adaptation_window_shapes: dict[str, tuple[int, int]] = {}
+    adaptation_obs_dims: dict[str, int] = {}
+    for term in self.rma_manager._terms.values():
+      if term.cfg.adaptation_obs_group is None or term.adaptation_encoder is None:
+        continue
+      group = term.cfg.adaptation_obs_group
+      W = term._window.shape[1]
+      D = term._window.shape[2]
+      self._adaptation_window_shapes[group] = (W, D)
+      adaptation_obs_dims[group] = W * D
 
     self.rollout_buffer = RolloutBuffer(
       num_envs=self.env.num_envs,
@@ -120,6 +133,7 @@ class RmaPPO(PPO):
       action_dim=self.action_dim,
       device=self.device,
       privileged_obs_dims=privileged_obs_dims,
+      adaptation_obs_dims=adaptation_obs_dims or None,
     )
 
   # ------------------------------------------------------------------
@@ -143,10 +157,16 @@ class RmaPPO(PPO):
         norm_actor_obs_base = self.actor_obs_normalizer(current_actor_obs)
         norm_critic_obs = self.critic_obs_normalizer(current_critic_obs)
 
-        # Compose actor input: cat([norm_proprio, encoder_latents])
+        # Snapshot adaptation obs BEFORE composing so the stored window aligns
+        # with the action taken at this step (fixes Phase 3 mini-batch staleness).
         current_privileged_obs = self.get_privileged_obs(obs_dict)
+        current_adaptation_obs = (
+          self.rma_manager.get_adaptation_obs()
+          if self.phase == RmaPhase.POLICY_FINETUNE
+          else None
+        )
         norm_actor_obs = self._compose_actor_input(
-          norm_actor_obs_base, current_privileged_obs
+          norm_actor_obs_base, current_privileged_obs, current_adaptation_obs
         )
 
         actions, log_probs, action_means, action_stds = self.actor.act_with_log_prob(
@@ -199,6 +219,7 @@ class RmaPPO(PPO):
           action_means=action_means,
           action_stds=action_stds,
           privileged_obs=current_privileged_obs,
+          adaptation_obs=current_adaptation_obs,
         )
 
         current_actor_obs = next_actor_obs
@@ -229,14 +250,23 @@ class RmaPPO(PPO):
   def train(self) -> None:
     if self.phase == RmaPhase.ADAPT_TRAIN:
       self._train_phase2()
+      self.env.close()
     else:
       super().train()  # PRIVILEGED and POLICY_FINETUNE both use the PPO loop
 
-  def _train_phase2(self) -> None:
+  def _train_phase2(
+    self,
+    loss_threshold: float | None = None,
+    total_steps: int | None = None,
+  ) -> None:
     """Phase 2 outer loop: adaptation encoder regression.
 
     build_adaptation_optimizer() and _phase = 2 must be set before calling
-    (train_phase2.py handles this).
+    (rma_train.py handles this).
+
+    Args:
+      loss_threshold: Stop early when the smoothed latent_mse falls below this
+                      value. None disables early stopping (run for all steps).
     """
     assert isinstance(self.config, PpoConfig)
 
@@ -245,16 +275,22 @@ class RmaPPO(PPO):
     losses_buffer: dict[str, list[float]] = defaultdict(list)
     collection_time_sum = 0.0
 
-    total_timesteps = self.config.learning_steps
+    total_timesteps = total_steps if total_steps is not None else self.config.learning_steps
     steps_per_iter = self.config.num_steps_per_env * self.env.num_envs
     num_iterations = total_timesteps // steps_per_iter
     log_interval_iters = max(1, self.log_interval // steps_per_iter)
+
+    # Exponential moving average of latent_mse for early-stopping.
+    ema_latent_mse: float | None = None
+    ema_alpha = 0.1
 
     logger.info("=" * 80)
     logger.info("Starting RMA Phase 2 training (adaptation encoder regression)")
     logger.info(f"Total steps:    {total_timesteps}")
     logger.info(f"Steps per iter: {steps_per_iter}")
     logger.info(f"Num iterations: {num_iterations}")
+    if loss_threshold is not None:
+      logger.info(f"Early-stop threshold (latent_mse EMA): {loss_threshold}")
     logger.info("=" * 80)
 
     obs_dict, _ = self.env.reset(seed=self.seed)
@@ -270,6 +306,19 @@ class RmaPPO(PPO):
       self.global_step += steps_per_iter
       self._maybe_save_checkpoint(self.global_step)
 
+      if loss_threshold is not None and "adapt/latent_mse" in loss_dict:
+        raw = loss_dict["adapt/latent_mse"]
+        ema_latent_mse = (
+          raw if ema_latent_mse is None
+          else ema_alpha * raw + (1 - ema_alpha) * ema_latent_mse
+        )
+        if ema_latent_mse < loss_threshold:
+          logger.info(
+            f"Phase 2 early stop: latent_mse EMA {ema_latent_mse:.5f} "
+            f"< threshold {loss_threshold} at step {self.global_step}"
+          )
+          break
+
       if iteration % log_interval_iters == 0:
         self._log_training_metrics(
           step=self.global_step,
@@ -284,8 +333,6 @@ class RmaPPO(PPO):
         )
         losses_buffer.clear()
         collection_time_sum = 0.0
-
-    self.env.close()
 
   def _phase2_learning_step(
     self,
@@ -541,6 +588,7 @@ class RmaPPO(PPO):
     self,
     actor_obs: torch.Tensor,
     privileged_obs: dict[str, torch.Tensor],
+    adaptation_obs: dict[str, torch.Tensor] | None = None,
   ) -> torch.Tensor:
     """Concatenate normalised proprio with encoder latents.
 
@@ -548,22 +596,32 @@ class RmaPPO(PPO):
       PRIVILEGED:      privileged encoder; noise applied only when gradients
                        are enabled (i.e. the learning step, not collection).
       ADAPT_TRAIN:     privileged encoder, no noise (policy frozen, rollout only).
-      POLICY_FINETUNE: adaptation encoder, no noise (encoder frozen).
+      POLICY_FINETUNE: adaptation encoder using per-step window snapshots stored
+                       in the rollout buffer (fixes mini-batch staleness).
 
     Args:
-      actor_obs:      (N, actor_obs_dim) normalised proprioceptive obs.
-      privileged_obs: Dict of GT privileged groups (unused in POLICY_FINETUNE).
+      actor_obs:       (N, actor_obs_dim) normalised proprioceptive obs.
+      privileged_obs:  Dict of GT privileged groups (unused in POLICY_FINETUNE).
+      adaptation_obs:  Dict of adaptation obs groups. During Phase 3 collection
+                       this is a live snapshot; during the learning step it holds
+                       per-step windows from the buffer (flat (B, W*D), reshaped here).
 
     Returns:
       (N, actor_obs_dim + total_latent_dim) actor input tensor.
     """
     if self.phase == RmaPhase.POLICY_FINETUNE:
-      # NOTE: Phase 3 with shuffled PPO mini-batches requires pre-stored
-      # adaptation obs (see build_phase3_optimizer). For now we snapshot the
-      # current term buffers, which is correct during sequential collection
-      # but not during the randomised learning step.
-      adapt_obs = self.rma_manager.get_adaptation_obs()
-      z = self.rma_manager.encode(adapt_obs, use_adaptation=True, apply_noise=False)
+      if adaptation_obs:
+        # Learning step: reshape flat (B, W*D) → (B, W, D) per group.
+        reshaped = {
+          group: flat.reshape(flat.shape[0], *self._adaptation_window_shapes[group])
+          for group, flat in adaptation_obs.items()
+          if group in self._adaptation_window_shapes
+        }
+        z = self.rma_manager.encode(reshaped, use_adaptation=True, apply_noise=False)
+      else:
+        # Collection step: live window snapshot already has shape (N, W, D).
+        adapt_obs = self.rma_manager.get_adaptation_obs()
+        z = self.rma_manager.encode(adapt_obs, use_adaptation=True, apply_noise=False)
     else:
       # Noise only during the Phase 1 learning step (gradients enabled).
       apply_noise = torch.is_grad_enabled() and self.phase == RmaPhase.PRIVILEGED

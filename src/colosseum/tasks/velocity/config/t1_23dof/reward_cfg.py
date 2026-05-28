@@ -20,10 +20,10 @@ from colosseum.mdp.rewards import (
   dof_vel_penalty,
   feet_distance_penalty,
   feet_phase,
+  feet_slip,
   foot_orientation_penalty,
   orientation_penalty,
   pose_deviation_penalty,
-  static_stance,
 )
 from colosseum.robots.t1_23dof.constants import (
   BASE_BODY_NAME,
@@ -70,7 +70,6 @@ rewards = {
       "max_speed": 1.5,
       "tracking_sigma": 0.25,
       "command_name": "twist",
-      "command_threshold": 0.05,
     },
   ),
   "alive": RewardTermCfg(
@@ -125,17 +124,14 @@ rewards = {
     params={
       "asset_cfg": SceneEntityCfg("robot", site_names=(FOOT_SITE_NAMES)),
       "min_dist": 0.2,
-      "command_name": "twist",
-      "command_threshold": 0.05,
     },
   ),
-  "static_stance": RewardTermCfg(
-    func=static_stance,
-    weight=-1.0,
+  "feet_slip": RewardTermCfg(
+    func=feet_slip,
+    weight=-0.25,
     params={
       "asset_cfg": SceneEntityCfg("robot", site_names=(FOOT_SITE_NAMES)),
-      "command_name": "twist",
-      "command_threshold": 0.05,
+      "sensor_name": "feet_ground_contact",
     },
   ),
   "penalty_dof_vel": RewardTermCfg(

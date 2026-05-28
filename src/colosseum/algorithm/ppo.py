@@ -202,6 +202,11 @@ class PPO(BaseAlgorithm):
 
   def train(self) -> None:
     """Main PPO training loop."""
+    self._ppo_loop()
+    self.env.close()
+
+  def _ppo_loop(self, title: str = "PPO Training", total_steps: int | None = None) -> None:
+    """Inner PPO training loop without env.close(). Called by train() and pipeline scripts."""
     assert isinstance(self.config, PpoConfig)
 
     self.start_time = time.time()
@@ -214,16 +219,14 @@ class PPO(BaseAlgorithm):
     self.actor.train()
     self.value_net.train()
 
-    total_timesteps = self.config.learning_steps
+    total_timesteps = total_steps if total_steps is not None else self.config.learning_steps
     steps_per_iter = self.config.num_steps_per_env * self.env.num_envs
     num_iterations = total_timesteps // steps_per_iter
 
-    # Convert log_interval from env steps → PPO iterations (same unit as SAC's step counter)
-    # This makes the W&B x-axis (global_step = total env transitions) consistent with SAC.
     log_interval_iters = max(1, self.log_interval // steps_per_iter)
 
     logger.info("=" * 80)
-    logger.info("Starting PPO training")
+    logger.info(f"Starting {title}")
     logger.info(f"Total steps: {total_timesteps}")
     logger.info(f"Steps per iteration: {steps_per_iter}")
     logger.info(f"Num iterations: {num_iterations}")
@@ -300,15 +303,13 @@ class PPO(BaseAlgorithm):
           learning_time=learning_time_sum,
           log_interval=log_interval_iters,
           total_timesteps=total_timesteps,
-          title="PPO Training",
+          title=title,
           use_rich=self.config.use_rich_logging,
           steps_per_log_step=self.config.num_steps_per_env,
         )
         losses_buffer.clear()
         collection_time_sum = 0.0
         learning_time_sum = 0.0
-
-    self.env.close()
 
   def _collect_rollout(
     self,
@@ -463,6 +464,7 @@ class PPO(BaseAlgorithm):
       # encoder latents (subclasses like RmaPPO append latents in _compose_actor_input).
       original_batch_size = actor_obs_norm.shape[0]
       privileged_obs = batch.get("privileged_obs", {})
+      adaptation_obs = batch.get("adaptation_obs", {})
       if (
         self._use_symmetry
         and self.config.symmetry_data_augmentation
@@ -482,9 +484,12 @@ class PPO(BaseAlgorithm):
         privileged_obs = {
           k: v.repeat(2, *([1] * (v.dim() - 1))) for k, v in privileged_obs.items()
         }
+        adaptation_obs = {
+          k: v.repeat(2, *([1] * (v.dim() - 1))) for k, v in adaptation_obs.items()
+        }
 
       # Compose actor input (identity in PPO; RmaPPO overrides to append encoder latents)
-      actor_obs = self._compose_actor_input(actor_obs_norm, privileged_obs)
+      actor_obs = self._compose_actor_input(actor_obs_norm, privileged_obs, adaptation_obs)
 
       # Re-evaluate actions with current policy
       new_log_probs, entropy_all = self.actor.evaluate(actor_obs, actions)
@@ -586,7 +591,7 @@ class PPO(BaseAlgorithm):
           else:
             mu_original = self.actor.forward(actor_obs.detach())
             mirrored_actor_obs = self._mirror_actor_input(
-              actor_obs_norm.detach(), privileged_obs
+              actor_obs_norm.detach(), privileged_obs, adaptation_obs
             )
             mu_mirrored = self.actor.forward(mirrored_actor_obs)
             symmetry_actor_loss = torch.nn.functional.mse_loss(
@@ -698,6 +703,7 @@ class PPO(BaseAlgorithm):
     self,
     actor_obs: torch.Tensor,
     privileged_obs: dict[str, torch.Tensor],
+    adaptation_obs: dict[str, torch.Tensor] | None = None,
   ) -> torch.Tensor:
     """Build the full actor input. Identity in PPO; RmaPPO overrides to append encoder latents."""
     return actor_obs
@@ -706,10 +712,11 @@ class PPO(BaseAlgorithm):
     self,
     actor_obs_norm: torch.Tensor,
     privileged_obs: dict[str, torch.Tensor],
+    adaptation_obs: dict[str, torch.Tensor] | None = None,
   ) -> torch.Tensor:
     """Mirror actor_obs_norm then recompose. Used by the non-augmentation symmetry loss path."""
     mirrored_norm = mirror_obs(actor_obs_norm, self._actor_sym_spec)
-    return self._compose_actor_input(mirrored_norm, privileged_obs)
+    return self._compose_actor_input(mirrored_norm, privileged_obs, adaptation_obs)
 
   def _prewarm_actor_obs(self, actor_obs: torch.Tensor) -> torch.Tensor:
     """Transform actor obs for normalizer pre-warming. Override in subclasses."""

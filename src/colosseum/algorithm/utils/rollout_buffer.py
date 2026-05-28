@@ -38,6 +38,7 @@ class RolloutBuffer:
         device: torch.device,
         extras: dict[str, int] | None = None,
         privileged_obs_dims: dict[str, int] | None = None,
+        adaptation_obs_dims: dict[str, int] | None = None,
     ) -> None:
         self.num_envs = num_envs
         self.num_steps = num_steps
@@ -78,6 +79,16 @@ class RolloutBuffer:
                     num_steps, num_envs, dim, device=device
                 )
 
+        # Adaptation obs storage (Phase 3): proprio windows stored flattened as
+        # [T, N, W*D] so the mini-batch generator can index them with the same
+        # permutation used for all other tensors.
+        self._adaptation_obs: dict[str, torch.Tensor] = {}
+        if adaptation_obs_dims:
+            for group_name, dim in adaptation_obs_dims.items():
+                self._adaptation_obs[group_name] = torch.zeros(
+                    num_steps, num_envs, dim, device=device
+                )
+
     def add(
         self,
         actor_obs: torch.Tensor,
@@ -91,6 +102,7 @@ class RolloutBuffer:
         action_stds: torch.Tensor,
         extras: dict[str, torch.Tensor] | None = None,
         privileged_obs: dict[str, torch.Tensor] | None = None,
+        adaptation_obs: dict[str, torch.Tensor] | None = None,
     ) -> None:
         """Store one step of transition data.
 
@@ -124,6 +136,13 @@ class RolloutBuffer:
         if privileged_obs:
             for group_name, data in privileged_obs.items():
                 self._privileged_obs[group_name][self.step].copy_(data)
+
+        # Store adaptation obs (Phase 3): window flattened to [N, W*D]
+        if adaptation_obs:
+            for group_name, data in adaptation_obs.items():
+                self._adaptation_obs[group_name][self.step].copy_(
+                    data.flatten(1) if data.dim() > 2 else data
+                )
 
         self.step += 1
 
@@ -210,6 +229,11 @@ class RolloutBuffer:
             group: tensor.flatten(0, 1) for group, tensor in self._privileged_obs.items()
         }
 
+        # Flatten adaptation obs groups (Phase 3)
+        flat_adaptation_obs = {
+            group: tensor.flatten(0, 1) for group, tensor in self._adaptation_obs.items()
+        }
+
         # Single permutation reused across epochs (RSL-RL pattern)
         indices = torch.randperm(
             num_mini_batches * mini_batch_size, device=self.device
@@ -249,6 +273,14 @@ class RolloutBuffer:
                     batch["privileged_obs"] = {
                         group: flat_tensor[batch_idx]
                         for group, flat_tensor in flat_privileged_obs.items()
+                    }
+
+                # Include adaptation obs groups (Phase 3) — stored flattened,
+                # reshaped to (B, W, D) by _compose_actor_input in RmaPPO
+                if flat_adaptation_obs:
+                    batch["adaptation_obs"] = {
+                        group: flat_tensor[batch_idx]
+                        for group, flat_tensor in flat_adaptation_obs.items()
                     }
 
                 yield batch

@@ -343,6 +343,28 @@ def stance_phase_schedule(
   return reward
 
 
+def feet_slip(
+  env: ManagerBasedRlEnv,
+  asset_cfg: SceneEntityCfg,
+  sensor_name: str,
+  contact_threshold: float = 1.0,
+) -> torch.Tensor:
+  """Penalize foot XY sliding while the foot is in contact (use negative weight).
+
+  Gated on contact (‖force‖ > contact_threshold), not on command, so it discourages
+  dragging a planted foot in both walking and standing regimes while leaving the
+  policy free to lift a foot to take a recovery step. Replaces the command-gated
+  static_stance, whose all-velocity penalty froze recovery stepping at standstill.
+  """
+  contact_sensor: ContactSensor = env.scene[sensor_name]
+  assert contact_sensor.data.force is not None
+  contact = contact_sensor.data.force.norm(dim=-1) > contact_threshold  # (N, 2)
+  asset: Entity = env.scene[asset_cfg.name]
+  foot_vel_xy = asset.data.site_lin_vel_w[:, asset_cfg.site_ids, :2]  # (N, 2, 2)
+  vel_sq = (foot_vel_xy**2).sum(dim=-1)  # (N, 2)
+  return (vel_sq * contact.float()).sum(dim=-1)
+
+
 def static_stance(
   env: ManagerBasedRlEnv,
   asset_cfg: SceneEntityCfg,
@@ -423,25 +445,24 @@ def arm_phase(
   phase_command_name: str,
   asset_cfg: SceneEntityCfg,
   swing_amplitude: float = 0.25,
-  swing_center: float = 0.0,
   max_speed: float = 1.5,
   tracking_sigma: float = 0.05,
   command_name: str | None = None,
-  command_threshold: float = 0.05,
 ) -> torch.Tensor:
   """Reward shoulder pitch tracking a cosine arm-swing profile.
 
   Contralateral coupling: left arm tracks right foot phase, right arm tracks
   left foot phase.
-      target = (default_shoulder_pitch + swing_center) - amplitude(speed) * cos(phi_contralateral)
+      target = default_shoulder_pitch - amplitude(speed) * cos(phi_contralateral)
 
-  swing_center offsets the oscillation center from the default joint position.
-  Keep it at 0 unless HOME_QPOS shoulder pitch is also updated to match — any
-  non-zero offset shifts the walking center away from q_default and causes a
-  visible snap when the velocity gate fires on stop.
+  The oscillation is centered on the default pose (-cos sweeps [-1, +1]), so the
+  shoulder swings q_default ± amplitude — q_default is the swing center, never an
+  edge. A forward walking posture belongs in HOME_QPOS, not here.
 
-  amplitude and tracking_sigma both scale with speed up to max_speed.
-  Gated on walking: zeroed when ||cmd_xy|| <= command_threshold.
+  amplitude and tracking_sigma both scale with speed up to max_speed. The reward
+  itself is scaled by the same speed ramp (speed_scale), so it fades continuously
+  to zero at standstill instead of switching off at a threshold — no discontinuity
+  for the policy to jerk against on stop.
 
   asset_cfg must resolve [Left_Shoulder_Pitch, Right_Shoulder_Pitch] in
   that order, matching gait phase order (left=0, right=1).
@@ -463,18 +484,14 @@ def arm_phase(
     effective_sigma = tracking_sigma / (
       1.0 + speed_scale
     )  # (N,), tighter at high speed
-    effective_center = (swing_center * speed_scale).unsqueeze(-1)  # (N, 1)
   else:
     effective_amplitude = swing_amplitude
     effective_sigma = tracking_sigma
-    effective_center = swing_center
 
-  center = q_default + effective_center  # (N, 2)
-  target = center - effective_amplitude * torch.cos(phi_contra)  # (N, 2)
+  target = q_default - effective_amplitude * torch.cos(phi_contra)  # (N, 2)
   error = torch.sum(torch.square(q - target), dim=-1)  # (N,)
   reward = torch.exp(-error / effective_sigma)  # (N,)
 
   if command_name is not None:
-    moving = (speed > command_threshold).float()
-    reward = reward * moving
+    reward = reward * speed_scale
   return reward
