@@ -622,17 +622,19 @@ class RmaPPO(PPO):
           super().__init__()
           self.obs_normalizer = obs_normalizer
           self.actor = actor
-          self.encoders = nn.ModuleList([enc for _, enc, _ in adapt_info])
+          self.num_encoders = len(adapt_info)
+          for i, (_, enc, _) in enumerate(adapt_info):
+            self.add_module(f"encoder_{i}", enc)
 
         def forward(
           self, actor_obs: torch.Tensor, *windows_in: torch.Tensor
         ) -> tuple[torch.Tensor, ...]:
           latents = []
           windows_out = []
-          for i in range(len(adapt_info)):
+          for i in range(self.num_encoders):
             w_out = torch.cat([windows_in[i][:, 1:, :], actor_obs.unsqueeze(1)], dim=1)
             windows_out.append(w_out)
-            latents.append(self.encoders[i](w_out))
+            latents.append(getattr(self, f"encoder_{i}")(w_out))
           z = torch.cat(latents, dim=-1)
           norm_obs = self.obs_normalizer(actor_obs)
           actions = self.actor(torch.cat([norm_obs, z], dim=-1))
@@ -654,6 +656,7 @@ class RmaPPO(PPO):
         opset_version=18,
         input_names=["obs"] + state_names,
         output_names=["actions"] + [n + "_out" for n in state_names],
+        dynamo=False,
       )
       for _, enc, _ in adapt_info:
         enc.to(self.device)

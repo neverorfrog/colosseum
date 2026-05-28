@@ -60,6 +60,27 @@ class VelocityRmaTermCfg(RmaTermCfg):
     return VelocityRmaTerm(cfg=self, env=env)
 
 
+class _AdaptEncModule(nn.Module):
+  """Wrapper around ProprioWindowEncoder + OdomHead for parameter tracking.
+
+  Registers submodules with numeric keys ("0", "1") so state dict keys
+  match the old ``ModuleList``-based checkpoints and avoid non-strict
+  loading warnings.
+
+  ``forward()`` returns only the latent from ``ProprioWindowEncoder``
+  (what the ONNX export wrapper expects). ``OdomHead`` is used internally
+  by ``compute_loss()`` during Phase 2 training.
+  """
+
+  def __init__(self, adapt_enc: nn.Module, odom_head: nn.Module) -> None:
+    super().__init__()
+    self.add_module("0", adapt_enc)
+    self.add_module("1", odom_head)
+
+  def forward(self, window: torch.Tensor) -> torch.Tensor:
+    return self._modules["0"](window)
+
+
 class VelocityRmaTerm(RmaTerm):
   """RMA term for velocity locomotion task.
 
@@ -95,7 +116,7 @@ class VelocityRmaTerm(RmaTerm):
       hidden_dim=cfg.hidden_dim,
     ).to(device)
 
-    self._adapt_enc_module = nn.ModuleList([self._adapt_enc, self._odom_head]).to(device)
+    self._adapt_enc_module = _AdaptEncModule(self._adapt_enc, self._odom_head).to(device)
 
     # Rolling buffer: (N, W, D_actor)
     self._window = torch.zeros(
