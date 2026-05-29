@@ -266,6 +266,8 @@ def main() -> None:
     def _make_algo(cfg: ManagerBasedRlEnvCfg) -> RmaPPO:
       """Create a fresh env+algo pair for one phase."""
       phase_env = cfg.class_type(cfg=cfg, device=str(device))
+      if is_distributed and dist.is_initialized():
+        dist.barrier()
       algo: RmaPPO = algo_class(
         config=algo_cfg,
         env=phase_env,
