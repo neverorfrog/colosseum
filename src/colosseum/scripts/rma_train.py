@@ -372,7 +372,7 @@ def main() -> None:
     if p3_source is None or not p3_source.exists():
       logger.error("Phase 3 requires a Phase 2 checkpoint (--checkpoint or from Phase 2).")
       sys.exit(1)
-    algo = _make_algo(env_cfg)
+    algo = _make_algo(phase2_env_cfg)
     algo.load(p3_source)
     algo.global_step = 0
     algo.build_phase3_optimizer()
