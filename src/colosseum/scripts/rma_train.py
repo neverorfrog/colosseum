@@ -309,11 +309,10 @@ def main() -> None:
     def _save_phase(algo: RmaPPO, label: str) -> Path | None:
       if ckpt_dir is None:
         return None
+      ckpt_dir.mkdir(parents=True, exist_ok=True)
       path = ckpt_dir / f"{label}_final.pt"
-      if is_main_process:
-        ckpt_dir.mkdir(parents=True, exist_ok=True)
-        algo.save(path, global_step=algo.global_step)
-        logger.success(f"Saved {label} checkpoint: {path}")
+      algo.save(path, global_step=algo.global_step)
+      logger.success(f"Saved {label} checkpoint: {path}")
       return path
 
     def _handle_interrupt(algo: RmaPPO, label: str) -> None:
@@ -328,6 +327,7 @@ def main() -> None:
 
     phase1_ckpt: Path | None = None
     phase2_ckpt: Path | None = None
+    phase1_end_step: int = 0
     # Env carried over from Phase 2 to Phase 3 (identical config) to skip a rebuild.
     def _reclaim_memory(skip_gc: bool = False) -> None:
       """Reclaim freed GPU memory after the caller has dropped its algo ref.
@@ -363,6 +363,7 @@ def main() -> None:
       except KeyboardInterrupt:
         _handle_interrupt(algo, "phase1")
         raise
+      phase1_end_step = algo.global_step
       phase1_ckpt = _save_phase(algo, "phase1")
       algo.env.close()
       del algo
@@ -380,6 +381,8 @@ def main() -> None:
         sys.exit(1)
       algo = _make_algo(phase2_env_cfg)
       algo.load(p2_source)
+      if phase1_end_step == 0:
+        phase1_end_step = algo.global_step
       algo.global_step = 0
       algo.build_adaptation_optimizer(lr=config.phase2_lr)
       try:
@@ -390,6 +393,7 @@ def main() -> None:
       except KeyboardInterrupt:
         _handle_interrupt(algo, "phase2")
         raise
+      algo._metadata["phase1_end_step"] = phase1_end_step
       phase2_ckpt = _save_phase(algo, "phase2")
       # Phase 3 uses the same env config: keep the env, free everything else.
       reused_env = algo.env
@@ -406,8 +410,12 @@ def main() -> None:
       logger.error("Phase 3 requires a Phase 2 checkpoint (--checkpoint or from Phase 2).")
       sys.exit(1)
     algo = _make_algo(phase2_env_cfg, env=reused_env)
-    algo.load(p3_source)
-    algo.global_step = 0
+    loaded = algo.load(p3_source)
+    if phase1_end_step == 0:
+      phase1_end_step = loaded.get("metadata", {}).get("phase1_end_step", 0)
+    algo.global_step = phase1_end_step
+    if phase1_end_step > 0:
+      algo._restore_env_step_counter()
     algo.build_phase3_optimizer()
     try:
       algo._ppo_loop(title="RMA Phase 3", total_steps=config.phase3_steps)
