@@ -15,6 +15,7 @@ Usage:
 
 from __future__ import annotations
 
+import gc
 import importlib
 import os
 import signal
@@ -29,7 +30,7 @@ import torch.distributed as dist
 import tyro
 import wandb
 from loguru import logger
-from mjlab.envs import ManagerBasedRlEnvCfg
+from mjlab.envs import ManagerBasedRlEnv, ManagerBasedRlEnvCfg
 from mjlab.utils.torch import configure_torch_backends
 from pydantic import ConfigDict
 from pydantic.dataclasses import dataclass
@@ -174,6 +175,15 @@ def main() -> None:
     is_distributed, world_size, rank, local_rank = _init_distributed(config.use_cuda)
     is_main_process = rank == 0
 
+    def _barrier() -> None:
+      if not (is_distributed and dist.is_initialized()):
+        return
+      # NCCL needs the device id to avoid serializing on the wrong GPU.
+      if config.use_cuda:
+        dist.barrier(device_ids=[local_rank])
+      else:
+        dist.barrier()
+
     algo_cfg = config.task.algo_cfg
     assert algo_cfg is not None, f"Task '{config.task.name}' has no algo_cfg."
 
@@ -227,7 +237,9 @@ def main() -> None:
         f"  threshold={config.phase2_loss_threshold}"
         f"  num_envs={phase2_env_cfg.scene.num_envs}"
       )
-      logger.info(f"Phase 3 steps: {config.phase3_steps}  num_envs={env_cfg.scene.num_envs}")
+      logger.info(
+        f"Phase 3 steps: {config.phase3_steps}  num_envs={phase2_env_cfg.scene.num_envs}"
+      )
       logger.info(f"Seed:          {config.seed}")
       logger.info(f"Distributed:   {is_distributed} (world={world_size}, rank={rank})")
       logger.info(f"Run dir:       {run_dir}")
@@ -263,11 +275,15 @@ def main() -> None:
 
     ckpt_dir = run_dir / "checkpoints" if run_dir is not None else None
 
-    def _make_algo(cfg: ManagerBasedRlEnvCfg) -> RmaPPO:
-      """Create a fresh env+algo pair for one phase."""
-      phase_env = cfg.class_type(cfg=cfg, device=str(device))
-      if is_distributed and dist.is_initialized():
-        dist.barrier()
+    def _make_algo(
+      cfg: ManagerBasedRlEnvCfg, env: ManagerBasedRlEnv | None = None
+    ) -> RmaPPO:
+      """Create an algo for one phase, reusing ``env`` when provided.
+
+      Reusing the env across phases avoids a full MuJoCo-Warp recompile, which
+      is the dominant cost of a phase transition."""
+      phase_env = env if env is not None else cfg.class_type(cfg=cfg, device=str(device))
+      _barrier()
       algo: RmaPPO = algo_class(
         config=algo_cfg,
         env=phase_env,
@@ -312,6 +328,19 @@ def main() -> None:
 
     phase1_ckpt: Path | None = None
     phase2_ckpt: Path | None = None
+    # Env carried over from Phase 2 to Phase 3 (identical config) to skip a rebuild.
+    reused_env: ManagerBasedRlEnv | None = None
+
+    def _reclaim_memory() -> None:
+      """Reclaim freed GPU memory after the caller has dropped its algo ref.
+
+      The caller must ``del`` its own ``algo`` binding first (a helper can't free
+      it). Run before building the next phase so the old phase's allocations —
+      most importantly the RMA rollout buffer with depth-frame storage — don't
+      sit alongside the new env's allocations and cause fragmentation/OOM."""
+      gc.collect()
+      if config.use_cuda and torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
     # ------------------------------------------------------------------
     # Phase 1 — PPO with privileged encoder
@@ -326,8 +355,7 @@ def main() -> None:
           sys.exit(1)
         algo.load(checkpoint_path)
         algo.global_step = 0
-      if is_distributed and dist.is_initialized():
-        dist.barrier()
+      _barrier()
       try:
         algo._ppo_loop(title="RMA Phase 1", total_steps=phase1_steps)
       except KeyboardInterrupt:
@@ -335,14 +363,15 @@ def main() -> None:
         raise
       phase1_ckpt = _save_phase(algo, "phase1")
       algo.env.close()
+      del algo
+      _reclaim_memory()
 
     # ------------------------------------------------------------------
     # Phase 2 — adaptation encoder regression
     # ------------------------------------------------------------------
     if config.start_phase <= 2:
       logger.info("--- Phase 2: adaptation encoder regression ---")
-      if is_distributed and dist.is_initialized():
-        dist.barrier()
+      _barrier()
       p2_source = Path(config.checkpoint) if config.start_phase == 2 else phase1_ckpt
       if p2_source is None or not p2_source.exists():
         logger.error("Phase 2 requires a Phase 1 checkpoint (--checkpoint or from Phase 1).")
@@ -360,19 +389,21 @@ def main() -> None:
         _handle_interrupt(algo, "phase2")
         raise
       phase2_ckpt = _save_phase(algo, "phase2")
-      algo.env.close()
+      # Phase 3 uses the same env config: keep the env, free everything else.
+      reused_env = algo.env
+      del algo
+      _reclaim_memory()
 
     # ------------------------------------------------------------------
     # Phase 3 — policy fine-tuning with frozen adaptation encoder
     # ------------------------------------------------------------------
     logger.info("--- Phase 3: policy fine-tuning with frozen encoders ---")
-    if is_distributed and dist.is_initialized():
-      dist.barrier()
+    _barrier()
     p3_source = Path(config.checkpoint) if config.start_phase == 3 else phase2_ckpt
     if p3_source is None or not p3_source.exists():
       logger.error("Phase 3 requires a Phase 2 checkpoint (--checkpoint or from Phase 2).")
       sys.exit(1)
-    algo = _make_algo(phase2_env_cfg)
+    algo = _make_algo(phase2_env_cfg, env=reused_env)
     algo.load(p3_source)
     algo.global_step = 0
     algo.build_phase3_optimizer()
