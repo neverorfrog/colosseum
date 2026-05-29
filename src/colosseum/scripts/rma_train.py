@@ -43,6 +43,8 @@ from colosseum.utils.logger import (
   save_experiment_config,
   setup_loguru,
   setup_wandb,
+  start_live_display,
+  stop_live_display,
   teardown_wandb,
 )
 from colosseum.utils.torch import get_device, set_seed
@@ -349,6 +351,9 @@ def main() -> None:
 
     reused_env: ManagerBasedRlEnv | None = None
 
+    if is_main_process:
+      start_live_display()
+
     # ------------------------------------------------------------------
     # Phase 1 — PPO with privileged encoder
     # ------------------------------------------------------------------
@@ -435,6 +440,7 @@ def main() -> None:
     algo.env.close()
 
     if is_main_process:
+      stop_live_display()
       teardown_wandb()
     logger.success("RMA pipeline complete!")
 

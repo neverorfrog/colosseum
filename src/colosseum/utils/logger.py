@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 from loguru import logger
 from rich.console import Console
+from rich.live import Live
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
@@ -28,6 +29,21 @@ if TYPE_CHECKING:
   from colosseum.config.types.experiment import BaseExperimentConfig
 
 console = Console()
+_live: Live | None = None
+
+
+def start_live_display() -> None:
+  global _live
+  if _live is None:
+    _live = Live(console=console, auto_refresh=False)
+    _live.start()
+
+
+def stop_live_display() -> None:
+  global _live
+  if _live is not None:
+    _live.stop()
+    _live = None
 
 
 def generate_run_name(
@@ -438,8 +454,12 @@ def log_training_step(
             padding=(1, 2),
         )
 
-        # Print to console
-        console.print(panel)
+        # Print to console (or update in-place if live display is active)
+        if _live is not None:
+          _live.update(panel)
+          _live.refresh()
+        else:
+          console.print(panel)
     else:
         # Loguru text output (traditional)
         progress_pct = (step / total_steps * 100) if total_steps > 0 else 0
