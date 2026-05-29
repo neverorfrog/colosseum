@@ -122,8 +122,9 @@ def booster_t1_velocity_env_cfg(play: bool = False) -> ColosseumEnvCfg:
 
     twist = cfg.commands["twist"]
     assert isinstance(twist, UniformVelocityCommandCfg)
+    twist.curriculum = False  # play/eval: uniform-box sampling from ranges
     twist.heading_command = True
-    twist.rel_forward_envs = 1.0
+    twist.rel_forward_envs = 0.7
     twist.rel_world_envs = 0.0
     twist.rel_standing_envs = 0.0
     twist.rel_heading_envs = 1.0

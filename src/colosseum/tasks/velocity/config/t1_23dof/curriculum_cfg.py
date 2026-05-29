@@ -1,65 +1,36 @@
 from mjlab.managers.curriculum_manager import CurriculumTermCfg
 
 from colosseum.mdp.curriculums import (
-  command_vel_curriculum,
   penalty_curriculum,
   push_force_curriculum_by_transitions,
-  standing_curriculum_by_transitions,
 )
 
+# The command-range and standing distributions are now owned by the grid-based,
+# performance-gated CurriculumVelocityCommand (per-env, in cat_cfg.py), so the
+# old time-based command_vel / standing curricula are removed here.
 curriculum = {
-  "command_vel": CurriculumTermCfg(
-    func=command_vel_curriculum,
-    params={
-      "command_name": "twist",
-      "velocity_stages": [
-        {
-          "transitions": 0,
-          "lin_vel_x": (-0.2, 0.5),
-          "lin_vel_y": (-0.2, 0.2),
-          "ang_vel_z": (-0.5, 0.5),
-        },
-        {
-          "transitions": 100_000_000,
-          "lin_vel_x": (-0.3, 1.0),
-          "lin_vel_y": (-0.5, 0.5),
-          "ang_vel_z": (-0.75, 0.75),
-        },
-        {
-          "transitions": 200_000_000,
-          "lin_vel_x": (-1.0, 1.5),
-          "lin_vel_y": (-1.0, 1.0),
-          "ang_vel_z": (-1.0, 1.0),
-        },
-      ],
-    },
-  ),
-  "standing_curriculum": CurriculumTermCfg(
-    func=standing_curriculum_by_transitions,
-    params={
-      "command_name": "twist",
-      "stages": [
-        {"transitions": 0, "rel_standing_envs": 0.5},
-        {"transitions": 50_000_000, "rel_standing_envs": 0.3},
-        {"transitions": 100_000_000, "rel_standing_envs": 0.2},
-        {"transitions": 150_000_000, "rel_standing_envs": 0.1},
-      ],
-    },
-  ),
   "push_curriculum": CurriculumTermCfg(
     func=push_force_curriculum_by_transitions,
     params={
       "event_name": "push_robot",
       "stages": [
-        # Reference-matched: gaussian std 10N/2Nm ≈ uniform ±17/±3.5 (a = std·√3).
         {
           "transitions": 0,
-          "force_range": (-17.0, 17.0),
-          "torque_range": (-3.5, 3.5),
+          "force_range": (-5.0, 5.0),
+          "torque_range": (-1.0, 1.0),
         },
-        # Headroom beyond the reference's gaussian tail for extra robustness.
+        {
+          "transitions": 100_000_000,
+          "force_range": (-10.0, 10.0),
+          "torque_range": (-2.0, 2.0),
+        },
         {
           "transitions": 200_000_000,
+          "force_range": (-15.0, 15.0),
+          "torque_range": (-3.0, 3.0),
+        },
+        {
+          "transitions": 400_000_000,
           "force_range": (-25.0, 25.0),
           "torque_range": (-5.0, 5.0),
         },

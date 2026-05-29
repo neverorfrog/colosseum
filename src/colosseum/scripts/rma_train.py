@@ -56,13 +56,13 @@ class RmaTrainConfig(TrainConfig):
   phase2_steps: int = 50_000_000
   """Env steps for Phase 2 (adaptation encoder regression)."""
 
-  phase2_lr: float = 1e-3
+  phase2_lr: float = 1e-4
   """Learning rate for the Phase 2 adaptation encoder optimizer."""
 
   phase2_loss_threshold: float | None = None
   """Early-stop Phase 2 when the smoothed latent_mse falls below this value."""
 
-  phase3_steps: int = 200_000_000
+  phase3_steps: int = 300_000_000
   """Env steps for Phase 3 (policy fine-tuning with frozen encoders)."""
 
   phase2_num_envs: int | None = None
@@ -270,7 +270,9 @@ def main() -> None:
     module = importlib.import_module(module_path)
     algo_class = getattr(module, class_name)
     if not issubclass(algo_class, RmaPPO):
-      logger.error(f"rma-train requires an RmaPPO algorithm, got {algo_class.__name__}.")
+      logger.error(
+        f"rma-train requires an RmaPPO algorithm, got {algo_class.__name__}."
+      )
       sys.exit(1)
 
     ckpt_dir = run_dir / "checkpoints" if run_dir is not None else None
@@ -282,7 +284,9 @@ def main() -> None:
 
       Reusing the env across phases avoids a full MuJoCo-Warp recompile, which
       is the dominant cost of a phase transition."""
-      phase_env = env if env is not None else cfg.class_type(cfg=cfg, device=str(device))
+      phase_env = (
+        env if env is not None else cfg.class_type(cfg=cfg, device=str(device))
+      )
       _barrier()
       algo: RmaPPO = algo_class(
         config=algo_cfg,
@@ -328,6 +332,7 @@ def main() -> None:
     phase1_ckpt: Path | None = None
     phase2_ckpt: Path | None = None
     phase1_end_step: int = 0
+
     # Env carried over from Phase 2 to Phase 3 (identical config) to skip a rebuild.
     def _reclaim_memory(skip_gc: bool = False) -> None:
       """Reclaim freed GPU memory after the caller has dropped its algo ref.
@@ -377,7 +382,9 @@ def main() -> None:
       _barrier()
       p2_source = Path(config.checkpoint) if config.start_phase == 2 else phase1_ckpt
       if p2_source is None or not p2_source.exists():
-        logger.error("Phase 2 requires a Phase 1 checkpoint (--checkpoint or from Phase 1).")
+        logger.error(
+          "Phase 2 requires a Phase 1 checkpoint (--checkpoint or from Phase 1)."
+        )
         sys.exit(1)
       algo = _make_algo(phase2_env_cfg)
       algo.load(p2_source)
@@ -407,7 +414,9 @@ def main() -> None:
     _barrier()
     p3_source = Path(config.checkpoint) if config.start_phase == 3 else phase2_ckpt
     if p3_source is None or not p3_source.exists():
-      logger.error("Phase 3 requires a Phase 2 checkpoint (--checkpoint or from Phase 2).")
+      logger.error(
+        "Phase 3 requires a Phase 2 checkpoint (--checkpoint or from Phase 2)."
+      )
       sys.exit(1)
     algo = _make_algo(phase2_env_cfg, env=reused_env)
     loaded = algo.load(p3_source)

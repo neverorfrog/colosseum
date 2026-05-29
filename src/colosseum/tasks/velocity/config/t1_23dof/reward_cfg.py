@@ -37,13 +37,13 @@ rewards = {
   # =======================
   "track_linear_velocity": RewardTermCfg(
     func=track_linear_velocity,
-    weight=4.0,
-    params={"command_name": "twist", "std": math.sqrt(0.1)},
+    weight=3.0,
+    params={"command_name": "twist", "std": math.sqrt(0.25)},
   ),
   "track_angular_velocity": RewardTermCfg(
     func=track_angular_velocity,
     weight=3.0,
-    params={"command_name": "twist", "std": math.sqrt(0.1)},
+    params={"command_name": "twist", "std": math.sqrt(0.25)},
   ),
   "feet_phase": RewardTermCfg(
     func=feet_phase,
@@ -66,7 +66,7 @@ rewards = {
         "robot",
         joint_names=("Left_Shoulder_Pitch", "Right_Shoulder_Pitch"),
       ),
-      "swing_amplitude": 0.2,
+      "swing_amplitude": 0.25,
       "max_speed": 1.5,
       "tracking_sigma": 0.25,
       "command_name": "twist",

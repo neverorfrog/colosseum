@@ -765,6 +765,14 @@ class BaseAlgorithm(ABC):
     if algo_name is not None:
       state_dict.setdefault("algo_name", algo_name)
 
+    # Persist any command-term state (e.g. a performance-gated curriculum grid).
+    # Generic: the command manager decides what, if anything, to serialize.
+    command_manager = getattr(self.env.unwrapped, "command_manager", None)
+    if command_manager is not None:
+      command_state = command_manager.state_dict()
+      if command_state:
+        state_dict.setdefault("command_manager", command_state)
+
     cpu_dict = {}
     for key, value in state_dict.items():
       if isinstance(value, dict):
@@ -892,6 +900,12 @@ class BaseAlgorithm(ABC):
 
     checkpoint = torch.load(path, map_location=map_location, weights_only=False)
     logger.success(f"Checkpoint loaded: {path}")
+
+    command_state = checkpoint.get("command_manager")
+    if command_state:
+      command_manager = getattr(self.env.unwrapped, "command_manager", None)
+      if command_manager is not None:
+        command_manager.load_state_dict(command_state)
 
     return checkpoint
 
