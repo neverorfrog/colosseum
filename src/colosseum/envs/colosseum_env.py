@@ -31,16 +31,16 @@ from typing import Annotated, Any, Callable, ClassVar
 
 import torch
 import tyro
+from loguru import logger
 from mjlab.envs import ManagerBasedRlEnv, ManagerBasedRlEnvCfg
 from mjlab.envs.types import VecEnvObs, VecEnvStepReturn
-from loguru import logger
 
-from colosseum.managers.rma_manager import RmaManager, RmaTermCfg
 from colosseum.managers.abstraction_manager import (
   AbstractionManager,
   AbstractionTermCfg,
 )
 from colosseum.managers.constraint_manager import ConstraintManager, ConstraintTermCfg
+from colosseum.managers.rma_manager import RmaManager, RmaTermCfg
 
 
 @dataclass(kw_only=True)
@@ -75,11 +75,11 @@ class ColosseumEnv(ManagerBasedRlEnv):
     return self.observation_manager.compute()
 
   def load_managers(self) -> None:
-    if self.cfg.abstractions:
-      self.abstraction_manager = AbstractionManager(cfg=self.cfg.abstractions, env=self)
+    self.abstraction_manager = AbstractionManager(cfg=self.cfg.abstractions, env=self)
+    self.rma_manager = RmaManager(cfg=self.cfg.encoders, env=self)
     super().load_managers()
-    if self.cfg.encoders:
-      self.rma_manager = RmaManager(cfg=self.cfg.encoders, env=self)
+
+    self.rma_manager = RmaManager(cfg=self.cfg.encoders, env=self)
     if self.cfg.constraints:
       self.constraint_manager = ConstraintManager(cfg=self.cfg.constraints, env=self)
 

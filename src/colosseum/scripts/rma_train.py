@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Integrated RMA training pipeline: Phase 1 → Phase 2 → Phase 3.
 
-All three phases share a single env and algo instance.  Phase transitions are
-automatic; checkpoints are saved at the end of each phase.
+Each phase runs with its own env+algo instance created from a checkpoint.
+Phase transitions are automatic; checkpoints are saved at the end of each phase.
 
 Usage:
     pixi run -e train rma-train task:t1-velocity
     pixi run -e train rma-train task:t1-velocity --phase2-lr 3e-4
+    pixi run -e train rma-train task:t1-velocity --phase2-num-envs 1024
     pixi run -e train rma-train task:t1-velocity --phase2-loss-threshold 0.01
     pixi run -e train rma-train task:t1-velocity --start-phase 2 --checkpoint ./logs/.../phase1_final.pt
     pixi run -e train rma-train task:t1-velocity --start-phase 3 --checkpoint ./logs/.../phase2_final.pt
@@ -14,6 +15,7 @@ Usage:
 
 from __future__ import annotations
 
+import importlib
 import os
 import signal
 import subprocess
@@ -27,12 +29,13 @@ import torch.distributed as dist
 import tyro
 import wandb
 from loguru import logger
+from mjlab.envs import ManagerBasedRlEnvCfg
 from mjlab.utils.torch import configure_torch_backends
 from pydantic import ConfigDict
 from pydantic.dataclasses import dataclass
 
 import colosseum.tasks  # noqa: F401
-from colosseum.algorithm.rma_ppo import RmaPhase, RmaPPO
+from colosseum.algorithm.rma_ppo import RmaPPO
 from colosseum.config.types.experiment import TrainConfig
 from colosseum.utils.logger import (
   generate_run_name,
@@ -60,6 +63,10 @@ class RmaTrainConfig(TrainConfig):
 
   phase3_steps: int = 200_000_000
   """Env steps for Phase 3 (policy fine-tuning with frozen encoders)."""
+
+  phase2_num_envs: int | None = None
+  """Number of parallel environments for Phase 2. Defaults to the same as Phase 1/3.
+  Reduce this if Phase 2 (depth-buffer regression) causes GPU OOM."""
 
 
 # ---------------------------------------------------------------------------
@@ -173,6 +180,13 @@ def main() -> None:
     phase1_steps = config.learning_steps or algo_cfg.learning_steps
     env_cfg = config.task.train_env_cfg
 
+    # Phase 2 may run with a different number of environments
+    if config.phase2_num_envs is not None:
+      phase2_scene = replace(env_cfg.scene, num_envs=config.phase2_num_envs)
+      phase2_env_cfg: ManagerBasedRlEnvCfg = replace(env_cfg, scene=phase2_scene)
+    else:
+      phase2_env_cfg = env_cfg
+
     run_name = config.logger.name or generate_run_name(
       task_name=config.task.name,
       algo_name=f"{algo_cfg.name}_rma",
@@ -204,18 +218,19 @@ def main() -> None:
 
       logger.info("=" * 80)
       logger.info("RMA Integrated Training Pipeline")
-      logger.info(f"Task:         {config.task.name}")
-      logger.info(f"Algorithm:    {algo_cfg.name}")
-      logger.info(f"Start phase:  {config.start_phase}")
-      logger.info(f"Phase 1 steps: {phase1_steps}")
+      logger.info(f"Task:          {config.task.name}")
+      logger.info(f"Algorithm:     {algo_cfg.name}")
+      logger.info(f"Start phase:   {config.start_phase}")
+      logger.info(f"Phase 1 steps: {phase1_steps}  num_envs={env_cfg.scene.num_envs}")
       logger.info(
-        f"Phase 2 steps: {config.phase2_steps}  lr={config.phase2_lr}  threshold={config.phase2_loss_threshold}"
+        f"Phase 2 steps: {config.phase2_steps}  lr={config.phase2_lr}"
+        f"  threshold={config.phase2_loss_threshold}"
+        f"  num_envs={phase2_env_cfg.scene.num_envs}"
       )
-      logger.info(f"Phase 3 steps: {config.phase3_steps}")
-      logger.info(f"Seed:         {config.seed}")
-      logger.info(f"Num envs:     {env_cfg.scene.num_envs}")
-      logger.info(f"Distributed:  {is_distributed} (world={world_size}, rank={rank})")
-      logger.info(f"Run dir:      {run_dir}")
+      logger.info(f"Phase 3 steps: {config.phase3_steps}  num_envs={env_cfg.scene.num_envs}")
+      logger.info(f"Seed:          {config.seed}")
+      logger.info(f"Distributed:   {is_distributed} (world={world_size}, rank={rank})")
+      logger.info(f"Run dir:       {run_dir}")
       logger.info("=" * 80)
 
       if is_main_process:
@@ -239,65 +254,52 @@ def main() -> None:
     device = get_device(cuda=config.use_cuda, device_id=device_id)
     logger.info(f"Using device: {device}")
 
-    env = env_cfg.class_type(cfg=env_cfg, device=str(device))
-
-    import importlib
-
     module_path, class_name = algo_cfg.target.rsplit(":", 1)
     module = importlib.import_module(module_path)
     algo_class = getattr(module, class_name)
-
     if not issubclass(algo_class, RmaPPO):
-      logger.error(
-        f"rma-train requires an RmaPPO algorithm, got {algo_class.__name__}."
-      )
+      logger.error(f"rma-train requires an RmaPPO algorithm, got {algo_class.__name__}.")
       sys.exit(1)
 
-    algo: RmaPPO = algo_class(
-      config=algo_cfg,
-      env=env,
-      device=device,
-      log_fn=log_fn,
-      log_interval=logger_cfg.log_interval,
-    )
-
-    algo.attach_metadata(
-      experiment_config=config.to_serializable_dict(),
-      wandb_run_id=wandb_run.id if wandb_run is not None else None,
-      timestamp=datetime.now().isoformat(),
-      seed=rank_seed,
-      base_seed=config.seed,
-      device=str(device),
-      rank=rank,
-      world_size=world_size,
-    )
-
     ckpt_dir = run_dir / "checkpoints" if run_dir is not None else None
-    if is_main_process and ckpt_dir is not None and config.logger.save_interval > 0:
-      ckpt_dir.mkdir(parents=True, exist_ok=True)
-      algo.configure_checkpointing(ckpt_dir, config.logger.save_interval)
 
-    if config.checkpoint is not None:
-      checkpoint_path = Path(config.checkpoint)
-      if not checkpoint_path.exists():
-        logger.error(f"Checkpoint not found: {checkpoint_path}")
-        sys.exit(1)
-      logger.info(f"Loading checkpoint: {checkpoint_path}")
-      algo.load(checkpoint_path)
-      algo.global_step = 0
+    def _make_algo(cfg: ManagerBasedRlEnvCfg) -> RmaPPO:
+      """Create a fresh env+algo pair for one phase."""
+      phase_env = cfg.class_type(cfg=cfg, device=str(device))
+      algo: RmaPPO = algo_class(
+        config=algo_cfg,
+        env=phase_env,
+        device=device,
+        log_fn=log_fn,
+        log_interval=logger_cfg.log_interval,
+      )
+      algo.attach_metadata(
+        experiment_config=config.to_serializable_dict(),
+        wandb_run_id=wandb_run.id if wandb_run is not None else None,
+        timestamp=datetime.now().isoformat(),
+        seed=rank_seed,
+        base_seed=config.seed,
+        device=str(device),
+        rank=rank,
+        world_size=world_size,
+      )
+      if is_main_process and ckpt_dir is not None and config.logger.save_interval > 0:
+        ckpt_dir.mkdir(parents=True, exist_ok=True)
+        algo.configure_checkpointing(ckpt_dir, config.logger.save_interval)
+      return algo
 
-    if is_distributed and dist.is_initialized():
-      dist.barrier()
-
-    def _save_phase_checkpoint(phase_label: str) -> None:
+    def _save_phase(algo: RmaPPO, label: str) -> Path | None:
       if is_main_process and ckpt_dir is not None:
-        path = ckpt_dir / f"{phase_label}_final.pt"
+        ckpt_dir.mkdir(parents=True, exist_ok=True)
+        path = ckpt_dir / f"{label}_final.pt"
         algo.save(path, global_step=algo.global_step)
-        logger.success(f"Saved {phase_label} checkpoint: {path}")
+        logger.success(f"Saved {label} checkpoint: {path}")
+        return path
+      return None
 
-    def _handle_interrupt(phase_label: str) -> None:
+    def _handle_interrupt(algo: RmaPPO, label: str) -> None:
       if is_main_process and ckpt_dir is not None:
-        path = ckpt_dir / f"{phase_label}_interrupted.pt"
+        path = ckpt_dir / f"{label}_interrupted.pt"
         ckpt_dir.mkdir(parents=True, exist_ok=True)
         try:
           algo.save(path, global_step=algo.global_step)
@@ -305,56 +307,79 @@ def main() -> None:
         except Exception as exc:
           logger.error(f"Failed to save checkpoint: {exc}")
 
+    phase1_ckpt: Path | None = None
+    phase2_ckpt: Path | None = None
+
     # ------------------------------------------------------------------
     # Phase 1 — PPO with privileged encoder
     # ------------------------------------------------------------------
     if config.start_phase <= 1:
       logger.info("--- Phase 1: PPO with privileged encoder ---")
+      algo = _make_algo(env_cfg)
+      if config.checkpoint is not None:
+        checkpoint_path = Path(config.checkpoint)
+        if not checkpoint_path.exists():
+          logger.error(f"Checkpoint not found: {checkpoint_path}")
+          sys.exit(1)
+        algo.load(checkpoint_path)
+        algo.global_step = 0
+      if is_distributed and dist.is_initialized():
+        dist.barrier()
       try:
         algo._ppo_loop(title="RMA Phase 1", total_steps=phase1_steps)
       except KeyboardInterrupt:
-        _handle_interrupt("phase1")
+        _handle_interrupt(algo, "phase1")
         raise
-
-      _save_phase_checkpoint("phase1")
-      algo.global_step = 0
+      phase1_ckpt = _save_phase(algo, "phase1")
+      algo.env.close()
 
     # ------------------------------------------------------------------
     # Phase 2 — adaptation encoder regression
     # ------------------------------------------------------------------
     if config.start_phase <= 2:
-      if config.start_phase == 2 and algo.phase != RmaPhase.ADAPT_TRAIN:
-        # Resuming from a Phase 1 checkpoint: the checkpoint already restored
-        # the phase label, but we still need to rebuild the adaptation optimizer.
-        pass
       logger.info("--- Phase 2: adaptation encoder regression ---")
+      p2_source = Path(config.checkpoint) if config.start_phase == 2 else phase1_ckpt
+      if p2_source is None or not p2_source.exists():
+        logger.error("Phase 2 requires a Phase 1 checkpoint (--checkpoint or from Phase 1).")
+        sys.exit(1)
+      algo = _make_algo(phase2_env_cfg)
+      algo.load(p2_source)
+      algo.global_step = 0
       algo.build_adaptation_optimizer(lr=config.phase2_lr)
+      if is_distributed and dist.is_initialized():
+        dist.barrier()
       try:
         algo._train_phase2(
           loss_threshold=config.phase2_loss_threshold,
           total_steps=config.phase2_steps,
         )
       except KeyboardInterrupt:
-        _handle_interrupt("phase2")
+        _handle_interrupt(algo, "phase2")
         raise
-
-      _save_phase_checkpoint("phase2")
-      algo.global_step = 0
+      phase2_ckpt = _save_phase(algo, "phase2")
+      algo.env.close()
 
     # ------------------------------------------------------------------
     # Phase 3 — policy fine-tuning with frozen adaptation encoder
     # ------------------------------------------------------------------
     logger.info("--- Phase 3: policy fine-tuning with frozen encoders ---")
+    p3_source = Path(config.checkpoint) if config.start_phase == 3 else phase2_ckpt
+    if p3_source is None or not p3_source.exists():
+      logger.error("Phase 3 requires a Phase 2 checkpoint (--checkpoint or from Phase 2).")
+      sys.exit(1)
+    algo = _make_algo(env_cfg)
+    algo.load(p3_source)
+    algo.global_step = 0
     algo.build_phase3_optimizer()
+    if is_distributed and dist.is_initialized():
+      dist.barrier()
     try:
       algo._ppo_loop(title="RMA Phase 3", total_steps=config.phase3_steps)
     except KeyboardInterrupt:
-      _handle_interrupt("phase3")
+      _handle_interrupt(algo, "phase3")
       raise
-
-    _save_phase_checkpoint("phase3")
-
-    env.close()
+    _save_phase(algo, "phase3")
+    algo.env.close()
 
     if is_main_process:
       teardown_wandb()

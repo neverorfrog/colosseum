@@ -37,13 +37,13 @@ rewards = {
   # =======================
   "track_linear_velocity": RewardTermCfg(
     func=track_linear_velocity,
-    weight=3.0,
-    params={"command_name": "twist", "std": math.sqrt(0.2)},
+    weight=4.0,
+    params={"command_name": "twist", "std": math.sqrt(0.15)},
   ),
   "track_angular_velocity": RewardTermCfg(
     func=track_angular_velocity,
-    weight=2.5,
-    params={"command_name": "twist", "std": math.sqrt(0.2)},
+    weight=3.0,
+    params={"command_name": "twist", "std": math.sqrt(0.15)},
   ),
   "feet_phase": RewardTermCfg(
     func=feet_phase,
