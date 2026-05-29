@@ -124,4 +124,9 @@ t1-velocity:
       run: t1-velocity-RmaPPO_phase2-123-20260528_182056
       step: 0
       created: '2026-05-28T16:57:55.170718+00:00'
+    v3:
+      file: v3/t1-velocity_rmappo_v3.onnx
+      run: t1-velocity-RmaPPO_rma-123-20260529_104847
+      step: 0
+      created: '2026-05-29T10:13:32.272828+00:00'
   default: v0

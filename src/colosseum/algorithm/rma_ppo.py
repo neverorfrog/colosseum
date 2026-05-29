@@ -754,8 +754,16 @@ class RmaPPO(PPO):
     self.actor.load_state_dict(checkpoint["actor_state_dict"])
     self.value_net.load_state_dict(checkpoint["value_net_state_dict"])
     if "actor_optimizer_state_dict" in checkpoint:
-      self.actor_optimizer.load_state_dict(checkpoint["actor_optimizer_state_dict"])
-      self.critic_optimizer.load_state_dict(checkpoint["critic_optimizer_state_dict"])
+      # The optimizer layout differs across phases (Phase 3 rebuilds the actor
+      # optimizer with only the actor params, dropping the encoder param group).
+      # Restoring is only meaningful when resuming the same phase; a mismatch is
+      # harmless for export/inference and for phases that rebuild the optimizer
+      # after load, so skip it instead of failing.
+      try:
+        self.actor_optimizer.load_state_dict(checkpoint["actor_optimizer_state_dict"])
+        self.critic_optimizer.load_state_dict(checkpoint["critic_optimizer_state_dict"])
+      except ValueError as exc:
+        logger.warning(f"Skipping optimizer state restore (layout mismatch): {exc}")
     self.actor_obs_normalizer.load_state_dict(
       checkpoint["actor_obs_normalizer_state_dict"]
     )

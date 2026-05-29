@@ -102,11 +102,15 @@ echo "Copied $SRC_MODEL_DIR/*.onnx* → $DST_MODEL_DIR/"
 POLICY_YAML="$DEST/models/$POLICY/models.yaml"
 
 if [[ -f "$POLICY_YAML" ]]; then
-    # Append new version entry if not already present
     if grep -q "^  $VERSION:" "$POLICY_YAML"; then
-        echo "Version $VERSION already in $POLICY_YAML"
+        # Update the path in-place (algorithm name may have changed)
+        awk -v ver="  $VERSION:" -v file="$FILE" '
+            $0 == ver { in_v = 1; print; next }
+            in_v && /^    path:/ { print "    path: " file; in_v = 0; next }
+            { print }
+        ' "$POLICY_YAML" > "${POLICY_YAML}.tmp" && mv "${POLICY_YAML}.tmp" "$POLICY_YAML"
+        echo "Updated path for $VERSION in $POLICY_YAML"
     else
-        # Insert before the last line or append
         cat >> "$POLICY_YAML" <<EOF
   $VERSION:
     path: $FILE

@@ -38,12 +38,12 @@ rewards = {
   "track_linear_velocity": RewardTermCfg(
     func=track_linear_velocity,
     weight=4.0,
-    params={"command_name": "twist", "std": math.sqrt(0.15)},
+    params={"command_name": "twist", "std": math.sqrt(0.1)},
   ),
   "track_angular_velocity": RewardTermCfg(
     func=track_angular_velocity,
     weight=3.0,
-    params={"command_name": "twist", "std": math.sqrt(0.15)},
+    params={"command_name": "twist", "std": math.sqrt(0.1)},
   ),
   "feet_phase": RewardTermCfg(
     func=feet_phase,
@@ -128,7 +128,7 @@ rewards = {
   ),
   "feet_slip": RewardTermCfg(
     func=feet_slip,
-    weight=-0.25,
+    weight=-1.0,
     params={
       "asset_cfg": SceneEntityCfg("robot", site_names=(FOOT_SITE_NAMES)),
       "sensor_name": "feet_ground_contact",
