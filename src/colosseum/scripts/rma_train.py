@@ -329,18 +329,20 @@ def main() -> None:
     phase1_ckpt: Path | None = None
     phase2_ckpt: Path | None = None
     # Env carried over from Phase 2 to Phase 3 (identical config) to skip a rebuild.
-    reused_env: ManagerBasedRlEnv | None = None
-
-    def _reclaim_memory() -> None:
+    def _reclaim_memory(skip_gc: bool = False) -> None:
       """Reclaim freed GPU memory after the caller has dropped its algo ref.
 
       The caller must ``del`` its own ``algo`` binding first (a helper can't free
       it). Run before building the next phase so the old phase's allocations —
       most importantly the RMA rollout buffer with depth-frame storage — don't
       sit alongside the new env's allocations and cause fragmentation/OOM."""
-      gc.collect()
       if config.use_cuda and torch.cuda.is_available():
+        torch.cuda.synchronize()
         torch.cuda.empty_cache()
+      if not skip_gc:
+        gc.collect()
+
+    reused_env: ManagerBasedRlEnv | None = None
 
     # ------------------------------------------------------------------
     # Phase 1 — PPO with privileged encoder
@@ -392,7 +394,7 @@ def main() -> None:
       # Phase 3 uses the same env config: keep the env, free everything else.
       reused_env = algo.env
       del algo
-      _reclaim_memory()
+      _reclaim_memory(skip_gc=True)
 
     # ------------------------------------------------------------------
     # Phase 3 — policy fine-tuning with frozen adaptation encoder
