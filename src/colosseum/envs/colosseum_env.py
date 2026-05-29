@@ -75,10 +75,9 @@ class ColosseumEnv(ManagerBasedRlEnv):
     return self.observation_manager.compute()
 
   def load_managers(self) -> None:
-    self.abstraction_manager = AbstractionManager(cfg=self.cfg.abstractions, env=self)
-    self.rma_manager = RmaManager(cfg=self.cfg.encoders, env=self)
     super().load_managers()
-
+    if self.cfg.abstractions:
+      self.abstraction_manager = AbstractionManager(cfg=self.cfg.abstractions, env=self)
     self.rma_manager = RmaManager(cfg=self.cfg.encoders, env=self)
     if self.cfg.constraints:
       self.constraint_manager = ConstraintManager(cfg=self.cfg.constraints, env=self)
