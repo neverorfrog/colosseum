@@ -289,13 +289,14 @@ def main() -> None:
       return algo
 
     def _save_phase(algo: RmaPPO, label: str) -> Path | None:
-      if is_main_process and ckpt_dir is not None:
+      if ckpt_dir is None:
+        return None
+      path = ckpt_dir / f"{label}_final.pt"
+      if is_main_process:
         ckpt_dir.mkdir(parents=True, exist_ok=True)
-        path = ckpt_dir / f"{label}_final.pt"
         algo.save(path, global_step=algo.global_step)
         logger.success(f"Saved {label} checkpoint: {path}")
-        return path
-      return None
+      return path
 
     def _handle_interrupt(algo: RmaPPO, label: str) -> None:
       if is_main_process and ckpt_dir is not None:
@@ -338,6 +339,8 @@ def main() -> None:
     # ------------------------------------------------------------------
     if config.start_phase <= 2:
       logger.info("--- Phase 2: adaptation encoder regression ---")
+      if is_distributed and dist.is_initialized():
+        dist.barrier()
       p2_source = Path(config.checkpoint) if config.start_phase == 2 else phase1_ckpt
       if p2_source is None or not p2_source.exists():
         logger.error("Phase 2 requires a Phase 1 checkpoint (--checkpoint or from Phase 1).")
@@ -346,8 +349,6 @@ def main() -> None:
       algo.load(p2_source)
       algo.global_step = 0
       algo.build_adaptation_optimizer(lr=config.phase2_lr)
-      if is_distributed and dist.is_initialized():
-        dist.barrier()
       try:
         algo._train_phase2(
           loss_threshold=config.phase2_loss_threshold,
@@ -363,6 +364,8 @@ def main() -> None:
     # Phase 3 — policy fine-tuning with frozen adaptation encoder
     # ------------------------------------------------------------------
     logger.info("--- Phase 3: policy fine-tuning with frozen encoders ---")
+    if is_distributed and dist.is_initialized():
+      dist.barrier()
     p3_source = Path(config.checkpoint) if config.start_phase == 3 else phase2_ckpt
     if p3_source is None or not p3_source.exists():
       logger.error("Phase 3 requires a Phase 2 checkpoint (--checkpoint or from Phase 2).")
@@ -371,8 +374,6 @@ def main() -> None:
     algo.load(p3_source)
     algo.global_step = 0
     algo.build_phase3_optimizer()
-    if is_distributed and dist.is_initialized():
-      dist.barrier()
     try:
       algo._ppo_loop(title="RMA Phase 3", total_steps=config.phase3_steps)
     except KeyboardInterrupt:
