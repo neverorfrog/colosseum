@@ -26,6 +26,11 @@ class TrueErrorVelocityCommand(UniformVelocityCommand):
   Also splits the linear error into separate per-axis metrics (``error_vel_x``,
   ``error_vel_y``) alongside the combined ``error_vel_xy`` so forward vs lateral
   tracking can be diagnosed independently.
+
+  The velocity the error is measured against is supplied by
+  ``_tracking_lin_vel_b`` / ``_tracking_ang_vel_b`` (raw base velocity here);
+  subclasses override them so the logged error matches whatever velocity their
+  reward and curriculum gate actually use.
   """
 
   def __init__(self, cfg: TrueErrorVelocityCommandCfg, env: ManagerBasedRlEnv):
@@ -34,14 +39,20 @@ class TrueErrorVelocityCommand(UniformVelocityCommand):
     self.metrics["error_vel_x"] = torch.zeros(self.num_envs, device=self.device)
     self.metrics["error_vel_y"] = torch.zeros(self.num_envs, device=self.device)
 
+  def _tracking_lin_vel_b(self) -> torch.Tensor:
+    return self.robot.data.root_link_lin_vel_b
+
+  def _tracking_ang_vel_b(self) -> torch.Tensor:
+    return self.robot.data.root_link_ang_vel_b
+
   def _update_metrics(self) -> None:
-    lin_err = self.vel_command_b[:, :2] - self.robot.data.root_link_lin_vel_b[:, :2]
+    lin_vel = self._tracking_lin_vel_b()
+    ang_vel = self._tracking_ang_vel_b()
+    lin_err = self.vel_command_b[:, :2] - lin_vel[:, :2]
     instant_x = torch.abs(lin_err[:, 0])
     instant_y = torch.abs(lin_err[:, 1])
     instant_xy = torch.norm(lin_err, dim=-1)
-    instant_yaw = torch.abs(
-      self.vel_command_b[:, 2] - self.robot.data.root_link_ang_vel_b[:, 2]
-    )
+    instant_yaw = torch.abs(self.vel_command_b[:, 2] - ang_vel[:, 2])
     self._metric_steps += 1
     n = self._metric_steps
     self.metrics["error_vel_x"] += (instant_x - self.metrics["error_vel_x"]) / n
@@ -112,19 +123,34 @@ class CurriculumVelocityCommand(TrueErrorVelocityCommand):
     self.metrics["cmd_lin_level"] = torch.zeros(self.num_envs, device=self.device)
     self.metrics["cmd_ang_level"] = torch.zeros(self.num_envs, device=self.device)
 
+  def _tracking_lin_vel_b(self) -> torch.Tensor:
+    # In play/eval (curriculum off) the filter is never advanced, so fall back
+    # to the raw base velocity for the error metrics.
+    if self.cfg.curriculum:
+      return self.filtered_lin_vel
+    return super()._tracking_lin_vel_b()
+
+  def _tracking_ang_vel_b(self) -> torch.Tensor:
+    if self.cfg.curriculum:
+      return self.filtered_ang_vel
+    return super()._tracking_ang_vel_b()
+
   def _update_metrics(self) -> None:
+    # Advance the EMA filter *before* super() computes the error metrics, so the
+    # logged error_vel_* measure the same filtered velocity the reward and the
+    # promotion gate use (and are directly comparable to x/y/yaw_toler).
+    if self.cfg.curriculum:
+      fw = self.cfg.filter_weight
+      self.filtered_lin_vel.mul_(1.0 - fw).add_(
+        self.robot.data.root_link_lin_vel_b, alpha=fw
+      )
+      self.filtered_ang_vel.mul_(1.0 - fw).add_(
+        self.robot.data.root_link_ang_vel_b, alpha=fw
+      )
     super()._update_metrics()
-    if not self.cfg.curriculum:
-      return
-    fw = self.cfg.filter_weight
-    self.filtered_lin_vel.mul_(1.0 - fw).add_(
-      self.robot.data.root_link_lin_vel_b, alpha=fw
-    )
-    self.filtered_ang_vel.mul_(1.0 - fw).add_(
-      self.robot.data.root_link_ang_vel_b, alpha=fw
-    )
-    self.metrics["cmd_lin_level"][:] = self.env_lin.abs().float()
-    self.metrics["cmd_ang_level"][:] = self.env_ang.abs().float()
+    if self.cfg.curriculum:
+      self.metrics["cmd_lin_level"][:] = self.env_lin.abs().float()
+      self.metrics["cmd_ang_level"][:] = self.env_ang.abs().float()
 
   def reset(self, env_ids):
     # Promotion is evaluated here (episode reset), mirroring t1.py's
@@ -133,7 +159,7 @@ class CurriculumVelocityCommand(TrueErrorVelocityCommand):
     # filtered_*_vel still holds the pre-reset filtered velocity. An env is
     # promoted only if it survived nearly the whole episode while its filtered
     # velocity tracked the command on all three axes.
-    if self.cfg.curriculum and isinstance(env_ids, torch.Tensor) and len(env_ids) > 0:
+    if self.cfg.curriculum and len(env_ids) > 0:
       max_steps = self._env.max_episode_length
       survived = self._env.episode_length_buf[env_ids].float() > max_steps * (
         1.0 - self.cfg.episode_length_toler
@@ -169,13 +195,57 @@ class CurriculumVelocityCommand(TrueErrorVelocityCommand):
     # Cell -> command. Lateral is coupled to lin_level and capped below forward.
     n = len(env_ids)
     jit = lambda: torch.empty(n, device=self.device).uniform_(-0.5, 0.5)  # noqa: E731
-    self.vel_command_b[env_ids, 0] = (lin.float() + jit()) * self.cfg.lin_vel_x_resolution
+    self.vel_command_b[env_ids, 0] = (
+      lin.float() + jit()
+    ) * self.cfg.lin_vel_x_resolution
     self.vel_command_b[env_ids, 1] = (
       lin.float().abs()
       * torch.empty(n, device=self.device).uniform_(-1.0, 1.0)
       * self.cfg.lin_vel_y_resolution
     )
     self.vel_command_b[env_ids, 2] = (ang.float() + jit()) * self.cfg.ang_vel_resolution
+
+    # Overlay a mutually-exclusive command "style" on the grid command so the
+    # policy practices the deployment command distribution (heading-controlled +
+    # forward-biased), which it would otherwise never see. All three styles reuse
+    # the base UniformVelocityCommand machinery:
+    #   standing: is_standing_env -> base _update_command zeroes the command;
+    #   forward : straight line, no strafe/turn (vy=wz=0), keeps grid vx;
+    #   heading : base _update_command overwrites wz each step with the heading
+    #             controller (clip(stiffness * heading_error)); keeps grid vx/vy.
+    # The center cell (level 0) is always standing -- a genuine zero command, so
+    # the policy learns clean standing there instead of marching in place.
+    #
+    # Forward and heading envs ride the *forward axis* (env_ang forced to 0) so
+    # promotion stays coherent: they only ever promote (lin, 0) cells, since their
+    # yaw is 0 (forward) or a heading-derived transient (heading), neither of
+    # which corresponds to a non-zero ang_level.
+    r = torch.rand(n, device=self.device)
+    p_s, p_f = self.cfg.rel_standing_envs, self.cfg.rel_forward_envs
+    p_h = self.cfg.rel_heading_envs
+    is_center = (lin == 0) & (ang == 0)
+    is_standing = is_center | (r < p_s)
+    is_forward = (r >= p_s) & (r < p_s + p_f) & ~is_center
+    is_heading = (r >= p_s + p_f) & (r < p_s + p_f + p_h) & ~is_center
+
+    fwd_or_head = is_forward | is_heading
+    self.env_ang[env_ids[fwd_or_head]] = 0
+
+    fwd_ids = env_ids[is_forward]
+    self.vel_command_b[fwd_ids, 1] = 0.0
+    self.vel_command_b[fwd_ids, 2] = 0.0
+
+    head_ids = env_ids[is_heading]
+    if len(head_ids) > 0:
+      assert self.cfg.ranges.heading is not None
+      self.heading_target[head_ids] = torch.empty(
+        len(head_ids), device=self.device
+      ).uniform_(*self.cfg.ranges.heading)
+
+    self.is_standing_env[env_ids] = is_standing
+    self.is_forward_env[env_ids] = is_forward
+    self.is_heading_env[env_ids] = is_heading
+
     self.vel_command_w[env_ids] = self.vel_command_b[env_ids]
 
     self._reset_metric_accumulators(env_ids)
@@ -236,7 +306,7 @@ class CurriculumVelocityCommandCfg(TrueErrorVelocityCommandCfg):
   # tracked the command within tolerance on all three axes. Filtering is what
   # forces real walking -- marching-in-place filters to ~0 and so never tracks a
   # non-zero command, regardless of how loose the tolerance is.
-  x_toler: float = 0.40
+  x_toler: float = 0.30
   y_toler: float = 0.20
   yaw_toler: float = 0.20
   update_rate: float = 0.10
@@ -244,9 +314,6 @@ class CurriculumVelocityCommandCfg(TrueErrorVelocityCommandCfg):
   episode_length_toler: float = 0.10
   # EMA weight for the base-velocity low-pass: filtered = w*raw + (1-w)*filtered.
   filter_weight: float = 0.10
-
-  def build(self, env: ManagerBasedRlEnv) -> CurriculumVelocityCommand:
-    return CurriculumVelocityCommand(self, env)
 
   def build(self, env: ManagerBasedRlEnv) -> CurriculumVelocityCommand:
     return CurriculumVelocityCommand(self, env)

@@ -16,6 +16,7 @@ commands: Dict[str, CommandTermCfg] = {
     entity_name="robot",
     rel_forward_envs=0.3,
     rel_heading_envs=0.4,
+    rel_standing_envs=0.1,
     heading_command=True,
     heading_control_stiffness=0.5,
     debug_vis=True,
@@ -39,7 +40,7 @@ commands: Dict[str, CommandTermCfg] = {
     # >=(1-episode_length_toler) of the episode AND its EMA-filtered velocity
     # (filter_weight) tracked the command within these tolerances. Filtering is
     # what forces walking, so the tolerances can stay loose (reference values).
-    x_toler=0.40,
+    x_toler=0.20,
     y_toler=0.20,
     yaw_toler=0.20,
     episode_length_toler=0.10,

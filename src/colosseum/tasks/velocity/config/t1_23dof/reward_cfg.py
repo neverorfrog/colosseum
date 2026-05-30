@@ -19,6 +19,7 @@ from colosseum.mdp.rewards import (
   feet_distance_penalty,
   feet_phase,
   feet_slip,
+  feet_yaw_diff_penalty,
   foot_orientation_penalty,
   orientation_penalty,
   pose_deviation_penalty,
@@ -37,7 +38,7 @@ rewards = {
   # =======================
   "track_linear_velocity": RewardTermCfg(
     func=track_linear_velocity_filtered,
-    weight=3.0,
+    weight=4.0,
     params={"command_name": "twist", "std": math.sqrt(0.25)},
   ),
   "track_angular_velocity": RewardTermCfg(
@@ -103,6 +104,11 @@ rewards = {
     weight=-5.0,
     params={"asset_cfg": SceneEntityCfg("robot", body_names=(FOOT_BODY_NAMES))},
   ),
+  "penalty_feet_yaw_diff": RewardTermCfg(
+    func=feet_yaw_diff_penalty,
+    weight=-1.0,
+    params={"asset_cfg": SceneEntityCfg("robot", body_names=(FOOT_BODY_NAMES))},
+  ),
   "penalty_action_rate": RewardTermCfg(func=action_rate_l2, weight=-1.0),
   "penalty_pose_deviation": RewardTermCfg(
     func=pose_deviation_penalty,
@@ -136,12 +142,12 @@ rewards = {
   ),
   "penalty_dof_vel": RewardTermCfg(
     func=dof_vel_penalty,
-    weight=-1e-4,
+    weight=-1e-3,
     params={"asset_cfg": SceneEntityCfg("robot", joint_names=(".*",))},
   ),
   "penalty_dof_acc": RewardTermCfg(
     func=dof_acc_penalty,
-    weight=-1e-7,
+    weight=-1e-5,
     params={"asset_cfg": SceneEntityCfg("robot", joint_names=(".*",))},
   ),
 }
@@ -167,7 +173,7 @@ rewards["penalty_pose_deviation"].params["weights_walking"] = {
   r"(?i).*shoulder_roll.*": 50.0,
   r"(?i).*elbow.pitch": 50.0,
   r"(?i).*elbow.yaw": 1.0,
-  r"Waist": 25.0,
+  r"Waist": 20.0,
   r"(?i).*hip_pitch.*": 1.0,
   r"(?i).*hip_roll.*": 5.0,
   r"(?i).*hip_yaw.*": 5.0,

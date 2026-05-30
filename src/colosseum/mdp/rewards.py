@@ -13,7 +13,11 @@ from mjlab.entity import Entity
 from mjlab.managers.reward_manager import RewardTermCfg
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.sensor import ContactSensor
-from mjlab.utils.lab_api.math import quat_apply, quat_apply_inverse
+from mjlab.utils.lab_api.math import (
+  euler_xyz_from_quat,
+  quat_apply,
+  quat_apply_inverse,
+)
 from mjlab.utils.lab_api.string import resolve_matching_names_values
 
 if TYPE_CHECKING:
@@ -215,6 +219,24 @@ def foot_orientation_penalty(
     g_local = quat_apply_inverse(foot_quats[:, i], gravity_w)  # (N, 3)
     penalty = penalty + g_local[:, :2].square().sum(dim=-1).sqrt()
   return penalty
+
+
+def feet_yaw_diff_penalty(
+  env: ManagerBasedRlEnv,
+  asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+) -> torch.Tensor:
+  """Penalize the yaw difference between the two feet (use negative weight).
+
+  Keeps the feet parallel (no splay / toe-in / toe-out relative to each other).
+  The signed yaw difference is wrapped to (-pi, pi] so a half-turn apart is the
+  maximum penalty, then squared. Port of `_reward_feet_yaw_diff` in t1.py.
+  """
+  asset: Entity = env.scene[asset_cfg.name]
+  foot_quats = asset.data.body_link_quat_w[:, asset_cfg.body_ids, :]  # (N, 2, 4)
+  _, _, yaw_l = euler_xyz_from_quat(foot_quats[:, 0])
+  _, _, yaw_r = euler_xyz_from_quat(foot_quats[:, 1])
+  diff = (yaw_l - yaw_r + math.pi) % (2 * math.pi) - math.pi
+  return diff.square()
 
 
 def orientation_penalty(
