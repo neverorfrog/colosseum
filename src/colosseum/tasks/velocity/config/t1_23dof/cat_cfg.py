@@ -35,9 +35,6 @@ commands: Dict[str, CommandTermCfg] = {
     lin_vel_x_resolution=0.25,
     lin_vel_y_resolution=0.10,
     ang_vel_resolution=0.20,
-    x_toler=0.30,
-    y_toler=0.15,
-    yaw_toler=0.20,
     update_rate=0.10,
   ),
   "gait_phase": GaitPhaseCommandCfg(
