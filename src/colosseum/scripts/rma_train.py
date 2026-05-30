@@ -55,7 +55,7 @@ class RmaTrainConfig(TrainConfig):
   start_phase: int = 1
   """Which phase to begin from (1, 2, or 3).  Use with --checkpoint to resume."""
 
-  phase2_steps: int = 50_000_000
+  phase2_steps: int = 1_000_000
   """Env steps for Phase 2 (adaptation encoder regression)."""
 
   phase2_lr: float = 1e-4
@@ -64,7 +64,7 @@ class RmaTrainConfig(TrainConfig):
   phase2_loss_threshold: float | None = None
   """Early-stop Phase 2 when the smoothed latent_mse falls below this value."""
 
-  phase3_steps: int = 300_000_000
+  phase3_steps: int = 5_000_000
   """Env steps for Phase 3 (policy fine-tuning with frozen encoders)."""
 
   phase2_num_envs: int | None = None
@@ -395,7 +395,6 @@ def main() -> None:
       algo.load(p2_source)
       if phase1_end_step == 0:
         phase1_end_step = algo.global_step
-      algo.global_step = 0
       algo.build_adaptation_optimizer(lr=config.phase2_lr)
       try:
         algo._train_phase2(

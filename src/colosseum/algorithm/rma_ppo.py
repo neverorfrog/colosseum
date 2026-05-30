@@ -296,6 +296,7 @@ class RmaPPO(PPO):
     logger.info("=" * 80)
 
     obs_dict, _ = self.env.reset(seed=self.seed)
+    unlogged_iters = 0
 
     for iteration in range(1, num_iterations + 1):
       start = time.perf_counter()
@@ -304,6 +305,7 @@ class RmaPPO(PPO):
 
       for k, v in loss_dict.items():
         losses_buffer[k].append(v)
+      unlogged_iters += 1
 
       self.global_step += steps_per_iter
       self._maybe_save_checkpoint(self.global_step)
@@ -321,13 +323,13 @@ class RmaPPO(PPO):
           )
           break
 
-      if iteration % log_interval_iters == 0:
+      if unlogged_iters >= log_interval_iters:
         self._log_training_metrics(
           step=self.global_step,
           losses_buffer=losses_buffer,
           collection_time=collection_time_sum,
           learning_time=0.0,
-          log_interval=log_interval_iters,
+          log_interval=unlogged_iters,
           total_timesteps=display_total,
           title="RMA Phase 2",
           use_rich=self.config.use_rich_logging,
@@ -335,6 +337,23 @@ class RmaPPO(PPO):
         )
         losses_buffer.clear()
         collection_time_sum = 0.0
+        unlogged_iters = 0
+
+    # Flush any remaining metrics (handles short phases where the log
+    # interval exceeds the total step count, e.g. Phase 2 at 10M steps
+    # with a 100M-step log_interval).
+    if unlogged_iters > 0:
+      self._log_training_metrics(
+        step=self.global_step,
+        losses_buffer=losses_buffer,
+        collection_time=collection_time_sum,
+        learning_time=0.0,
+        log_interval=unlogged_iters,
+        total_timesteps=display_total,
+        title="RMA Phase 2",
+        use_rich=self.config.use_rich_logging,
+        steps_per_log_step=self.config.num_steps_per_env,
+      )
 
   def _phase2_learning_step(
     self,

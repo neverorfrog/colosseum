@@ -313,6 +313,23 @@ class PPO(BaseAlgorithm):
         collection_time_sum = 0.0
         learning_time_sum = 0.0
 
+    # Flush remaining metrics at end of loop (handles short runs where the
+    # log interval exceeds the total step count).
+    if losses_buffer:
+      if len(self.rewbuffer) > 0:
+        losses_buffer["mean_reward"].append(statistics.mean(self.rewbuffer))
+      self._log_training_metrics(
+        step=self.global_step,
+        losses_buffer=losses_buffer,
+        collection_time=collection_time_sum,
+        learning_time=learning_time_sum,
+        log_interval=num_iterations,
+        total_timesteps=display_total,
+        title=title,
+        use_rich=self.config.use_rich_logging,
+        steps_per_log_step=self.config.num_steps_per_env,
+      )
+
   def _collect_rollout(
     self,
     current_actor_obs: torch.Tensor,

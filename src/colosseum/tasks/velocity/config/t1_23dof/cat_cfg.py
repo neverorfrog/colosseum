@@ -35,6 +35,13 @@ commands: Dict[str, CommandTermCfg] = {
     lin_vel_x_resolution=0.25,
     lin_vel_y_resolution=0.10,
     ang_vel_resolution=0.20,
+    # Absolute mean-error gate (m/s, rad/s). Set below each axis's minimum
+    # non-zero command so standing can't promote a moving cell, but above the
+    # achievable tracking-error floor (~0.1 m/s). Raise x_toler if promotion
+    # stalls at level 1; lower it if the robot climbs levels while sloppy.
+    x_toler=0.10,
+    y_toler=0.12,
+    yaw_toler=0.15,
     update_rate=0.10,
   ),
   "gait_phase": GaitPhaseCommandCfg(

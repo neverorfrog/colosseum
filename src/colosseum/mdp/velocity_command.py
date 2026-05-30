@@ -149,21 +149,14 @@ class CurriculumVelocityCommand(TrueErrorVelocityCommand):
       mean_x = self._win_x[env_ids] / steps
       mean_y = self._win_y[env_ids] / steps
       mean_yaw = self._win_yaw[env_ids] / steps
-      # Relative gate: error must stay below toler_frac * |command| (floored).
-      # vel_command_b still holds the command that was active during this window
-      # (resampling happens below), so it is the correct denominator. Standing
-      # makes error == |command|, which fails for any command above the floor.
-      cmd = self.vel_command_b[env_ids]
-      thr_x = (self.cfg.toler_frac * cmd[:, 0].abs()).clamp(min=self.cfg.x_toler_floor)
-      thr_y = (self.cfg.toler_frac * cmd[:, 1].abs()).clamp(min=self.cfg.y_toler_floor)
-      thr_yaw = (self.cfg.toler_frac * cmd[:, 2].abs()).clamp(
-        min=self.cfg.yaw_toler_floor
-      )
+      # Absolute gate: standing makes error == command, which exceeds the
+      # tolerance for any cell whose command is above it (every moving cell),
+      # but passes the center cell (command ~ 0) for the standing bootstrap.
       ok = (
         (self._win_steps[env_ids] >= self.cfg.min_window_steps)
-        & (mean_x < thr_x)
-        & (mean_y < thr_y)
-        & (mean_yaw < thr_yaw)
+        & (mean_x < self.cfg.x_toler)
+        & (mean_y < self.cfg.y_toler)
+        & (mean_yaw < self.cfg.yaw_toler)
       )
       self._promote(env_ids[ok])
 
@@ -245,17 +238,17 @@ class CurriculumVelocityCommandCfg(TrueErrorVelocityCommandCfg):
   lin_vel_x_resolution: float = 0.25
   lin_vel_y_resolution: float = 0.10
   ang_vel_resolution: float = 0.20
-  # Promotion gate is *relative* to command magnitude: an env promotes only if
-  # its mean per-axis error stays below ``toler_frac * |command|`` (floored).
-  # Standing makes error == |command|, so it can never satisfy a non-trivial
-  # command at any level. The per-axis floor stops the threshold collapsing to
-  # zero for near-zero commands (a divide-by-zero guard, not a real constraint);
-  # lateral/yaw floors are set above their level-1 command magnitude so the
-  # minor axes don't block promotion while the robot is still learning forward.
-  toler_frac: float = 0.5
-  x_toler_floor: float = 0.05
-  y_toler_floor: float = 0.12
-  yaw_toler_floor: float = 0.10
+  # Absolute mean-error promotion gate (m/s, rad/s) -- physically interpretable
+  # and, unlike a relative gate, it does not collapse below the robot's roughly
+  # constant tracking-error floor at low speed. Each tolerance must sit *below*
+  # its axis's minimum non-zero command so standing (error == command) cannot
+  # promote a moving cell, yet *above* the achievable error floor (~0.1 m/s).
+  # The center (zero) cell still passes (standing error ~ 0), preserving the
+  # standing bootstrap. y/yaw tolerances exceed their level-1 command magnitude
+  # so the minor axes don't block promotion while forward walking is learned.
+  x_toler: float = 0.10
+  y_toler: float = 0.12
+  yaw_toler: float = 0.15
   update_rate: float = 0.10
   min_window_steps: int = 50
 
