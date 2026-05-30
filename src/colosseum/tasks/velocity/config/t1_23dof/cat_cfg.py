@@ -35,13 +35,15 @@ commands: Dict[str, CommandTermCfg] = {
     lin_vel_x_resolution=0.25,
     lin_vel_y_resolution=0.10,
     ang_vel_resolution=0.20,
-    # Absolute mean-error gate (m/s, rad/s). Set below each axis's minimum
-    # non-zero command so standing can't promote a moving cell, but above the
-    # achievable tracking-error floor (~0.1 m/s). Raise x_toler if promotion
-    # stalls at level 1; lower it if the robot climbs levels while sloppy.
-    x_toler=0.10,
-    y_toler=0.12,
-    yaw_toler=0.15,
+    # Gate mirrors t1.py: at episode reset, promote if the env survived
+    # >=(1-episode_length_toler) of the episode AND its EMA-filtered velocity
+    # (filter_weight) tracked the command within these tolerances. Filtering is
+    # what forces walking, so the tolerances can stay loose (reference values).
+    x_toler=0.40,
+    y_toler=0.20,
+    yaw_toler=0.20,
+    episode_length_toler=0.10,
+    filter_weight=0.10,
     update_rate=0.10,
   ),
   "gait_phase": GaitPhaseCommandCfg(

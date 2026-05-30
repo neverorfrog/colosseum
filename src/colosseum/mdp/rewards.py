@@ -495,3 +495,40 @@ def arm_phase(
   if command_name is not None:
     reward = reward * speed_scale
   return reward
+
+
+def track_linear_velocity_filtered(
+  env: ManagerBasedRlEnv,
+  std: float,
+  command_name: str,
+) -> torch.Tensor:
+  """Track commanded base linear velocity using the EMA-filtered velocity.
+
+  Mirrors t1.py: reads ``filtered_lin_vel`` off the curriculum command term so
+  that marching-in-place (which filters to ~0) earns no tracking reward, forcing
+  sustained directed locomotion. Same Gaussian kernel as mjlab's raw version.
+  """
+  command = env.command_manager.get_command(command_name)
+  assert command is not None, f"Command '{command_name}' not found."
+  filtered = env.command_manager.get_term(command_name).filtered_lin_vel
+  xy_error = torch.sum(torch.square(command[:, :2] - filtered[:, :2]), dim=1)
+  z_error = torch.square(filtered[:, 2])
+  return torch.exp(-(xy_error + z_error) / std**2)
+
+
+def track_angular_velocity_filtered(
+  env: ManagerBasedRlEnv,
+  std: float,
+  command_name: str,
+) -> torch.Tensor:
+  """Track commanded base yaw rate using the EMA-filtered angular velocity.
+
+  Filtered counterpart of mjlab's ``track_angular_velocity`` (see
+  ``track_linear_velocity_filtered``).
+  """
+  command = env.command_manager.get_command(command_name)
+  assert command is not None, f"Command '{command_name}' not found."
+  filtered = env.command_manager.get_term(command_name).filtered_ang_vel
+  z_error = torch.square(command[:, 2] - filtered[:, 2])
+  xy_error = torch.sum(torch.square(filtered[:, :2]), dim=1)
+  return torch.exp(-(z_error + xy_error) / std**2)

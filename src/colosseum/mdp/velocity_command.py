@@ -102,15 +102,12 @@ class CurriculumVelocityCommand(TrueErrorVelocityCommand):
     self.env_lin = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
     self.env_ang = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
 
-    # Window accumulators for the success gate. Unlike self.metrics (which the
-    # base CommandTerm.reset() zeroes before _resample_command runs), these are
-    # reset only by our own resample, so they always hold the just-ended
-    # window's mean when the gate reads them.
-    self._win_steps = torch.zeros(self.num_envs, device=self.device)
-    self._win_x = torch.zeros(self.num_envs, device=self.device)
-    self._win_y = torch.zeros(self.num_envs, device=self.device)
-    self._win_yaw = torch.zeros(self.num_envs, device=self.device)
-    self._in_reset = False
+    # Low-pass (EMA) base velocity in the body frame, mirroring t1.py. Both the
+    # promotion gate (in reset) and the tracking reward read these so that
+    # marching-in-place -- which averages to ~0 -- earns neither reward nor a
+    # promotion, while sustained directed locomotion does.
+    self.filtered_lin_vel = torch.zeros(self.num_envs, 3, device=self.device)
+    self.filtered_ang_vel = torch.zeros(self.num_envs, 3, device=self.device)
 
     self.metrics["cmd_lin_level"] = torch.zeros(self.num_envs, device=self.device)
     self.metrics["cmd_ang_level"] = torch.zeros(self.num_envs, device=self.device)
@@ -119,48 +116,50 @@ class CurriculumVelocityCommand(TrueErrorVelocityCommand):
     super()._update_metrics()
     if not self.cfg.curriculum:
       return
-    lin_err = self.vel_command_b[:, :2] - self.robot.data.root_link_lin_vel_b[:, :2]
-    self._win_steps += 1
-    self._win_x += torch.abs(lin_err[:, 0])
-    self._win_y += torch.abs(lin_err[:, 1])
-    self._win_yaw += torch.abs(
-      self.vel_command_b[:, 2] - self.robot.data.root_link_ang_vel_b[:, 2]
+    fw = self.cfg.filter_weight
+    self.filtered_lin_vel.mul_(1.0 - fw).add_(
+      self.robot.data.root_link_lin_vel_b, alpha=fw
+    )
+    self.filtered_ang_vel.mul_(1.0 - fw).add_(
+      self.robot.data.root_link_ang_vel_b, alpha=fw
     )
     self.metrics["cmd_lin_level"][:] = self.env_lin.abs().float()
     self.metrics["cmd_ang_level"][:] = self.env_ang.abs().float()
 
   def reset(self, env_ids):
-    # Flag so _resample_command (invoked by super().reset) knows this is an
-    # episode reset (interrupted window) and skips success promotion.
-    self._in_reset = True
-    out = super().reset(env_ids)
-    self._in_reset = False
-    return out
+    # Promotion is evaluated here (episode reset), mirroring t1.py's
+    # _update_curriculum call in _reset_idx. mjlab zeroes episode_length_buf
+    # *after* command_manager.reset, so it still holds the terminal length, and
+    # filtered_*_vel still holds the pre-reset filtered velocity. An env is
+    # promoted only if it survived nearly the whole episode while its filtered
+    # velocity tracked the command on all three axes.
+    if self.cfg.curriculum and isinstance(env_ids, torch.Tensor) and len(env_ids) > 0:
+      max_steps = self._env.max_episode_length
+      survived = self._env.episode_length_buf[env_ids].float() > max_steps * (
+        1.0 - self.cfg.episode_length_toler
+      )
+      cmd = self.vel_command_b[env_ids]
+      ok = (
+        survived
+        & (torch.abs(self.filtered_lin_vel[env_ids, 0] - cmd[:, 0]) < self.cfg.x_toler)
+        & (torch.abs(self.filtered_lin_vel[env_ids, 1] - cmd[:, 1]) < self.cfg.y_toler)
+        & (
+          torch.abs(self.filtered_ang_vel[env_ids, 2] - cmd[:, 2]) < self.cfg.yaw_toler
+        )
+      )
+      self._promote(env_ids[ok])
+      self.filtered_lin_vel[env_ids] = 0.0
+      self.filtered_ang_vel[env_ids] = 0.0
+    return super().reset(env_ids)
 
   def _resample_command(self, env_ids: torch.Tensor) -> None:
     if not self.cfg.curriculum:
       super()._resample_command(env_ids)
       return
 
-    # Promote only on timed resamples: a full command window survived without
-    # termination. Episode resets (self._in_reset) carry interrupted windows.
-    if not self._in_reset:
-      steps = self._win_steps[env_ids].clamp(min=1.0)
-      mean_x = self._win_x[env_ids] / steps
-      mean_y = self._win_y[env_ids] / steps
-      mean_yaw = self._win_yaw[env_ids] / steps
-      # Absolute gate: standing makes error == command, which exceeds the
-      # tolerance for any cell whose command is above it (every moving cell),
-      # but passes the center cell (command ~ 0) for the standing bootstrap.
-      ok = (
-        (self._win_steps[env_ids] >= self.cfg.min_window_steps)
-        & (mean_x < self.cfg.x_toler)
-        & (mean_y < self.cfg.y_toler)
-        & (mean_yaw < self.cfg.yaw_toler)
-      )
-      self._promote(env_ids[ok])
-
-    # Sample new cells from the frontier distribution.
+    # Sample new cells from the frontier distribution. Promotion is NOT done
+    # here -- it happens once per episode in reset(), as in t1.py. Timed
+    # mid-episode resamples just redraw a command from the current frontier.
     flat = torch.multinomial(self.prob.flatten(), len(env_ids), replacement=True)
     lin = (flat // self.n_ang).long() - self.cfg.lin_levels
     ang = (flat % self.n_ang).long() - self.cfg.ang_levels
@@ -180,10 +179,6 @@ class CurriculumVelocityCommand(TrueErrorVelocityCommand):
     self.vel_command_w[env_ids] = self.vel_command_b[env_ids]
 
     self._reset_metric_accumulators(env_ids)
-    self._win_steps[env_ids] = 0.0
-    self._win_x[env_ids] = 0.0
-    self._win_y[env_ids] = 0.0
-    self._win_yaw[env_ids] = 0.0
 
   def _promote(self, ids: torch.Tensor) -> None:
     if len(ids) == 0:
@@ -231,26 +226,27 @@ class CurriculumVelocityCommandCfg(TrueErrorVelocityCommandCfg):
   ang_levels: int = 6
   seed_lin_level: int = 0
   """Forward/backward level(s) seeded into the grid. 0 seeds the center (zero)
-  cell, so the robot first learns to *stand* (a useful bootstrap); the relative
-  promotion gate below then forces it off the center cell once it can balance,
-  because standing can't satisfy a non-zero command. Set >=1 to skip the
-  standing phase entirely."""
+  cell, so the robot first learns to *stand* (a useful bootstrap). Set >=1 to
+  skip the standing phase entirely."""
   lin_vel_x_resolution: float = 0.25
   lin_vel_y_resolution: float = 0.10
   ang_vel_resolution: float = 0.20
-  # Absolute mean-error promotion gate (m/s, rad/s) -- physically interpretable
-  # and, unlike a relative gate, it does not collapse below the robot's roughly
-  # constant tracking-error floor at low speed. Each tolerance must sit *below*
-  # its axis's minimum non-zero command so standing (error == command) cannot
-  # promote a moving cell, yet *above* the achievable error floor (~0.1 m/s).
-  # The center (zero) cell still passes (standing error ~ 0), preserving the
-  # standing bootstrap. y/yaw tolerances exceed their level-1 command magnitude
-  # so the minor axes don't block promotion while forward walking is learned.
-  x_toler: float = 0.10
-  y_toler: float = 0.12
-  yaw_toler: float = 0.15
+  # Promotion gate (m/s, rad/s), mirroring t1.py: at episode reset an env is
+  # promoted only if it survived ~the whole episode AND its EMA-filtered velocity
+  # tracked the command within tolerance on all three axes. Filtering is what
+  # forces real walking -- marching-in-place filters to ~0 and so never tracks a
+  # non-zero command, regardless of how loose the tolerance is.
+  x_toler: float = 0.40
+  y_toler: float = 0.20
+  yaw_toler: float = 0.20
   update_rate: float = 0.10
-  min_window_steps: int = 50
+  # Episode-survival fraction: episode_length must exceed (1 - this) of the max.
+  episode_length_toler: float = 0.10
+  # EMA weight for the base-velocity low-pass: filtered = w*raw + (1-w)*filtered.
+  filter_weight: float = 0.10
+
+  def build(self, env: ManagerBasedRlEnv) -> CurriculumVelocityCommand:
+    return CurriculumVelocityCommand(self, env)
 
   def build(self, env: ManagerBasedRlEnv) -> CurriculumVelocityCommand:
     return CurriculumVelocityCommand(self, env)

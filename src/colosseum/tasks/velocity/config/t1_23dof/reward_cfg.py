@@ -10,8 +10,6 @@ from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.tasks.velocity.mdp import (
   body_angular_velocity_penalty,
   soft_landing,
-  track_angular_velocity,
-  track_linear_velocity,
 )
 
 from colosseum.mdp.rewards import (
@@ -24,6 +22,8 @@ from colosseum.mdp.rewards import (
   foot_orientation_penalty,
   orientation_penalty,
   pose_deviation_penalty,
+  track_angular_velocity_filtered,
+  track_linear_velocity_filtered,
 )
 from colosseum.robots.t1_23dof.constants import (
   BASE_BODY_NAME,
@@ -36,12 +36,12 @@ rewards = {
   # Task Tracking Rewards
   # =======================
   "track_linear_velocity": RewardTermCfg(
-    func=track_linear_velocity,
+    func=track_linear_velocity_filtered,
     weight=3.0,
     params={"command_name": "twist", "std": math.sqrt(0.25)},
   ),
   "track_angular_velocity": RewardTermCfg(
-    func=track_angular_velocity,
+    func=track_angular_velocity_filtered,
     weight=3.0,
     params={"command_name": "twist", "std": math.sqrt(0.25)},
   ),
@@ -120,7 +120,7 @@ rewards = {
   "dof_pos_limits": RewardTermCfg(func=joint_pos_limits, weight=-1.0),
   "penalty_feet_distance": RewardTermCfg(
     func=feet_distance_penalty,
-    weight=-3.0,
+    weight=-5.0,
     params={
       "asset_cfg": SceneEntityCfg("robot", site_names=(FOOT_SITE_NAMES)),
       "min_dist": 0.2,
@@ -141,7 +141,7 @@ rewards = {
   ),
   "penalty_dof_acc": RewardTermCfg(
     func=dof_acc_penalty,
-    weight=-1e-6,
+    weight=-1e-7,
     params={"asset_cfg": SceneEntityCfg("robot", joint_names=(".*",))},
   ),
 }
