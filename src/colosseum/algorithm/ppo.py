@@ -222,12 +222,14 @@ class PPO(BaseAlgorithm):
     total_timesteps = total_steps if total_steps is not None else self.config.learning_steps
     steps_per_iter = self.config.num_steps_per_env * self.env.num_envs
     num_iterations = total_timesteps // steps_per_iter
+    display_total = self.global_step + total_timesteps
 
     log_interval_iters = max(1, self.log_interval // steps_per_iter)
 
     logger.info("=" * 80)
     logger.info(f"Starting {title}")
-    logger.info(f"Total steps: {total_timesteps}")
+    logger.info(f"Step range:   {self.global_step} → {display_total}")
+    logger.info(f"Additional:   {total_timesteps}")
     logger.info(f"Steps per iteration: {steps_per_iter}")
     logger.info(f"Num iterations: {num_iterations}")
     logger.info(
@@ -302,7 +304,7 @@ class PPO(BaseAlgorithm):
           collection_time=collection_time_sum,
           learning_time=learning_time_sum,
           log_interval=log_interval_iters,
-          total_timesteps=total_timesteps,
+          total_timesteps=display_total,
           title=title,
           use_rich=self.config.use_rich_logging,
           steps_per_log_step=self.config.num_steps_per_env,

@@ -4,8 +4,8 @@ WANDB = LoggerConfig(
   enabled=True,
   project="colosseum",
   mode="online",
-  log_interval=50,
-  save_interval=50_000_000,
+  log_interval=1_000,
+  save_interval=10_000_000,
   log_dir="./logs",
   console_level="INFO",
 )

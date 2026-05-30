@@ -95,7 +95,10 @@ class CurriculumVelocityCommand(TrueErrorVelocityCommand):
     self.n_lin = 2 * cfg.lin_levels + 1
     self.n_ang = 2 * cfg.ang_levels + 1
     self.prob = torch.zeros(self.n_lin, self.n_ang, device=self.device)
-    self.prob[cfg.lin_levels, cfg.ang_levels] = 1.0  # seed the center cell
+    # Seed forward/backward at +/- seed_lin_level (0 -> the standing center cell).
+    s = cfg.seed_lin_level
+    self.prob[cfg.lin_levels + s, cfg.ang_levels] = 1.0
+    self.prob[cfg.lin_levels - s, cfg.ang_levels] = 1.0
     self.env_lin = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
     self.env_ang = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
 
@@ -146,11 +149,21 @@ class CurriculumVelocityCommand(TrueErrorVelocityCommand):
       mean_x = self._win_x[env_ids] / steps
       mean_y = self._win_y[env_ids] / steps
       mean_yaw = self._win_yaw[env_ids] / steps
+      # Relative gate: error must stay below toler_frac * |command| (floored).
+      # vel_command_b still holds the command that was active during this window
+      # (resampling happens below), so it is the correct denominator. Standing
+      # makes error == |command|, which fails for any command above the floor.
+      cmd = self.vel_command_b[env_ids]
+      thr_x = (self.cfg.toler_frac * cmd[:, 0].abs()).clamp(min=self.cfg.x_toler_floor)
+      thr_y = (self.cfg.toler_frac * cmd[:, 1].abs()).clamp(min=self.cfg.y_toler_floor)
+      thr_yaw = (self.cfg.toler_frac * cmd[:, 2].abs()).clamp(
+        min=self.cfg.yaw_toler_floor
+      )
       ok = (
         (self._win_steps[env_ids] >= self.cfg.min_window_steps)
-        & (mean_x < self.cfg.x_toler)
-        & (mean_y < self.cfg.y_toler)
-        & (mean_yaw < self.cfg.yaw_toler)
+        & (mean_x < thr_x)
+        & (mean_y < thr_y)
+        & (mean_yaw < thr_yaw)
       )
       self._promote(env_ids[ok])
 
@@ -223,12 +236,26 @@ class CurriculumVelocityCommandCfg(TrueErrorVelocityCommandCfg):
   fall back to uniform-box sampling from ``ranges``."""
   lin_levels: int = 6
   ang_levels: int = 6
+  seed_lin_level: int = 0
+  """Forward/backward level(s) seeded into the grid. 0 seeds the center (zero)
+  cell, so the robot first learns to *stand* (a useful bootstrap); the relative
+  promotion gate below then forces it off the center cell once it can balance,
+  because standing can't satisfy a non-zero command. Set >=1 to skip the
+  standing phase entirely."""
   lin_vel_x_resolution: float = 0.25
   lin_vel_y_resolution: float = 0.10
   ang_vel_resolution: float = 0.20
-  x_toler: float = 0.30
-  y_toler: float = 0.15
-  yaw_toler: float = 0.20
+  # Promotion gate is *relative* to command magnitude: an env promotes only if
+  # its mean per-axis error stays below ``toler_frac * |command|`` (floored).
+  # Standing makes error == |command|, so it can never satisfy a non-trivial
+  # command at any level. The per-axis floor stops the threshold collapsing to
+  # zero for near-zero commands (a divide-by-zero guard, not a real constraint);
+  # lateral/yaw floors are set above their level-1 command magnitude so the
+  # minor axes don't block promotion while the robot is still learning forward.
+  toler_frac: float = 0.5
+  x_toler_floor: float = 0.05
+  y_toler_floor: float = 0.12
+  yaw_toler_floor: float = 0.10
   update_rate: float = 0.10
   min_window_steps: int = 50
 

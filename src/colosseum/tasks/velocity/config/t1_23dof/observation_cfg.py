@@ -164,14 +164,14 @@ observations = {
     concatenate_terms=True,
     enable_corruption=False,
   ),
-  "env_params": ObservationGroupCfg(
-    terms=env_params_terms,
-    concatenate_terms=True,
-    enable_corruption=False,
-  ),
-  "odom": ObservationGroupCfg(
-    terms=odom_terms,
-    concatenate_terms=True,
-    enable_corruption=False,
-  ),
+  # "env_params": ObservationGroupCfg(
+  #   terms=env_params_terms,
+  #   concatenate_terms=True,
+  #   enable_corruption=False,
+  # ),
+  # "odom": ObservationGroupCfg(
+  #   terms=odom_terms,
+  #   concatenate_terms=True,
+  #   enable_corruption=False,
+  # ),
 }
