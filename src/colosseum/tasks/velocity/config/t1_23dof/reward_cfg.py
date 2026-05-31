@@ -10,6 +10,8 @@ from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.tasks.velocity.mdp import (
   body_angular_velocity_penalty,
   soft_landing,
+  track_angular_velocity,
+  track_linear_velocity,
 )
 
 from colosseum.mdp.rewards import (
@@ -53,7 +55,7 @@ rewards = {
       "phase_command_name": "gait_phase",
       "height_sensor_name": "foot_height_scan",
       "swing_height": 0.08,
-      "tracking_sigma": 0.008,
+      "tracking_sigma": 0.005,
       "command_name": "twist",
       "command_threshold": 0.05,
     },
@@ -134,7 +136,7 @@ rewards = {
   ),
   "feet_slip": RewardTermCfg(
     func=feet_slip,
-    weight=-1.0,
+    weight=-5.0,
     params={
       "asset_cfg": SceneEntityCfg("robot", site_names=(FOOT_SITE_NAMES)),
       "sensor_name": "feet_ground_contact",
