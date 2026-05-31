@@ -27,10 +27,12 @@ class TrueErrorVelocityCommand(UniformVelocityCommand):
   ``error_vel_y``) alongside the combined ``error_vel_xy`` so forward vs lateral
   tracking can be diagnosed independently.
 
-  The velocity the error is measured against is supplied by
-  ``_tracking_lin_vel_b`` / ``_tracking_ang_vel_b`` (raw base velocity here);
-  subclasses override them so the logged error matches whatever velocity their
-  reward and curriculum gate actually use.
+  Maintains an EMA low-pass of the base velocity in the body frame
+  (``filtered_lin_vel`` / ``filtered_ang_vel``), mirroring t1.py. This is the
+  velocity the error is measured against (via ``_tracking_*_b``) and the velocity
+  the filtered tracking rewards read, so the logged error matches what the reward
+  sees. Marching-in-place averages to ~0 and so earns neither tracking reward nor
+  a low logged error, forcing sustained directed locomotion.
   """
 
   def __init__(self, cfg: TrueErrorVelocityCommandCfg, env: ManagerBasedRlEnv):
@@ -38,14 +40,30 @@ class TrueErrorVelocityCommand(UniformVelocityCommand):
     self._metric_steps = torch.zeros(self.num_envs, device=self.device)
     self.metrics["error_vel_x"] = torch.zeros(self.num_envs, device=self.device)
     self.metrics["error_vel_y"] = torch.zeros(self.num_envs, device=self.device)
+    self.filtered_lin_vel = torch.zeros(self.num_envs, 3, device=self.device)
+    self.filtered_ang_vel = torch.zeros(self.num_envs, 3, device=self.device)
 
   def _tracking_lin_vel_b(self) -> torch.Tensor:
-    return self.robot.data.root_link_lin_vel_b
+    return self.filtered_lin_vel
 
   def _tracking_ang_vel_b(self) -> torch.Tensor:
-    return self.robot.data.root_link_ang_vel_b
+    return self.filtered_ang_vel
+
+  def reset(self, env_ids):
+    self.filtered_lin_vel[env_ids] = 0.0
+    self.filtered_ang_vel[env_ids] = 0.0
+    return super().reset(env_ids)
 
   def _update_metrics(self) -> None:
+    # Advance the EMA filter before computing the error metrics so error_vel_*
+    # measure the same filtered velocity the reward (and any curriculum gate) use.
+    fw = self.cfg.filter_weight
+    self.filtered_lin_vel.mul_(1.0 - fw).add_(
+      self.robot.data.root_link_lin_vel_b, alpha=fw
+    )
+    self.filtered_ang_vel.mul_(1.0 - fw).add_(
+      self.robot.data.root_link_ang_vel_b, alpha=fw
+    )
     lin_vel = self._tracking_lin_vel_b()
     ang_vel = self._tracking_ang_vel_b()
     lin_err = self.vel_command_b[:, :2] - lin_vel[:, :2]
@@ -74,6 +92,9 @@ class TrueErrorVelocityCommand(UniformVelocityCommand):
 
 @dataclass(kw_only=True)
 class TrueErrorVelocityCommandCfg(UniformVelocityCommandCfg):
+  # EMA weight for the base-velocity low-pass: filtered = w*raw + (1-w)*filtered.
+  filter_weight: float = 0.10
+
   def build(self, env: ManagerBasedRlEnv) -> TrueErrorVelocityCommand:
     return TrueErrorVelocityCommand(self, env)
 
@@ -113,40 +134,14 @@ class CurriculumVelocityCommand(TrueErrorVelocityCommand):
     self.env_lin = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
     self.env_ang = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
 
-    # Low-pass (EMA) base velocity in the body frame, mirroring t1.py. Both the
-    # promotion gate (in reset) and the tracking reward read these so that
-    # marching-in-place -- which averages to ~0 -- earns neither reward nor a
-    # promotion, while sustained directed locomotion does.
-    self.filtered_lin_vel = torch.zeros(self.num_envs, 3, device=self.device)
-    self.filtered_ang_vel = torch.zeros(self.num_envs, 3, device=self.device)
-
+    # The EMA-filtered base velocity (filtered_lin_vel / filtered_ang_vel) is
+    # provided by TrueErrorVelocityCommand. The promotion gate (in reset) and the
+    # filtered tracking reward read it: marching-in-place averages to ~0 and so
+    # earns neither a promotion nor reward, while sustained locomotion does.
     self.metrics["cmd_lin_level"] = torch.zeros(self.num_envs, device=self.device)
     self.metrics["cmd_ang_level"] = torch.zeros(self.num_envs, device=self.device)
 
-  def _tracking_lin_vel_b(self) -> torch.Tensor:
-    # In play/eval (curriculum off) the filter is never advanced, so fall back
-    # to the raw base velocity for the error metrics.
-    if self.cfg.curriculum:
-      return self.filtered_lin_vel
-    return super()._tracking_lin_vel_b()
-
-  def _tracking_ang_vel_b(self) -> torch.Tensor:
-    if self.cfg.curriculum:
-      return self.filtered_ang_vel
-    return super()._tracking_ang_vel_b()
-
   def _update_metrics(self) -> None:
-    # Advance the EMA filter *before* super() computes the error metrics, so the
-    # logged error_vel_* measure the same filtered velocity the reward and the
-    # promotion gate use (and are directly comparable to x/y/yaw_toler).
-    if self.cfg.curriculum:
-      fw = self.cfg.filter_weight
-      self.filtered_lin_vel.mul_(1.0 - fw).add_(
-        self.robot.data.root_link_lin_vel_b, alpha=fw
-      )
-      self.filtered_ang_vel.mul_(1.0 - fw).add_(
-        self.robot.data.root_link_ang_vel_b, alpha=fw
-      )
     super()._update_metrics()
     if self.cfg.curriculum:
       self.metrics["cmd_lin_level"][:] = self.env_lin.abs().float()
@@ -158,7 +153,8 @@ class CurriculumVelocityCommand(TrueErrorVelocityCommand):
     # *after* command_manager.reset, so it still holds the terminal length, and
     # filtered_*_vel still holds the pre-reset filtered velocity. An env is
     # promoted only if it survived nearly the whole episode while its filtered
-    # velocity tracked the command on all three axes.
+    # velocity tracked the command on all three axes. The filter itself is zeroed
+    # by super().reset() (TrueErrorVelocityCommand), so read it before that call.
     if self.cfg.curriculum and len(env_ids) > 0:
       max_steps = self._env.max_episode_length
       survived = self._env.episode_length_buf[env_ids].float() > max_steps * (
@@ -174,8 +170,6 @@ class CurriculumVelocityCommand(TrueErrorVelocityCommand):
         )
       )
       self._promote(env_ids[ok])
-      self.filtered_lin_vel[env_ids] = 0.0
-      self.filtered_ang_vel[env_ids] = 0.0
     return super().reset(env_ids)
 
   def _resample_command(self, env_ids: torch.Tensor) -> None:
@@ -312,8 +306,7 @@ class CurriculumVelocityCommandCfg(TrueErrorVelocityCommandCfg):
   update_rate: float = 0.10
   # Episode-survival fraction: episode_length must exceed (1 - this) of the max.
   episode_length_toler: float = 0.10
-  # EMA weight for the base-velocity low-pass: filtered = w*raw + (1-w)*filtered.
-  filter_weight: float = 0.10
+  # filter_weight (EMA low-pass weight) is inherited from TrueErrorVelocityCommandCfg.
 
   def build(self, env: ManagerBasedRlEnv) -> CurriculumVelocityCommand:
     return CurriculumVelocityCommand(self, env)
