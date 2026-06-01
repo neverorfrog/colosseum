@@ -369,7 +369,7 @@ def feet_slip(
   env: ManagerBasedRlEnv,
   asset_cfg: SceneEntityCfg,
   sensor_name: str,
-  contact_threshold: float = 1.0,
+  contact_threshold: float = 0.5,
 ) -> torch.Tensor:
   """Penalize foot XY sliding while the foot is in contact (use negative weight).
 
@@ -405,6 +405,68 @@ def static_stance(
   foot_vel_xy = asset.data.site_lin_vel_w[:, asset_cfg.site_ids, :2]  # (N, 2, 2)
   vel_sq = (foot_vel_xy**2).sum(dim=-1).mean(dim=-1)  # (N,) mean over feet
   return vel_sq * standing
+
+
+class feet_no_slip:
+  """Penalize a planted foot's drift from where it first touched down (neg weight).
+
+  Velocity-based slip penalties (both this repo's L2 ``feet_slip`` and booster_gym's
+  L2 ``_reward_feet_slip``) have a gradient that vanishes quadratically as foot
+  velocity -> 0, so they are blind to a very slow standing creep (~1e-5 m/s) that
+  still drives stick-slip vibration on rubber soles. This term anchors the foot's
+  xy position at first contact and penalizes the *accumulated* L1 displacement from
+  that anchor while the foot stays in contact:
+
+    - L1 -> non-vanishing gradient: "perfectly still" is consistently preferred
+      over "creeping", down to arbitrarily small velocities.
+    - anchored displacement -> escalating pressure: sustained creep grows the
+      offset every step, so the penalty climbs the longer the foot drifts.
+
+  Contact-gated (not command-gated): a lifted foot is masked out and re-anchors on
+  the next touchdown, so recovery stepping at standstill stays free (unlike the old
+  command-gated ``static_stance``). The anchor re-initializes on episode reset, so
+  the first post-reset step sees zero displacement (no stale-anchor spike).
+  """
+
+  def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRlEnv):
+    del cfg
+    self._env = env
+    self.anchor_xy: torch.Tensor | None = None
+    self.was_contact: torch.Tensor | None = None
+
+  def _ensure(self, n_feet: int, device) -> None:
+    if self.anchor_xy is None:
+      n = self._env.num_envs
+      self.anchor_xy = torch.zeros(n, n_feet, 2, device=device)
+      self.was_contact = torch.zeros(n, n_feet, dtype=torch.bool, device=device)
+
+  def __call__(
+    self,
+    env: ManagerBasedRlEnv,
+    asset_cfg: SceneEntityCfg,
+    sensor_name: str,
+    contact_threshold: float = 0.5,
+  ) -> torch.Tensor:
+    contact_sensor: ContactSensor = env.scene[sensor_name]
+    assert contact_sensor.data.force is not None
+    contact = contact_sensor.data.force.norm(dim=-1) > contact_threshold  # (N, F)
+    asset: Entity = env.scene[asset_cfg.name]
+    foot_xy = asset.data.site_pos_w[:, asset_cfg.site_ids, :2]  # (N, F, 2)
+    self._ensure(foot_xy.shape[1], foot_xy.device)
+    assert self.anchor_xy is not None and self.was_contact is not None
+    # Re-anchor feet that just made contact (first contact, or first step post-reset).
+    new_contact = contact & ~self.was_contact  # (N, F)
+    self.anchor_xy[new_contact] = foot_xy[new_contact]
+    disp = (foot_xy - self.anchor_xy).abs().sum(dim=-1)  # (N, F) L1 drift
+    self.was_contact.copy_(contact)
+    return (disp * contact.float()).sum(dim=-1)  # (N,)
+
+  def reset(self, env_ids: torch.Tensor | slice | None = None) -> None:
+    if self.was_contact is None:
+      return
+    if env_ids is None:
+      env_ids = slice(None)
+    self.was_contact[env_ids] = False
 
 
 class arm_swing_penalty:

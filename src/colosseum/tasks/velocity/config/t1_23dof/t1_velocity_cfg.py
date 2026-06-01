@@ -3,7 +3,12 @@ import math
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from mjlab.envs.mdp.events import reset_joints_by_offset
+from mjlab.envs.mdp import dr
+from mjlab.envs.mdp.events import (
+  apply_body_impulse,
+  apply_external_force_torque,
+  reset_joints_by_offset,
+)
 from mjlab.managers import (
   CurriculumTermCfg,
   EventTermCfg,
@@ -20,7 +25,11 @@ from mjlab.viewer import ViewerConfig
 
 from colosseum.config.types.task import TaskConfig, register_task
 from colosseum.envs.colosseum_env import ColosseumEnvCfg
-from colosseum.robots.t1_23dof.constants import BASE_BODY_NAME, get_robot_cfg
+from colosseum.robots.t1_23dof.constants import (
+  BASE_BODY_NAME,
+  FOOT_GEOM_NAMES,
+  get_robot_cfg,
+)
 from colosseum.robots.t1_23dof.sensors import (
   FEET_GROUND_CONTACT_SENSOR,
   FOOT_HEIGHT_SCAN,
@@ -96,9 +105,7 @@ def booster_t1_velocity_env_cfg(play: bool = False) -> ColosseumEnvCfg:
     sim=sim_cfg(),
     decimation=4,
     episode_length_s=30.0,
-    encoders={
-      "env_params": VelocityRmaTermCfg(),
-    },
+    encoders={},
   )
 
   if cfg.scene.terrain is not None and cfg.scene.terrain.terrain_generator is not None:
@@ -120,16 +127,40 @@ def booster_t1_velocity_env_cfg(play: bool = False) -> ColosseumEnvCfg:
       },
     )
 
+    cfg.events["push_robot"] = EventTermCfg(
+      func=apply_body_impulse,
+      mode="step",
+      params={
+        "force_range": (-10.0, 10.0),
+        "torque_range": (-2.0, 2.0),
+        "duration_s": (0.8, 1.0),
+        "cooldown_s": (4.0, 6.0),
+        "asset_cfg": SceneEntityCfg("robot", body_names=(BASE_BODY_NAME,)),
+      },
+    )
+
+    cfg.events["foot_friction"] = EventTermCfg(
+      mode="reset",
+      func=dr.geom_friction,
+      params={
+        "asset_cfg": SceneEntityCfg("robot", geom_names=FOOT_GEOM_NAMES),
+        "ranges": {0: (1.2, 1.2), 1: (0.03, 0.03)},
+        "axes": [0, 1],
+        "operation": "abs",
+        "shared_random": True,
+      },
+    )
+
     twist = cfg.commands["twist"]
     assert isinstance(twist, UniformVelocityCommandCfg)
-    twist.curriculum = False  # play/eval: uniform-box sampling from ranges
-    twist.heading_command = True
-    twist.rel_forward_envs = 0.7
-    twist.rel_world_envs = 0.0
-    twist.rel_standing_envs = 0.0
-    twist.rel_heading_envs = 1.0
-    twist.ranges.heading = (-math.pi / 3, math.pi / 3)
-    twist.heading_control_stiffness = 1.5
+    # twist.curriculum = False  # play/eval: uniform-box sampling from ranges
+    # twist.heading_command = True
+    # twist.rel_forward_envs = 0.7
+    # twist.rel_world_envs = 0.0
+    # twist.rel_standing_envs = 0.0
+    # twist.rel_heading_envs = 1.0
+    # twist.ranges.heading = (-math.pi / 3, math.pi / 3)
+    # twist.heading_control_stiffness = 1.5
 
     gait = cfg.commands["gait_phase"]
     assert isinstance(gait, GaitPhaseCommandCfg)

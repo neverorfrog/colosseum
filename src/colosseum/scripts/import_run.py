@@ -77,6 +77,33 @@ def main() -> None:
     else:
       logger.warning(f"Skipped {fname} (not found on remote)")
 
+  # Import wandb run data
+  wandb_id_path = local_run / "wandb_id.txt"
+  if wandb_id_path.exists():
+    wandb_id = wandb_id_path.read_text().strip()
+    logger.info(f"W&B run ID: {wandb_id}")
+
+    remote_wandb_dir = remote_root / "logs" / "wandb"
+    result = subprocess.run(
+      ["ssh", config.remote, f"ls -d {remote_wandb_dir}/run-*-{wandb_id} 2>/dev/null"],
+      capture_output=True,
+      text=True,
+    )
+    if result.returncode == 0 and result.stdout.strip():
+      remote_dir = result.stdout.strip().split("\n")[0]
+      dir_name = Path(remote_dir).name
+      local_wandb_dir = Path(config.log_dir) / "wandb"
+      local_wandb_dir.mkdir(parents=True, exist_ok=True)
+      logger.info(f"Importing wandb run from {config.remote}:{remote_dir}")
+      subprocess.run(
+        ["scp", "-r", f"{config.remote}:{remote_dir}", str(local_wandb_dir / dir_name)],
+        check=True,
+      )
+    else:
+      logger.warning(f"No wandb run directory found for ID '{wandb_id}' on remote")
+  else:
+    logger.warning("No wandb_id.txt found, skipping wandb data import")
+
   logger.success(f"Imported '{config.run}' from {config.remote}")
 
 

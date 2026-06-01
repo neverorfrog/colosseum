@@ -145,7 +145,7 @@ events = {
     func=dr.joint_damping,
     params={
       "asset_cfg": SceneEntityCfg("robot", joint_names=(".*",)),
-      "ranges": (0.85, 1.15),
+      "ranges": (0.9, 1.1),
       "operation": "scale",
     },
   ),
@@ -154,7 +154,7 @@ events = {
     func=dr.joint_armature,
     params={
       "asset_cfg": SceneEntityCfg("robot", joint_names=(".*",)),
-      "ranges": (0.85, 1.15),
+      "ranges": (0.9, 1.1),
       "operation": "scale",
     },
   ),
@@ -163,8 +163,8 @@ events = {
     func=dr.pd_gains,
     params={
       "asset_cfg": SceneEntityCfg("robot"),
-      "kp_range": (0.85, 1.15),
-      "kd_range": (0.85, 1.15),
+      "kp_range": (0.9, 1.1),
+      "kd_range": (0.9, 1.1),
       "operation": "scale",
     },
   ),
@@ -173,7 +173,7 @@ events = {
     func=dr.effort_limits,
     params={
       "asset_cfg": SceneEntityCfg("robot"),
-      "effort_limit_range": (0.75, 1.0),
+      "effort_limit_range": (0.8, 1.0),
       "operation": "scale",
     },
   ),

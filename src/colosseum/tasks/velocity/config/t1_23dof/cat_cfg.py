@@ -31,8 +31,8 @@ commands: Dict[str, CommandTermCfg] = {
     # capped below it (res_y < res_x), so "max forward AND max lateral" is never
     # commanded; cells only open up once an env tracks the frontier within
     # tolerance. Max |vx|=1.5, |vy|=0.6, |wz|=1.2 at the outermost levels.
-    lin_levels=6,
-    ang_levels=6,
+    lin_levels=5,
+    ang_levels=5,
     lin_vel_x_resolution=0.25,
     lin_vel_y_resolution=0.10,
     ang_vel_resolution=0.20,
@@ -40,7 +40,7 @@ commands: Dict[str, CommandTermCfg] = {
     # >=(1-episode_length_toler) of the episode AND its EMA-filtered velocity
     # (filter_weight) tracked the command within these tolerances. Filtering is
     # what forces walking, so the tolerances can stay loose (reference values).
-    x_toler=0.20,
+    x_toler=0.40,
     y_toler=0.20,
     yaw_toler=0.20,
     episode_length_toler=0.10,

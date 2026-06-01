@@ -205,7 +205,9 @@ class PPO(BaseAlgorithm):
     self._ppo_loop()
     self.env.close()
 
-  def _ppo_loop(self, title: str = "PPO Training", total_steps: int | None = None) -> None:
+  def _ppo_loop(
+    self, title: str = "PPO Training", total_steps: int | None = None
+  ) -> None:
     """Inner PPO training loop without env.close(). Called by train() and pipeline scripts."""
     assert isinstance(self.config, PpoConfig)
 
@@ -219,7 +221,9 @@ class PPO(BaseAlgorithm):
     self.actor.train()
     self.value_net.train()
 
-    total_timesteps = total_steps if total_steps is not None else self.config.learning_steps
+    total_timesteps = (
+      total_steps if total_steps is not None else self.config.learning_steps
+    )
     steps_per_iter = self.config.num_steps_per_env * self.env.num_envs
     num_iterations = total_timesteps // steps_per_iter
     display_total = self.global_step + total_timesteps
@@ -508,7 +512,9 @@ class PPO(BaseAlgorithm):
         }
 
       # Compose actor input (identity in PPO; RmaPPO overrides to append encoder latents)
-      actor_obs = self._compose_actor_input(actor_obs_norm, privileged_obs, adaptation_obs)
+      actor_obs = self._compose_actor_input(
+        actor_obs_norm, privileged_obs, adaptation_obs
+      )
 
       # Re-evaluate actions with current policy
       new_log_probs, entropy_all = self.actor.evaluate(actor_obs, actions)
@@ -598,9 +604,7 @@ class PPO(BaseAlgorithm):
       symmetry_critic_loss = torch.tensor(0.0, device=self.device)
       if self._use_symmetry and self._action_mirror_fn is not None:
         if self.config.symmetry_loss_coef > 0.0:
-          if (
-            self.config.symmetry_data_augmentation
-          ):
+          if self.config.symmetry_data_augmentation:
             mu_full = self.actor.forward(actor_obs.detach())
             mu_original = mu_full[:original_batch_size]
             mu_mirrored = mu_full[original_batch_size:]
@@ -618,18 +622,14 @@ class PPO(BaseAlgorithm):
             )
 
         if self.config.symmetry_critic_coef > 0.0:
-          if (
-            self.config.symmetry_data_augmentation
-          ):
+          if self.config.symmetry_data_augmentation:
             val_original = new_values[:original_batch_size]
             val_mirrored = new_values[original_batch_size:]
             symmetry_critic_loss = torch.nn.functional.mse_loss(
               val_original, val_mirrored
             )
           else:
-            mirrored_critic_obs = mirror_obs(
-              critic_obs.detach(), self._critic_sym_spec
-            )
+            mirrored_critic_obs = mirror_obs(critic_obs.detach(), self._critic_sym_spec)
             val_mirrored = self.value_net(mirrored_critic_obs)
             symmetry_critic_loss = torch.nn.functional.mse_loss(
               new_values, val_mirrored
@@ -715,7 +715,9 @@ class PPO(BaseAlgorithm):
     }
     if self._use_symmetry:
       loss_dict["symmetry_actor_loss"] = total_symmetry_actor_loss / max(num_updates, 1)
-      loss_dict["symmetry_critic_loss"] = total_symmetry_critic_loss / max(num_updates, 1)
+      loss_dict["symmetry_critic_loss"] = total_symmetry_critic_loss / max(
+        num_updates, 1
+      )
     return loss_dict
 
   def _compose_actor_input(

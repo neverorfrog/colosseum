@@ -106,7 +106,7 @@ FOOT_BALL_CONTACT_SENSOR = ContactSensorCfg(
   name="foot_ball_contact",
   primary=ContactMatch(
     mode="subtree",
-    pattern=r"^(left_foot_link|right_foot_link)$",
+    pattern=r"^(left_foot_sphere_*_link|right_foot_sphere_*_link)$",
     entity="robot",
   ),
   secondary=ContactMatch(mode="body", pattern="ball", entity="ball"),

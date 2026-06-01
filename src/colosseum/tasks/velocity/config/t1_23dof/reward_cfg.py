@@ -19,6 +19,7 @@ from colosseum.mdp.rewards import (
   dof_acc_penalty,
   dof_vel_penalty,
   feet_distance_penalty,
+  feet_no_slip,
   feet_phase,
   feet_slip,
   feet_yaw_diff_penalty,
@@ -41,12 +42,12 @@ rewards = {
   "track_linear_velocity": RewardTermCfg(
     func=track_linear_velocity_filtered,
     weight=4.0,
-    params={"command_name": "twist", "std": math.sqrt(0.25)},
+    params={"command_name": "twist", "std": math.sqrt(0.3)},
   ),
   "track_angular_velocity": RewardTermCfg(
     func=track_angular_velocity_filtered,
     weight=3.0,
-    params={"command_name": "twist", "std": math.sqrt(0.25)},
+    params={"command_name": "twist", "std": math.sqrt(0.3)},
   ),
   "feet_phase": RewardTermCfg(
     func=feet_phase,
@@ -84,7 +85,7 @@ rewards = {
   # =========================
   "penalty_landing": RewardTermCfg(
     func=soft_landing,
-    weight=-0.1,
+    weight=-0.005,
     params={
       "sensor_name": "feet_ground_contact",
       "command_name": "twist",
@@ -136,6 +137,17 @@ rewards = {
   ),
   "feet_slip": RewardTermCfg(
     func=feet_slip,
+    weight=-10.0,
+    params={
+      "asset_cfg": SceneEntityCfg("robot", site_names=(FOOT_SITE_NAMES)),
+      "sensor_name": "feet_ground_contact",
+    },
+  ),
+  # Anchored L1 no-slip: catches slow standing creep (~1e-5 m/s) that the L2
+  # feet_slip is blind to. Weight needs tuning — start small and raise until the
+  # standing foot-creep disappears without hurting walking foot roll.
+  "feet_no_slip": RewardTermCfg(
+    func=feet_no_slip,
     weight=-5.0,
     params={
       "asset_cfg": SceneEntityCfg("robot", site_names=(FOOT_SITE_NAMES)),
@@ -144,12 +156,12 @@ rewards = {
   ),
   "penalty_dof_vel": RewardTermCfg(
     func=dof_vel_penalty,
-    weight=-1e-3,
+    weight=-1e-4,
     params={"asset_cfg": SceneEntityCfg("robot", joint_names=(".*",))},
   ),
   "penalty_dof_acc": RewardTermCfg(
     func=dof_acc_penalty,
-    weight=-1e-5,
+    weight=-1e-7,
     params={"asset_cfg": SceneEntityCfg("robot", joint_names=(".*",))},
   ),
 }
@@ -175,7 +187,7 @@ rewards["penalty_pose_deviation"].params["weights_walking"] = {
   r"(?i).*shoulder_roll.*": 50.0,
   r"(?i).*elbow.pitch": 50.0,
   r"(?i).*elbow.yaw": 1.0,
-  r"Waist": 20.0,
+  r"Waist": 15.0,
   r"(?i).*hip_pitch.*": 1.0,
   r"(?i).*hip_roll.*": 5.0,
   r"(?i).*hip_yaw.*": 5.0,
