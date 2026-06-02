@@ -207,9 +207,6 @@ class CurriculumVelocityCommand(TrueErrorVelocityCommand):
     #   forward : straight line, no strafe/turn (vy=wz=0), keeps grid vx;
     #   heading : base _update_command overwrites wz each step with the heading
     #             controller (clip(stiffness * heading_error)); keeps grid vx/vy.
-    # The center cell (level 0) is always standing -- a genuine zero command, so
-    # the policy learns clean standing there instead of marching in place.
-    #
     # Forward and heading envs ride the *forward axis* (env_ang forced to 0) so
     # promotion stays coherent: they only ever promote (lin, 0) cells, since their
     # yaw is 0 (forward) or a heading-derived transient (heading), neither of
@@ -217,10 +214,9 @@ class CurriculumVelocityCommand(TrueErrorVelocityCommand):
     r = torch.rand(n, device=self.device)
     p_s, p_f = self.cfg.rel_standing_envs, self.cfg.rel_forward_envs
     p_h = self.cfg.rel_heading_envs
-    is_center = (lin == 0) & (ang == 0)
-    is_standing = is_center | (r < p_s)
-    is_forward = (r >= p_s) & (r < p_s + p_f) & ~is_center
-    is_heading = (r >= p_s + p_f) & (r < p_s + p_f + p_h) & ~is_center
+    is_standing = r < p_s
+    is_forward = (r >= p_s) & (r < p_s + p_f)
+    is_heading = (r >= p_s + p_f) & (r < p_s + p_f + p_h)
 
     fwd_or_head = is_forward | is_heading
     self.env_ang[env_ids[fwd_or_head]] = 0

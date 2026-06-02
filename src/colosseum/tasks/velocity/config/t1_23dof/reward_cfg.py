@@ -148,7 +148,7 @@ rewards = {
   # standing foot-creep disappears without hurting walking foot roll.
   "feet_no_slip": RewardTermCfg(
     func=feet_no_slip,
-    weight=-5.0,
+    weight=-20.0,
     params={
       "asset_cfg": SceneEntityCfg("robot", site_names=(FOOT_SITE_NAMES)),
       "sensor_name": "feet_ground_contact",

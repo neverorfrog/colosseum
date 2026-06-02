@@ -54,11 +54,11 @@ events = {
   "kick_robot": EventTermCfg(
     func=push_by_setting_velocity,
     mode="interval",
-    interval_range_s=(1.0, 3.0),
+    interval_range_s=(5.0, 10.0),
     params={
       "velocity_range": {
-        "x": (-0.1, 0.1),
-        "y": (-0.1, 0.1),
+        "x": (-0.5, 0.5),
+        "y": (-0.5, 0.5),
         "z": (-0.1, 0.1),
         "roll": (-0.04, 0.04),
         "pitch": (-0.04, 0.04),

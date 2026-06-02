@@ -14,8 +14,8 @@ from colosseum.tasks.dribbling.mdp.gait_phase_command import GaitPhaseCommandCfg
 commands: Dict[str, CommandTermCfg] = {
   "twist": CurriculumVelocityCommandCfg(
     entity_name="robot",
-    rel_forward_envs=0.3,
-    rel_heading_envs=0.4,
+    rel_forward_envs=0.1,
+    rel_heading_envs=0.2,
     rel_standing_envs=0.1,
     heading_command=True,
     heading_control_stiffness=0.5,

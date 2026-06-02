@@ -6,7 +6,6 @@ from pathlib import Path
 from mjlab.envs.mdp import dr
 from mjlab.envs.mdp.events import (
   apply_body_impulse,
-  apply_external_force_torque,
   reset_joints_by_offset,
 )
 from mjlab.managers import (
@@ -37,7 +36,6 @@ from colosseum.robots.t1_23dof.sensors import (
   SELF_COLLISION_SENSOR,
 )
 from colosseum.tasks.dribbling.mdp.gait_phase_command import GaitPhaseCommandCfg
-from colosseum.tasks.velocity.mdp.rma_term import VelocityRmaTermCfg
 from colosseum.utils import project_root
 
 from .algo_cfg import booster_t1_ppo_cfg, booster_t1_rsl_rl_runner_cfg
@@ -131,10 +129,10 @@ def booster_t1_velocity_env_cfg(play: bool = False) -> ColosseumEnvCfg:
       func=apply_body_impulse,
       mode="step",
       params={
-        "force_range": (-10.0, 10.0),
-        "torque_range": (-2.0, 2.0),
-        "duration_s": (0.8, 1.0),
-        "cooldown_s": (4.0, 6.0),
+        "force_range": (-20.0, 20.0),
+        "torque_range": (-5.0, 5.0),
+        "duration_s": (1.0, 1.0),
+        "cooldown_s": (5.0, 5.0),
         "asset_cfg": SceneEntityCfg("robot", body_names=(BASE_BODY_NAME,)),
       },
     )
