@@ -26,12 +26,12 @@ curriculum = {
         },
         {
           "transitions": 200_000_000,
-          "force_range": (-15.0, 15.0),
+          "force_range": (-20.0, 20.0),
           "torque_range": (-3.0, 3.0),
         },
         {
           "transitions": 400_000_000,
-          "force_range": (-25.0, 25.0),
+          "force_range": (-30.0, 30.0),
           "torque_range": (-5.0, 5.0),
         },
       ],
