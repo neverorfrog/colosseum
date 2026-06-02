@@ -36,3 +36,14 @@ class PpoCriticConfig(NetworkConfig):
     """Configuration for PPO critic (value function) network."""
 
     pass
+
+
+@dataclass(frozen=True)
+class OrchestratorConfig(NetworkConfig):
+    """Configuration for the residual orchestrator (gating) network.
+
+    learning_rate is inherited but unused: the orchestrator shares the actor
+    optimizer (same pattern as PpoCriticConfig sharing the critic optimizer).
+    """
+
+    pass

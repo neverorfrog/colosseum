@@ -1,0 +1,570 @@
+"""ResidualPPO — PPO with frozen base skills + a trainable residual + orchestrator.
+
+Subclass of PPO. The actor is a ResidualActor (composite): one or more frozen
+base skills, a trainable residual branch, and a gating orchestrator that blends
+them via PoE-style fusion. See `residual_ppo_plan.md`.
+
+Differences from plain PPO:
+  - The actor reads multiple named observation groups (one per base skill, one
+    for the residual, plus "orchestrator"), not a single "actor" group. Per-skill
+    raw obs are stored in the rollout buffer's privileged-obs channel and
+    re-normalized at learning time.
+  - Per-skill EmpiricalNormalization. Base-skill normalizers are loaded from the
+    base checkpoints and (by default) frozen.
+  - The actor optimizer trains only the residual branch + orchestrator; the
+    frozen base branches are excluded.
+  - KL is computed from the combined distribution (ResidualActor has no .std /
+    .forward). Two extra penalties keep the residual small and the orchestrator
+    biased toward the frozen base.
+
+Symmetry (data augmentation / symmetry loss) is not yet wired for residual mode;
+the config defaults keep it disabled.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, Callable
+
+import numpy as np
+import torch
+import torch.optim as optim
+from mjlab.envs import ManagerBasedRlEnv
+
+from colosseum.algorithm.base_algorithm import ObsType
+from colosseum.algorithm.networks.ppo_networks import PpoValueNet
+from colosseum.algorithm.networks.residual_ppo_networks import ResidualActor
+from colosseum.algorithm.ppo import PPO
+from colosseum.algorithm.utils.normalization import (
+  EmpiricalNormalization,
+  IdentityNormalizer,
+)
+from colosseum.algorithm.utils.rollout_buffer import RolloutBuffer
+from colosseum.config.types.algorithm import ResidualPpoConfig, register_algorithm
+from colosseum.utils.logger import extract_episode_metrics
+
+
+@register_algorithm("residual_ppo", config_class=ResidualPpoConfig)
+class ResidualPPO(PPO):
+  """PPO with frozen base skills blended with a trainable residual by an orchestrator."""
+
+  # Hardcoded group consumed by the orchestrator (mirrors PPO hardcoding "critic").
+  _ORCH_GROUP = "orchestrator"
+
+  def __init__(
+    self,
+    config: ResidualPpoConfig,
+    env: ManagerBasedRlEnv,
+    device: str | torch.device,
+    log_fn: Callable[[dict[str, float], int], None],
+    log_interval: int,
+  ) -> None:
+    super().__init__(
+      config=config, env=env, device=device, log_fn=log_fn, log_interval=log_interval
+    )
+    # Lifecycle is separate from structure: load + freeze the base skills, then
+    # bias the orchestrator toward them (both after the networks are built).
+    self._load_frozen_skills()
+    self.residual_actor.init_orchestrator_bias(config.residual_actor.init_favored_logit)
+
+  # ------------------------------------------------------------------ #
+  # Construction
+  # ------------------------------------------------------------------ #
+
+  def _all_skill_groups(self) -> set[str]:
+    """All actor-side obs groups: every base skill group + residual + orchestrator."""
+    groups = set(self._base_skill_groups.values())
+    groups.add(self._residual_group)
+    groups.add(self._ORCH_GROUP)
+    return groups
+
+  def _build_networks(self) -> None:
+    assert isinstance(self.config, ResidualPpoConfig)
+    ra = self.config.residual_actor
+    obs_dim = self.env.observation_manager.group_obs_dim
+
+    def gdim(group: str) -> int:
+      return obs_dim[group][0]
+
+    self._base_skill_groups = {n: s.obs_group for n, s in ra.base_skills.items()}
+    self._residual_group = ra.residual_obs_group
+
+    self.action_dim = int(np.prod(self.env.single_action_space.shape))
+    self.critic_obs_dim = gdim("critic")
+    self.actor_obs_dim = 1  # dummy: the buffer's actor_obs slot is unused
+
+    self.residual_actor = ResidualActor(
+      base_skill_obs_dims={n: gdim(g) for n, g in self._base_skill_groups.items()},
+      base_skill_configs={n: s.actor for n, s in ra.base_skills.items()},
+      residual_obs_dim=gdim(self._residual_group),
+      residual_config=ra.residual_actor,
+      action_dim=self.action_dim,
+      orchestrator_obs_dim=gdim(self._ORCH_GROUP),
+      orchestrator_hidden_layers=ra.orchestrator.hidden_layers,
+      orchestrator_activation=ra.orchestrator.activation,
+    ).to(self.device)
+    # Alias so inherited references (.train(), _synchronize_model_weights) work.
+    self.actor = self.residual_actor
+
+    self.value_net = PpoValueNet(self.critic_obs_dim, self.config.critic).to(self.device)
+
+  def _build_optimizers(self) -> None:
+    """Actor optimizer over residual + orchestrator only; critic unchanged."""
+    self.actor_optimizer = optim.AdamW(
+      self.residual_actor.trainable_parameters(),
+      lr=self.actor_learning_rate,
+      weight_decay=self.config.weight_decay,
+    )
+    self.critic_optimizer = optim.AdamW(
+      self.value_net.parameters(),
+      lr=self.critic_learning_rate,
+      weight_decay=self.config.weight_decay,
+    )
+
+  def _build_rollout_buffer(self) -> None:
+    """Dummy actor_obs slot; per-skill raw obs ride the privileged-obs channel."""
+    obs_dim = self.env.observation_manager.group_obs_dim
+    skill_obs_dims = {g: obs_dim[g][0] for g in self._all_skill_groups()}
+    self.rollout_buffer = RolloutBuffer(
+      num_envs=self.env.num_envs,
+      num_steps=self.config.num_steps_per_env,
+      actor_obs_dim=self.actor_obs_dim,
+      critic_obs_dim=self.critic_obs_dim,
+      action_dim=self.action_dim,
+      device=self.device,
+      privileged_obs_dims=skill_obs_dims,
+    )
+
+  def _build_normalizer(self) -> None:
+    """Per-skill normalizers + critic normalizer. Base-skill ones are frozen."""
+    assert isinstance(self.config, ResidualPpoConfig)
+    obs_dim = self.env.observation_manager.group_obs_dim
+
+    self.skill_normalizers: dict[str, EmpiricalNormalization | IdentityNormalizer] = {}
+    self._frozen_normalizer_groups: set[str] = set()
+
+    if not self.config.obs_normalization:
+      for g in self._all_skill_groups():
+        self.skill_normalizers[g] = IdentityNormalizer()
+      self.critic_obs_normalizer = IdentityNormalizer()
+      self.actor_obs_normalizer = IdentityNormalizer()
+      return
+
+    for g in self._all_skill_groups():
+      self.skill_normalizers[g] = EmpiricalNormalization(
+        shape=obs_dim[g][0], device=self.device
+      )
+    self.critic_obs_normalizer = EmpiricalNormalization(
+      shape=self.critic_obs_dim, device=self.device
+    )
+    # Placeholder: the inherited _ppo_loop prewarms self.actor_obs_normalizer,
+    # which is a no-op here (real prewarm happens in _prewarm_actor_obs).
+    self.actor_obs_normalizer = IdentityNormalizer()
+
+    if self.config.freeze_base_normalizers:
+      self._frozen_normalizer_groups = set(self._base_skill_groups.values())
+
+  def _load_frozen_skills(self) -> None:
+    """Load PPO checkpoints into base branches, freeze them, (optionally) freeze norms."""
+    assert isinstance(self.config, ResidualPpoConfig)
+    for name, skill in self.config.residual_actor.base_skills.items():
+      checkpoint = torch.load(
+        skill.checkpoint, map_location=self.device, weights_only=False
+      )
+      self.residual_actor.load_base_skill(name, checkpoint["actor_state_dict"])
+      if self.config.freeze_base_normalizers:
+        norm = self.skill_normalizers[skill.obs_group]
+        norm.load_state_dict(checkpoint["actor_obs_normalizer_state_dict"])
+        norm.eval()  # freeze running stats (EmpiricalNormalization skips update in eval)
+    self.residual_actor.freeze_base_skills()
+
+  # ------------------------------------------------------------------ #
+  # Observation routing helpers
+  # ------------------------------------------------------------------ #
+
+  def _normalized_skill_inputs(
+    self, obs: dict[str, torch.Tensor]
+  ) -> tuple[dict[str, torch.Tensor], torch.Tensor, torch.Tensor]:
+    """Normalize per-skill obs and return (base_obs, residual_obs, orch_obs)."""
+    base_obs = {
+      name: self.skill_normalizers[g](obs[g])
+      for name, g in self._base_skill_groups.items()
+    }
+    residual_obs = self.skill_normalizers[self._residual_group](obs[self._residual_group])
+    orch_obs = self.skill_normalizers[self._ORCH_GROUP](obs[self._ORCH_GROUP])
+    return base_obs, residual_obs, orch_obs
+
+  def _raw_skill_obs(self, obs: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+    """Raw (un-normalized) per-skill obs for the rollout buffer."""
+    return {g: obs[g] for g in self._all_skill_groups()}
+
+  def _update_skill_normalizers(self, obs: dict[str, torch.Tensor]) -> None:
+    """Update non-frozen per-skill normalizers from new observations."""
+    for g, norm in self.skill_normalizers.items():
+      if g not in self._frozen_normalizer_groups:
+        norm.update(obs[g])
+
+  def get_actor_obs(self, obs: ObsType) -> torch.Tensor:
+    """Residual mode has no single 'actor' group.
+
+    Cache the full obs dict so per-skill routing (and prewarm) can read every
+    group, and return the orchestrator obs as the threaded placeholder the
+    inherited loop expects.
+    """
+    assert isinstance(obs, dict)
+    self._cached_obs_dict = obs
+    return obs[self._ORCH_GROUP]
+
+  def _prewarm_actor_obs(self, actor_obs: torch.Tensor) -> torch.Tensor:
+    """Prewarm the fresh (non-frozen) per-skill normalizers from initial obs."""
+    if self.config.obs_normalization:
+      self._update_skill_normalizers(self._cached_obs_dict)
+    return actor_obs
+
+  # ------------------------------------------------------------------ #
+  # Rollout collection
+  # ------------------------------------------------------------------ #
+
+  def _collect_rollout(
+    self,
+    current_actor_obs: torch.Tensor,
+    current_critic_obs: torch.Tensor,
+    current_dones: torch.Tensor,
+    obs_dict: ObsType,
+  ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, ObsType]:
+    assert isinstance(self.config, ResidualPpoConfig)
+    assert isinstance(obs_dict, dict)
+
+    self.rollout_buffer.clear()
+    dummy_actor_obs = torch.zeros(self.env.num_envs, 1, device=self.device)
+
+    with torch.no_grad():
+      for _step in range(self.config.num_steps_per_env):
+        # Raw per-skill obs (stored in the buffer) + normalized inputs (forward).
+        raw_skill_obs = self._raw_skill_obs(obs_dict)
+        base_obs, residual_obs, orch_obs = self._normalized_skill_inputs(obs_dict)
+        norm_critic_obs = self.critic_obs_normalizer(current_critic_obs)
+
+        actions, log_probs, action_means, action_stds = (
+          self.residual_actor.act_with_log_prob(base_obs, residual_obs, orch_obs)
+        )
+        values = self.value_net(norm_critic_obs)
+
+        obs_dict, rewards, terminated, truncated, infos = self.env.step(actions)
+        assert isinstance(obs_dict, dict)
+        if terminated.is_floating_point():
+          dones = torch.clamp(terminated + truncated.float(), 0.0, 1.0)
+        else:
+          dones = (terminated | truncated).float()
+
+        next_critic_obs = self.get_critic_obs(obs_dict)
+
+        # Update normalizers AFTER env.step on new obs (RSL-RL pattern).
+        if self.config.obs_normalization:
+          self._update_skill_normalizers(obs_dict)
+          self.critic_obs_normalizer.update(next_critic_obs)
+
+        self.cur_reward_sum += rewards
+
+        # Timeout bootstrapping (RSL-RL/holosoma) for infinite-horizon tasks.
+        if not getattr(self.env.cfg, "is_finite_horizon", True):
+          truncated_mask = truncated.float()
+          if truncated_mask.any():
+            norm_next_critic = self.critic_obs_normalizer(next_critic_obs)
+            truncated_values = self.value_net(norm_next_critic).squeeze(-1)
+            rewards = rewards + self.config.gamma * truncated_values * truncated_mask
+
+        self.episode_length_buf += 1
+        episode_done_ids = (dones >= 1.0).nonzero(as_tuple=False).squeeze(-1)
+        if len(episode_done_ids) > 0:
+          self.rewbuffer.extend(
+            self.cur_reward_sum[episode_done_ids].cpu().numpy().tolist()
+          )
+          self.cur_reward_sum[episode_done_ids] = 0.0
+          self.episode_lengths.extend(
+            self.episode_length_buf[episode_done_ids].cpu().numpy().tolist()
+          )
+          self.episode_length_buf[episode_done_ids] = 0
+
+        hard_terminated = (
+          terminated >= 1.0 if terminated.is_floating_point() else terminated
+        )
+        self.update_episode_counts(hard_terminated, truncated)
+
+        if "log" in infos and (dones >= 1.0).any():
+          self.latest_episode_metrics = extract_episode_metrics(infos["log"])
+
+        self.rollout_buffer.add(
+          actor_obs=dummy_actor_obs,
+          critic_obs=current_critic_obs,
+          actions=actions,
+          rewards=rewards,
+          dones=dones,
+          values=values,
+          log_probs=log_probs,
+          action_means=action_means,
+          action_stds=action_stds,
+          privileged_obs=raw_skill_obs,
+        )
+
+        current_critic_obs = next_critic_obs
+        current_dones = dones
+
+      norm_last_critic = self.critic_obs_normalizer(current_critic_obs)
+      last_values = self.value_net(norm_last_critic)
+
+    self.rollout_buffer.compute_returns_and_advantages(
+      last_values=last_values,
+      gamma=self.config.gamma,
+      lam=self.config.lam,
+      normalize_advantage=False,
+    )
+
+    if not self.config.normalize_advantage_per_mini_batch:
+      self.rollout_buffer.advantages = self._normalize_advantages_multi_gpu(
+        self.rollout_buffer.advantages
+      )
+
+    return self.get_actor_obs(obs_dict), current_critic_obs, current_dones, obs_dict
+
+  # ------------------------------------------------------------------ #
+  # Learning
+  # ------------------------------------------------------------------ #
+
+  def _learning_step(self) -> dict[str, float]:
+    assert isinstance(self.config, ResidualPpoConfig)
+
+    total_surrogate_loss = 0.0
+    total_value_loss = 0.0
+    total_entropy = 0.0
+    total_kl = 0.0
+    total_residual_magnitude = 0.0
+    total_residual_weight = 0.0
+    num_updates = 0
+
+    generator = self.rollout_buffer.mini_batch_generator(
+      num_mini_batches=self.config.num_mini_batches,
+      num_epochs=self.config.num_learning_epochs,
+      normalize_advantage_per_mini_batch=self.config.normalize_advantage_per_mini_batch,
+    )
+
+    for batch in generator:
+      raw_skill_obs = batch["privileged_obs"]
+      actions = batch["actions"]
+      returns = batch["returns"]
+      advantages = batch["advantages"]
+      old_log_probs = batch["old_log_probs"].squeeze(-1)
+      old_action_means = batch["old_action_means"]
+      old_action_stds = batch["old_action_stds"]
+      target_values = batch["values"]
+
+      base_obs, residual_obs, orch_obs = self._normalized_skill_inputs(raw_skill_obs)
+      critic_obs = self.critic_obs_normalizer(batch["critic_obs"])
+
+      # Re-evaluate actions; this sets the differentiable penalty side effects.
+      new_log_probs, entropy = self.residual_actor.evaluate(
+        base_obs, residual_obs, orch_obs, actions
+      )
+      # Capture penalties NOW (live tensors with grad) before anything recomputes
+      # the distribution and overwrites the attributes.
+      residual_magnitude = self.residual_actor.residual_action_magnitude
+      residual_weight = self.residual_actor.residual_weights_
+      new_values = self.value_net(critic_obs)
+
+      # --- KL from the combined distribution (no second forward) ---
+      with torch.no_grad():
+        mu_batch = self.residual_actor.distribution.mean
+        sigma_batch = self.residual_actor.distribution.stddev
+        kl = torch.sum(
+          torch.log(sigma_batch / old_action_stds + 1e-5)
+          + (old_action_stds.pow(2) + (old_action_means - mu_batch).pow(2))
+          / (2.0 * sigma_batch.pow(2))
+          - 0.5,
+          dim=-1,
+        )
+        kl_mean = self._distributed_mean_scalar(float(kl.mean().item()))
+
+      # --- Adaptive KL LR scheduling (holosoma pattern) ---
+      if self.config.schedule == "adaptive" and self.config.desired_kl is not None:
+        if kl_mean > self.config.desired_kl * 2.0:
+          self.actor_learning_rate = max(
+            self.min_actor_learning_rate, self.actor_learning_rate / 1.5
+          )
+          self.critic_learning_rate = max(
+            self.min_critic_learning_rate, self.critic_learning_rate / 1.5
+          )
+        elif kl_mean < self.config.desired_kl / 2.0 and kl_mean > 0.0:
+          self.actor_learning_rate = min(
+            self.max_actor_learning_rate, self.actor_learning_rate * 1.5
+          )
+          self.critic_learning_rate = min(
+            self.max_critic_learning_rate, self.critic_learning_rate * 1.5
+          )
+        for g in self.actor_optimizer.param_groups:
+          g["lr"] = self.actor_learning_rate
+        for g in self.critic_optimizer.param_groups:
+          g["lr"] = self.critic_learning_rate
+
+      # --- Surrogate loss (PPO-clip) ---
+      advantages_squeezed = advantages.squeeze(-1)
+      ratio = torch.exp(new_log_probs - old_log_probs)
+      surrogate = -advantages_squeezed * ratio
+      surrogate_clipped = -advantages_squeezed * torch.clamp(
+        ratio, 1.0 - self.config.clip_param, 1.0 + self.config.clip_param
+      )
+      surrogate_loss = torch.max(surrogate, surrogate_clipped).mean()
+
+      # --- Value loss ---
+      if self.config.use_clipped_value_loss:
+        value_clipped = target_values + torch.clamp(
+          new_values - target_values, -self.config.clip_param, self.config.clip_param
+        )
+        value_loss_unclipped = (new_values - returns).pow(2)
+        value_loss_clipped = (value_clipped - returns).pow(2)
+        value_loss = torch.max(value_loss_unclipped, value_loss_clipped).mean()
+      else:
+        value_loss = (returns - new_values).pow(2).mean()
+
+      # --- Total loss + residual penalties (differentiable) ---
+      loss = (
+        surrogate_loss
+        + self.config.value_loss_coef * value_loss
+        - self.config.entropy_coef * entropy.mean()
+        + self.config.residual_action_penalty_coef * residual_magnitude
+        + self.config.residual_weight_penalty_coef * residual_weight
+      )
+
+      self.actor_optimizer.zero_grad()
+      self.critic_optimizer.zero_grad()
+
+      if not torch.isfinite(loss):
+        continue
+
+      loss.backward()
+      self._distributed_average_optimizer_grads(self.actor_optimizer)
+      self._distributed_average_optimizer_grads(self.critic_optimizer)
+      for p in self.residual_actor.trainable_parameters():
+        if p.grad is not None:
+          p.grad.nan_to_num_(nan=0.0, posinf=0.0, neginf=0.0)
+      for p in self.value_net.parameters():
+        if p.grad is not None:
+          p.grad.nan_to_num_(nan=0.0, posinf=0.0, neginf=0.0)
+      torch.nn.utils.clip_grad_norm_(
+        list(self.residual_actor.trainable_parameters()),
+        max_norm=self.config.max_grad_norm,
+      )
+      torch.nn.utils.clip_grad_norm_(
+        self.value_net.parameters(), max_norm=self.config.max_grad_norm
+      )
+      self.actor_optimizer.step()
+      self.critic_optimizer.step()
+
+      total_surrogate_loss += surrogate_loss.item()
+      total_value_loss += value_loss.item()
+      total_entropy += entropy.mean().item()
+      total_kl += kl_mean
+      total_residual_magnitude += residual_magnitude.item()
+      total_residual_weight += residual_weight.item()
+      num_updates += 1
+
+    if self.is_distributed:
+      totals = self._distributed_sum_vector(
+        [
+          total_surrogate_loss,
+          total_value_loss,
+          total_entropy,
+          total_kl,
+          total_residual_magnitude,
+          total_residual_weight,
+          float(num_updates),
+        ]
+      )
+      (
+        total_surrogate_loss,
+        total_value_loss,
+        total_entropy,
+        total_kl,
+        total_residual_magnitude,
+        total_residual_weight,
+      ) = totals[:6]
+      num_updates = int(totals[6])
+
+    self.rollout_buffer.clear()
+
+    denom = max(num_updates, 1)
+    return {
+      "surrogate_loss": total_surrogate_loss / denom,
+      "value_loss": total_value_loss / denom,
+      "entropy": total_entropy / denom,
+      "kl": total_kl / denom,
+      "residual_magnitude": total_residual_magnitude / denom,
+      "residual_weight": total_residual_weight / denom,
+      "actor_learning_rate": self.actor_learning_rate,
+      "critic_learning_rate": self.critic_learning_rate,
+    }
+
+  # ------------------------------------------------------------------ #
+  # Evaluation
+  # ------------------------------------------------------------------ #
+
+  def _eval_get_action(self, normalized_obs: torch.Tensor) -> torch.Tensor:
+    """Deterministic combined action. Routes from the cached obs dict."""
+    base_obs, residual_obs, orch_obs = self._normalized_skill_inputs(
+      self._cached_obs_dict
+    )
+    return self.residual_actor.act_inference(base_obs, residual_obs, orch_obs)
+
+  # ------------------------------------------------------------------ #
+  # Checkpoint
+  # ------------------------------------------------------------------ #
+
+  def save(self, path: str | Path, **extra_state: Any) -> None:
+    if "global_step" not in extra_state:
+      raise ValueError("global_step must be provided in extra_state")
+
+    state_dict = {
+      "residual_actor_state_dict": self.residual_actor.state_dict(),
+      "value_net_state_dict": self.value_net.state_dict(),
+      "actor_optimizer_state_dict": self.actor_optimizer.state_dict(),
+      "critic_optimizer_state_dict": self.critic_optimizer.state_dict(),
+      "skill_normalizer_state_dicts": {
+        g: n.state_dict() for g, n in self.skill_normalizers.items()
+      },
+      "critic_obs_normalizer_state_dict": self.critic_obs_normalizer.state_dict(),
+      "global_step": extra_state["global_step"],
+      "actor_learning_rate": self.actor_learning_rate,
+      "critic_learning_rate": self.critic_learning_rate,
+      "config": self.config,
+    }
+    for key, value in extra_state.items():
+      if key not in state_dict:
+        state_dict[key] = value
+    self._save_checkpoint(path, state_dict)
+
+  def load(self, path: str | Path) -> dict[str, Any]:
+    checkpoint = self._load_checkpoint(path)
+
+    self.residual_actor.load_state_dict(checkpoint["residual_actor_state_dict"])
+    self.value_net.load_state_dict(checkpoint["value_net_state_dict"])
+    self.actor_optimizer.load_state_dict(checkpoint["actor_optimizer_state_dict"])
+    self.critic_optimizer.load_state_dict(checkpoint["critic_optimizer_state_dict"])
+    for g, norm in self.skill_normalizers.items():
+      norm.load_state_dict(checkpoint["skill_normalizer_state_dicts"][g])
+    self.critic_obs_normalizer.load_state_dict(
+      checkpoint["critic_obs_normalizer_state_dict"]
+    )
+
+    self.global_step = checkpoint["global_step"]
+    self.actor_learning_rate = checkpoint.get(
+      "actor_learning_rate", self.actor_learning_rate
+    )
+    self.critic_learning_rate = checkpoint.get(
+      "critic_learning_rate", self.critic_learning_rate
+    )
+    self._restore_env_step_counter()
+
+    return {
+      "global_step": checkpoint["global_step"],
+      "metadata": checkpoint.get("metadata", {}),
+      "config": checkpoint.get("config"),
+    }
