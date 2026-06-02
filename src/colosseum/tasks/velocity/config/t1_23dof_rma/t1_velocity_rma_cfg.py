@@ -22,7 +22,7 @@ def booster_t1_velocity_rma_env_cfg(play: bool = False) -> ColosseumEnvCfg:
 @dataclass(frozen=True)
 class T1VelocityTask(TaskConfig):
   name: str = "t1-velocity-rma"
-  env: ColosseumEnvCfg = field(default_factory=booster_t1_velocity_env_cfg)
+  env: ColosseumEnvCfg = field(default_factory=booster_t1_velocity_rma_env_cfg)
 
   @property
   def train_env_cfg(self):
@@ -30,7 +30,7 @@ class T1VelocityTask(TaskConfig):
 
   @property
   def play_env_cfg(self):
-    return booster_t1_velocity_env_cfg(play=True)
+    return booster_t1_velocity_rma_env_cfg(play=True)
 
   @property
   def algo_cfg(self):
