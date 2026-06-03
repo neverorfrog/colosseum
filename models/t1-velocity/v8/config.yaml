@@ -2,11 +2,11 @@ use_cuda: true
 cuda: 0,1
 checkpoint: null
 task:
-  name: t1-velocity-rma
+  name: t1-velocity
   env:
     decimation: 4
     scene:
-      num_envs: 8192
+      num_envs: 10240
       env_spacing: 10.0
       terrain:
         init_state:
@@ -737,239 +737,6 @@ task:
         flatten_history_dim: true
         nan_policy: disabled
         nan_check_per_term: true
-      env_params:
-        terms:
-          foot_friction:
-            params:
-              asset_cfg:
-                name: robot
-                joint_names: null
-                body_names: null
-                geom_names:
-                - left_foot_link
-                - left_foot_sphere_1_link
-                - left_foot_sphere_2_link
-                - left_foot_sphere_3_link
-                - left_foot_sphere_4_link
-                - left_foot_sphere_5_link
-                - left_foot_sphere_6_link
-                - left_foot_sphere_7_link
-                - right_foot_link
-                - right_foot_sphere_1_link
-                - right_foot_sphere_2_link
-                - right_foot_sphere_3_link
-                - right_foot_sphere_4_link
-                - right_foot_sphere_5_link
-                - right_foot_sphere_6_link
-                - right_foot_sphere_7_link
-                site_names: null
-                actuator_names: null
-                tendon_names: null
-                camera_names: null
-                light_names: null
-                material_names: null
-                pair_names: null
-                preserve_order: false
-            noise: null
-            clip: null
-            scale: null
-            delay_min_lag: 0
-            delay_max_lag: 0
-            delay_per_env: true
-            delay_hold_prob: 0.0
-            delay_update_period: 0
-            delay_per_env_phase: true
-            history_length: 0
-            flatten_history_dim: true
-          base_com:
-            params:
-              asset_cfg:
-                name: robot
-                joint_names: null
-                body_names:
-                - Trunk
-                geom_names: null
-                site_names: null
-                actuator_names: null
-                tendon_names: null
-                camera_names: null
-                light_names: null
-                material_names: null
-                pair_names: null
-                preserve_order: false
-            noise: null
-            clip: null
-            scale: null
-            delay_min_lag: 0
-            delay_max_lag: 0
-            delay_per_env: true
-            delay_hold_prob: 0.0
-            delay_update_period: 0
-            delay_per_env_phase: true
-            history_length: 0
-            flatten_history_dim: true
-          kp_scale:
-            params:
-              asset_cfg:
-                name: robot
-                joint_names: null
-                body_names: null
-                geom_names: null
-                site_names: null
-                actuator_names: null
-                tendon_names: null
-                camera_names: null
-                light_names: null
-                material_names: null
-                pair_names: null
-                preserve_order: false
-            noise: null
-            clip: null
-            scale: null
-            delay_min_lag: 0
-            delay_max_lag: 0
-            delay_per_env: true
-            delay_hold_prob: 0.0
-            delay_update_period: 0
-            delay_per_env_phase: true
-            history_length: 0
-            flatten_history_dim: true
-          kd_scale:
-            params:
-              asset_cfg:
-                name: robot
-                joint_names: null
-                body_names: null
-                geom_names: null
-                site_names: null
-                actuator_names: null
-                tendon_names: null
-                camera_names: null
-                light_names: null
-                material_names: null
-                pair_names: null
-                preserve_order: false
-            noise: null
-            clip: null
-            scale: null
-            delay_min_lag: 0
-            delay_max_lag: 0
-            delay_per_env: true
-            delay_hold_prob: 0.0
-            delay_update_period: 0
-            delay_per_env_phase: true
-            history_length: 0
-            flatten_history_dim: true
-          link_mass_scale:
-            params:
-              asset_cfg:
-                name: robot
-                joint_names: null
-                body_names:
-                - .*
-                geom_names: null
-                site_names: null
-                actuator_names: null
-                tendon_names: null
-                camera_names: null
-                light_names: null
-                material_names: null
-                pair_names: null
-                preserve_order: false
-            noise: null
-            clip: null
-            scale: null
-            delay_min_lag: 0
-            delay_max_lag: 0
-            delay_per_env: true
-            delay_hold_prob: 0.0
-            delay_update_period: 0
-            delay_per_env_phase: true
-            history_length: 0
-            flatten_history_dim: true
-          joint_damping_scale:
-            params:
-              asset_cfg:
-                name: robot
-                joint_names:
-                - .*
-                body_names: null
-                geom_names: null
-                site_names: null
-                actuator_names: null
-                tendon_names: null
-                camera_names: null
-                light_names: null
-                material_names: null
-                pair_names: null
-                preserve_order: false
-            noise: null
-            clip: null
-            scale: null
-            delay_min_lag: 0
-            delay_max_lag: 0
-            delay_per_env: true
-            delay_hold_prob: 0.0
-            delay_update_period: 0
-            delay_per_env_phase: true
-            history_length: 0
-            flatten_history_dim: true
-          effort_limit_scale:
-            params:
-              asset_cfg:
-                name: robot
-                joint_names: null
-                body_names: null
-                geom_names: null
-                site_names: null
-                actuator_names: null
-                tendon_names: null
-                camera_names: null
-                light_names: null
-                material_names: null
-                pair_names: null
-                preserve_order: false
-            noise: null
-            clip: null
-            scale: null
-            delay_min_lag: 0
-            delay_max_lag: 0
-            delay_per_env: true
-            delay_hold_prob: 0.0
-            delay_update_period: 0
-            delay_per_env_phase: true
-            history_length: 0
-            flatten_history_dim: true
-        concatenate_terms: true
-        concatenate_dim: -1
-        enable_corruption: false
-        history_length: null
-        flatten_history_dim: true
-        nan_policy: disabled
-        nan_check_per_term: true
-      odom:
-        terms:
-          base_lin_vel:
-            params:
-              sensor_name: robot/imu_lin_vel
-            noise: null
-            clip: null
-            scale: null
-            delay_min_lag: 0
-            delay_max_lag: 0
-            delay_per_env: true
-            delay_hold_prob: 0.0
-            delay_update_period: 0
-            delay_per_env_phase: true
-            history_length: 0
-            flatten_history_dim: true
-        concatenate_terms: true
-        concatenate_dim: -1
-        enable_corruption: false
-        history_length: null
-        flatten_history_dim: true
-        nan_policy: disabled
-        nan_check_per_term: true
     actions:
       joint_pos:
         entity_name: robot
@@ -1467,22 +1234,22 @@ task:
       track_linear_velocity:
         params:
           command_name: twist
-          std: 0.5477225575051661
+          std: 0.5
         weight: 4.0
       track_angular_velocity:
         params:
           command_name: twist
-          std: 0.5477225575051661
+          std: 0.5
         weight: 3.0
       feet_phase:
         params:
           phase_command_name: gait_phase
           height_sensor_name: foot_height_scan
-          swing_height: 0.08
+          swing_height: 0.09
           tracking_sigma: 0.005
           command_name: twist
           command_threshold: 0.05
-        weight: 4.0
+        weight: 2.0
       arm_phase:
         params:
           phase_command_name: gait_phase
@@ -1514,7 +1281,7 @@ task:
           sensor_name: feet_ground_contact
           command_name: twist
           command_threshold: 0.05
-        weight: -0.05
+        weight: -0.025
       penalty_body_ang_vel:
         params:
           asset_cfg:
@@ -1859,16 +1626,7 @@ task:
     is_finite_horizon: false
     auto_reset: true
     scale_rewards_by_dt: true
-    encoders:
-      env_params:
-        privileged_obs_group: env_params
-        adaptation_obs_group: proprio_window
-        latent_dim: 8
-        latent_noise_std: 0.05
-        odom_obs_group: odom
-        window_size: 50
-        hidden_dim: 64
-        lambda_odom: 1.0
+    encoders: {}
     abstractions: {}
     constraints: {}
     use_depth_camera: false
@@ -1880,10 +1638,10 @@ warm_start: null
 logger:
   enabled: true
   backend: wandb
-  project: colosseum
+  project: colosseum-t1-velocity
   name: null
   entity: null
-  group: null
+  group: PPO
   tags: []
   id: null
   resume: null
@@ -1894,17 +1652,11 @@ logger:
   console_level: INFO
   task_name: null
   scenario: null
-  job_type: null
-start_phase: 1
-phase2_steps: 50000000
-phase2_lr: 0.001
-phase2_loss_threshold: null
-phase3_steps: 500000000
-phase2_num_envs: 4096
+  job_type: PPO_t1-velocity
 algo_cfg:
-  name: RmaPPO
+  name: PPO
   version: v1
-  target: colosseum.algorithm.rma_ppo:RmaPPO
+  target: colosseum.algorithm.ppo:PPO
   learning_steps: 1000000000
   obs_normalization: true
   seed: null
@@ -1932,7 +1684,7 @@ algo_cfg:
   desired_kl: 0.01
   schedule: adaptive
   normalize_advantage_per_mini_batch: false
-  symmetry_loss_coef: 1.0
+  symmetry_loss_coef: 5.0
   symmetry_critic_coef: 0.0
   symmetry_data_augmentation: true
   actor:
