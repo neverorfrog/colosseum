@@ -17,8 +17,9 @@ Differences from plain PPO:
     .forward). Two extra penalties keep the residual small and the orchestrator
     biased toward the frozen base.
 
-Symmetry (data augmentation / symmetry loss) is not yet wired for residual mode;
-the config defaults keep it disabled.
+Symmetry is per-group: one mirror spec per actor-side obs group (each base skill
+group + residual + orchestrator), with the symmetry loss on the COMBINED action
+mean. Toggled by the same symmetry_* config fields as base PPO.
 """
 
 from __future__ import annotations
@@ -41,6 +42,13 @@ from colosseum.algorithm.utils.normalization import (
 )
 from colosseum.algorithm.utils.rollout_buffer import RolloutBuffer
 from colosseum.config.types.algorithm import ResidualPpoConfig, register_algorithm
+from colosseum.mdp.symmetry import (
+  TermMirrorSpec,
+  augment_actions,
+  augment_obs,
+  build_symmetry_spec,
+  mirror_obs,
+)
 from colosseum.utils.logger import extract_episode_metrics
 
 
@@ -164,6 +172,36 @@ class ResidualPPO(PPO):
     if self.config.freeze_base_normalizers:
       self._frozen_normalizer_groups = set(self._base_skill_groups.values())
 
+  def _setup_symmetry(self) -> None:
+    """Build one mirror spec per actor-side group (residual mode has no 'actor' group)."""
+    assert isinstance(self.config, ResidualPpoConfig)
+    # Unused singular specs from the base contract; residual uses per-group specs.
+    self._actor_sym_spec: list[TermMirrorSpec] | None = None
+    self._critic_sym_spec: list[TermMirrorSpec] | None = None
+    self._action_mirror_fn = None
+    self._use_symmetry = False
+    self._actor_sym_specs: dict[str, list[TermMirrorSpec]] = {}
+
+    cfg = self.config
+    if not (
+      cfg.symmetry_loss_coef > 0.0
+      or cfg.symmetry_critic_coef > 0.0
+      or cfg.symmetry_data_augmentation
+    ):
+      return
+
+    self._use_symmetry = True
+    obs_mgr = self.env.observation_manager
+    for group in self._all_skill_groups():
+      self._actor_sym_specs[group] = build_symmetry_spec(obs_mgr, group)
+    self._critic_sym_spec = build_symmetry_spec(obs_mgr, "critic")
+    # Action mirror fn from any actor-side group carrying the "actions" term.
+    for group in self._all_skill_groups():
+      if "actions" in obs_mgr.active_terms.get(group, []):
+        actions_cfg = obs_mgr.get_term_cfg(group, "actions")
+        self._action_mirror_fn = getattr(actions_cfg, "mirror_fn", None)
+        break
+
   def _load_frozen_skills(self) -> None:
     """Load PPO checkpoints into base branches, freeze them, (optionally) freeze norms."""
     assert isinstance(self.config, ResidualPpoConfig)
@@ -197,6 +235,33 @@ class ResidualPPO(PPO):
   def _raw_skill_obs(self, obs: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
     """Raw (un-normalized) per-skill obs for the rollout buffer."""
     return {g: obs[g] for g in self._all_skill_groups()}
+
+  def _spec_for_skill(self, name: str) -> list[TermMirrorSpec]:
+    return self._actor_sym_specs[self._base_skill_groups[name]]
+
+  def _augment_skill_inputs(
+    self,
+    base_obs: dict[str, torch.Tensor],
+    residual_obs: torch.Tensor,
+    orch_obs: torch.Tensor,
+  ) -> tuple[dict[str, torch.Tensor], torch.Tensor, torch.Tensor]:
+    """Double each group's batch with its left-right mirror."""
+    base_aug = {n: augment_obs(o, self._spec_for_skill(n)) for n, o in base_obs.items()}
+    residual_aug = augment_obs(residual_obs, self._actor_sym_specs[self._residual_group])
+    orch_aug = augment_obs(orch_obs, self._actor_sym_specs[self._ORCH_GROUP])
+    return base_aug, residual_aug, orch_aug
+
+  def _mirror_skill_inputs(
+    self,
+    base_obs: dict[str, torch.Tensor],
+    residual_obs: torch.Tensor,
+    orch_obs: torch.Tensor,
+  ) -> tuple[dict[str, torch.Tensor], torch.Tensor, torch.Tensor]:
+    """Mirror each group's batch (no doubling)."""
+    base_m = {n: mirror_obs(o, self._spec_for_skill(n)) for n, o in base_obs.items()}
+    residual_m = mirror_obs(residual_obs, self._actor_sym_specs[self._residual_group])
+    orch_m = mirror_obs(orch_obs, self._actor_sym_specs[self._ORCH_GROUP])
+    return base_m, residual_m, orch_m
 
   def _update_skill_normalizers(self, obs: dict[str, torch.Tensor]) -> None:
     """Update non-frozen per-skill normalizers from new observations."""
@@ -340,12 +405,20 @@ class ResidualPPO(PPO):
     total_kl = 0.0
     total_residual_magnitude = 0.0
     total_residual_weight = 0.0
+    total_symmetry_actor_loss = 0.0
+    total_symmetry_critic_loss = 0.0
     num_updates = 0
 
     generator = self.rollout_buffer.mini_batch_generator(
       num_mini_batches=self.config.num_mini_batches,
       num_epochs=self.config.num_learning_epochs,
       normalize_advantage_per_mini_batch=self.config.normalize_advantage_per_mini_batch,
+    )
+
+    augment = (
+      self._use_symmetry
+      and self.config.symmetry_data_augmentation
+      and self._action_mirror_fn is not None
     )
 
     for batch in generator:
@@ -361,23 +434,52 @@ class ResidualPPO(PPO):
       base_obs, residual_obs, orch_obs = self._normalized_skill_inputs(raw_skill_obs)
       critic_obs = self.critic_obs_normalizer(batch["critic_obs"])
 
+      # --- Symmetry data augmentation: mirror each group, double the batch ---
+      original_batch_size = actions.shape[0]
+      if augment:
+        base_obs, residual_obs, orch_obs = self._augment_skill_inputs(
+          base_obs, residual_obs, orch_obs
+        )
+        critic_obs = augment_obs(critic_obs, self._critic_sym_spec)
+        actions = augment_actions(actions, self._action_mirror_fn)
+        old_log_probs = old_log_probs.repeat(2)
+        target_values = target_values.repeat(2, 1)
+        advantages = advantages.repeat(2, 1)
+        returns = returns.repeat(2, 1)
+        old_action_means = old_action_means.repeat(2, 1)
+        old_action_stds = old_action_stds.repeat(2, 1)
+
       # Re-evaluate actions; this sets the differentiable penalty side effects.
-      new_log_probs, entropy = self.residual_actor.evaluate(
+      new_log_probs, entropy_all = self.residual_actor.evaluate(
         base_obs, residual_obs, orch_obs, actions
       )
       # Capture penalties NOW (live tensors with grad) before anything recomputes
       # the distribution and overwrites the attributes.
       residual_magnitude = self.residual_actor.residual_action_magnitude
       residual_weight = self.residual_actor.residual_weights_
+      # Combined mean from this forward, for the symmetry loss (kept before any
+      # later get_distribution_params call replaces self.distribution).
+      combined_mean = self.residual_actor.distribution.mean
       new_values = self.value_net(critic_obs)
 
-      # --- KL from the combined distribution (no second forward) ---
+      # Entropy from the original batch only (holosoma convention).
+      entropy = entropy_all[:original_batch_size] if augment else entropy_all
+
+      # --- KL from the combined distribution (original batch only) ---
       with torch.no_grad():
         mu_batch = self.residual_actor.distribution.mean
         sigma_batch = self.residual_actor.distribution.stddev
+        if augment:
+          mu_batch = mu_batch[:original_batch_size]
+          sigma_batch = sigma_batch[:original_batch_size]
+          old_means_kl = old_action_means[:original_batch_size]
+          old_stds_kl = old_action_stds[:original_batch_size]
+        else:
+          old_means_kl = old_action_means
+          old_stds_kl = old_action_stds
         kl = torch.sum(
-          torch.log(sigma_batch / old_action_stds + 1e-5)
-          + (old_action_stds.pow(2) + (old_action_means - mu_batch).pow(2))
+          torch.log(sigma_batch / old_stds_kl + 1e-5)
+          + (old_stds_kl.pow(2) + (old_means_kl - mu_batch).pow(2))
           / (2.0 * sigma_batch.pow(2))
           - 0.5,
           dim=-1,
@@ -425,11 +527,47 @@ class ResidualPPO(PPO):
       else:
         value_loss = (returns - new_values).pow(2).mean()
 
+      # --- Symmetry losses (per-group mirroring; loss on the COMBINED mean) ---
+      symmetry_actor_loss = torch.zeros((), device=self.device)
+      symmetry_critic_loss = torch.zeros((), device=self.device)
+      if self._use_symmetry and self._action_mirror_fn is not None:
+        if self.config.symmetry_loss_coef > 0.0:
+          if augment:
+            mu_original = combined_mean[:original_batch_size]
+            mu_mirrored = combined_mean[original_batch_size:]
+            symmetry_actor_loss = torch.nn.functional.mse_loss(
+              mu_mirrored, self._action_mirror_fn(mu_original)
+            )
+          else:
+            base_m, residual_m, orch_m = self._mirror_skill_inputs(
+              base_obs, residual_obs, orch_obs
+            )
+            mu_mirrored, _ = self.residual_actor.get_distribution_params(
+              base_m, residual_m, orch_m
+            )
+            symmetry_actor_loss = torch.nn.functional.mse_loss(
+              mu_mirrored, self._action_mirror_fn(combined_mean)
+            )
+
+        if self.config.symmetry_critic_coef > 0.0:
+          if augment:
+            val_original = new_values[:original_batch_size]
+            val_mirrored = new_values[original_batch_size:]
+            symmetry_critic_loss = torch.nn.functional.mse_loss(
+              val_original, val_mirrored
+            )
+          else:
+            mirrored_critic = mirror_obs(critic_obs.detach(), self._critic_sym_spec)
+            val_mirrored = self.value_net(mirrored_critic)
+            symmetry_critic_loss = torch.nn.functional.mse_loss(new_values, val_mirrored)
+
       # --- Total loss + residual penalties (differentiable) ---
       loss = (
         surrogate_loss
         + self.config.value_loss_coef * value_loss
         - self.config.entropy_coef * entropy.mean()
+        + self.config.symmetry_loss_coef * symmetry_actor_loss
+        + self.config.symmetry_critic_coef * symmetry_critic_loss
         + self.config.residual_action_penalty_coef * residual_magnitude
         + self.config.residual_weight_penalty_coef * residual_weight
       )
@@ -465,6 +603,8 @@ class ResidualPPO(PPO):
       total_kl += kl_mean
       total_residual_magnitude += residual_magnitude.item()
       total_residual_weight += residual_weight.item()
+      total_symmetry_actor_loss += symmetry_actor_loss.item()
+      total_symmetry_critic_loss += symmetry_critic_loss.item()
       num_updates += 1
 
     if self.is_distributed:
@@ -476,6 +616,8 @@ class ResidualPPO(PPO):
           total_kl,
           total_residual_magnitude,
           total_residual_weight,
+          total_symmetry_actor_loss,
+          total_symmetry_critic_loss,
           float(num_updates),
         ]
       )
@@ -486,13 +628,15 @@ class ResidualPPO(PPO):
         total_kl,
         total_residual_magnitude,
         total_residual_weight,
-      ) = totals[:6]
-      num_updates = int(totals[6])
+        total_symmetry_actor_loss,
+        total_symmetry_critic_loss,
+      ) = totals[:8]
+      num_updates = int(totals[8])
 
     self.rollout_buffer.clear()
 
     denom = max(num_updates, 1)
-    return {
+    loss_dict = {
       "surrogate_loss": total_surrogate_loss / denom,
       "value_loss": total_value_loss / denom,
       "entropy": total_entropy / denom,
@@ -502,6 +646,10 @@ class ResidualPPO(PPO):
       "actor_learning_rate": self.actor_learning_rate,
       "critic_learning_rate": self.critic_learning_rate,
     }
+    if self._use_symmetry:
+      loss_dict["symmetry_actor_loss"] = total_symmetry_actor_loss / denom
+      loss_dict["symmetry_critic_loss"] = total_symmetry_critic_loss / denom
+    return loss_dict
 
   # ------------------------------------------------------------------ #
   # Evaluation

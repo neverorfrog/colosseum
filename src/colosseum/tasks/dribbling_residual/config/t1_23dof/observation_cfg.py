@@ -22,6 +22,7 @@ from colosseum.mdp.symmetry import (
   mirror_gait_phase,
   mirror_projected_gravity,
   mirror_velocity_command,
+  mirror_xy,
 )
 from colosseum.robots.t1_23dof.mdp.symmetry import mirror_joints
 from colosseum.tasks.dribbling.mdp.observations import (
@@ -75,11 +76,16 @@ gait_phase_term = MirrorableObservationTermCfg(
   mirror_fn=mirror_gait_phase,
 )
 
-# Ball state in robot body frame (2D each). Plain terms: only joints are
-# mirrored for symmetry, so the ball observations carry no mirror_fn.
+# Ball state in robot body frame (2D each). Mirrorable: under left-right (y → -y)
+# reflection the body-frame y component flips, so symmetry stays physically
+# consistent with the ball's laterality.
 ball_terms = {
-  "ball_pos": ObservationTermCfg(func=ball_position),  # (N, 2)
-  "ball_vel_xy": ObservationTermCfg(func=ball_velocity_xy),  # (N, 2)
+  "ball_pos": MirrorableObservationTermCfg(
+    func=ball_position, mirror_fn=mirror_xy
+  ),  # (N, 2)
+  "ball_vel_xy": MirrorableObservationTermCfg(
+    func=ball_velocity_xy, mirror_fn=mirror_xy
+  ),  # (N, 2)
 }
 
 # ---------------------------------------------------------------------------
@@ -102,9 +108,10 @@ dribble_actor_terms = {
   **proprio_terms,
   "gait_phase": gait_phase_term,
   **ball_terms,
-  "ball_vel_command": ObservationTermCfg(
+  "ball_vel_command": MirrorableObservationTermCfg(
     func=ball_vel_command_body,
     params={"command_name": "ball_vel"},
+    mirror_fn=mirror_velocity_command,
   ),
 }
 

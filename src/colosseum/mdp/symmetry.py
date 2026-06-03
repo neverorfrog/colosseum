@@ -111,6 +111,20 @@ def mirror_velocity_command(x: torch.Tensor) -> torch.Tensor:
   return x * x.new_tensor([1.0, -1.0, -1.0])
 
 
+def mirror_xy(x: torch.Tensor) -> torch.Tensor:
+  """Mirror a 2D body-frame planar vector under y → -y reflection.
+
+  [px, py] → [px, -py]. Use for body-frame XY positions/velocities
+  (e.g. ball position, ball velocity).
+
+  Args:
+    x: (..., 2) tensor [px, py].
+  Returns:
+    (..., 2) mirrored tensor [px, -py].
+  """
+  return x * x.new_tensor([1.0, -1.0])
+
+
 def mirror_gait_phase(x: torch.Tensor) -> torch.Tensor:
   """Mirror 4D gait phase clock under left-right swap.
 

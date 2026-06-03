@@ -4,7 +4,8 @@ Frozen v4 walk skill (reads `loco_actor`, steered toward the ball via the twist
 trick) + a trainable residual (reads `dribble_actor`) blended by an orchestrator
 (reads `orchestrator`). Asymmetric critic over the privileged `critic` group.
 
-Symmetry is left disabled (not yet wired for residual mode).
+Per-group symmetry (data augmentation + symmetry loss) matches the walk skill's
+training (symmetry_loss_coef=1.0, symmetry_data_augmentation=True).
 """
 
 from colosseum.config.types.algorithm import (
@@ -42,9 +43,9 @@ def booster_t1_residual_ppo_cfg() -> ResidualPpoConfig:
     desired_kl=0.01,
     schedule="adaptive",
     obs_normalization=True,
-    symmetry_loss_coef=0.0,
+    symmetry_loss_coef=1.0,
     symmetry_critic_coef=0.0,
-    symmetry_data_augmentation=False,
+    symmetry_data_augmentation=True,
     critic=PpoCriticConfig(hidden_layers=[512, 256, 128], activation="elu"),
     residual_actor=ResidualActorCfg(
       base_skills={

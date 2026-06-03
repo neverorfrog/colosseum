@@ -114,23 +114,7 @@ class PPO(BaseAlgorithm):
     self._build_normalizer()
 
     # Symmetry (holosoma-style left-right mirror equivariance)
-    self._actor_sym_spec: list[TermMirrorSpec] | None = None
-    self._critic_sym_spec: list[TermMirrorSpec] | None = None
-    self._action_mirror_fn = None
-    self._use_symmetry = False
-
-    if (
-      config.symmetry_loss_coef > 0.0
-      or config.symmetry_critic_coef > 0.0
-      or config.symmetry_data_augmentation
-    ):
-      self._use_symmetry = True
-      obs_manager = self.env.observation_manager
-      self._actor_sym_spec = build_symmetry_spec(obs_manager, "actor")
-      self._critic_sym_spec = build_symmetry_spec(obs_manager, "critic")
-      if "actions" in obs_manager.active_terms.get("actor", []):
-        actions_cfg = obs_manager.get_term_cfg("actor", "actions")
-        self._action_mirror_fn = getattr(actions_cfg, "mirror_fn", None)
+    self._setup_symmetry()
 
     self.episode_length_buf = torch.zeros(self.env.num_envs, device=self.device)
 
@@ -183,6 +167,31 @@ class PPO(BaseAlgorithm):
       action_dim=self.action_dim,
       device=self.device,
     )
+
+  def _setup_symmetry(self) -> None:
+    """Build the actor/critic mirror specs (single "actor" group).
+
+    Overridden by ResidualPPO, which has multiple per-skill actor groups
+    instead of one "actor" group.
+    """
+    assert isinstance(self.config, PpoConfig)
+    self._actor_sym_spec: list[TermMirrorSpec] | None = None
+    self._critic_sym_spec: list[TermMirrorSpec] | None = None
+    self._action_mirror_fn = None
+    self._use_symmetry = False
+
+    if (
+      self.config.symmetry_loss_coef > 0.0
+      or self.config.symmetry_critic_coef > 0.0
+      or self.config.symmetry_data_augmentation
+    ):
+      self._use_symmetry = True
+      obs_manager = self.env.observation_manager
+      self._actor_sym_spec = build_symmetry_spec(obs_manager, "actor")
+      self._critic_sym_spec = build_symmetry_spec(obs_manager, "critic")
+      if "actions" in obs_manager.active_terms.get("actor", []):
+        actions_cfg = obs_manager.get_term_cfg("actor", "actions")
+        self._action_mirror_fn = getattr(actions_cfg, "mirror_fn", None)
 
   def _build_normalizer(self) -> None:
     assert isinstance(self.config, PpoConfig)
