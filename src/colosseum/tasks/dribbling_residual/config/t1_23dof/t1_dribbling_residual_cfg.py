@@ -61,7 +61,7 @@ def scene_cfg(play: bool = False) -> SceneCfg:
       NONFOOT_GROUND_CONTACT_SENSOR,
       SELF_COLLISION_SENSOR,
     ),
-    num_envs=1,
+    num_envs=4096,
     extent=10.0,
     env_spacing=10.0,
   )
