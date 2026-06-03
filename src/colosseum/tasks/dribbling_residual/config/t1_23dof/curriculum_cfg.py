@@ -1,7 +1,6 @@
 from mjlab.managers.curriculum_manager import CurriculumTermCfg
 
 from colosseum.mdp.curriculums import (
-  penalty_curriculum,
   push_force_curriculum_by_transitions,
 )
 

@@ -3,7 +3,8 @@
 Resolves joint mirror mapping from name-based config (SYMMETRY_JOINT_NAMES and
 FLIP_SIGN_JOINT_NAMES in t1_23dof/constants.py), matching holosoma's convention.
 
-Provides mirror_joints for use as a mirror_fn in MirrorableObservationTermCfg.
+Provides mirror_joints for 23-DOF joint observations and mirror_actions for the
+21-DOF action space (head joints excluded).
 """
 
 from __future__ import annotations
@@ -37,14 +38,43 @@ _MIRROR_SIGNS = torch.tensor(JOINT_MIRROR_SIGNS, dtype=torch.float32)
 def mirror_joints(x: torch.Tensor) -> torch.Tensor:
   """Mirror a joint-indexed tensor under left-right reflection.
 
-  Works for joint positions, velocities, and actions (same JOINT_NAMES ordering).
+  Works for joint positions and velocities (23-DOF, JOINT_NAMES order).
 
   Args:
-    x: (..., D) tensor in JOINT_NAMES order.
+    x: (..., 23) tensor in JOINT_NAMES order.
 
   Returns:
-    (..., D) mirrored tensor.
+    (..., 23) mirrored tensor.
   """
   signs = _MIRROR_SIGNS.to(device=x.device)
   idx = _MIRROR_IDX.to(device=x.device)
+  return x[..., idx] * signs
+
+
+# Action space excludes head joints (AAHead_yaw, Head_pitch) — 21 DOF.
+_ACTION_NAMES = [
+  n for n in JOINT_NAMES if n not in ("AAHead_yaw", "Head_pitch")
+]
+_action_name_to_idx = {n: i for i, n in enumerate(_ACTION_NAMES)}
+_ACTION_MIRROR_INDICES = [
+  _action_name_to_idx[SYMMETRY_JOINT_NAMES[n]] for n in _ACTION_NAMES
+]
+_ACTION_MIRROR_SIGNS = [
+  -1.0 if n in _flip_set else 1.0 for n in _ACTION_NAMES
+]
+_MIRROR_IDX_ACTION = torch.tensor(_ACTION_MIRROR_INDICES, dtype=torch.long)
+_MIRROR_SIGNS_ACTION = torch.tensor(_ACTION_MIRROR_SIGNS, dtype=torch.float32)
+
+
+def mirror_actions(x: torch.Tensor) -> torch.Tensor:
+  """Mirror a 21-DOF action tensor (JOINT_NAMES minus head joints).
+
+  Args:
+    x: (..., 21) action tensor in JOINT_NAMES order (head excluded).
+
+  Returns:
+    (..., 21) mirrored tensor.
+  """
+  signs = _MIRROR_SIGNS_ACTION.to(device=x.device)
+  idx = _MIRROR_IDX_ACTION.to(device=x.device)
   return x[..., idx] * signs

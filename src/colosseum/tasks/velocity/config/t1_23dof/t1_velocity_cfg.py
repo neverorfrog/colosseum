@@ -115,50 +115,11 @@ def booster_t1_velocity_env_cfg(play: bool = False) -> ColosseumEnvCfg:
     cfg.observations["actor"].enable_corruption = False
     cfg.curriculum = {}
     cfg.events = {}
-    cfg.events["reset_robot_joints"] = EventTermCfg(
-      func=reset_joints_by_offset,
-      mode="reset",
-      params={
-        "position_range": (0.0, 0.0),
-        "velocity_range": (0.0, 0.0),
-        "asset_cfg": SceneEntityCfg("robot", joint_names=(".*",)),
-      },
-    )
 
-    cfg.events["push_robot"] = EventTermCfg(
-      func=apply_body_impulse,
-      mode="step",
-      params={
-        "force_range": (-20.0, 20.0),
-        "torque_range": (-5.0, 5.0),
-        "duration_s": (1.0, 1.0),
-        "cooldown_s": (5.0, 5.0),
-        "asset_cfg": SceneEntityCfg("robot", body_names=(BASE_BODY_NAME,)),
-      },
-    )
-
-    cfg.events["foot_friction"] = EventTermCfg(
-      mode="reset",
-      func=dr.geom_friction,
-      params={
-        "asset_cfg": SceneEntityCfg("robot", geom_names=FOOT_GEOM_NAMES),
-        "ranges": {0: (1.2, 1.2), 1: (0.03, 0.03)},
-        "axes": [0, 1],
-        "operation": "abs",
-        "shared_random": True,
-      },
-    )
-
-    twist = cfg.commands["twist"]
-    assert isinstance(twist, UniformVelocityCommandCfg)
-    # twist.curriculum = False  # play/eval: uniform-box sampling from ranges
-    # twist.heading_command = True
-    # twist.rel_forward_envs = 0.7
-    # twist.rel_world_envs = 0.0
-    # twist.rel_standing_envs = 0.0
-    # twist.rel_heading_envs = 1.0
-    # twist.ranges.heading = (-math.pi / 3, math.pi / 3)
-    # twist.heading_control_stiffness = 1.5
+    # Head perturbation is for training robustness only; hold joints at
+    # default pose during evaluation so the real head policy owns them.
+    cfg.actions = copy.deepcopy(cfg.actions)
+    cfg.actions["head_perturb"].enabled = False
 
     gait = cfg.commands["gait_phase"]
     assert isinstance(gait, GaitPhaseCommandCfg)

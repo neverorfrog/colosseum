@@ -43,6 +43,9 @@ from colosseum.robots.t1_23dof.sensors import (
   SELF_COLLISION_SENSOR,
 )
 from colosseum.tasks.dribbling.mdp.gait_phase_command import GaitPhaseCommandCfg
+from colosseum.tasks.dribbling_residual.mdp.ball_velocity_command import (
+  BallVelocityCommandCfg,
+)
 
 from .algo_cfg import booster_t1_residual_ppo_cfg
 from .cat_cfg import actions, commands, terminations
@@ -135,6 +138,12 @@ def booster_t1_dribbling_residual_env_cfg(play: bool = False) -> ColosseumEnvCfg
         },
         "velocity_range": {},
       },
+    )
+
+    cfg.commands["ball_vel"] = BallVelocityCommandCfg(
+      resampling_time_range=(20.0, 30.0),
+      target_reached_threshold=0.5,
+      speed_range=(0.1, 0.5),
     )
 
     cfg.events["reset_ball"] = EventTermCfg(

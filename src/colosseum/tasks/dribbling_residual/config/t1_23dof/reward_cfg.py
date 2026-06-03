@@ -70,7 +70,7 @@ rewards = {
       "behind_close_penalty": 0.5,
       "far_sharpness": 3.0,
       "between_feet_forward_distance": 0.1,
-      "between_feet_penalty": 2.0,
+      "between_feet_penalty": 4.0,
     },
   ),
   # Ungated bootstrap: pays the instant a foot touches the ball, so the residual
@@ -78,7 +78,10 @@ rewards = {
   "foot_ball_contact": RewardTermCfg(
     func=foot_ball_contact,
     weight=1.0,
-    params={"sensor_name": "foot_ball_contact"},
+    params={
+      "sensor_name": "foot_ball_contact",
+      "command_name": "ball_vel",
+    },
   ),
   "robot_ball_yaw": RewardTermCfg(
     func=robot_ball_yaw_body,
@@ -197,6 +200,7 @@ rewards = {
     params={
       "asset_cfg": SceneEntityCfg("robot", site_names=(FOOT_SITE_NAMES)),
       "sensor_name": "feet_ground_contact",
+      "foot_body_cfg": SceneEntityCfg("robot", body_names=(FOOT_BODY_NAMES)),
     },
   ),
   # Anchored L1 no-slip: catches slow standing creep (~1e-5 m/s) that the L2

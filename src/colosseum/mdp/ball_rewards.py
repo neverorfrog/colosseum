@@ -202,12 +202,13 @@ def robot_ball_distance(
   behind_close_penalty: float = 2.0,
   far_sharpness: float = 3.0,
   between_feet_forward_distance: float = 0.1,
-  between_feet_penalty: float = 2.0,
+  between_feet_penalty: float = 3.0,
 ) -> torch.Tensor:
   """Front/back-aware robot-ball proximity reward.
 
   Returns 1.0 when ball is close and in front, decays exponentially when far,
-  and gives a low constant reward when ball is behind or between the feet.
+  gives a low constant reward when the ball is behind, and a negative penalty
+  when the ball is trapped between the feet (a loss-of-control failure mode).
   """
   robot = env.scene["robot"]
   ball_pos_w = env.scene["ball"].data.root_link_pos_w[:, :3]
@@ -263,13 +264,28 @@ def robot_ball_approach_vel(
   return torch.exp(-(deficit**2))
 
 
-def foot_ball_contact(env: ManagerBasedRlEnv, sensor_name: str) -> torch.Tensor:
-  """Reward any foot-ball contact. Shape (N,).
+def foot_ball_contact(
+  env: ManagerBasedRlEnv,
+  sensor_name: str,
+  command_name: str,
+  min_speed: float = 0.05,
+) -> torch.Tensor:
+  """Reward foot-ball contact only when it drives the ball toward the target.
 
-  Ungated by ball motion, so it pays out the moment a foot touches the ball —
-  seeds the engagement the gated ball-velocity rewards cannot bootstrap.
+  Direction-aware bootstrap: pays the step a foot touches the ball AND the ball
+  is moving along the commanded direction (proj(v_ball, cmd_dir) > 0). A trapped
+  (~stationary) ball or a wrong-direction brush pays nothing, so the contact
+  reward can't be farmed by pinning the ball between the feet or knocking it the
+  wrong way during the walk-around.
   """
   found = env.scene[sensor_name].data.found
   if found is None:
     return torch.zeros(env.num_envs, device=env.device)
-  return (found.flatten(start_dim=1) > 0).any(dim=-1).float()
+  contact = (found.flatten(start_dim=1) > 0).any(dim=-1).float()
+
+  ball_vel = env.scene["ball"].data.root_link_lin_vel_w[:, :2]
+  cmd = env.command_manager.get_command(command_name)[:, :2]
+  cmd_dir = cmd / cmd.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+  proj = (ball_vel * cmd_dir).sum(dim=-1)
+  good = (proj > 0.0) & (ball_vel.norm(dim=-1) > min_speed)
+  return contact * good.float()

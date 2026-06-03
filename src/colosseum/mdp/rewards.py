@@ -239,6 +239,28 @@ def feet_yaw_diff_penalty(
   return diff.square()
 
 
+def feet_yaw_mean_penalty(
+  env: ManagerBasedRlEnv,
+  asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+) -> torch.Tensor:
+  """Penalize mean foot yaw deviating from the base heading (use negative weight).
+
+  Keeps both feet pointing where the torso points. Complements feet_yaw_diff,
+  which only keeps the feet parallel to *each other* and is blind to a shared
+  toe-out or an in-place yaw pivot of the whole stance. Port of
+  `_reward_feet_yaw_mean` in t1.py.
+  """
+  asset: Entity = env.scene[asset_cfg.name]
+  foot_quats = asset.data.body_link_quat_w[:, asset_cfg.body_ids, :]  # (N, 2, 4)
+  _, _, yaw_l = euler_xyz_from_quat(foot_quats[:, 0])
+  _, _, yaw_r = euler_xyz_from_quat(foot_quats[:, 1])
+  # Mean foot yaw, with a half-turn correction when the two yaws straddle ±π.
+  feet_yaw_mean = 0.5 * (yaw_l + yaw_r) + math.pi * ((yaw_r - yaw_l).abs() > math.pi)
+  _, _, base_yaw = euler_xyz_from_quat(asset.data.root_link_quat_w)
+  diff = (base_yaw - feet_yaw_mean + math.pi) % (2 * math.pi) - math.pi
+  return diff.square()
+
+
 def orientation_penalty(
   env: ManagerBasedRlEnv,
   asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
@@ -280,6 +302,45 @@ def _bezier_foot_height(phi: torch.Tensor, swing_height: float) -> torch.Tensor:
   rising = _cubic_bezier(z, h, 2.0 * x)
   falling = _cubic_bezier(h, z, 2.0 * x - 1.0)
   return torch.where(x <= 0.5, rising, falling)
+
+
+def feet_swing(
+  env: ManagerBasedRlEnv,
+  phase_command_name: str,
+  sensor_name: str,
+  swing_period: float = 0.2,
+  contact_threshold: float = 0.1,
+  command_name: str | None = None,
+  command_threshold: float = 0.05,
+) -> torch.Tensor:
+  """Reward feet being off the ground during their swing phases.
+
+  Port of TUM ADLR's _reward_feet_swing. For each foot, gives a binary
+  reward when the foot is NOT in contact during a fixed time window
+  centered on the expected swing peak (phase=0.5 in [0,1] scale).
+
+  Complements feet_phase by providing a strong, unambiguous gradient for
+  basic foot clearance, while feet_phase refines the height trajectory.
+  """
+  gait_term = env.command_manager.get_term(phase_command_name)
+  phi = gait_term.phase  # (N, 2), raw angles in [-π, π]
+  phase_01 = (phi + math.pi) / (2.0 * math.pi)  # (N, 2): 0.5=peak swing
+
+  left_swing = (phase_01[:, 0] - 0.5).abs() < 0.5 * swing_period
+  right_swing = (phase_01[:, 1] - 0.5).abs() < 0.5 * swing_period
+
+  contact_sensor: ContactSensor = env.scene[sensor_name]
+  assert contact_sensor.data.force is not None
+  in_air = contact_sensor.data.force.norm(dim=-1) < contact_threshold  # (N, 2)
+
+  reward = (left_swing & in_air[:, 0]).float() + (right_swing & in_air[:, 1]).float()
+
+  if command_name is not None:
+    cmd = env.command_manager.get_command(command_name)
+    moving = (torch.norm(cmd[:, :2], dim=-1) > command_threshold).float()
+    reward = reward * moving
+
+  return reward
 
 
 def feet_phase(
@@ -369,22 +430,34 @@ def feet_slip(
   env: ManagerBasedRlEnv,
   asset_cfg: SceneEntityCfg,
   sensor_name: str,
+  foot_body_cfg: SceneEntityCfg,
   contact_threshold: float = 0.5,
+  yaw_scrub_scale: float = 0.1,
 ) -> torch.Tensor:
-  """Penalize foot XY sliding while the foot is in contact (use negative weight).
+  """Penalize foot sliding AND yaw-pivot scrub while in contact (negative weight).
 
   Gated on contact (‖force‖ > contact_threshold), not on command, so it discourages
   dragging a planted foot in both walking and standing regimes while leaving the
   policy free to lift a foot to take a recovery step. Replaces the command-gated
   static_stance, whose all-velocity penalty froze recovery stepping at standstill.
+
+  The yaw-pivot term catches in-place foot rotation that the site *linear* velocity
+  misses: a foot spinning about its own center has ~0 site velocity but a scrubbing
+  contact patch (cheap in sim with low torsional friction, a real scrub on rubber).
+  `yaw_scrub_scale` weights the rotational part (rad²/s²) against the linear part
+  (m²/s²) — tune it. `asset_cfg` carries the foot sites (linear); `foot_body_cfg`
+  carries the foot bodies (yaw rate) as a separate cfg, since combining site_names
+  and body_names in one SceneEntityCfg leaves body_ids unresolved.
   """
   contact_sensor: ContactSensor = env.scene[sensor_name]
   assert contact_sensor.data.force is not None
   contact = contact_sensor.data.force.norm(dim=-1) > contact_threshold  # (N, 2)
   asset: Entity = env.scene[asset_cfg.name]
   foot_vel_xy = asset.data.site_lin_vel_w[:, asset_cfg.site_ids, :2]  # (N, 2, 2)
-  vel_sq = (foot_vel_xy**2).sum(dim=-1)  # (N, 2)
-  return (vel_sq * contact.float()).sum(dim=-1)
+  lin_sq = (foot_vel_xy**2).sum(dim=-1)  # (N, 2)
+  foot_yaw_rate = asset.data.body_link_ang_vel_w[:, foot_body_cfg.body_ids, 2]  # (N, 2)
+  scrub = lin_sq + yaw_scrub_scale * foot_yaw_rate**2  # (N, 2)
+  return (scrub * contact.float()).sum(dim=-1)
 
 
 def static_stance(

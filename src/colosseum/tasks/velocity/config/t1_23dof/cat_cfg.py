@@ -6,7 +6,7 @@ from mjlab.managers import CommandTermCfg
 from mjlab.managers.action_manager import ActionTermCfg
 from mjlab.managers.termination_manager import TerminationTermCfg
 
-from colosseum.mdp.actions import DelayedJointPositionActionCfg
+from colosseum.mdp.actions import DelayedJointPositionActionCfg, HeadPerturbActionCfg
 from colosseum.mdp.velocity_command import CurriculumVelocityCommandCfg
 from colosseum.robots.t1_23dof.constants import ACTION_SCALE
 from colosseum.tasks.dribbling.mdp.gait_phase_command import GaitPhaseCommandCfg
@@ -54,16 +54,24 @@ commands: Dict[str, CommandTermCfg] = {
   ),
 }
 
-VELOCITY_ACTION_SCALE = {k: v for k, v in ACTION_SCALE.items()}
+VELOCITY_ACTION_SCALE = {k: v for k, v in ACTION_SCALE.items() if k not in ("AAHead_yaw", "Head_pitch")}
 
 actions: dict[str, ActionTermCfg] = {
   "joint_pos": DelayedJointPositionActionCfg(
     entity_name="robot",
-    actuator_names=(".*",),
+    actuator_names=("^(?!AAHead_yaw$|Head_pitch$).*$",),
     scale=VELOCITY_ACTION_SCALE,
     use_default_offset=True,
     max_delay_steps=2,
-  )
+  ),
+  "head_perturb": HeadPerturbActionCfg(
+    entity_name="robot",
+    head_joint_names=("AAHead_yaw", "Head_pitch"),
+    yaw_range=(-1.0, 1.0),
+    pitch_range=(-0.2, 0.8),
+    interval_range=(1.0, 3.0),
+    smoothing_duration=0.3,
+  ),
 }
 
 terminations = {

@@ -201,14 +201,14 @@ def main() -> None:
 
     run_name = config.logger.name or generate_run_name(
       task_name=config.task.name,
-      algo_name=f"{algo_cfg.name}_rma",
+      algo_name=f"{algo_cfg.name}",
       seed=config.seed,
     )
 
     logger_cfg = replace(
       config.logger,
       project=f"colosseum-{config.task.name}",
-      group=f"{algo_cfg.name}_rma",
+      group=f"{algo_cfg.name}",
       job_type=f"{algo_cfg.name}_rma_{config.task.name}",
     )
 

@@ -51,6 +51,7 @@ curriculum = {
         "penalty_dof_vel",
         "penalty_dof_acc",
         "feet_slip",
+        "penalty_feet_yaw_mean"
       ],
       "initial_scale": 0.1,
       "min_scale": 0.01,

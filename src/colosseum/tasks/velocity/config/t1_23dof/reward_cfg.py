@@ -10,8 +10,6 @@ from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.tasks.velocity.mdp import (
   body_angular_velocity_penalty,
   soft_landing,
-  track_angular_velocity,
-  track_linear_velocity,
 )
 
 from colosseum.mdp.rewards import (
@@ -22,7 +20,9 @@ from colosseum.mdp.rewards import (
   feet_no_slip,
   feet_phase,
   feet_slip,
+  feet_swing,
   feet_yaw_diff_penalty,
+  feet_yaw_mean_penalty,
   foot_orientation_penalty,
   orientation_penalty,
   pose_deviation_penalty,
@@ -42,20 +42,32 @@ rewards = {
   "track_linear_velocity": RewardTermCfg(
     func=track_linear_velocity_filtered,
     weight=4.0,
-    params={"command_name": "twist", "std": math.sqrt(0.3)},
+    params={"command_name": "twist", "std": math.sqrt(0.25)},
   ),
   "track_angular_velocity": RewardTermCfg(
     func=track_angular_velocity_filtered,
     weight=3.0,
-    params={"command_name": "twist", "std": math.sqrt(0.3)},
+    params={"command_name": "twist", "std": math.sqrt(0.25)},
+  ),
+  "feet_swing": RewardTermCfg(
+    func=feet_swing,
+    weight=2.0,
+    params={
+      "phase_command_name": "gait_phase",
+      "sensor_name": "feet_ground_contact",
+      "swing_period": 0.2,
+      "contact_threshold": 0.1,
+      "command_name": "twist",
+      "command_threshold": 0.05,
+    },
   ),
   "feet_phase": RewardTermCfg(
     func=feet_phase,
-    weight=4.0,
+    weight=0.5,
     params={
       "phase_command_name": "gait_phase",
       "height_sensor_name": "foot_height_scan",
-      "swing_height": 0.08,
+      "swing_height": 0.09,
       "tracking_sigma": 0.005,
       "command_name": "twist",
       "command_threshold": 0.05,
@@ -85,7 +97,7 @@ rewards = {
   # =========================
   "penalty_landing": RewardTermCfg(
     func=soft_landing,
-    weight=-0.005,
+    weight=-0.025,
     params={
       "sensor_name": "feet_ground_contact",
       "command_name": "twist",
@@ -112,6 +124,13 @@ rewards = {
     weight=-1.0,
     params={"asset_cfg": SceneEntityCfg("robot", body_names=(FOOT_BODY_NAMES))},
   ),
+  # Aligns mean foot yaw to the base heading — catches the shared toe-out / yaw
+  # pivot that feet_yaw_diff (feet-parallel-to-each-other) is blind to.
+  "penalty_feet_yaw_mean": RewardTermCfg(
+    func=feet_yaw_mean_penalty,
+    weight=-1.0,
+    params={"asset_cfg": SceneEntityCfg("robot", body_names=(FOOT_BODY_NAMES))},
+  ),
   "penalty_action_rate": RewardTermCfg(func=action_rate_l2, weight=-1.0),
   "penalty_pose_deviation": RewardTermCfg(
     func=pose_deviation_penalty,
@@ -135,12 +154,14 @@ rewards = {
       "min_dist": 0.2,
     },
   ),
+  # site_names → linear slip; body_names → foot yaw-rate for the rotational scrub.
   "feet_slip": RewardTermCfg(
     func=feet_slip,
     weight=-10.0,
     params={
       "asset_cfg": SceneEntityCfg("robot", site_names=(FOOT_SITE_NAMES)),
       "sensor_name": "feet_ground_contact",
+      "foot_body_cfg": SceneEntityCfg("robot", body_names=(FOOT_BODY_NAMES)),
     },
   ),
   # Anchored L1 no-slip: catches slow standing creep (~1e-5 m/s) that the L2
@@ -168,7 +189,7 @@ rewards = {
 
 # Standing: upper body tight + moderate leg constraint to prevent stance spread.
 rewards["penalty_pose_deviation"].params["weights_standing"] = {
-  r"(?i).*head.*": 50.0,
+  r"(?i).*head.*": 0.0,
   r"(?i).*shoulder_pitch.*": 1.0,
   r"(?i).*shoulder_roll.*": 50.0,
   r"(?i).*elbow.pitch": 50.0,
@@ -182,7 +203,7 @@ rewards["penalty_pose_deviation"].params["weights_standing"] = {
 }
 # Walking: upper body tight (shoulder_pitch loose for arm_phase)
 rewards["penalty_pose_deviation"].params["weights_walking"] = {
-  r"(?i).*head.*": 50.0,
+  r"(?i).*head.*": 0.0,
   r"(?i).*shoulder_pitch.*": 1.0,
   r"(?i).*shoulder_roll.*": 50.0,
   r"(?i).*elbow.pitch": 50.0,
@@ -196,7 +217,7 @@ rewards["penalty_pose_deviation"].params["weights_walking"] = {
 }
 # Running: same as walking — legs already nearly unconstrained.
 rewards["penalty_pose_deviation"].params["weights_running"] = {
-  r"(?i).*head.*": 50.0,
+  r"(?i).*head.*": 0.0,
   r"(?i).*shoulder_pitch.*": 1.0,
   r"(?i).*shoulder_roll.*": 50.0,
   r"(?i).*elbow.pitch": 50.0,
