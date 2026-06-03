@@ -145,7 +145,7 @@ events = {
     func=dr.joint_friction,
     params={
       "asset_cfg": SceneEntityCfg("robot", joint_names=(".*",)),
-      "ranges": (0.0, 2.0),
+      "ranges": (0.0, 1.0),
       "operation": "add",
     },
   ),

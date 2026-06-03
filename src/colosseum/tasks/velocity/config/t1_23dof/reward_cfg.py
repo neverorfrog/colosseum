@@ -17,7 +17,6 @@ from colosseum.mdp.rewards import (
   dof_acc_penalty,
   dof_vel_penalty,
   feet_distance_penalty,
-  feet_no_slip,
   feet_phase,
   feet_slip,
   feet_swing,
@@ -26,6 +25,7 @@ from colosseum.mdp.rewards import (
   foot_orientation_penalty,
   orientation_penalty,
   pose_deviation_penalty,
+  static_stance,
   track_angular_velocity_filtered,
   track_linear_velocity_filtered,
 )
@@ -164,25 +164,27 @@ rewards = {
       "foot_body_cfg": SceneEntityCfg("robot", body_names=(FOOT_BODY_NAMES)),
     },
   ),
-  # Anchored L1 no-slip: catches slow standing creep (~1e-5 m/s) that the L2
-  # feet_slip is blind to. Weight needs tuning — start small and raise until the
-  # standing foot-creep disappears without hurting walking foot roll.
-  "feet_no_slip": RewardTermCfg(
-    func=feet_no_slip,
-    weight=-20.0,
+  # Command-gated standstill pin: penalizes ALL foot velocity (contact-agnostic)
+  # when ‖cmd‖≈0, closing the lift-and-reposition escape that the contact-gated
+  # feet_slip can't see (a lifted foot is masked off, then re-anchors on landing).
+  # Off while walking, so it doesn't fight feet_slip/feet_swing.
+  "static_stance": RewardTermCfg(
+    func=static_stance,
+    weight=-1.0,
     params={
       "asset_cfg": SceneEntityCfg("robot", site_names=(FOOT_SITE_NAMES)),
-      "sensor_name": "feet_ground_contact",
+      "command_name": "twist",
+      "command_threshold": 0.05,
     },
   ),
   "penalty_dof_vel": RewardTermCfg(
     func=dof_vel_penalty,
-    weight=-1e-4,
+    weight=-1e-3,
     params={"asset_cfg": SceneEntityCfg("robot", joint_names=(".*",))},
   ),
   "penalty_dof_acc": RewardTermCfg(
     func=dof_acc_penalty,
-    weight=-1e-7,
+    weight=-1e-6,
     params={"asset_cfg": SceneEntityCfg("robot", joint_names=(".*",))},
   ),
 }
