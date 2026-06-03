@@ -10,6 +10,14 @@ from mjlab.tasks.velocity.mdp import (
   soft_landing,
 )
 
+from colosseum.mdp.ball_rewards import (
+  ball_vel_angle_body,
+  ball_vel_norm,
+  ball_vel_tracking_body,
+  foot_ball_contact,
+  robot_ball_distance,
+  robot_ball_yaw_body,
+)
 from colosseum.mdp.rewards import (
   arm_phase,
   dof_acc_penalty,
@@ -22,13 +30,6 @@ from colosseum.mdp.rewards import (
   foot_orientation_penalty,
   orientation_penalty,
   pose_deviation_penalty,
-)
-from colosseum.mdp.ball_rewards import (
-  ball_vel_angle_body,
-  ball_vel_norm,
-  ball_vel_tracking_body,
-  robot_ball_distance,
-  robot_ball_yaw_body,
 )
 from colosseum.robots.t1_23dof.constants import (
   BASE_BODY_NAME,
@@ -63,7 +64,7 @@ rewards = {
   ),
   "robot_ball_distance": RewardTermCfg(
     func=robot_ball_distance,
-    weight=0.05,
+    weight=1.0,
     params={
       "close_distance": 0.3,
       "behind_close_penalty": 0.5,
@@ -71,6 +72,13 @@ rewards = {
       "between_feet_forward_distance": 0.1,
       "between_feet_penalty": 2.0,
     },
+  ),
+  # Ungated bootstrap: pays the instant a foot touches the ball, so the residual
+  # has a gradient toward engagement before any ball-velocity reward can fire.
+  "foot_ball_contact": RewardTermCfg(
+    func=foot_ball_contact,
+    weight=1.0,
+    params={"sensor_name": "foot_ball_contact"},
   ),
   "robot_ball_yaw": RewardTermCfg(
     func=robot_ball_yaw_body,
@@ -99,7 +107,7 @@ rewards = {
   # =======================
   "feet_phase": RewardTermCfg(
     func=feet_phase,
-    weight=4.0,
+    weight=1.0,
     params={
       "phase_command_name": "gait_phase",
       "height_sensor_name": "foot_height_scan",
@@ -111,7 +119,7 @@ rewards = {
   ),
   "arm_phase": RewardTermCfg(
     func=arm_phase,
-    weight=2.0,
+    weight=1.0,
     params={
       "phase_command_name": "gait_phase",
       "asset_cfg": SceneEntityCfg(

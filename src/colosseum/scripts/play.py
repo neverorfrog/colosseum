@@ -270,11 +270,19 @@ def _wrap_agent_with_vel_debug(
   Reports for env 0 only.
   """
   step_counter = [0]
+  # Running peak terrain-relative foot clearance [left, right] since the last
+  # print, reset each window. Approximates swing apex for env 0.
+  peak_clear = [0.0, 0.0]
 
   def wrapped(obs_dict):
     actions = agent(obs_dict)
-
     step_counter[0] += 1
+
+    # Accumulate swing apex every step (not just on print steps).
+    heights = env.scene["foot_height_scan"].data.heights[0]  # (2,)
+    peak_clear[0] = max(peak_clear[0], heights[0].item())
+    peak_clear[1] = max(peak_clear[1], heights[1].item())
+
     if step_counter[0] % every != 0:
       return actions
 
@@ -288,6 +296,14 @@ def _wrap_agent_with_vel_debug(
     act_vx, act_vy = act_lin[0].item(), act_lin[1].item()
     act_wz = act_ang[2].item()
 
+    # Duty factor from the last completed stance/swing phases per foot:
+    # duty = stance / (stance + swing). High duty + low apex = feet dragging.
+    contact = env.scene["feet_ground_contact"].data
+    c = contact.last_contact_time[0]  # (2,) last stance duration
+    a = contact.last_air_time[0]  # (2,) last swing duration
+    duty = (c / (c + a).clamp(min=1e-6)).tolist()  # [left, right]
+    air = a.tolist()  # [left, right] last swing duration (s)
+
     import math
 
     print(
@@ -295,8 +311,11 @@ def _wrap_agent_with_vel_debug(
       f"cmd: vx={cmd_vx:+.2f}  vy={cmd_vy:+.2f}  wz={cmd_wz:+.2f} | "
       f"act: vx={act_vx:+.2f}  vy={act_vy:+.2f}  wz={act_wz:+.2f} | "
       f"err: vx={cmd_vx - act_vx:+.2f}  vy={cmd_vy - act_vy:+.2f}  wz={cmd_wz - act_wz:+.2f} | "
-      f"heading={math.degrees(heading):+.1f}°"
+      f"heading={math.degrees(heading):+.1f}° | "
+      f"duty L/R={duty[0]:.2f}/{duty[1]:.2f}  air={air[0]:.2f}/{air[1]:.2f}s  "
+      f"apex L/R={peak_clear[0]:.3f}/{peak_clear[1]:.3f}m"
     )
+    peak_clear[0] = peak_clear[1] = 0.0
     return actions
 
   return wrapped

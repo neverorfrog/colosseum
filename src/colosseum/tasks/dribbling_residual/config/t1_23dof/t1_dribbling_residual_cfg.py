@@ -37,6 +37,7 @@ from colosseum.robots.t1_23dof.constants import (
 )
 from colosseum.robots.t1_23dof.sensors import (
   FEET_GROUND_CONTACT_SENSOR,
+  FOOT_BALL_CONTACT_SENSOR,
   FOOT_HEIGHT_SCAN,
   NONFOOT_GROUND_CONTACT_SENSOR,
   SELF_COLLISION_SENSOR,
@@ -57,6 +58,7 @@ def scene_cfg(play: bool = False) -> SceneCfg:
     entities={"robot": get_robot_cfg(), "ball": get_ball_cfg()},
     sensors=(
       FEET_GROUND_CONTACT_SENSOR,
+      FOOT_BALL_CONTACT_SENSOR,
       FOOT_HEIGHT_SCAN,
       NONFOOT_GROUND_CONTACT_SENSOR,
       SELF_COLLISION_SENSOR,

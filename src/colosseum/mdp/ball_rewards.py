@@ -261,3 +261,15 @@ def robot_ball_approach_vel(
   cmd_speed = env.command_manager.get_command(command_name)[:, :2].norm(dim=-1)
   deficit = (cmd_speed - approach_vel).clamp(min=0.0)
   return torch.exp(-(deficit**2))
+
+
+def foot_ball_contact(env: ManagerBasedRlEnv, sensor_name: str) -> torch.Tensor:
+  """Reward any foot-ball contact. Shape (N,).
+
+  Ungated by ball motion, so it pays out the moment a foot touches the ball —
+  seeds the engagement the gated ball-velocity rewards cannot bootstrap.
+  """
+  found = env.scene[sensor_name].data.found
+  if found is None:
+    return torch.zeros(env.num_envs, device=env.device)
+  return (found.flatten(start_dim=1) > 0).any(dim=-1).float()

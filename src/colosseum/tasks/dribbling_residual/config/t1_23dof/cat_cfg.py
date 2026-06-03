@@ -18,8 +18,11 @@ from colosseum.tasks.dribbling_residual.mdp.ball_velocity_command import (
 )
 
 commands: Dict[str, CommandTermCfg] = {
-  "twist": BallTwistCommandCfg(),
-  "ball_vel": BallVelocityCommandCfg(),
+  "twist": BallTwistCommandCfg(stop_distance=0.25),
+  "ball_vel": BallVelocityCommandCfg(
+    resampling_time_range=(15.0, 20.0),
+    target_reached_threshold=0.3,
+  ),
   "gait_phase": GaitPhaseCommandCfg(
     gait_freq_range=(1.5, 2.0),
     gate_command_name="twist",

@@ -44,6 +44,12 @@ class BallVelocityCommand(CommandTerm):
     )
     self.metrics["target_distance"] = torch.zeros(env.num_envs, device=env.device)
     self.metrics["cmd_ball_vel_error"] = torch.zeros(env.num_envs, device=env.device)
+    # Per-episode count of foot->ball contact onsets ("hits"). Auto-zeroed and
+    # logged as Metrics/ball_vel/foot_ball_hits at reset by the command manager.
+    self.metrics["foot_ball_hits"] = torch.zeros(env.num_envs, device=env.device)
+    self._prev_foot_ball_contact = torch.zeros(
+      env.num_envs, dtype=torch.bool, device=env.device
+    )
 
     # Commands must be valid from the first step: a stale zero target at the
     # global origin is tens of metres away in a tiled multi-env world.
@@ -127,20 +133,40 @@ class BallVelocityCommand(CommandTerm):
     if len(resample_env_ids) > 0:
       self._resample(resample_env_ids)
 
+  def _foot_ball_contact(self) -> torch.Tensor:
+    """Per-env bool: any foot geom in contact with the ball this step."""
+    try:
+      sensor = self._env.scene[self.cfg.foot_ball_contact_sensor]
+    except KeyError:
+      return torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+    found = sensor.data.found
+    if found is None:
+      return torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+    return (found.flatten(start_dim=1) > 0).any(dim=-1)
+
   def _update_metrics(self) -> None:
     ball_pos = self._env.scene[self.cfg.ball_entity].data.root_link_pos_w[:, :2]
     ball_vel = self._env.scene[self.cfg.ball_entity].data.root_link_lin_vel_w[:, :2]
     self.metrics["target_distance"] = (self.target_position - ball_pos).norm(dim=-1)
-    self.metrics["cmd_ball_vel_error"] = (
-      self.velocity_command[:, :2] - ball_vel
-    ).norm(dim=-1)
+    self.metrics["cmd_ball_vel_error"] = (self.velocity_command[:, :2] - ball_vel).norm(
+      dim=-1
+    )
+
+    # Count rising edges (no-contact -> contact) so the metric reads as the
+    # number of distinct foot-ball touches per episode, not the dwell time.
+    contact = self._foot_ball_contact()
+    self.metrics["foot_ball_hits"] += (contact & ~self._prev_foot_ball_contact).float()
+    self._prev_foot_ball_contact = contact
 
   def _debug_vis_impl(self, visualizer: DebugVisualizer) -> None:
     batch = visualizer.env_idx
     if batch >= self.num_envs:
       return
 
-    ball_pos = self._env.scene[self.cfg.ball_entity].data.root_link_pos_w[batch]
+    ball = self._env.scene[self.cfg.ball_entity]
+    ball_pos = ball.data.root_link_pos_w[batch]
+
+    # Desired ball velocity (green).
     vel_2d = self.velocity_command[batch, :2]
     vel_3d = torch.cat([vel_2d, torch.zeros(1, device=vel_2d.device)])
     visualizer.add_arrow(
@@ -150,8 +176,20 @@ class BallVelocityCommand(CommandTerm):
       label=f"ball_cmd |v|={vel_2d.norm():.2f}",
     )
 
+    # Actual ball velocity (orange) — overlaid so tracking quality is visible.
+    actual_2d = ball.data.root_link_lin_vel_w[batch, :2]
+    actual_3d = torch.cat([actual_2d, torch.zeros(1, device=actual_2d.device)])
+    visualizer.add_arrow(
+      start=ball_pos.cpu().numpy(),
+      end=(ball_pos + actual_3d * 2.0).cpu().numpy(),
+      color=(0.95, 0.6, 0.1, 0.9),
+      label=f"ball_vel |v|={actual_2d.norm():.2f}",
+    )
+
     target_pos = self.target_position[batch]
-    target_pos_3d = torch.cat([target_pos, torch.tensor([0.05], device=target_pos.device)])
+    target_pos_3d = torch.cat(
+      [target_pos, torch.tensor([0.05], device=target_pos.device)]
+    )
     visualizer.add_sphere(
       center=target_pos_3d.cpu().numpy(),
       radius=0.5,
@@ -166,14 +204,18 @@ class BallVelocityCommandCfg(CommandTermCfg):
 
   class_type: type[CommandTerm] = BallVelocityCommand
 
+  debug_vis: bool = True
+
   # Resample target every 5–10 seconds (like UniformVelocityCommand).
   resampling_time_range: tuple[float, float] = (5.0, 10.0)
 
   robot_entity: str = "robot"
   ball_entity: str = "ball"
+  # Contact sensor (registered in the scene) used to count foot->ball touches.
+  foot_ball_contact_sensor: str = "foot_ball_contact"
 
   # Desired ball speed, recomputed each step and clipped to this range.
-  speed_range: tuple[float, float] = (0.1, 0.5)
+  speed_range: tuple[float, float] = (0.1, 1.0)
 
   # Sampled target radius (m) drawn from the current ball position at resample.
   target_distance_range: tuple[float, float] = (1.0, 2.0)
