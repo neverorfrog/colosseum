@@ -1,12 +1,12 @@
 use_cuda: true
-cuda: 0,1
-checkpoint: null
+cuda: '0'
+checkpoint: logs/t1-velocity-RmaPPO-123-20260528_121811/checkpoints/latest.pt
 task:
-  name: t1-velocity-rma
+  name: t1-velocity
   env:
     decimation: 4
     scene:
-      num_envs: 8192
+      num_envs: 1024
       env_spacing: 10.0
       terrain:
         init_state:
@@ -91,14 +91,13 @@ task:
         env_spacing: 2.0
         max_init_terrain_level: null
         num_envs: 1
-        debug_vis: false
       entities:
         robot:
           init_state:
             pos:
             - 0
             - 0
-            - 0.66
+            - 0.64
             rot:
             - 1.0
             - 0.0
@@ -115,26 +114,26 @@ task:
             joint_pos:
               AAHead_yaw: 0.0
               Head_pitch: 0.0
-              Left_Shoulder_Pitch: 0.2
-              Left_Shoulder_Roll: -1.35
+              Left_Shoulder_Pitch: 0.1
+              Left_Shoulder_Roll: -1.4
               Left_Elbow_Pitch: 0.0
-              Left_Elbow_Yaw: -0.5
-              Right_Shoulder_Pitch: 0.2
-              Right_Shoulder_Roll: 1.35
+              Left_Elbow_Yaw: -0.2
+              Right_Shoulder_Pitch: 0.1
+              Right_Shoulder_Roll: 1.4
               Right_Elbow_Pitch: 0.0
-              Right_Elbow_Yaw: 0.5
+              Right_Elbow_Yaw: 0.2
               Waist: 0.0
-              Left_Hip_Pitch: -0.24
+              Left_Hip_Pitch: -0.38
               Left_Hip_Roll: 0.0
               Left_Hip_Yaw: 0.0
-              Left_Knee_Pitch: 0.5
-              Left_Ankle_Pitch: -0.3
+              Left_Knee_Pitch: 0.8
+              Left_Ankle_Pitch: -0.43
               Left_Ankle_Roll: 0.0
-              Right_Hip_Pitch: -0.24
+              Right_Hip_Pitch: -0.38
               Right_Hip_Roll: 0.0
               Right_Hip_Yaw: 0.0
-              Right_Knee_Pitch: 0.5
-              Right_Ankle_Pitch: -0.3
+              Right_Knee_Pitch: 0.8
+              Right_Ankle_Pitch: -0.43
               Right_Ankle_Roll: 0.0
             joint_vel:
               .*: 0.0
@@ -144,38 +143,35 @@ task:
               - AAHead_yaw
               - Head_pitch
               transmission_type: joint
-              armature: 0.03
-              frictionloss: 0.03
-              viscous_damping: null
+              armature: 0.0018
+              frictionloss: 0.2
               delay_min_lag: 0
               delay_max_lag: 0
               delay_hold_prob: 0.0
               delay_update_period: 0
               delay_per_env_phase: true
               stiffness: 5.0
-              damping: 2.0
-              effort_limit: 7.0
+              damping: 1.5
+              effort_limit: 7
             - target_names_expr:
               - .*Shoulder.*
               - .*Elbow.*
               transmission_type: joint
-              armature: 0.03
-              frictionloss: 0.03
-              viscous_damping: null
+              armature: 0.0282528
+              frictionloss: 0.2
               delay_min_lag: 0
               delay_max_lag: 0
               delay_hold_prob: 0.0
               delay_update_period: 0
               delay_per_env_phase: true
-              stiffness: 20.0
+              stiffness: 50.0
               damping: 1.0
-              effort_limit: 18.0
+              effort_limit: 30
             - target_names_expr:
               - Waist
               transmission_type: joint
-              armature: 0.03
-              frictionloss: 0.03
-              viscous_damping: null
+              armature: 0.0478125
+              frictionloss: 0.2
               delay_min_lag: 0
               delay_max_lag: 0
               delay_hold_prob: 0.0
@@ -183,13 +179,12 @@ task:
               delay_per_env_phase: true
               stiffness: 200.0
               damping: 5.0
-              effort_limit: 30.0
+              effort_limit: 40
             - target_names_expr:
               - .*Hip_Pitch
               transmission_type: joint
-              armature: 0.03
-              frictionloss: 0.03
-              viscous_damping: null
+              armature: 0.052390799999999994
+              frictionloss: 0.2
               delay_min_lag: 0
               delay_max_lag: 0
               delay_hold_prob: 0.0
@@ -197,13 +192,12 @@ task:
               delay_per_env_phase: true
               stiffness: 200.0
               damping: 5.0
-              effort_limit: 45.0
+              effort_limit: 90
             - target_names_expr:
               - .*Hip_Roll
               transmission_type: joint
-              armature: 0.03
-              frictionloss: 0.03
-              viscous_damping: null
+              armature: 0.0478125
+              frictionloss: 0.2
               delay_min_lag: 0
               delay_max_lag: 0
               delay_hold_prob: 0.0
@@ -211,13 +205,12 @@ task:
               delay_per_env_phase: true
               stiffness: 200.0
               damping: 5.0
-              effort_limit: 30.0
+              effort_limit: 40
             - target_names_expr:
               - .*Hip_Yaw
               transmission_type: joint
-              armature: 0.03
-              frictionloss: 0.03
-              viscous_damping: null
+              armature: 0.0478125
+              frictionloss: 0.2
               delay_min_lag: 0
               delay_max_lag: 0
               delay_hold_prob: 0.0
@@ -225,13 +218,12 @@ task:
               delay_per_env_phase: true
               stiffness: 200.0
               damping: 5.0
-              effort_limit: 30.0
+              effort_limit: 40
             - target_names_expr:
               - .*Knee_Pitch
               transmission_type: joint
-              armature: 0.03
-              frictionloss: 0.03
-              viscous_damping: null
+              armature: 0.0636012
+              frictionloss: 0.2
               delay_min_lag: 0
               delay_max_lag: 0
               delay_hold_prob: 0.0
@@ -239,13 +231,12 @@ task:
               delay_per_env_phase: true
               stiffness: 200.0
               damping: 5.0
-              effort_limit: 65.0
+              effort_limit: 118
             - target_names_expr:
               - .*Ankle_Pitch
               transmission_type: joint
-              armature: 0.03
-              frictionloss: 0.03
-              viscous_damping: null
+              armature: 0.0339552
+              frictionloss: 0.1
               delay_min_lag: 0
               delay_max_lag: 0
               delay_hold_prob: 0.0
@@ -253,13 +244,12 @@ task:
               delay_per_env_phase: true
               stiffness: 50.0
               damping: 3.0
-              effort_limit: 24.0
+              effort_limit: 57
             - target_names_expr:
               - .*Ankle_Roll
               transmission_type: joint
-              armature: 0.03
-              frictionloss: 0.03
-              viscous_damping: null
+              armature: 0.0339552
+              frictionloss: 0.1
               delay_min_lag: 0
               delay_max_lag: 0
               delay_hold_prob: 0.0
@@ -267,7 +257,7 @@ task:
               delay_per_env_phase: true
               stiffness: 50.0
               damping: 3.0
-              effort_limit: 15.0
+              effort_limit: 57
             soft_joint_pos_limit_factor: 0.9
           sort_actuators: false
           lights: []
@@ -375,6 +365,9 @@ task:
           - left_foot_sphere_5_link
           - left_foot_sphere_6_link
           - left_foot_sphere_7_link
+          - left_foot_sphere_8_link
+          - left_foot_sphere_9_link
+          - left_foot_sphere_10_link
           - right_foot_link
           - right_foot_sphere_1_link
           - right_foot_sphere_2_link
@@ -383,6 +376,9 @@ task:
           - right_foot_sphere_5_link
           - right_foot_sphere_6_link
           - right_foot_sphere_7_link
+          - right_foot_sphere_8_link
+          - right_foot_sphere_9_link
+          - right_foot_sphere_10_link
         secondary:
           mode: body
           pattern: terrain
@@ -754,6 +750,9 @@ task:
                 - left_foot_sphere_5_link
                 - left_foot_sphere_6_link
                 - left_foot_sphere_7_link
+                - left_foot_sphere_8_link
+                - left_foot_sphere_9_link
+                - left_foot_sphere_10_link
                 - right_foot_link
                 - right_foot_sphere_1_link
                 - right_foot_sphere_2_link
@@ -762,6 +761,9 @@ task:
                 - right_foot_sphere_5_link
                 - right_foot_sphere_6_link
                 - right_foot_sphere_7_link
+                - right_foot_sphere_8_link
+                - right_foot_sphere_9_link
+                - right_foot_sphere_10_link
                 site_names: null
                 actuator_names: null
                 tendon_names: null
@@ -976,8 +978,10 @@ task:
         clip: null
         transmission_type: joint
         actuator_names:
-        - ^(?!AAHead_yaw$|Head_pitch$).*$
+        - .*
         scale:
+          AAHead_yaw: 0.25
+          Head_pitch: 0.25
           Left_Shoulder_Pitch: 0.25
           Left_Shoulder_Roll: 0.25
           Left_Elbow_Pitch: 0.25
@@ -1004,23 +1008,6 @@ task:
         use_default_offset: true
         min_delay_steps: 0
         max_delay_steps: 2
-      head_perturb:
-        entity_name: robot
-        clip: null
-        head_joint_names:
-        - AAHead_yaw
-        - Head_pitch
-        yaw_range:
-        - -1.0
-        - 1.0
-        pitch_range:
-        - -0.2
-        - 0.8
-        interval_range:
-        - 1.0
-        - 3.0
-        smoothing_duration: 0.3
-        enabled: true
     events:
       reset_base:
         params:
@@ -1083,6 +1070,9 @@ task:
             - left_foot_sphere_5_link
             - left_foot_sphere_6_link
             - left_foot_sphere_7_link
+            - left_foot_sphere_8_link
+            - left_foot_sphere_9_link
+            - left_foot_sphere_10_link
             - right_foot_link
             - right_foot_sphere_1_link
             - right_foot_sphere_2_link
@@ -1091,6 +1081,9 @@ task:
             - right_foot_sphere_5_link
             - right_foot_sphere_6_link
             - right_foot_sphere_7_link
+            - right_foot_sphere_8_link
+            - right_foot_sphere_9_link
+            - right_foot_sphere_10_link
             site_names: null
             actuator_names: null
             tendon_names: null
@@ -1101,8 +1094,8 @@ task:
             preserve_order: false
           ranges:
             0:
-            - 0.8
-            - 1.5
+            - 0.2
+            - 2.0
             1:
             - 0.02
             - 0.05
@@ -1119,27 +1112,15 @@ task:
         params:
           velocity_range:
             x:
-            - -0.5
-            - 0.5
-            y:
-            - -0.5
-            - 0.5
-            z:
             - -0.1
             - 0.1
-            roll:
-            - -0.04
-            - 0.04
-            pitch:
-            - -0.04
-            - 0.04
-            yaw:
-            - -0.04
-            - 0.04
+            y:
+            - -0.1
+            - 0.1
         mode: interval
         interval_range_s:
-        - 5.0
-        - 10.0
+        - 1.0
+        - 3.0
         is_global_time: false
         min_step_count_between_reset: 0
       push_robot:
@@ -1151,11 +1132,11 @@ task:
           - 0.0
           - 0.0
           duration_s:
-          - 0.8
+          - 0.3
           - 1.0
           cooldown_s:
-          - 4.0
-          - 6.0
+          - 5.0
+          - 10.0
           asset_cfg:
             name: robot
             joint_names: null
@@ -1374,8 +1355,8 @@ task:
             pair_names: null
             preserve_order: false
           ranges:
-          - 0.8
-          - 1.2
+          - 0.85
+          - 1.15
           operation: scale
         mode: startup
         interval_range_s: null
@@ -1423,7 +1404,7 @@ task:
             pair_names: null
             preserve_order: false
           effort_limit_range:
-          - 0.7
+          - 0.75
           - 1.0
           operation: scale
         mode: startup
@@ -1482,31 +1463,22 @@ task:
       track_linear_velocity:
         params:
           command_name: twist
-          std: 0.5
-        weight: 4.0
+          std: 0.4472135954999579
+        weight: 3.0
       track_angular_velocity:
         params:
           command_name: twist
-          std: 0.5
-        weight: 3.0
-      feet_swing:
-        params:
-          phase_command_name: gait_phase
-          sensor_name: feet_ground_contact
-          swing_period: 0.2
-          contact_threshold: 0.1
-          command_name: twist
-          command_threshold: 0.05
-        weight: 2.0
+          std: 0.4472135954999579
+        weight: 2.5
       feet_phase:
         params:
           phase_command_name: gait_phase
           height_sensor_name: foot_height_scan
-          swing_height: 0.09
-          tracking_sigma: 0.005
+          swing_height: 0.08
+          tracking_sigma: 0.008
           command_name: twist
           command_threshold: 0.05
-        weight: 1.0
+        weight: 4.0
       arm_phase:
         params:
           phase_command_name: gait_phase
@@ -1525,10 +1497,11 @@ task:
             material_names: null
             pair_names: null
             preserve_order: false
-          swing_amplitude: 0.25
+          swing_amplitude: 0.2
           max_speed: 1.5
           tracking_sigma: 0.25
           command_name: twist
+          command_threshold: 0.05
         weight: 2.0
       alive:
         params: {}
@@ -1538,7 +1511,7 @@ task:
           sensor_name: feet_ground_contact
           command_name: twist
           command_threshold: 0.05
-        weight: -0.03
+        weight: -0.1
       penalty_body_ang_vel:
         params:
           asset_cfg:
@@ -1589,45 +1562,9 @@ task:
             pair_names: null
             preserve_order: false
         weight: -5.0
-      penalty_feet_yaw_diff:
-        params:
-          asset_cfg:
-            name: robot
-            joint_names: null
-            body_names:
-            - left_foot_link
-            - right_foot_link
-            geom_names: null
-            site_names: null
-            actuator_names: null
-            tendon_names: null
-            camera_names: null
-            light_names: null
-            material_names: null
-            pair_names: null
-            preserve_order: false
-        weight: -1.0
-      penalty_feet_yaw_mean:
-        params:
-          asset_cfg:
-            name: robot
-            joint_names: null
-            body_names:
-            - left_foot_link
-            - right_foot_link
-            geom_names: null
-            site_names: null
-            actuator_names: null
-            tendon_names: null
-            camera_names: null
-            light_names: null
-            material_names: null
-            pair_names: null
-            preserve_order: false
-        weight: -1.0
       penalty_action_rate:
         params: {}
-        weight: -1.25
+        weight: -1.0
       penalty_pose_deviation:
         params:
           asset_cfg:
@@ -1648,7 +1585,7 @@ task:
           walking_threshold: 0.05
           running_threshold: 1.5
           weights_standing:
-            (?i).*head.*: 0.0
+            (?i).*head.*: 50.0
             (?i).*shoulder_pitch.*: 1.0
             (?i).*shoulder_roll.*: 50.0
             (?i).*elbow.pitch: 50.0
@@ -1660,19 +1597,19 @@ task:
             (?i).*knee.*: 1.0
             (?i).*ankle.*: 5.0
           weights_walking:
-            (?i).*head.*: 0.0
+            (?i).*head.*: 50.0
             (?i).*shoulder_pitch.*: 1.0
             (?i).*shoulder_roll.*: 50.0
             (?i).*elbow.pitch: 50.0
             (?i).*elbow.yaw: 1.0
-            Waist: 15.0
+            Waist: 25.0
             (?i).*hip_pitch.*: 1.0
             (?i).*hip_roll.*: 5.0
             (?i).*hip_yaw.*: 5.0
             (?i).*knee.*: 1.0
             (?i).*ankle.*: 5.0
           weights_running:
-            (?i).*head.*: 0.0
+            (?i).*head.*: 50.0
             (?i).*shoulder_pitch.*: 1.0
             (?i).*shoulder_roll.*: 50.0
             (?i).*elbow.pitch: 50.0
@@ -1705,41 +1642,9 @@ task:
             pair_names: null
             preserve_order: false
           min_dist: 0.2
-        weight: -5.0
-      feet_slip:
-        params:
-          asset_cfg:
-            name: robot
-            joint_names: null
-            body_names: null
-            geom_names: null
-            site_names:
-            - left_foot
-            - right_foot
-            actuator_names: null
-            tendon_names: null
-            camera_names: null
-            light_names: null
-            material_names: null
-            pair_names: null
-            preserve_order: false
-          sensor_name: feet_ground_contact
-          foot_body_cfg:
-            name: robot
-            joint_names: null
-            body_names:
-            - left_foot_link
-            - right_foot_link
-            geom_names: null
-            site_names: null
-            actuator_names: null
-            tendon_names: null
-            camera_names: null
-            light_names: null
-            material_names: null
-            pair_names: null
-            preserve_order: false
-        weight: -2.0
+          command_name: twist
+          command_threshold: 0.05
+        weight: -3.0
       static_stance:
         params:
           asset_cfg:
@@ -1776,7 +1681,7 @@ task:
             material_names: null
             pair_names: null
             preserve_order: false
-        weight: -0.001
+        weight: -0.0001
       penalty_dof_acc:
         params:
           asset_cfg:
@@ -1814,10 +1719,10 @@ task:
         entity_name: robot
         heading_command: true
         heading_control_stiffness: 0.5
-        rel_standing_envs: 0.1
-        rel_heading_envs: 0.2
+        rel_standing_envs: 0.0
+        rel_heading_envs: 0.4
         rel_world_envs: 0.0
-        rel_forward_envs: 0.1
+        rel_forward_envs: 0.3
         init_velocity_prob: 0.0
         ranges:
           lin_vel_x:
@@ -1835,19 +1740,6 @@ task:
         viz:
           z_offset: 0.2
           scale: 0.5
-        filter_weight: 0.1
-        curriculum: true
-        lin_levels: 5
-        ang_levels: 5
-        seed_lin_level: 0
-        lin_vel_x_resolution: 0.25
-        lin_vel_y_resolution: 0.1
-        ang_vel_resolution: 0.2
-        x_toler: 0.4
-        y_toler: 0.2
-        yaw_toler: 0.2
-        update_rate: 0.1
-        episode_length_toler: 0.1
       gait_phase:
         resampling_time_range:
         - 1000000000.0
@@ -1861,38 +1753,77 @@ task:
         gate_command_name: twist
         gate_speed_threshold: 0.05
     curriculum:
+      command_vel:
+        params:
+          command_name: twist
+          velocity_stages:
+          - transitions: 0
+            lin_vel_x:
+            - -0.2
+            - 0.5
+            lin_vel_y:
+            - -0.2
+            - 0.2
+            ang_vel_z:
+            - -0.5
+            - 0.5
+          - transitions: 100000000
+            lin_vel_x:
+            - -0.3
+            - 1.0
+            lin_vel_y:
+            - -0.5
+            - 0.5
+            ang_vel_z:
+            - -0.75
+            - 0.75
+          - transitions: 200000000
+            lin_vel_x:
+            - -1.0
+            - 1.5
+            lin_vel_y:
+            - -1.0
+            - 1.0
+            ang_vel_z:
+            - -1.0
+            - 1.0
+      standing_curriculum:
+        params:
+          command_name: twist
+          stages:
+          - transitions: 0
+            rel_standing_envs: 0.4
+          - transitions: 50000000
+            rel_standing_envs: 0.3
+          - transitions: 100000000
+            rel_standing_envs: 0.2
+          - transitions: 150000000
+            rel_standing_envs: 0.1
       push_curriculum:
         params:
           event_name: push_robot
           stages:
           - transitions: 0
             force_range:
-            - -5.0
-            - 5.0
+            - 0.0
+            - 0.0
             torque_range:
-            - -1.0
-            - 1.0
-          - transitions: 100000000
+            - 0.0
+            - 0.0
+          - transitions: 300000000
             force_range:
             - -10.0
             - 10.0
             torque_range:
             - -2.0
             - 2.0
-          - transitions: 200000000
+          - transitions: 400000000
             force_range:
             - -20.0
             - 20.0
             torque_range:
-            - -3.0
-            - 3.0
-          - transitions: 400000000
-            force_range:
-            - -30.0
-            - 30.0
-            torque_range:
-            - -5.0
-            - 5.0
+            - -4.0
+            - 4.0
       penalty_curriculum:
         params:
           reward_names:
@@ -1905,9 +1836,6 @@ task:
           - penalty_landing
           - penalty_dof_vel
           - penalty_dof_acc
-          - feet_slip
-          - penalty_feet_yaw_mean
-          - penalty_feet_yaw_diff
           initial_scale: 0.1
           min_scale: 0.01
           max_scale: 1.0
@@ -1917,7 +1845,6 @@ task:
     metrics: {}
     recorders: {}
     is_finite_horizon: false
-    auto_reset: true
     scale_rewards_by_dt: true
     encoders:
       env_params:
@@ -1948,24 +1875,21 @@ logger:
   id: null
   resume: null
   mode: online
-  log_interval: 1000
-  save_interval: 10000000
+  log_interval: 50
+  save_interval: 50000000
   log_dir: ./logs
   console_level: INFO
   task_name: null
   scenario: null
   job_type: null
-start_phase: 1
-phase2_steps: 50000000
-phase2_lr: 0.001
-phase2_loss_threshold: null
-phase3_steps: 250000000
-phase2_num_envs: 4096
+adaptation_lr: 0.001
+save_interval: 10000
+adaptation_epochs: 4
 algo_cfg:
   name: RmaPPO
   version: v1
   target: colosseum.algorithm.rma_ppo:RmaPPO
-  learning_steps: 250000000
+  learning_steps: 1000000000
   obs_normalization: true
   seed: null
   use_rich_logging: true
