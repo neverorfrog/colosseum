@@ -157,7 +157,7 @@ rewards = {
   # site_names → linear slip; body_names → foot yaw-rate for the rotational scrub.
   "feet_slip": RewardTermCfg(
     func=feet_slip,
-    weight=-2.0,
+    weight=-10.0,
     params={
       "asset_cfg": SceneEntityCfg("robot", site_names=(FOOT_SITE_NAMES)),
       "sensor_name": "feet_ground_contact",

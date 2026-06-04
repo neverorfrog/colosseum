@@ -6,6 +6,8 @@ from mjlab.envs.mdp.observations import (
   last_action,
   projected_gravity,
 )
+from dataclasses import replace
+
 from mjlab.managers.observation_manager import ObservationGroupCfg, ObservationTermCfg
 from mjlab.tasks.velocity.mdp.observations import (
   foot_contact,
@@ -29,27 +31,45 @@ from colosseum.robots.t1_23dof.mdp.symmetry import mirror_actions, mirror_joints
 # Actor / critic terms
 # ---------------------------------------------------------------------------
 
+# Persistent per-episode observation latency on the sensor-derived actor terms,
+# matching the real robot's FastDDS transport delay (~2-3 control steps). The high
+# update_period holds the sampled lag for ~one episode (30s/20ms ~= 1500 steps)
+# so the policy learns phase margin against a STEADY delay, not per-step jitter.
+# Applied to actor only; the critic stays clean/privileged (see critic_terms).
+
 actor_terms = {
   "base_ang_vel": MirrorableObservationTermCfg(
     func=builtin_sensor,
     params={"sensor_name": "robot/imu_ang_vel"},
     noise=Unoise(n_min=-0.1, n_max=0.1),
     mirror_fn=mirror_ang_vel,
+    delay_min_lag=0,
+    delay_max_lag=3,
+    delay_update_period=1500,
   ),
   "projected_gravity": MirrorableObservationTermCfg(
     func=projected_gravity,
     noise=Unoise(n_min=-0.05, n_max=0.05),
     mirror_fn=mirror_projected_gravity,
+    delay_min_lag=0,
+    delay_max_lag=3,
+    delay_update_period=1500,
   ),
   "joint_pos": MirrorableObservationTermCfg(
     func=joint_pos_rel,
     noise=Unoise(n_min=-0.01, n_max=0.01),
     mirror_fn=mirror_joints,
+    delay_min_lag=0,
+    delay_max_lag=3,
+    delay_update_period=1500,
   ),
   "joint_vel": MirrorableObservationTermCfg(
     func=joint_vel_rel,
     noise=Unoise(n_min=-0.1, n_max=0.1),
     mirror_fn=mirror_joints,
+    delay_min_lag=0,
+    delay_max_lag=3,
+    delay_update_period=1500,
   ),
   "actions": MirrorableObservationTermCfg(
     func=last_action,
@@ -67,8 +87,11 @@ actor_terms = {
   ),
 }
 
+# Critic is privileged: same proprio terms but WITHOUT the actor's obs delay
+# (replace() makes fresh copies, so mutating delay here can't alias the actor).
 critic_terms = {
-  **actor_terms,
+  **{k: replace(v, delay_min_lag=0, delay_max_lag=0, delay_update_period=0)
+     for k, v in actor_terms.items()},
   "base_lin_vel": MirrorableObservationTermCfg(
     func=builtin_sensor,
     params={"sensor_name": "robot/imu_lin_vel"},
