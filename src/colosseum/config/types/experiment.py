@@ -40,7 +40,7 @@ class TrainConfig(BaseExperimentConfig):
   """Training-specific configuration."""
 
   name: str = "EXPERIMENT"
-  seed: int = 42
+  seed: int = 123
 
   learning_steps: int | None = None
   """Override algo_cfg.learning_steps for this run. Useful in pipeline scripts."""

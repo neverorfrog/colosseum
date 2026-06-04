@@ -1,13 +1,8 @@
 import copy
-import math
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from mjlab.envs.mdp import dr
-from mjlab.envs.mdp.events import (
-  apply_body_impulse,
-  reset_joints_by_offset,
-)
+from mjlab.envs.mdp.events import reset_joints_by_offset
 from mjlab.managers import (
   CurriculumTermCfg,
   EventTermCfg,
@@ -16,7 +11,6 @@ from mjlab.managers import (
 from mjlab.scene import SceneCfg
 from mjlab.sim import MujocoCfg, SimulationCfg
 from mjlab.tasks.velocity.mdp.curriculums import terrain_levels_vel
-from mjlab.tasks.velocity.mdp.velocity_command import UniformVelocityCommandCfg
 from mjlab.terrains import TerrainEntityCfg
 from mjlab.terrains.config import ROUGH_TERRAINS_CFG
 from mjlab.utils.nan_guard import NanGuardCfg
@@ -24,9 +18,9 @@ from mjlab.viewer import ViewerConfig
 
 from colosseum.config.types.task import TaskConfig, register_task
 from colosseum.envs.colosseum_env import ColosseumEnvCfg
+from colosseum.mdp.actions import HeadPerturbActionCfg
 from colosseum.robots.t1_23dof.constants import (
   BASE_BODY_NAME,
-  FOOT_GEOM_NAMES,
   get_robot_cfg,
 )
 from colosseum.robots.t1_23dof.sensors import (
@@ -116,10 +110,21 @@ def booster_t1_velocity_env_cfg(play: bool = False) -> ColosseumEnvCfg:
     cfg.curriculum = {}
     cfg.events = {}
 
+    cfg.events["reset_robot_joints"] = EventTermCfg(
+      func=reset_joints_by_offset,
+      mode="reset",
+      params={
+        "position_range": (-0.1, 0.1),
+        "velocity_range": (0.0, 0.0),
+        "asset_cfg": SceneEntityCfg("robot", joint_names=(".*",)),
+      },
+    )
+
     # Head perturbation is for training robustness only; hold joints at
     # default pose during evaluation so the real head policy owns them.
-    cfg.actions = copy.deepcopy(cfg.actions)
-    cfg.actions["head_perturb"].enabled = False
+    head_perturb = cfg.actions["head_perturb"]
+    assert isinstance(head_perturb, HeadPerturbActionCfg)
+    head_perturb.enabled = False
 
     gait = cfg.commands["gait_phase"]
     assert isinstance(gait, GaitPhaseCommandCfg)

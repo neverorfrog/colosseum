@@ -112,80 +112,80 @@ MOTOR_SPECS = {
 T1_ACTUATOR_NECK = BuiltinPositionActuatorCfg(
   target_names_expr=("AAHead_yaw", "Head_pitch"),
   stiffness=5.0,
-  damping=1.5,
-  effort_limit=MOTOR_SPECS["neck"].effort_limit,
-  armature=MOTOR_SPECS["neck"].reflected_inertia,
-  frictionloss=0.2,
+  damping=2.0,
+  effort_limit=7.0,
+  armature=0.03,
+  frictionloss=0.03,
 )
 
 T1_ACTUATOR_ARM = BuiltinPositionActuatorCfg(
   target_names_expr=(".*Shoulder.*", ".*Elbow.*"),
-  stiffness=50.0,
+  stiffness=20.0,
   damping=1.0,
-  effort_limit=MOTOR_SPECS["arm"].effort_limit,
-  armature=MOTOR_SPECS["arm"].reflected_inertia,
-  frictionloss=0.2,
-)
-
-T1_ACTUATOR_HIP_PITCH = BuiltinPositionActuatorCfg(
-  target_names_expr=(".*Hip_Pitch",),
-  stiffness=200.0,
-  damping=5.0,
-  effort_limit=MOTOR_SPECS["hip_pitch"].effort_limit,
-  armature=MOTOR_SPECS["hip_pitch"].reflected_inertia,
-  frictionloss=0.2,
+  effort_limit=18.0,
+  armature=0.03,
+  frictionloss=0.03,
 )
 
 T1_ACTUATOR_WAIST = BuiltinPositionActuatorCfg(
   target_names_expr=("Waist",),
   stiffness=200.0,
   damping=5.0,
-  effort_limit=MOTOR_SPECS["waist"].effort_limit,
-  armature=MOTOR_SPECS["waist"].reflected_inertia,
-  frictionloss=0.2,
+  effort_limit=30.0,
+  armature=0.03,
+  frictionloss=0.03,
+)
+
+T1_ACTUATOR_HIP_PITCH = BuiltinPositionActuatorCfg(
+  target_names_expr=(".*Hip_Pitch",),
+  stiffness=200.0,
+  damping=5.0,
+  effort_limit=45.0,
+  armature=0.03,
+  frictionloss=0.03,
 )
 
 T1_ACTUATOR_HIP_ROLL = BuiltinPositionActuatorCfg(
   target_names_expr=(".*Hip_Roll",),
   stiffness=200.0,
   damping=5.0,
-  effort_limit=MOTOR_SPECS["waist"].effort_limit,
-  armature=MOTOR_SPECS["waist"].reflected_inertia,
-  frictionloss=0.2,
+  effort_limit=30.0,
+  armature=0.03,
+  frictionloss=0.03,
 )
 
 T1_ACTUATOR_HIP_YAW = BuiltinPositionActuatorCfg(
   target_names_expr=(".*Hip_Yaw",),
   stiffness=200.0,
   damping=5.0,
-  effort_limit=MOTOR_SPECS["waist"].effort_limit,
-  armature=MOTOR_SPECS["waist"].reflected_inertia,
-  frictionloss=0.2,
+  effort_limit=30.0,
+  armature=0.03,
+  frictionloss=0.03,
 )
 
 T1_ACTUATOR_KNEE = BuiltinPositionActuatorCfg(
   target_names_expr=(".*Knee_Pitch",),
   stiffness=200.0,
   damping=5.0,
-  effort_limit=MOTOR_SPECS["knee"].effort_limit,
-  armature=MOTOR_SPECS["knee"].reflected_inertia,
-  frictionloss=0.2,
+  effort_limit=65.0,
+  armature=0.03,
+  frictionloss=0.03,
 )
 
 T1_ACTUATOR_ANKLE_PITCH = BuiltinPositionActuatorCfg(
   target_names_expr=(".*Ankle_Pitch",),
   stiffness=50.0,
   damping=3.0,
-  effort_limit=MOTOR_SPECS["ankle_pitch"].effort_limit,
-  armature=MOTOR_SPECS["ankle_pitch"].reflected_inertia,
-  frictionloss=0.1,
+  effort_limit=24.0,
+  armature=0.03,
+  frictionloss=0.03,
 )
 
 T1_ACTUATOR_ANKLE_ROLL = BuiltinPositionActuatorCfg(
   target_names_expr=(".*Ankle_Roll",),
   stiffness=50.0,
   damping=3.0,
-  effort_limit=MOTOR_SPECS["ankle_roll"].effort_limit,
-  armature=MOTOR_SPECS["ankle_roll"].reflected_inertia,
-  frictionloss=0.1,
+  effort_limit=15.0,
+  armature=0.03,
+  frictionloss=0.03,
 )

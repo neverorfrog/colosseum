@@ -54,7 +54,9 @@ commands: Dict[str, CommandTermCfg] = {
   ),
 }
 
-VELOCITY_ACTION_SCALE = {k: v for k, v in ACTION_SCALE.items() if k not in ("AAHead_yaw", "Head_pitch")}
+VELOCITY_ACTION_SCALE = {
+  k: v for k, v in ACTION_SCALE.items() if k not in ("AAHead_yaw", "Head_pitch")
+}
 
 actions: dict[str, ActionTermCfg] = {
   "joint_pos": DelayedJointPositionActionCfg(
