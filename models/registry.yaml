@@ -29,5 +29,58 @@ t1-velocity:
       file: v5/t1-velocity_ppo_v5.onnx
       run: t1-velocity-PPO-42-20260531_131208
       step: 0
-      created: '2026-06-01T14:59:44.883613+00:00'    
+      created: '2026-06-01T14:59:44.883613+00:00'
+    jun4_0:
+      file: jun4_0/t1-velocity_ppo_jun4_0.onnx
+      run: t1-velocity-PPO-42-20260604_123256
+      step: 80216064
+      created: '2026-06-04T11:07:51.359208+00:00'
+    jun4_1:
+      file: jun4_1/t1-velocity_ppo_jun4_1.onnx
+      run: t1-velocity-PPO-42-20260604_130912
+      step: 30081024
+      created: '2026-06-04T11:24:27.154944+00:00'
+    jun4_2:
+      file: jun4_2/t1-velocity_ppo_jun4_2.onnx
+      run: t1-velocity-PPO-42-20260604_132739
+      step: 10027008
+      created: '2026-06-04T11:32:57.110053+00:00'
+    jun4_3:
+      file: jun4_3/t1-velocity_ppo_jun4_3.onnx
+      run: t1-velocity-PPO-42-20260604_135235
+      step: 50135040
+      created: '2026-06-04T12:13:55.766208+00:00'
+    jun4_4:
+      file: jun4_4/t1-velocity_ppo_jun4_4.onnx
+      run: t1-velocity-PPO-42-20260604_141527
+      step: 100270080
+      created: '2026-06-04T13:00:20.169318+00:00'
+    jun4_5:
+      file: jun4_5/t1-velocity_ppo_jun4_5.onnx
+      run: t1-velocity-PPO-123-20260604_150422
+      step: 0
+      created: '2026-06-04T13:40:03.376159+00:00'
+    jun4_6:
+      file: jun4_6/t1-velocity_ppo_jun4_6.onnx
+      run: t1-velocity-PPO-123-20260604_154010
+      step: 70189056
+      created: '2026-06-04T14:11:33.551753+00:00'
+    jun4_7:
+      file: jun4_7/t1-velocity_ppo_jun4_7.onnx
+      run: t1-velocity-PPO-123-20260604_161259
+      step: 210567168
+      created: '2026-06-04T15:37:12.449164+00:00'
   default: v0
+t1-velocity-rma:
+  models:
+    v1:
+      file: v1/t1-velocity-rma_rmappo_v1.onnx
+      run: t1-velocity-rma-RmaPPO-42-20260604_010638
+      step: 0
+      created: '2026-06-04T07:19:38.253188+00:00'
+    v2:
+      file: v2/t1-velocity-rma_rmappo_v2.onnx
+      run: t1-velocity-rma-RmaPPO-123-20260604_101551
+      step: 0
+      created: '2026-06-04T14:00:19.578062+00:00'
+  default: v1
