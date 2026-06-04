@@ -75,6 +75,11 @@ t1-velocity:
       run: t1-velocity-PPO-123-20260604_184853
       step: 0
       created: '2026-06-04T17:32:32.555734+00:00'
+    jun4_9:
+      file: jun4_9/t1-velocity_ppo_jun4_9.onnx
+      run: t1-velocity-PPO-123-20260604_161259
+      step: 541458432
+      created: '2026-06-04T17:57:08.930556+00:00'
   default: v0
 t1-velocity-rma:
   models:
