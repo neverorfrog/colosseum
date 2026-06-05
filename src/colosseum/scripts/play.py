@@ -184,6 +184,14 @@ def create_agent(config: PlayConfig, env: ManagerBasedRlEnv, device: torch.devic
     state = algo.load(checkpoint_path)
     logger.info(f"Loaded from step {state.get('global_step', 0)}")
 
+    # Optional RMA latent-path override (diagnostics): force oracle vs adaptation.
+    phase_override = getattr(config, "rma_phase", "auto")
+    if phase_override != "auto" and hasattr(algo, "phase"):
+      from colosseum.algorithm.rma_ppo import RmaPhase
+
+      algo.phase = RmaPhase(phase_override)
+      logger.info(f"RMA phase forced -> {algo.phase.value}")
+
     algo.actor.eval()
     algo.actor_obs_normalizer.eval()
     if hasattr(algo, "rma_manager"):
@@ -264,58 +272,72 @@ def _wrap_agent_with_vel_debug(
   env: ManagerBasedRlEnv,
   every: int = 20,
 ):
-  """Wrap an agent to periodically print component-wise velocity tracking info.
+  """Wrap an agent to periodically print the same debug blocks as the arena.
 
-  All quantities are in the robot body frame (x=forward, y=left, z=up).
-  Reports for env 0 only.
+  Output format mirrors arena/src/tasks/T1Velocity.cpp exactly ([vel] line +
+  [OBS] block with leg pos_rel / vel / last_action in LHP..RAR order) so the
+  two can be diffed directly. Reports for env 0 only.
   """
+  from mjlab.managers.scene_entity_config import SceneEntityCfg
+
+  # Leg joints in the arena's hardware/sim order (LHP..RAR).
+  leg_joint_names = (
+    "Left_Hip_Pitch", "Left_Hip_Roll", "Left_Hip_Yaw",
+    "Left_Knee_Pitch", "Left_Ankle_Pitch", "Left_Ankle_Roll",
+    "Right_Hip_Pitch", "Right_Hip_Roll", "Right_Hip_Yaw",
+    "Right_Knee_Pitch", "Right_Ankle_Pitch", "Right_Ankle_Roll",
+  )
+  leg_labels = ("LHP", "LHR", "LHY", "LKN", "LAP", "LAR",
+                "RHP", "RHR", "RHY", "RKN", "RAP", "RAR")
+  leg_cfg = SceneEntityCfg("robot", joint_names=leg_joint_names, preserve_order=True)
+  leg_cfg.resolve(env.scene)
+  leg_ids = leg_cfg.joint_ids
+  # Leg slice of the 21-dim raw action (arms 8 + waist 1 precede legs); matches
+  # the arena's observation[52 + 9 + k].
+  leg_action_idx = list(range(9, 21))
+
   step_counter = [0]
-  # Running peak terrain-relative foot clearance [left, right] since the last
-  # print, reset each window. Approximates swing apex for env 0.
-  peak_clear = [0.0, 0.0]
+
+  def _fmt(labels, values):
+    return " ".join(f"{lbl}={v:g}" for lbl, v in zip(labels, values))
 
   def wrapped(obs_dict):
     actions = agent(obs_dict)
     step_counter[0] += 1
-
-    # Accumulate swing apex every step (not just on print steps).
-    heights = env.scene["foot_height_scan"].data.heights[0]  # (2,)
-    peak_clear[0] = max(peak_clear[0], heights[0].item())
-    peak_clear[1] = max(peak_clear[1], heights[1].item())
-
     if step_counter[0] % every != 0:
       return actions
 
     robot = env.scene["robot"]
     cmd = env.command_manager.get_command("twist")[0]  # (3,)
     act_lin = robot.data.root_link_lin_vel_b[0]  # (3,)
-    act_ang = robot.data.root_link_ang_vel_b[0]  # (3,)
-    heading = robot.data.heading_w[0].item()  # scalar (rad)
+    act_ang = robot.data.root_link_ang_vel_b[0]  # (3,) ~ gyro (imu_ang_vel)
+    pg = robot.data.projected_gravity_b[0]  # (3,)
 
     cmd_vx, cmd_vy, cmd_wz = cmd[0].item(), cmd[1].item(), cmd[2].item()
-    act_vx, act_vy = act_lin[0].item(), act_lin[1].item()
-    act_wz = act_ang[2].item()
+    act_vx, act_vy, act_wz = act_lin[0].item(), act_lin[1].item(), act_ang[2].item()
 
-    # Duty factor from the last completed stance/swing phases per foot:
-    # duty = stance / (stance + swing). High duty + low apex = feet dragging.
-    contact = env.scene["feet_ground_contact"].data
-    c = contact.last_contact_time[0]  # (2,) last stance duration
-    a = contact.last_air_time[0]  # (2,) last swing duration
-    duty = (c / (c + a).clamp(min=1e-6)).tolist()  # [left, right]
-    air = a.tolist()  # [left, right] last swing duration (s)
+    pos_rel = (robot.data.joint_pos[0, leg_ids]
+               - robot.data.default_joint_pos[0, leg_ids]).tolist()
+    vel = robot.data.joint_vel[0, leg_ids].tolist()
+    raw = actions[0]
+    act_leg = (raw[leg_action_idx].tolist()
+               if raw.numel() >= 21 else [float("nan")] * 12)
 
-    import math
-
+    s = step_counter[0]
     print(
-      f"[vel] step={step_counter[0]:>5d} | "
-      f"cmd: vx={cmd_vx:+.2f}  vy={cmd_vy:+.2f}  wz={cmd_wz:+.2f} | "
-      f"act: vx={act_vx:+.2f}  vy={act_vy:+.2f}  wz={act_wz:+.2f} | "
-      f"err: vx={cmd_vx - act_vx:+.2f}  vy={cmd_vy - act_vy:+.2f}  wz={cmd_wz - act_wz:+.2f} | "
-      f"heading={math.degrees(heading):+.1f}° | "
-      f"duty L/R={duty[0]:.2f}/{duty[1]:.2f}  air={air[0]:.2f}/{air[1]:.2f}s  "
-      f"apex L/R={peak_clear[0]:.3f}/{peak_clear[1]:.3f}m"
+      f"\n[vel] step={s:>5d} | "
+      f"cmd: vx={cmd_vx:+g} vy={cmd_vy:+g} wz={cmd_wz:+g} | "
+      f"act: vx={act_vx:+g} vy={act_vy:+g} wz={act_wz:+g} | "
+      f"err: vx={cmd_vx - act_vx:+g} vy={cmd_vy - act_vy:+g} wz={cmd_wz - act_wz:+g}"
     )
-    peak_clear[0] = peak_clear[1] = 0.0
+    print(
+      f"[OBS] step={s} cmd=[{cmd_vx:g},{cmd_vy:g},{cmd_wz:g}] "
+      f"gyro=[{act_ang[0]:g},{act_ang[1]:g},{act_ang[2]:g}] "
+      f"pg=[{pg[0]:g},{pg[1]:g},{pg[2]:g}]"
+    )
+    print("  leg pos_rel: " + _fmt(leg_labels, pos_rel))
+    print("  leg vel:     " + _fmt(leg_labels, vel))
+    print("  last_action: " + _fmt(leg_labels, act_leg), flush=True)
     return actions
 
   return wrapped

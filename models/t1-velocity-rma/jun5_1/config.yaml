@@ -1,0 +1,1961 @@
+use_cuda: true
+cuda: 0,1
+checkpoint: null
+task:
+  name: t1-velocity-rma
+  env:
+    decimation: 4
+    scene:
+      num_envs: 8192
+      env_spacing: 10.0
+      terrain:
+        init_state:
+          pos:
+          - 0.0
+          - 0.0
+          - 0.0
+          rot:
+          - 1.0
+          - 0.0
+          - 0.0
+          - 0.0
+          lin_vel:
+          - 0.0
+          - 0.0
+          - 0.0
+          ang_vel:
+          - 0.0
+          - 0.0
+          - 0.0
+          joint_pos:
+            .*: 0.0
+          joint_vel:
+            .*: 0.0
+        articulation: null
+        sort_actuators: false
+        lights:
+        - name: sun
+          body: world
+          mode: fixed
+          target: null
+          type: directional
+          castshadow: true
+          pos:
+          - 0.0
+          - 0.0
+          - 1.5
+          dir:
+          - 0.0
+          - 0.0
+          - -1.0
+          cutoff: 45.0
+          exponent: 10.0
+        cameras: []
+        textures:
+        - name: groundplane
+          type: 2d
+          builtin: checker
+          rgb1:
+          - 0.2
+          - 0.3
+          - 0.4
+          rgb2:
+          - 0.1
+          - 0.2
+          - 0.3
+          width: 300
+          height: 300
+          mark: edge
+          markrgb:
+          - 0.8
+          - 0.8
+          - 0.8
+        materials:
+        - name: groundplane
+          rgba:
+          - 1.0
+          - 1.0
+          - 1.0
+          - 1.0
+          texuniform: true
+          texrepeat:
+          - 4.0
+          - 4.0
+          reflectance: 0.2
+          texture: groundplane
+          geom_names_expr:
+          - terrain$
+        collisions: []
+        terrain_type: plane
+        terrain_generator: null
+        env_spacing: 2.0
+        max_init_terrain_level: null
+        num_envs: 1
+        debug_vis: false
+      entities:
+        robot:
+          init_state:
+            pos:
+            - 0
+            - 0
+            - 0.66
+            rot:
+            - 1.0
+            - 0.0
+            - 0.0
+            - 0.0
+            lin_vel:
+            - 0.0
+            - 0.0
+            - 0.0
+            ang_vel:
+            - 0.0
+            - 0.0
+            - 0.0
+            joint_pos:
+              AAHead_yaw: 0.0
+              Head_pitch: 0.0
+              Left_Shoulder_Pitch: 0.2
+              Left_Shoulder_Roll: -1.35
+              Left_Elbow_Pitch: 0.0
+              Left_Elbow_Yaw: -0.5
+              Right_Shoulder_Pitch: 0.2
+              Right_Shoulder_Roll: 1.35
+              Right_Elbow_Pitch: 0.0
+              Right_Elbow_Yaw: 0.5
+              Waist: 0.0
+              Left_Hip_Pitch: -0.24
+              Left_Hip_Roll: 0.0
+              Left_Hip_Yaw: 0.0
+              Left_Knee_Pitch: 0.5
+              Left_Ankle_Pitch: -0.3
+              Left_Ankle_Roll: 0.0
+              Right_Hip_Pitch: -0.24
+              Right_Hip_Roll: 0.0
+              Right_Hip_Yaw: 0.0
+              Right_Knee_Pitch: 0.5
+              Right_Ankle_Pitch: -0.3
+              Right_Ankle_Roll: 0.0
+            joint_vel:
+              .*: 0.0
+          articulation:
+            actuators:
+            - target_names_expr:
+              - AAHead_yaw
+              - Head_pitch
+              transmission_type: joint
+              armature: 0.03
+              frictionloss: 0.03
+              viscous_damping: null
+              delay_min_lag: 0
+              delay_max_lag: 0
+              delay_hold_prob: 0.0
+              delay_update_period: 0
+              delay_per_env_phase: true
+              stiffness: 5.0
+              damping: 2.0
+              effort_limit: 7.0
+            - target_names_expr:
+              - .*Shoulder.*
+              - .*Elbow.*
+              transmission_type: joint
+              armature: 0.03
+              frictionloss: 0.03
+              viscous_damping: null
+              delay_min_lag: 0
+              delay_max_lag: 0
+              delay_hold_prob: 0.0
+              delay_update_period: 0
+              delay_per_env_phase: true
+              stiffness: 20.0
+              damping: 1.0
+              effort_limit: 18.0
+            - target_names_expr:
+              - Waist
+              transmission_type: joint
+              armature: 0.03
+              frictionloss: 0.03
+              viscous_damping: null
+              delay_min_lag: 0
+              delay_max_lag: 0
+              delay_hold_prob: 0.0
+              delay_update_period: 0
+              delay_per_env_phase: true
+              stiffness: 200.0
+              damping: 5.0
+              effort_limit: 30.0
+            - target_names_expr:
+              - .*Hip_Pitch
+              transmission_type: joint
+              armature: 0.03
+              frictionloss: 0.03
+              viscous_damping: null
+              delay_min_lag: 0
+              delay_max_lag: 0
+              delay_hold_prob: 0.0
+              delay_update_period: 0
+              delay_per_env_phase: true
+              stiffness: 200.0
+              damping: 5.0
+              effort_limit: 45.0
+            - target_names_expr:
+              - .*Hip_Roll
+              transmission_type: joint
+              armature: 0.03
+              frictionloss: 0.03
+              viscous_damping: null
+              delay_min_lag: 0
+              delay_max_lag: 0
+              delay_hold_prob: 0.0
+              delay_update_period: 0
+              delay_per_env_phase: true
+              stiffness: 200.0
+              damping: 5.0
+              effort_limit: 30.0
+            - target_names_expr:
+              - .*Hip_Yaw
+              transmission_type: joint
+              armature: 0.03
+              frictionloss: 0.03
+              viscous_damping: null
+              delay_min_lag: 0
+              delay_max_lag: 0
+              delay_hold_prob: 0.0
+              delay_update_period: 0
+              delay_per_env_phase: true
+              stiffness: 200.0
+              damping: 5.0
+              effort_limit: 30.0
+            - target_names_expr:
+              - .*Knee_Pitch
+              transmission_type: joint
+              armature: 0.03
+              frictionloss: 0.03
+              viscous_damping: null
+              delay_min_lag: 0
+              delay_max_lag: 0
+              delay_hold_prob: 0.0
+              delay_update_period: 0
+              delay_per_env_phase: true
+              stiffness: 200.0
+              damping: 5.0
+              effort_limit: 65.0
+            - target_names_expr:
+              - .*Ankle_Pitch
+              transmission_type: joint
+              armature: 0.03
+              frictionloss: 0.03
+              viscous_damping: null
+              delay_min_lag: 0
+              delay_max_lag: 0
+              delay_hold_prob: 0.0
+              delay_update_period: 0
+              delay_per_env_phase: true
+              stiffness: 50.0
+              damping: 3.0
+              effort_limit: 24.0
+            - target_names_expr:
+              - .*Ankle_Roll
+              transmission_type: joint
+              armature: 0.03
+              frictionloss: 0.03
+              viscous_damping: null
+              delay_min_lag: 0
+              delay_max_lag: 0
+              delay_hold_prob: 0.0
+              delay_update_period: 0
+              delay_per_env_phase: true
+              stiffness: 50.0
+              damping: 3.0
+              effort_limit: 15.0
+            soft_joint_pos_limit_factor: 0.9
+          sort_actuators: false
+          lights: []
+          cameras: []
+          textures: []
+          materials: []
+          collisions:
+          - geom_names_expr:
+            - ^(left|right)_foot_sphere.*link$
+            contype: 0
+            conaffinity: 1
+            condim: 4
+            priority: 1
+            friction:
+            - 0.6
+            - 0.04
+            solref: null
+            solimp: null
+            margin: null
+            gap: null
+            solmix: null
+            disable_other_geoms: true
+      sensors:
+      - name: feet_ground_contact
+        primary:
+          mode: subtree
+          pattern: ^(left_foot_link|right_foot_link)$
+          entity: robot
+          exclude: []
+        secondary:
+          mode: body
+          pattern: terrain
+          entity: null
+          exclude: []
+        fields:
+        - found
+        - force
+        reduce: netforce
+        num_slots: 1
+        secondary_policy: first
+        track_air_time: true
+        global_frame: false
+        history_length: 0
+        debug: false
+      - name: foot_height_scan
+        frame:
+        - type: site
+          name: left_foot
+          entity: robot
+        - type: site
+          name: right_foot
+          entity: robot
+        pattern:
+          rings:
+          - radius: 0.03
+            num_samples: 6
+          include_center: true
+          direction:
+          - 0.0
+          - 0.0
+          - -1.0
+        ray_alignment: yaw
+        max_distance: 1.0
+        exclude_parent_body: true
+        include_geom_groups:
+        - 0
+        debug_vis: false
+        viz:
+          hit_color:
+          - 0.0
+          - 1.0
+          - 0.0
+          - 0.8
+          miss_color:
+          - 1.0
+          - 0.0
+          - 0.0
+          - 0.4
+          hit_sphere_color:
+          - 0.0
+          - 1.0
+          - 1.0
+          - 1.0
+          hit_sphere_radius: 0.5
+          show_rays: false
+          show_normals: false
+          normal_color:
+          - 1.0
+          - 1.0
+          - 0.0
+          - 1.0
+          normal_length: 5.0
+        reduction: min
+      - name: nonfoot_ground_touch
+        primary:
+          mode: geom
+          pattern: .+
+          entity: robot
+          exclude:
+          - left_foot_link
+          - left_foot_sphere_1_link
+          - left_foot_sphere_2_link
+          - left_foot_sphere_3_link
+          - left_foot_sphere_4_link
+          - left_foot_sphere_5_link
+          - left_foot_sphere_6_link
+          - left_foot_sphere_7_link
+          - right_foot_link
+          - right_foot_sphere_1_link
+          - right_foot_sphere_2_link
+          - right_foot_sphere_3_link
+          - right_foot_sphere_4_link
+          - right_foot_sphere_5_link
+          - right_foot_sphere_6_link
+          - right_foot_sphere_7_link
+        secondary:
+          mode: body
+          pattern: terrain
+          entity: null
+          exclude: []
+        fields:
+        - found
+        - force
+        reduce: none
+        num_slots: 1
+        secondary_policy: first
+        track_air_time: false
+        global_frame: false
+        history_length: 4
+        debug: false
+      - name: self_collision
+        primary:
+          mode: subtree
+          pattern: Trunk
+          entity: robot
+          exclude: []
+        secondary:
+          mode: subtree
+          pattern: Trunk
+          entity: robot
+          exclude: []
+        fields:
+        - found
+        - force
+        reduce: none
+        num_slots: 1
+        secondary_policy: first
+        track_air_time: false
+        global_frame: false
+        history_length: 4
+        debug: false
+      extent: 10.0
+      spec_fn: null
+    observations:
+      actor:
+        terms:
+          base_ang_vel:
+            params:
+              sensor_name: robot/imu_ang_vel
+            noise:
+              operation: add
+              _tensor_cache: {}
+              n_min: -0.1
+              n_max: 0.1
+            clip: null
+            scale: null
+            delay_min_lag: 0
+            delay_max_lag: 3
+            delay_per_env: true
+            delay_hold_prob: 0.0
+            delay_update_period: 1500
+            delay_per_env_phase: true
+            history_length: 0
+            flatten_history_dim: true
+          projected_gravity:
+            params: {}
+            noise:
+              operation: add
+              _tensor_cache: {}
+              n_min: -0.05
+              n_max: 0.05
+            clip: null
+            scale: null
+            delay_min_lag: 0
+            delay_max_lag: 3
+            delay_per_env: true
+            delay_hold_prob: 0.0
+            delay_update_period: 1500
+            delay_per_env_phase: true
+            history_length: 0
+            flatten_history_dim: true
+          joint_pos:
+            params: {}
+            noise:
+              operation: add
+              _tensor_cache: {}
+              n_min: -0.01
+              n_max: 0.01
+            clip: null
+            scale: null
+            delay_min_lag: 0
+            delay_max_lag: 3
+            delay_per_env: true
+            delay_hold_prob: 0.0
+            delay_update_period: 1500
+            delay_per_env_phase: true
+            history_length: 0
+            flatten_history_dim: true
+          joint_vel:
+            params: {}
+            noise:
+              operation: add
+              _tensor_cache: {}
+              n_min: -0.1
+              n_max: 0.1
+            clip: null
+            scale: null
+            delay_min_lag: 0
+            delay_max_lag: 3
+            delay_per_env: true
+            delay_hold_prob: 0.0
+            delay_update_period: 1500
+            delay_per_env_phase: true
+            history_length: 0
+            flatten_history_dim: true
+          actions:
+            params: {}
+            noise: null
+            clip: null
+            scale: null
+            delay_min_lag: 0
+            delay_max_lag: 0
+            delay_per_env: true
+            delay_hold_prob: 0.0
+            delay_update_period: 0
+            delay_per_env_phase: true
+            history_length: 0
+            flatten_history_dim: true
+          command:
+            params:
+              command_name: twist
+            noise: null
+            clip: null
+            scale: null
+            delay_min_lag: 0
+            delay_max_lag: 0
+            delay_per_env: true
+            delay_hold_prob: 0.0
+            delay_update_period: 0
+            delay_per_env_phase: true
+            history_length: 0
+            flatten_history_dim: true
+          gait_phase:
+            params:
+              command_name: gait_phase
+            noise: null
+            clip: null
+            scale: null
+            delay_min_lag: 0
+            delay_max_lag: 0
+            delay_per_env: true
+            delay_hold_prob: 0.0
+            delay_update_period: 0
+            delay_per_env_phase: true
+            history_length: 0
+            flatten_history_dim: true
+        concatenate_terms: true
+        concatenate_dim: -1
+        enable_corruption: true
+        history_length: null
+        flatten_history_dim: true
+        nan_policy: disabled
+        nan_check_per_term: true
+      critic:
+        terms:
+          base_ang_vel:
+            params:
+              sensor_name: robot/imu_ang_vel
+            noise:
+              operation: add
+              _tensor_cache: {}
+              n_min: -0.1
+              n_max: 0.1
+            clip: null
+            scale: null
+            delay_min_lag: 0
+            delay_max_lag: 0
+            delay_per_env: true
+            delay_hold_prob: 0.0
+            delay_update_period: 0
+            delay_per_env_phase: true
+            history_length: 0
+            flatten_history_dim: true
+          projected_gravity:
+            params: {}
+            noise:
+              operation: add
+              _tensor_cache: {}
+              n_min: -0.05
+              n_max: 0.05
+            clip: null
+            scale: null
+            delay_min_lag: 0
+            delay_max_lag: 0
+            delay_per_env: true
+            delay_hold_prob: 0.0
+            delay_update_period: 0
+            delay_per_env_phase: true
+            history_length: 0
+            flatten_history_dim: true
+          joint_pos:
+            params: {}
+            noise:
+              operation: add
+              _tensor_cache: {}
+              n_min: -0.01
+              n_max: 0.01
+            clip: null
+            scale: null
+            delay_min_lag: 0
+            delay_max_lag: 0
+            delay_per_env: true
+            delay_hold_prob: 0.0
+            delay_update_period: 0
+            delay_per_env_phase: true
+            history_length: 0
+            flatten_history_dim: true
+          joint_vel:
+            params: {}
+            noise:
+              operation: add
+              _tensor_cache: {}
+              n_min: -0.1
+              n_max: 0.1
+            clip: null
+            scale: null
+            delay_min_lag: 0
+            delay_max_lag: 0
+            delay_per_env: true
+            delay_hold_prob: 0.0
+            delay_update_period: 0
+            delay_per_env_phase: true
+            history_length: 0
+            flatten_history_dim: true
+          actions:
+            params: {}
+            noise: null
+            clip: null
+            scale: null
+            delay_min_lag: 0
+            delay_max_lag: 0
+            delay_per_env: true
+            delay_hold_prob: 0.0
+            delay_update_period: 0
+            delay_per_env_phase: true
+            history_length: 0
+            flatten_history_dim: true
+          command:
+            params:
+              command_name: twist
+            noise: null
+            clip: null
+            scale: null
+            delay_min_lag: 0
+            delay_max_lag: 0
+            delay_per_env: true
+            delay_hold_prob: 0.0
+            delay_update_period: 0
+            delay_per_env_phase: true
+            history_length: 0
+            flatten_history_dim: true
+          gait_phase:
+            params:
+              command_name: gait_phase
+            noise: null
+            clip: null
+            scale: null
+            delay_min_lag: 0
+            delay_max_lag: 0
+            delay_per_env: true
+            delay_hold_prob: 0.0
+            delay_update_period: 0
+            delay_per_env_phase: true
+            history_length: 0
+            flatten_history_dim: true
+          base_lin_vel:
+            params:
+              sensor_name: robot/imu_lin_vel
+            noise:
+              operation: add
+              _tensor_cache: {}
+              n_min: -0.1
+              n_max: 0.1
+            clip: null
+            scale: null
+            delay_min_lag: 0
+            delay_max_lag: 0
+            delay_per_env: true
+            delay_hold_prob: 0.0
+            delay_update_period: 0
+            delay_per_env_phase: true
+            history_length: 0
+            flatten_history_dim: true
+          base_height:
+            params: {}
+            noise:
+              operation: add
+              _tensor_cache: {}
+              n_min: -0.02
+              n_max: 0.02
+            clip: null
+            scale: null
+            delay_min_lag: 0
+            delay_max_lag: 0
+            delay_per_env: true
+            delay_hold_prob: 0.0
+            delay_update_period: 0
+            delay_per_env_phase: true
+            history_length: 0
+            flatten_history_dim: true
+          foot_height:
+            params:
+              sensor_name: foot_height_scan
+            noise: null
+            clip: null
+            scale: null
+            delay_min_lag: 0
+            delay_max_lag: 0
+            delay_per_env: true
+            delay_hold_prob: 0.0
+            delay_update_period: 0
+            delay_per_env_phase: true
+            history_length: 0
+            flatten_history_dim: true
+          foot_contact:
+            params:
+              sensor_name: feet_ground_contact
+            noise: null
+            clip: null
+            scale: null
+            delay_min_lag: 0
+            delay_max_lag: 0
+            delay_per_env: true
+            delay_hold_prob: 0.0
+            delay_update_period: 0
+            delay_per_env_phase: true
+            history_length: 0
+            flatten_history_dim: true
+          foot_contact_forces:
+            params:
+              sensor_name: feet_ground_contact
+            noise: null
+            clip: null
+            scale: null
+            delay_min_lag: 0
+            delay_max_lag: 0
+            delay_per_env: true
+            delay_hold_prob: 0.0
+            delay_update_period: 0
+            delay_per_env_phase: true
+            history_length: 0
+            flatten_history_dim: true
+        concatenate_terms: true
+        concatenate_dim: -1
+        enable_corruption: false
+        history_length: null
+        flatten_history_dim: true
+        nan_policy: disabled
+        nan_check_per_term: true
+      env_params:
+        terms:
+          foot_friction:
+            params:
+              asset_cfg:
+                name: robot
+                joint_names: null
+                body_names: null
+                geom_names:
+                - left_foot_link
+                - left_foot_sphere_1_link
+                - left_foot_sphere_2_link
+                - left_foot_sphere_3_link
+                - left_foot_sphere_4_link
+                - left_foot_sphere_5_link
+                - left_foot_sphere_6_link
+                - left_foot_sphere_7_link
+                - right_foot_link
+                - right_foot_sphere_1_link
+                - right_foot_sphere_2_link
+                - right_foot_sphere_3_link
+                - right_foot_sphere_4_link
+                - right_foot_sphere_5_link
+                - right_foot_sphere_6_link
+                - right_foot_sphere_7_link
+                site_names: null
+                actuator_names: null
+                tendon_names: null
+                camera_names: null
+                light_names: null
+                material_names: null
+                pair_names: null
+                preserve_order: false
+            noise: null
+            clip: null
+            scale: null
+            delay_min_lag: 0
+            delay_max_lag: 0
+            delay_per_env: true
+            delay_hold_prob: 0.0
+            delay_update_period: 0
+            delay_per_env_phase: true
+            history_length: 0
+            flatten_history_dim: true
+          base_com:
+            params:
+              asset_cfg:
+                name: robot
+                joint_names: null
+                body_names:
+                - Trunk
+                geom_names: null
+                site_names: null
+                actuator_names: null
+                tendon_names: null
+                camera_names: null
+                light_names: null
+                material_names: null
+                pair_names: null
+                preserve_order: false
+            noise: null
+            clip: null
+            scale: null
+            delay_min_lag: 0
+            delay_max_lag: 0
+            delay_per_env: true
+            delay_hold_prob: 0.0
+            delay_update_period: 0
+            delay_per_env_phase: true
+            history_length: 0
+            flatten_history_dim: true
+          kp_scale:
+            params:
+              asset_cfg:
+                name: robot
+                joint_names: null
+                body_names: null
+                geom_names: null
+                site_names: null
+                actuator_names: null
+                tendon_names: null
+                camera_names: null
+                light_names: null
+                material_names: null
+                pair_names: null
+                preserve_order: false
+            noise: null
+            clip: null
+            scale: null
+            delay_min_lag: 0
+            delay_max_lag: 0
+            delay_per_env: true
+            delay_hold_prob: 0.0
+            delay_update_period: 0
+            delay_per_env_phase: true
+            history_length: 0
+            flatten_history_dim: true
+          kd_scale:
+            params:
+              asset_cfg:
+                name: robot
+                joint_names: null
+                body_names: null
+                geom_names: null
+                site_names: null
+                actuator_names: null
+                tendon_names: null
+                camera_names: null
+                light_names: null
+                material_names: null
+                pair_names: null
+                preserve_order: false
+            noise: null
+            clip: null
+            scale: null
+            delay_min_lag: 0
+            delay_max_lag: 0
+            delay_per_env: true
+            delay_hold_prob: 0.0
+            delay_update_period: 0
+            delay_per_env_phase: true
+            history_length: 0
+            flatten_history_dim: true
+          link_mass_scale:
+            params:
+              asset_cfg:
+                name: robot
+                joint_names: null
+                body_names:
+                - .*
+                geom_names: null
+                site_names: null
+                actuator_names: null
+                tendon_names: null
+                camera_names: null
+                light_names: null
+                material_names: null
+                pair_names: null
+                preserve_order: false
+            noise: null
+            clip: null
+            scale: null
+            delay_min_lag: 0
+            delay_max_lag: 0
+            delay_per_env: true
+            delay_hold_prob: 0.0
+            delay_update_period: 0
+            delay_per_env_phase: true
+            history_length: 0
+            flatten_history_dim: true
+          joint_damping_scale:
+            params:
+              asset_cfg:
+                name: robot
+                joint_names:
+                - .*
+                body_names: null
+                geom_names: null
+                site_names: null
+                actuator_names: null
+                tendon_names: null
+                camera_names: null
+                light_names: null
+                material_names: null
+                pair_names: null
+                preserve_order: false
+            noise: null
+            clip: null
+            scale: null
+            delay_min_lag: 0
+            delay_max_lag: 0
+            delay_per_env: true
+            delay_hold_prob: 0.0
+            delay_update_period: 0
+            delay_per_env_phase: true
+            history_length: 0
+            flatten_history_dim: true
+          effort_limit_scale:
+            params:
+              asset_cfg:
+                name: robot
+                joint_names: null
+                body_names: null
+                geom_names: null
+                site_names: null
+                actuator_names: null
+                tendon_names: null
+                camera_names: null
+                light_names: null
+                material_names: null
+                pair_names: null
+                preserve_order: false
+            noise: null
+            clip: null
+            scale: null
+            delay_min_lag: 0
+            delay_max_lag: 0
+            delay_per_env: true
+            delay_hold_prob: 0.0
+            delay_update_period: 0
+            delay_per_env_phase: true
+            history_length: 0
+            flatten_history_dim: true
+        concatenate_terms: true
+        concatenate_dim: -1
+        enable_corruption: false
+        history_length: null
+        flatten_history_dim: true
+        nan_policy: disabled
+        nan_check_per_term: true
+      odom:
+        terms:
+          base_lin_vel:
+            params:
+              sensor_name: robot/imu_lin_vel
+            noise: null
+            clip: null
+            scale: null
+            delay_min_lag: 0
+            delay_max_lag: 0
+            delay_per_env: true
+            delay_hold_prob: 0.0
+            delay_update_period: 0
+            delay_per_env_phase: true
+            history_length: 0
+            flatten_history_dim: true
+        concatenate_terms: true
+        concatenate_dim: -1
+        enable_corruption: false
+        history_length: null
+        flatten_history_dim: true
+        nan_policy: disabled
+        nan_check_per_term: true
+    actions:
+      joint_pos:
+        entity_name: robot
+        clip: null
+        transmission_type: joint
+        actuator_names:
+        - ^(?!AAHead_yaw$|Head_pitch$).*$
+        scale:
+          Left_Shoulder_Pitch: 0.25
+          Left_Shoulder_Roll: 0.25
+          Left_Elbow_Pitch: 0.25
+          Left_Elbow_Yaw: 0.25
+          Right_Shoulder_Pitch: 0.25
+          Right_Shoulder_Roll: 0.25
+          Right_Elbow_Pitch: 0.25
+          Right_Elbow_Yaw: 0.25
+          Waist: 0.25
+          Left_Hip_Pitch: 0.25
+          Left_Hip_Roll: 0.25
+          Left_Hip_Yaw: 0.25
+          Left_Knee_Pitch: 0.25
+          Left_Ankle_Pitch: 0.25
+          Left_Ankle_Roll: 0.25
+          Right_Hip_Pitch: 0.25
+          Right_Hip_Roll: 0.25
+          Right_Hip_Yaw: 0.25
+          Right_Knee_Pitch: 0.25
+          Right_Ankle_Pitch: 0.25
+          Right_Ankle_Roll: 0.25
+        offset: 0.0
+        preserve_order: false
+        use_default_offset: true
+        min_delay_steps: 0
+        max_delay_steps: 2
+      head_perturb:
+        entity_name: robot
+        clip: null
+        head_joint_names:
+        - AAHead_yaw
+        - Head_pitch
+        yaw_range:
+        - -1.0
+        - 1.0
+        pitch_range:
+        - -0.2
+        - 0.8
+        interval_range:
+        - 1.0
+        - 3.0
+        smoothing_duration: 0.3
+        enabled: true
+    events:
+      reset_base:
+        params:
+          pose_range:
+            x:
+            - -0.5
+            - 0.5
+            y:
+            - -0.5
+            - 0.5
+            z:
+            - 0.01
+            - 0.05
+            yaw:
+            - -3.14
+            - 3.14
+          velocity_range: {}
+        mode: reset
+        interval_range_s: null
+        is_global_time: false
+        min_step_count_between_reset: 0
+      reset_robot_joints:
+        params:
+          position_range:
+          - -0.1
+          - 0.1
+          velocity_range:
+          - 0.0
+          - 0.0
+          asset_cfg:
+            name: robot
+            joint_names:
+            - .*
+            body_names: null
+            geom_names: null
+            site_names: null
+            actuator_names: null
+            tendon_names: null
+            camera_names: null
+            light_names: null
+            material_names: null
+            pair_names: null
+            preserve_order: false
+        mode: reset
+        interval_range_s: null
+        is_global_time: false
+        min_step_count_between_reset: 0
+      foot_friction:
+        params:
+          asset_cfg:
+            name: robot
+            joint_names: null
+            body_names: null
+            geom_names:
+            - left_foot_link
+            - left_foot_sphere_1_link
+            - left_foot_sphere_2_link
+            - left_foot_sphere_3_link
+            - left_foot_sphere_4_link
+            - left_foot_sphere_5_link
+            - left_foot_sphere_6_link
+            - left_foot_sphere_7_link
+            - right_foot_link
+            - right_foot_sphere_1_link
+            - right_foot_sphere_2_link
+            - right_foot_sphere_3_link
+            - right_foot_sphere_4_link
+            - right_foot_sphere_5_link
+            - right_foot_sphere_6_link
+            - right_foot_sphere_7_link
+            site_names: null
+            actuator_names: null
+            tendon_names: null
+            camera_names: null
+            light_names: null
+            material_names: null
+            pair_names: null
+            preserve_order: false
+          ranges:
+            0:
+            - 0.8
+            - 1.5
+            1:
+            - 0.02
+            - 0.05
+          axes:
+          - 0
+          - 1
+          operation: abs
+          shared_random: true
+        mode: reset
+        interval_range_s: null
+        is_global_time: false
+        min_step_count_between_reset: 0
+      kick_robot:
+        params:
+          velocity_range:
+            x:
+            - -0.5
+            - 0.5
+            y:
+            - -0.5
+            - 0.5
+            z:
+            - -0.1
+            - 0.1
+            roll:
+            - -0.04
+            - 0.04
+            pitch:
+            - -0.04
+            - 0.04
+            yaw:
+            - -0.04
+            - 0.04
+        mode: interval
+        interval_range_s:
+        - 5.0
+        - 10.0
+        is_global_time: false
+        min_step_count_between_reset: 0
+      push_robot:
+        params:
+          force_range:
+          - 0.0
+          - 0.0
+          torque_range:
+          - 0.0
+          - 0.0
+          duration_s:
+          - 0.8
+          - 1.0
+          cooldown_s:
+          - 4.0
+          - 6.0
+          asset_cfg:
+            name: robot
+            joint_names: null
+            body_names:
+            - Trunk
+            geom_names: null
+            site_names: null
+            actuator_names: null
+            tendon_names: null
+            camera_names: null
+            light_names: null
+            material_names: null
+            pair_names: null
+            preserve_order: false
+        mode: step
+        interval_range_s: null
+        is_global_time: false
+        min_step_count_between_reset: 0
+      encoder_bias:
+        params:
+          asset_cfg:
+            name: robot
+            joint_names: null
+            body_names: null
+            geom_names: null
+            site_names: null
+            actuator_names: null
+            tendon_names: null
+            camera_names: null
+            light_names: null
+            material_names: null
+            pair_names: null
+            preserve_order: false
+          bias_range:
+          - -0.015
+          - 0.015
+        mode: startup
+        interval_range_s: null
+        is_global_time: false
+        min_step_count_between_reset: 0
+      joint_default_pos:
+        params:
+          asset_cfg:
+            name: robot
+            joint_names:
+            - .*
+            body_names: null
+            geom_names: null
+            site_names: null
+            actuator_names: null
+            tendon_names: null
+            camera_names: null
+            light_names: null
+            material_names: null
+            pair_names: null
+            preserve_order: false
+          ranges:
+          - -0.01
+          - 0.01
+          operation: add
+        mode: startup
+        interval_range_s: null
+        is_global_time: false
+        min_step_count_between_reset: 0
+      base_com:
+        params:
+          asset_cfg:
+            name: robot
+            joint_names: null
+            body_names:
+            - Trunk
+            geom_names: null
+            site_names: null
+            actuator_names: null
+            tendon_names: null
+            camera_names: null
+            light_names: null
+            material_names: null
+            pair_names: null
+            preserve_order: false
+          operation: add
+          ranges:
+            0:
+            - -0.02
+            - 0.02
+            1:
+            - -0.02
+            - 0.02
+            2:
+            - -0.02
+            - 0.02
+        mode: startup
+        interval_range_s: null
+        is_global_time: false
+        min_step_count_between_reset: 0
+      trunk_inertia:
+        params:
+          asset_cfg:
+            name: robot
+            joint_names: null
+            body_names:
+            - Trunk
+            geom_names: null
+            site_names: null
+            actuator_names: null
+            tendon_names: null
+            camera_names: null
+            light_names: null
+            material_names: null
+            pair_names: null
+            preserve_order: false
+          alpha_range:
+          - -0.1
+          - 0.1
+          t_range:
+          - -0.02
+          - 0.02
+        mode: startup
+        interval_range_s: null
+        is_global_time: false
+        min_step_count_between_reset: 0
+      link_inertia:
+        params:
+          asset_cfg:
+            name: robot
+            joint_names: null
+            body_names:
+            - .*
+            geom_names: null
+            site_names: null
+            actuator_names: null
+            tendon_names: null
+            camera_names: null
+            light_names: null
+            material_names: null
+            pair_names: null
+            preserve_order: false
+          alpha_range:
+          - -0.2
+          - 0.2
+          d1_range:
+          - -0.1
+          - 0.1
+          d2_range:
+          - -0.15
+          - 0.15
+          d3_range:
+          - -0.15
+          - 0.15
+        mode: startup
+        interval_range_s: null
+        is_global_time: false
+        min_step_count_between_reset: 0
+      joint_friction:
+        params:
+          asset_cfg:
+            name: robot
+            joint_names:
+            - .*
+            body_names: null
+            geom_names: null
+            site_names: null
+            actuator_names: null
+            tendon_names: null
+            camera_names: null
+            light_names: null
+            material_names: null
+            pair_names: null
+            preserve_order: false
+          ranges:
+          - 1.0
+          - 20.0
+          operation: scale
+        mode: startup
+        interval_range_s: null
+        is_global_time: false
+        min_step_count_between_reset: 0
+      joint_damping:
+        params:
+          asset_cfg:
+            name: robot
+            joint_names:
+            - .*
+            body_names: null
+            geom_names: null
+            site_names: null
+            actuator_names: null
+            tendon_names: null
+            camera_names: null
+            light_names: null
+            material_names: null
+            pair_names: null
+            preserve_order: false
+          ranges:
+          - 0.85
+          - 1.15
+          operation: scale
+        mode: startup
+        interval_range_s: null
+        is_global_time: false
+        min_step_count_between_reset: 0
+      joint_armature:
+        params:
+          asset_cfg:
+            name: robot
+            joint_names:
+            - .*
+            body_names: null
+            geom_names: null
+            site_names: null
+            actuator_names: null
+            tendon_names: null
+            camera_names: null
+            light_names: null
+            material_names: null
+            pair_names: null
+            preserve_order: false
+          ranges:
+          - 0.8
+          - 1.2
+          operation: scale
+        mode: startup
+        interval_range_s: null
+        is_global_time: false
+        min_step_count_between_reset: 0
+      pd_gains:
+        params:
+          asset_cfg:
+            name: robot
+            joint_names: null
+            body_names: null
+            geom_names: null
+            site_names: null
+            actuator_names: null
+            tendon_names: null
+            camera_names: null
+            light_names: null
+            material_names: null
+            pair_names: null
+            preserve_order: false
+          kp_range:
+          - 0.85
+          - 1.15
+          kd_range:
+          - 0.85
+          - 1.15
+          operation: scale
+        mode: startup
+        interval_range_s: null
+        is_global_time: false
+        min_step_count_between_reset: 0
+      effort_limits:
+        params:
+          asset_cfg:
+            name: robot
+            joint_names: null
+            body_names: null
+            geom_names: null
+            site_names: null
+            actuator_names: null
+            tendon_names: null
+            camera_names: null
+            light_names: null
+            material_names: null
+            pair_names: null
+            preserve_order: false
+          effort_limit_range:
+          - 0.7
+          - 1.0
+          operation: scale
+        mode: startup
+        interval_range_s: null
+        is_global_time: false
+        min_step_count_between_reset: 0
+    seed: null
+    sim:
+      nconmax: 45
+      njmax: 1500
+      ls_parallel: true
+      contact_sensor_maxmatch: 500
+      mujoco:
+        timestep: 0.005
+        integrator: implicitfast
+        impratio: 1.0
+        cone: pyramidal
+        jacobian: auto
+        solver: newton
+        iterations: 10
+        tolerance: 1.0e-08
+        ls_iterations: 20
+        ls_tolerance: 0.01
+        ccd_iterations: 500
+        gravity:
+        - 0.0
+        - 0.0
+        - -9.81
+        disableflags: []
+        enableflags: []
+      nan_guard:
+        enabled: true
+        buffer_size: 100
+        output_dir: /tmp/mjlab/nan_dumps
+        max_envs_to_dump: 5
+    viewer:
+      lookat:
+      - 0.0
+      - 0.0
+      - 0.0
+      distance: 3.0
+      fovy: null
+      elevation: -5.0
+      azimuth: 90.0
+      origin_type: 4
+      entity_name: robot
+      body_name: Trunk
+      env_idx: 0
+      max_extra_envs: 2
+      enable_reflections: true
+      enable_shadows: true
+      height: 240
+      width: 320
+    episode_length_s: 30.0
+    rewards:
+      track_linear_velocity:
+        params:
+          command_name: twist
+          std: 0.5
+        weight: 4.0
+      track_angular_velocity:
+        params:
+          command_name: twist
+          std: 0.5
+        weight: 3.0
+      feet_swing:
+        params:
+          phase_command_name: gait_phase
+          sensor_name: feet_ground_contact
+          swing_period: 0.2
+          contact_threshold: 0.1
+          command_name: twist
+          command_threshold: 0.05
+        weight: 2.0
+      alive:
+        params: {}
+        weight: 0.5
+      penalty_landing:
+        params:
+          sensor_name: feet_ground_contact
+          command_name: twist
+          command_threshold: 0.05
+        weight: -0.025
+      penalty_body_ang_vel:
+        params:
+          asset_cfg:
+            name: robot
+            joint_names: null
+            body_names: Trunk
+            geom_names: null
+            site_names: null
+            actuator_names: null
+            tendon_names: null
+            camera_names: null
+            light_names: null
+            material_names: null
+            pair_names: null
+            preserve_order: false
+        weight: -2.0
+      penalty_orientation:
+        params:
+          asset_cfg:
+            name: robot
+            joint_names: null
+            body_names: Trunk
+            geom_names: null
+            site_names: null
+            actuator_names: null
+            tendon_names: null
+            camera_names: null
+            light_names: null
+            material_names: null
+            pair_names: null
+            preserve_order: false
+        weight: -10.0
+      penalty_feet_ori:
+        params:
+          asset_cfg:
+            name: robot
+            joint_names: null
+            body_names:
+            - left_foot_link
+            - right_foot_link
+            geom_names: null
+            site_names: null
+            actuator_names: null
+            tendon_names: null
+            camera_names: null
+            light_names: null
+            material_names: null
+            pair_names: null
+            preserve_order: false
+        weight: -5.0
+      penalty_feet_yaw_diff:
+        params:
+          asset_cfg:
+            name: robot
+            joint_names: null
+            body_names:
+            - left_foot_link
+            - right_foot_link
+            geom_names: null
+            site_names: null
+            actuator_names: null
+            tendon_names: null
+            camera_names: null
+            light_names: null
+            material_names: null
+            pair_names: null
+            preserve_order: false
+        weight: -1.0
+      penalty_feet_yaw_mean:
+        params:
+          asset_cfg:
+            name: robot
+            joint_names: null
+            body_names:
+            - left_foot_link
+            - right_foot_link
+            geom_names: null
+            site_names: null
+            actuator_names: null
+            tendon_names: null
+            camera_names: null
+            light_names: null
+            material_names: null
+            pair_names: null
+            preserve_order: false
+        weight: -1.0
+      penalty_action_rate:
+        params: {}
+        weight: -1.25
+      penalty_pose_deviation:
+        params:
+          asset_cfg:
+            name: robot
+            joint_names:
+            - .*
+            body_names: null
+            geom_names: null
+            site_names: null
+            actuator_names: null
+            tendon_names: null
+            camera_names: null
+            light_names: null
+            material_names: null
+            pair_names: null
+            preserve_order: false
+          command_name: twist
+          walking_threshold: 0.05
+          running_threshold: 1.5
+          weights_standing:
+            (?i).*head.*: 0.0
+            (?i).*shoulder_pitch.*: 50.0
+            (?i).*shoulder_roll.*: 50.0
+            (?i).*elbow.pitch: 50.0
+            (?i).*elbow.yaw: 50.0
+            Waist: 25.0
+            (?i).*hip_pitch.*: 1.0
+            (?i).*hip_roll.*: 5.0
+            (?i).*hip_yaw.*: 5.0
+            (?i).*knee.*: 1.0
+            (?i).*ankle.*: 5.0
+          weights_walking:
+            (?i).*head.*: 0.0
+            (?i).*shoulder_pitch.*: 50.0
+            (?i).*shoulder_roll.*: 50.0
+            (?i).*elbow.pitch: 50.0
+            (?i).*elbow.yaw: 50.0
+            Waist: 10.0
+            (?i).*hip_pitch.*: 1.0
+            (?i).*hip_roll.*: 5.0
+            (?i).*hip_yaw.*: 5.0
+            (?i).*knee.*: 1.0
+            (?i).*ankle.*: 5.0
+          weights_running:
+            (?i).*head.*: 0.0
+            (?i).*shoulder_pitch.*: 50.0
+            (?i).*shoulder_roll.*: 50.0
+            (?i).*elbow.pitch: 50.0
+            (?i).*elbow.yaw: 50.0
+            Waist: 5.0
+            (?i).*hip_pitch.*: 0.1
+            (?i).*hip_roll.*: 0.5
+            (?i).*hip_yaw.*: 0.5
+            (?i).*knee.*: 0.1
+            (?i).*ankle.*: 0.5
+        weight: -0.5
+      dof_pos_limits:
+        params: {}
+        weight: -1.0
+      penalty_feet_distance:
+        params:
+          asset_cfg:
+            name: robot
+            joint_names: null
+            body_names: null
+            geom_names: null
+            site_names:
+            - left_foot
+            - right_foot
+            actuator_names: null
+            tendon_names: null
+            camera_names: null
+            light_names: null
+            material_names: null
+            pair_names: null
+            preserve_order: false
+          min_dist: 0.18
+        weight: -5.0
+      feet_slip:
+        params:
+          asset_cfg:
+            name: robot
+            joint_names: null
+            body_names: null
+            geom_names: null
+            site_names:
+            - left_foot
+            - right_foot
+            actuator_names: null
+            tendon_names: null
+            camera_names: null
+            light_names: null
+            material_names: null
+            pair_names: null
+            preserve_order: false
+          sensor_name: feet_ground_contact
+          foot_body_cfg:
+            name: robot
+            joint_names: null
+            body_names:
+            - left_foot_link
+            - right_foot_link
+            geom_names: null
+            site_names: null
+            actuator_names: null
+            tendon_names: null
+            camera_names: null
+            light_names: null
+            material_names: null
+            pair_names: null
+            preserve_order: false
+        weight: -10.0
+      penalty_dof_vel:
+        params:
+          asset_cfg:
+            name: robot
+            joint_names:
+            - .*
+            body_names: null
+            geom_names: null
+            site_names: null
+            actuator_names: null
+            tendon_names: null
+            camera_names: null
+            light_names: null
+            material_names: null
+            pair_names: null
+            preserve_order: false
+        weight: -0.001
+      penalty_dof_acc:
+        params:
+          asset_cfg:
+            name: robot
+            joint_names:
+            - .*
+            body_names: null
+            geom_names: null
+            site_names: null
+            actuator_names: null
+            tendon_names: null
+            camera_names: null
+            light_names: null
+            material_names: null
+            pair_names: null
+            preserve_order: false
+        weight: -1.0e-06
+    terminations:
+      time_out:
+        params: {}
+        time_out: true
+      fell_over:
+        params:
+          limit_angle: 1.2217304763960306
+        time_out: false
+      nan:
+        params: {}
+        time_out: false
+    commands:
+      twist:
+        resampling_time_range:
+        - 7.0
+        - 10.0
+        debug_vis: true
+        entity_name: robot
+        heading_command: true
+        heading_control_stiffness: 0.5
+        rel_standing_envs: 0.1
+        rel_heading_envs: 0.2
+        rel_world_envs: 0.0
+        rel_forward_envs: 0.1
+        init_velocity_prob: 0.0
+        ranges:
+          lin_vel_x:
+          - -1.0
+          - 1.5
+          lin_vel_y:
+          - -1.0
+          - 1.0
+          ang_vel_z:
+          - -1.5
+          - 1.5
+          heading:
+          - -3.141592653589793
+          - 3.141592653589793
+        viz:
+          z_offset: 0.2
+          scale: 0.5
+        filter_weight: 0.1
+        curriculum: true
+        lin_levels: 5
+        ang_levels: 5
+        seed_lin_level: 0
+        lin_vel_x_resolution: 0.25
+        lin_vel_y_resolution: 0.1
+        ang_vel_resolution: 0.2
+        x_toler: 0.4
+        y_toler: 0.2
+        yaw_toler: 0.2
+        update_rate: 0.1
+        episode_length_toler: 0.1
+      gait_phase:
+        resampling_time_range:
+        - 1000000000.0
+        - 1000000000.0
+        debug_vis: false
+        gait_freq_range:
+        - 1.5
+        - 2.0
+        gait_freq_center_width: null
+        randomize_phase: true
+        gate_command_name: twist
+        gate_speed_threshold: 0.05
+    curriculum:
+      push_curriculum:
+        params:
+          event_name: push_robot
+          stages:
+          - transitions: 0
+            force_range:
+            - -5.0
+            - 5.0
+            torque_range:
+            - -1.0
+            - 1.0
+          - transitions: 100000000
+            force_range:
+            - -10.0
+            - 10.0
+            torque_range:
+            - -2.0
+            - 2.0
+          - transitions: 200000000
+            force_range:
+            - -20.0
+            - 20.0
+            torque_range:
+            - -3.0
+            - 3.0
+          - transitions: 400000000
+            force_range:
+            - -30.0
+            - 30.0
+            torque_range:
+            - -5.0
+            - 5.0
+      penalty_curriculum:
+        params:
+          reward_names:
+          - penalty_body_ang_vel
+          - penalty_orientation
+          - penalty_action_rate
+          - penalty_feet_distance
+          - penalty_feet_ori
+          - penalty_pose_deviation
+          - penalty_landing
+          - penalty_dof_vel
+          - penalty_dof_acc
+          - feet_slip
+          - penalty_feet_yaw_mean
+          - penalty_feet_yaw_diff
+          initial_scale: 0.1
+          min_scale: 0.01
+          max_scale: 1.0
+          level_down_threshold: 150
+          level_up_threshold: 750
+          degree: 0.00025
+    metrics: {}
+    recorders: {}
+    is_finite_horizon: false
+    auto_reset: true
+    scale_rewards_by_dt: true
+    encoders:
+      env_params:
+        privileged_obs_group: env_params
+        adaptation_obs_group: proprio_window
+        latent_dim: 8
+        latent_noise_std: 0.05
+        odom_obs_group: odom
+        window_size: 50
+        hidden_dim: 64
+        lambda_odom: 1.0
+    abstractions: {}
+    constraints: {}
+    use_depth_camera: false
+    viz_callbacks: []
+name: EXPERIMENT
+seed: 123
+learning_steps: null
+warm_start: null
+logger:
+  enabled: true
+  backend: wandb
+  project: colosseum
+  name: null
+  entity: null
+  group: null
+  tags: []
+  id: null
+  resume: null
+  mode: online
+  log_interval: 1000
+  save_interval: 10000000
+  log_dir: ./logs
+  console_level: INFO
+  task_name: null
+  scenario: null
+  job_type: null
+start_phase: 1
+phase2_steps: 50000000
+phase2_lr: 0.001
+phase2_loss_threshold: null
+phase3_steps: 100000000
+phase2_num_envs: 4096
+algo_cfg:
+  name: RmaPPO
+  version: v1
+  target: colosseum.algorithm.rma_ppo:RmaPPO
+  learning_steps: 125000000
+  obs_normalization: true
+  seed: null
+  use_rich_logging: true
+  eval_interval: 0
+  eval_episodes: 10
+  eval_batch_size: 5
+  num_steps_per_env: 24
+  gamma: 0.99
+  lam: 0.95
+  clip_param: 0.2
+  use_clipped_value_loss: true
+  value_loss_coef: 1.0
+  entropy_coef: 0.01
+  num_learning_epochs: 8
+  num_mini_batches: 4
+  max_grad_norm: 1.0
+  actor_learning_rate: 1.0e-05
+  critic_learning_rate: 1.0e-05
+  max_actor_learning_rate: null
+  min_actor_learning_rate: null
+  max_critic_learning_rate: null
+  min_critic_learning_rate: null
+  weight_decay: 0.001
+  desired_kl: 0.01
+  schedule: adaptive
+  normalize_advantage_per_mini_batch: false
+  symmetry_loss_coef: 5.0
+  symmetry_critic_coef: 0.0
+  symmetry_data_augmentation: true
+  actor:
+    learning_rate: 0.0003
+    hidden_layers:
+    - 512
+    - 256
+    - 128
+    activation: elu
+    init_noise_std: 0.8
+    min_noise_std: 0.01
+  critic:
+    learning_rate: 0.0003
+    hidden_layers:
+    - 512
+    - 256
+    - 128
+    activation: elu

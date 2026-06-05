@@ -80,6 +80,26 @@ t1-velocity:
       run: t1-velocity-PPO-123-20260604_161259
       step: 541458432
       created: '2026-06-04T17:57:08.930556+00:00'
+    jun5_0:
+      file: jun5_0/t1-velocity_ppo_jun5_0.onnx
+      run: t1-velocity-PPO-123-20260605_013007
+      step: 741998592
+      created: '2026-06-05T07:33:43.086487+00:00'
+    jun5_1:
+      file: jun5_1/t1-velocity_ppo_jun5_1.onnx
+      run: t1-velocity-PPO-123-20260605_090625
+      step: 240648192
+      created: '2026-06-05T08:43:16.037589+00:00'
+    jun5_2:
+      file: jun5_2/t1-velocity_ppo_jun5_2.onnx
+      run: t1-velocity-PPO-123-20260605_110216
+      step: 90243072
+      created: '2026-06-05T09:38:33.024369+00:00'
+    jun5_3:
+      file: jun5_3/t1-velocity_ppo_jun5_3.onnx
+      run: t1-velocity-PPO-123-20260605_110216
+      step: 451215360
+      created: '2026-06-05T12:03:35.854574+00:00'
   default: v0
 t1-velocity-rma:
   models:
@@ -98,4 +118,14 @@ t1-velocity-rma:
       run: t1-velocity-rma-RmaPPO-123-20260604_160835
       step: 0
       created: '2026-06-04T17:01:07.245996+00:00'
+    jun5_0:
+      file: jun5_0/t1-velocity-rma_rmappo_jun5_0.onnx
+      run: t1-velocity-rma-RmaPPO-123-20260605_014329
+      step: 0
+      created: '2026-06-05T06:42:12.752595+00:00'
+    jun5_1:
+      file: jun5_1/t1-velocity-rma_rmappo_jun5_1.onnx
+      run: t1-velocity-rma-RmaPPO-123-20260605_084527
+      step: 0
+      created: '2026-06-05T08:48:25.610561+00:00'
   default: v0
