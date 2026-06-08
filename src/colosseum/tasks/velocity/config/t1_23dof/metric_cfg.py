@@ -9,6 +9,7 @@ from colosseum.mdp.metrics import (
   feet_clearance,
   feet_contact_force,
   forward_velocity,
+  joint_jerk,
   joint_torque,
   joint_vibration,
   lin_vel_error,
@@ -51,10 +52,15 @@ metrics = {
   ),
 }
 
-# ---- Per-group vibration (mean |joint acc|) and torque (mean |actuator force|) ----
+# ---- Per-group effort: vibration (mean |joint acc|), jerk (mean |d acc / dt|),
+#      and torque (mean |actuator force|) ----
 for _group, _patterns in JOINT_GROUPS.items():
   metrics[f"joint_vibration/{_group}"] = MetricsTermCfg(
     func=joint_vibration,
+    params={"asset_cfg": SceneEntityCfg("robot", joint_names=_patterns)},
+  )
+  metrics[f"joint_jerk/{_group}"] = MetricsTermCfg(
+    func=joint_jerk,
     params={"asset_cfg": SceneEntityCfg("robot", joint_names=_patterns)},
   )
   metrics[f"joint_torque/{_group}"] = MetricsTermCfg(

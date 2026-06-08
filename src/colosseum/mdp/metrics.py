@@ -116,6 +116,50 @@ def joint_torque(
   return asset.data.qfrc_actuator[:, asset_cfg.joint_ids].abs().mean(dim=-1)
 
 
+class joint_jerk:
+  """Mean absolute joint jerk over the group (rad/s³).
+
+  Finite difference of joint acceleration between consecutive steps,
+  ``d(joint_acc)/dt``. Captures vibration that mean ``|acceleration|`` misses:
+  a large but smooth acceleration scores low jerk, while buzzing / chatter
+  (acceleration rapidly reversing sign) scores high.
+
+  Stateful: caches the previous step's acceleration. The first step of each
+  episode reports 0 (no previous sample), avoiding a reset spike.
+  """
+
+  def __init__(self, cfg, env: ManagerBasedRlEnv):
+    del cfg
+    self._prev_acc: torch.Tensor | None = None
+    self._valid: torch.Tensor | None = None
+
+  def __call__(
+    self,
+    env: ManagerBasedRlEnv,
+    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+  ) -> torch.Tensor:
+    asset: Entity = env.scene[asset_cfg.name]
+    acc = asset.data.joint_acc[:, asset_cfg.joint_ids]  # (N, J)
+    if self._prev_acc is None or self._prev_acc.shape != acc.shape:
+      self._prev_acc = torch.zeros_like(acc)
+      self._valid = torch.zeros(acc.shape[0], dtype=torch.bool, device=acc.device)
+    assert self._valid is not None
+    jerk = (acc - self._prev_acc).abs().mean(dim=-1) / env.step_dt  # (N,)
+    out = jerk * self._valid.float()  # zero on the first post-reset step
+    self._prev_acc.copy_(acc)
+    self._valid.fill_(True)
+    return out
+
+  def reset(self, env_ids: torch.Tensor | slice | None = None) -> None:
+    if self._prev_acc is None:
+      return
+    assert self._valid is not None
+    if env_ids is None:
+      env_ids = slice(None)
+    self._prev_acc[env_ids] = 0.0
+    self._valid[env_ids] = False
+
+
 # =========================
 # Gait / foot kinematics
 # =========================
