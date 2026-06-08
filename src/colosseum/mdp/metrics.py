@@ -57,6 +57,14 @@ def forward_velocity(
   return asset.data.root_link_lin_vel_b[:, 0]
 
 
+def commanded_velocity(
+  env: ManagerBasedRlEnv,
+  command_name: str,
+) -> torch.Tensor:
+  """Commanded forward (base-x) linear velocity (m/s) — pairs with forward_velocity."""
+  return env.command_manager.get_command(command_name)[:, 0]
+
+
 def lin_vel_error(
   env: ManagerBasedRlEnv,
   command_name: str,
@@ -80,24 +88,32 @@ def ang_vel_error(
 
 
 # =========================
-# Motion smoothness / effort
+# Per-joint-group effort (register one term per group via asset_cfg)
 # =========================
-def joint_acceleration(
+def joint_vibration(
   env: ManagerBasedRlEnv,
   asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
 ) -> torch.Tensor:
-  """Mean absolute joint acceleration over the selected joints (rad/s²)."""
+  """Mean absolute joint acceleration over the group (rad/s²).
+
+  A proxy for vibration / chatter — high-frequency oscillation shows up as
+  large accelerations.
+  """
   asset: Entity = env.scene[asset_cfg.name]
   return asset.data.joint_acc[:, asset_cfg.joint_ids].abs().mean(dim=-1)
 
 
-def joint_velocity(
+def joint_torque(
   env: ManagerBasedRlEnv,
   asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
 ) -> torch.Tensor:
-  """Mean absolute joint velocity over the selected joints (rad/s)."""
+  """Mean absolute actuator torque over the group (N·m).
+
+  Uses ``qfrc_actuator`` (actuator force mapped into joint space): for the T1
+  motors this is the commanded torque times the gear ratio.
+  """
   asset: Entity = env.scene[asset_cfg.name]
-  return asset.data.joint_vel[:, asset_cfg.joint_ids].abs().mean(dim=-1)
+  return asset.data.qfrc_actuator[:, asset_cfg.joint_ids].abs().mean(dim=-1)
 
 
 # =========================
