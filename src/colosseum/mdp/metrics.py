@@ -1,0 +1,136 @@
+"""Layer 1: Universal metric functions (robot-agnostic).
+
+Diagnostic per-step scalars logged by mjlab's ``MetricsManager`` under the
+``Episode_Metrics/<name>`` prefix (per-episode mean, no weight, no dt scaling,
+no gradient). Unlike reward terms — whose logged values are weighted and shaped
+— these are reported in physical units, so a gait can be read straight off the
+wandb plots.
+
+Each function takes ``env`` first and returns a ``[num_envs]`` tensor.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+import torch
+from mjlab.entity import Entity
+from mjlab.managers.scene_entity_config import SceneEntityCfg
+from mjlab.sensor import ContactSensor
+
+if TYPE_CHECKING:
+  from mjlab.envs import ManagerBasedRlEnv
+
+_DEFAULT_ASSET_CFG = SceneEntityCfg("robot")
+
+
+# =========================
+# Posture / balance
+# =========================
+def root_height(
+  env: ManagerBasedRlEnv,
+  asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+) -> torch.Tensor:
+  """Base height above the terrain floor (m)."""
+  asset: Entity = env.scene[asset_cfg.name]
+  return asset.data.root_link_pos_w[:, 2] - env.scene.env_origins[:, 2]
+
+
+def base_tilt(
+  env: ManagerBasedRlEnv,
+  asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+) -> torch.Tensor:
+  """Uprightness: norm of projected gravity in the base XY plane (0 = upright)."""
+  asset: Entity = env.scene[asset_cfg.name]
+  return torch.norm(asset.data.projected_gravity_b[:, :2], dim=-1)
+
+
+# =========================
+# Velocity tracking (physical units)
+# =========================
+def forward_velocity(
+  env: ManagerBasedRlEnv,
+  asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+) -> torch.Tensor:
+  """Actual forward (base-x) linear velocity (m/s)."""
+  asset: Entity = env.scene[asset_cfg.name]
+  return asset.data.root_link_lin_vel_b[:, 0]
+
+
+def lin_vel_error(
+  env: ManagerBasedRlEnv,
+  command_name: str,
+  asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+) -> torch.Tensor:
+  """Magnitude of the planar linear-velocity tracking error (m/s)."""
+  asset: Entity = env.scene[asset_cfg.name]
+  cmd = env.command_manager.get_command(command_name)
+  return torch.norm(cmd[:, :2] - asset.data.root_link_lin_vel_b[:, :2], dim=-1)
+
+
+def ang_vel_error(
+  env: ManagerBasedRlEnv,
+  command_name: str,
+  asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+) -> torch.Tensor:
+  """Absolute yaw-rate tracking error (rad/s)."""
+  asset: Entity = env.scene[asset_cfg.name]
+  cmd = env.command_manager.get_command(command_name)
+  return torch.abs(cmd[:, 2] - asset.data.root_link_ang_vel_b[:, 2])
+
+
+# =========================
+# Motion smoothness / effort
+# =========================
+def joint_acceleration(
+  env: ManagerBasedRlEnv,
+  asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+) -> torch.Tensor:
+  """Mean absolute joint acceleration over the selected joints (rad/s²)."""
+  asset: Entity = env.scene[asset_cfg.name]
+  return asset.data.joint_acc[:, asset_cfg.joint_ids].abs().mean(dim=-1)
+
+
+def joint_velocity(
+  env: ManagerBasedRlEnv,
+  asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+) -> torch.Tensor:
+  """Mean absolute joint velocity over the selected joints (rad/s)."""
+  asset: Entity = env.scene[asset_cfg.name]
+  return asset.data.joint_vel[:, asset_cfg.joint_ids].abs().mean(dim=-1)
+
+
+# =========================
+# Gait / foot kinematics
+# =========================
+def feet_air_time(
+  env: ManagerBasedRlEnv,
+  sensor_name: str,
+) -> torch.Tensor:
+  """Mean of the last completed swing (air) duration across feet (s).
+
+  A cadence proxy: longer air time = slower, longer strides. Requires a
+  contact sensor with ``track_air_time=True``.
+  """
+  sensor: ContactSensor = env.scene[sensor_name]
+  assert sensor.data.last_air_time is not None
+  return sensor.data.last_air_time.mean(dim=-1)
+
+
+def feet_clearance(
+  env: ManagerBasedRlEnv,
+  height_sensor_name: str,
+) -> torch.Tensor:
+  """Mean terrain-relative foot height across feet (m) — swing clearance."""
+  sensor = env.scene[height_sensor_name]
+  return sensor.data.heights.mean(dim=-1)
+
+
+def feet_contact_force(
+  env: ManagerBasedRlEnv,
+  sensor_name: str,
+) -> torch.Tensor:
+  """Mean foot-ground contact-force magnitude across feet (N) — landing impact."""
+  sensor: ContactSensor = env.scene[sensor_name]
+  assert sensor.data.force is not None
+  return sensor.data.force.norm(dim=-1).mean(dim=-1)
