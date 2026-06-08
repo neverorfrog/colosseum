@@ -54,9 +54,21 @@ commands: Dict[str, CommandTermCfg] = {
   ),
 }
 
+ARM_JOINT_NAMES = (
+  "Left_Shoulder_Pitch",
+  "Left_Shoulder_Roll",
+  "Left_Elbow_Pitch",
+  "Left_Elbow_Yaw",
+  "Right_Shoulder_Pitch",
+  "Right_Shoulder_Roll",
+  "Right_Elbow_Pitch",
+  "Right_Elbow_Yaw",
+)
+
 VELOCITY_ACTION_SCALE = {
   k: v for k, v in ACTION_SCALE.items() if k not in ("AAHead_yaw", "Head_pitch")
 }
+VELOCITY_ACTION_SCALE.update({name: 0.25 for name in ARM_JOINT_NAMES})
 
 actions: dict[str, ActionTermCfg] = {
   "joint_pos": DelayedJointPositionActionCfg(

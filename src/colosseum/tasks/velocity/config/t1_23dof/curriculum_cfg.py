@@ -46,7 +46,6 @@ curriculum = {
         "penalty_action_rate",
         "penalty_feet_distance",
         "penalty_feet_ori",
-        "penalty_pose_deviation",
         "penalty_landing",
         "penalty_dof_vel",
         "penalty_dof_acc",
