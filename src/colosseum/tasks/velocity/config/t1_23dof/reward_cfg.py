@@ -14,6 +14,7 @@ from mjlab.tasks.velocity.mdp import (
 
 from colosseum.mdp.rewards import (
   arm_phase,
+  base_height_penalty,
   dof_acc_penalty,
   dof_vel_penalty,
   feet_distance_penalty,
@@ -73,21 +74,23 @@ rewards = {
       "command_threshold": 0.05,
     },
   ),
-  "arm_phase": RewardTermCfg(
-    func=arm_phase,
-    weight=1.0,
-    params={
-      "phase_command_name": "gait_phase",
-      "asset_cfg": SceneEntityCfg(
-        "robot",
-        joint_names=("Left_Shoulder_Pitch", "Right_Shoulder_Pitch"),
-      ),
-      "swing_amplitude": 0.25,
-      "max_speed": 1.5,
-      "tracking_sigma": 0.25,
-      "command_name": "twist",
-    },
-  ),
+  # Phase 1: arms are fixed (action scale 0), so shoulder-pitch swing is
+  # impossible — disable arm_phase. Re-enable when restoring arm action scale.
+  # "arm_phase": RewardTermCfg(
+  #   func=arm_phase,
+  #   weight=1.0,
+  #   params={
+  #     "phase_command_name": "gait_phase",
+  #     "asset_cfg": SceneEntityCfg(
+  #       "robot",
+  #       joint_names=("Left_Shoulder_Pitch", "Right_Shoulder_Pitch"),
+  #     ),
+  #     "swing_amplitude": 0.25,
+  #     "max_speed": 1.5,
+  #     "tracking_sigma": 0.25,
+  #     "command_name": "twist",
+  #   },
+  # ),
   "alive": RewardTermCfg(
     func=is_alive,
     weight=0.5,
@@ -114,6 +117,14 @@ rewards = {
     weight=-7.0,
     params={"asset_cfg": SceneEntityCfg("robot", body_names=(BASE_BODY_NAME))},
   ),
+  # Always-on vertical posture anchor (replaces the vertical role pose_deviation
+  # played): keeps a consistent ride height without dictating joint poses.
+  # Quadratic (Δh)² in meters above terrain; target = T1 spawn root z.
+  "penalty_base_height": RewardTermCfg(
+    func=base_height_penalty,
+    weight=-20.0,
+    params={"target_height": 0.66},
+  ),
   "penalty_feet_ori": RewardTermCfg(
     func=foot_orientation_penalty,
     weight=-5.0,
@@ -121,14 +132,14 @@ rewards = {
   ),
   "penalty_feet_yaw_diff": RewardTermCfg(
     func=feet_yaw_diff_penalty,
-    weight=-1.0,
+    weight=-3.0,
     params={"asset_cfg": SceneEntityCfg("robot", body_names=(FOOT_BODY_NAMES))},
   ),
   # Aligns mean foot yaw to the base heading — catches the shared toe-out / yaw
   # pivot that feet_yaw_diff (feet-parallel-to-each-other) is blind to.
   "penalty_feet_yaw_mean": RewardTermCfg(
     func=feet_yaw_mean_penalty,
-    weight=-1.0,
+    weight=-3.0,
     params={"asset_cfg": SceneEntityCfg("robot", body_names=(FOOT_BODY_NAMES))},
   ),
   "penalty_action_rate": RewardTermCfg(func=action_rate_l2, weight=-1.25),

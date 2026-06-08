@@ -8,17 +8,28 @@ import torch
 from mjlab.envs import ManagerBasedRlEnv
 from mjlab.envs.mdp.actions import JointPositionAction, JointPositionActionCfg
 from mjlab.managers.action_manager import ActionTerm, ActionTermCfg
-from mjlab.utils.buffers.delay_buffer import DelayBuffer
 
 
 @dataclass(kw_only=True)
 class DelayedJointPositionActionCfg(JointPositionActionCfg):
-  """JointPositionAction with stochastic per-env action delay.
+  """JointPositionAction with steady, sub-step-resolved action latency.
 
-  Each environment independently samples a delay from
-  ``[min_delay_steps, max_delay_steps]`` at every policy step, simulating
-  motor communication and processing latency.  The default range of 0–2
-  policy steps corresponds to 0–40 ms at 50 Hz control.
+  Models the robot's FastDDS command-path transport delay. At every episode
+  reset each environment samples a delay (in physics substeps) that is HELD
+  CONSTANT for the whole episode — the steady regime real transport exhibits,
+  not per-step jitter — so the policy learns phase margin against a sustained
+  lag.
+
+  The delay spans up to ``max_delay_steps`` policy steps at substep resolution.
+  A sampled delay ``D = q * decimation + r`` applies the command from ``q + 1``
+  policy steps ago during the first ``r`` substeps of the control interval, then
+  switches to the command from ``q`` steps ago — i.e. the new target lands ``r``
+  substeps into the interval. This is the reference (tum-adlr ``t1.py``)
+  intrastep delay generalized from one policy step to ``max_delay_steps``.
+
+  Bounds are in POLICY STEPS, resolved to substeps via the env decimation. The
+  delay is drawn from ``[min_delay_steps, max_delay_steps) * decimation``; the
+  default 0–2 steps ~= 0–40 ms at 50 Hz with decimation 10.
   """
 
   min_delay_steps: int = 0
@@ -29,37 +40,59 @@ class DelayedJointPositionActionCfg(JointPositionActionCfg):
 
 
 class DelayedJointPositionAction(JointPositionAction):
-  """Joint position action backed by mjlab's DelayBuffer."""
+  """Steady, sub-step-resolved action delay (see cfg)."""
 
   cfg: DelayedJointPositionActionCfg
 
   def __init__(self, cfg: DelayedJointPositionActionCfg, env: ManagerBasedRlEnv) -> None:
     super().__init__(cfg, env)
-    self._delay_buffer = DelayBuffer(
-      min_lag=cfg.min_delay_steps,
-      max_lag=cfg.max_delay_steps,
-      batch_size=self.num_envs,
-      device=self.device,
-      per_env=True,
+    self._decimation = env.cfg.decimation
+    self._low = cfg.min_delay_steps * self._decimation
+    self._high = cfg.max_delay_steps * self._decimation
+    # History of processed targets at policy-step granularity, most-recent first
+    # (row 0 = current step k, row d = step k-d). Depth max_delay_steps+1 covers
+    # the deepest lookup history[q+1] (q <= max_delay_steps-1).
+    depth = cfg.max_delay_steps + 1
+    self._history = self._offset.unsqueeze(0).repeat(depth, 1, 1)
+    # Per-env delay in substeps (sampled per episode) and substep index in step.
+    self._delay_substeps = torch.zeros(
+      self.num_envs, dtype=torch.long, device=self.device
     )
-    # Holds the delayed target computed in process_actions, reused by each substep.
-    self._delayed_actions = torch.zeros(
-      self.num_envs, self._num_targets, device=self.device
-    )
+    self._substep = 0
 
-  def reset(self, env_ids: torch.Tensor | slice | None) -> None:
+  def reset(self, env_ids: torch.Tensor | slice | None = None) -> None:
     super().reset(env_ids=env_ids)
-    self._delay_buffer.reset(batch_ids=env_ids)
+    if env_ids is None:
+      env_ids = slice(None)
+    n = self.num_envs if isinstance(env_ids, slice) else env_ids.numel()
+    # Steady regime: resample the held delay once, at episode start.
+    if self._high > self._low:
+      self._delay_substeps[env_ids] = torch.randint(
+        self._low, self._high, (n,), device=self.device
+      )
+    else:
+      self._delay_substeps[env_ids] = self._low
+    # Seed history with the default pose so warmup substeps serve a valid target.
+    self._history[:, env_ids] = self._offset[env_ids].unsqueeze(0)
 
   def process_actions(self, actions: torch.Tensor) -> None:
     super().process_actions(actions)
-    self._delay_buffer.append(self._processed_actions)
-    self._delayed_actions = self._delay_buffer.compute()
+    # Shift history back one step and insert the new target at row 0.
+    self._history = torch.roll(self._history, shifts=1, dims=0)
+    self._history[0] = self._processed_actions
+    self._substep = 0
 
   def apply_actions(self) -> None:
+    q = self._delay_substeps // self._decimation  # whole policy steps back
+    r = self._delay_substeps % self._decimation  # sub-step swap point
+    # Older target (q+1 back) before the swap point, newer (q back) after.
+    idx = torch.where(self._substep < r, q + 1, q)  # (num_envs,)
+    env_ids = torch.arange(self.num_envs, device=self.device)
+    target = self._history[idx, env_ids]  # (num_envs, num_targets)
+    self._substep += 1
     encoder_bias = self._entity.data.encoder_bias[:, self._target_ids]
     self._entity.set_joint_position_target(
-      self._delayed_actions - encoder_bias, joint_ids=self._target_ids
+      target - encoder_bias, joint_ids=self._target_ids
     )
 
 
