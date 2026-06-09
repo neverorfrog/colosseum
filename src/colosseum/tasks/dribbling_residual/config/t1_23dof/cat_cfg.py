@@ -16,6 +16,7 @@ from colosseum.tasks.dribbling_residual.mdp.ball_twist_command import (
 from colosseum.tasks.dribbling_residual.mdp.ball_velocity_command import (
   BallVelocityCommandCfg,
 )
+from colosseum.tasks.dribbling_residual.mdp.head_ik_action import HeadIKActionCfg
 
 commands: Dict[str, CommandTermCfg] = {
   "twist": BallTwistCommandCfg(stop_distance=0.25),
@@ -31,7 +32,12 @@ commands: Dict[str, CommandTermCfg] = {
   ),
 }
 
-VELOCITY_ACTION_SCALE = {k: v for k, v in ACTION_SCALE.items()}
+# Head joints get scale=0: their targets are overridden by HeadIKActionCfg, so
+# the policy (frozen walk + residual) should not waste action on them.
+_HEAD_JOINTS = {"AAHead_yaw", "Head_pitch"}
+VELOCITY_ACTION_SCALE = {
+  k: (0.0 if k in _HEAD_JOINTS else v) for k, v in ACTION_SCALE.items()
+}
 
 actions: dict[str, ActionTermCfg] = {
   "joint_pos": DelayedJointPositionActionCfg(
@@ -40,7 +46,10 @@ actions: dict[str, ActionTermCfg] = {
     scale=VELOCITY_ACTION_SCALE,
     use_default_offset=True,
     max_delay_steps=2,
-  )
+  ),
+  # IK head tracking: runs after joint_pos and overrides the head targets with
+  # analytic yaw/pitch toward the ball, returning to (0, 0) when out of view.
+  "head_ik": HeadIKActionCfg(),
 }
 
 terminations = {

@@ -18,17 +18,19 @@ from colosseum.mdp.observations import base_height
 from colosseum.mdp.symmetry import (
   MirrorableObservationTermCfg,
   mirror_ang_vel,
+  mirror_ball_state,
   mirror_base_lin_vel,
   mirror_gait_phase,
   mirror_projected_gravity,
   mirror_velocity_command,
-  mirror_xy,
 )
 from colosseum.robots.t1_23dof.mdp.symmetry import mirror_joints
 from colosseum.tasks.dribbling.mdp.observations import (
-  ball_position,
   ball_vel_command_body,
-  ball_velocity_xy,
+)
+from colosseum.tasks.dribbling_residual.mdp.ball_perception import (
+  BallPerceptionModel,
+  ball_state_gt,
 )
 
 # ---------------------------------------------------------------------------
@@ -76,16 +78,18 @@ gait_phase_term = MirrorableObservationTermCfg(
   mirror_fn=mirror_gait_phase,
 )
 
-# Ball state in robot body frame (2D each). Mirrorable: under left-right (y → -y)
-# reflection the body-frame y component flips, so symmetry stays physically
-# consistent with the ball's laterality.
+# Ball state estimate in robot body frame, (N, 4) = [px, py, vx, vy]. This is
+# NOT the GT ball state: BallPerceptionModel reproduces the on-robot
+# YOLO->Kalman pipeline's output (noise, velocity lag, dropout/coast, latency)
+# so the actor trains on a deployment-shaped signal. Per-episode DR over the
+# noise band makes the policy robust across it. Mirrorable: under left-right
+# (y → -y) reflection the body-frame y components flip. The critic instead sees
+# clean GT (ball_state_gt) — asymmetric actor-critic.
 ball_terms = {
-  "ball_pos": MirrorableObservationTermCfg(
-    func=ball_position, mirror_fn=mirror_xy
-  ),  # (N, 2)
-  "ball_vel_xy": MirrorableObservationTermCfg(
-    func=ball_velocity_xy, mirror_fn=mirror_xy
-  ),  # (N, 2)
+  "ball_state": MirrorableObservationTermCfg(
+    func=BallPerceptionModel,
+    mirror_fn=mirror_ball_state,
+  ),  # (N, 4)
 }
 
 # ---------------------------------------------------------------------------
@@ -125,6 +129,10 @@ orchestrator_terms = {**loco_actor_terms, **dribble_actor_terms}
 
 critic_terms = {
   **orchestrator_terms,
+  # Override the actor's noisy ball estimate with clean GT (keeps the union's
+  # slot position, swaps only the value). The critic is train-only and may use
+  # privileged truth for lower-variance value estimates.
+  "ball_state": ObservationTermCfg(func=ball_state_gt),
   "base_lin_vel": MirrorableObservationTermCfg(
     func=builtin_sensor,
     params={"sensor_name": "robot/imu_lin_vel"},

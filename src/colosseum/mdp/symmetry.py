@@ -125,6 +125,20 @@ def mirror_xy(x: torch.Tensor) -> torch.Tensor:
   return x * x.new_tensor([1.0, -1.0])
 
 
+def mirror_ball_state(x: torch.Tensor) -> torch.Tensor:
+  """Mirror a 4D body-frame ball state under y → -y reflection.
+
+  [px, py, vx, vy] → [px, -py, vx, -vy]. Use for the combined ball
+  position+velocity observation.
+
+  Args:
+    x: (..., 4) tensor [px, py, vx, vy].
+  Returns:
+    (..., 4) mirrored tensor [px, -py, vx, -vy].
+  """
+  return x * x.new_tensor([1.0, -1.0, 1.0, -1.0])
+
+
 def mirror_gait_phase(x: torch.Tensor) -> torch.Tensor:
   """Mirror 4D gait phase clock under left-right swap.
 
