@@ -106,10 +106,9 @@ FOOT_BALL_CONTACT_SENSOR = ContactSensorCfg(
   name="foot_ball_contact",
   primary=ContactMatch(
     mode="subtree",
-    # Match the foot collision spheres directly — these are the only enabled
-    # foot colliders (see FEET_ONLY_COLLISION). The original `_*_link` regex
-    # ("zero+ underscores") matched no bodies.
-    pattern=r"^(left|right)_foot_sphere.*link$",
+    # Foot bodies; the subtree includes their foot[1-5]_collision capsules,
+    # the only enabled foot colliders (see FEET_ONLY/FEET_SELF_COLLISION).
+    pattern=r"^(left|right)_foot_link$",
     entity="robot",
   ),
   secondary=ContactMatch(mode="body", pattern="ball", entity="ball"),

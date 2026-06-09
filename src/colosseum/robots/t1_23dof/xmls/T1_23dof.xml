@@ -238,36 +238,24 @@
                     <geom class="visual" mesh="left_foot_link"/>
                     <geom name="left_foot_link" class="collision" type="mesh" mesh="left_foot_link"/>
 
-                    <!-- Foot contact spheres -->
-                    <body name="left_foot_sphere_1_link" pos="-0.1 0.025 -0.03">
-                      <inertial pos="0 0 0" mass="0.001" diaginertia="1e-7 1e-7 1e-7"/>
-                      <geom name="left_foot_sphere_1_link" type="sphere" size="0.005" rgba="0.2 0.2 0.2 1"/>
-                    </body>
-                    <body name="left_foot_sphere_2_link" pos="-0.1 -0.025 -0.03">
-                      <inertial pos="0 0 0" mass="0.001" diaginertia="1e-7 1e-7 1e-7"/>
-                      <geom name="left_foot_sphere_2_link" type="sphere" size="0.005" rgba="0.2 0.2 0.2 1"/>
-                    </body>
-                    <body name="left_foot_sphere_3_link" pos="0.11 0.03 -0.03">
-                      <inertial pos="0 0 0" mass="0.001" diaginertia="1e-7 1e-7 1e-7"/>
-                      <geom name="left_foot_sphere_3_link" type="sphere" size="0.005" rgba="0.2 0.2 0.2 1"/>
-                    </body>
-                    <body name="left_foot_sphere_4_link" pos="0.11 -0.03 -0.03">
-                      <inertial pos="0 0 0" mass="0.001" diaginertia="1e-7 1e-7 1e-7"/>
-                      <geom name="left_foot_sphere_4_link" type="sphere" size="0.005" rgba="0.2 0.2 0.2 1"/>
-                    </body>
-                    <body name="left_foot_sphere_5_link" pos="0.12 0 -0.03">
-                      <inertial pos="0 0 0" mass="0.001" diaginertia="1e-7 1e-7 1e-7"/>
-                      <geom name="left_foot_sphere_5_link" type="sphere" size="0.005" rgba="0.2 0.2 0.2 1"/>
-                    </body>
-                    <!-- Lateral edge spheres at sole level for ankle-roll stability -->
-                    <body name="left_foot_sphere_6_link" pos="0.0 0.045 -0.03">
-                      <inertial pos="0 0 0" mass="0.001" diaginertia="1e-7 1e-7 1e-7"/>
-                      <geom name="left_foot_sphere_6_link" type="sphere" size="0.005" rgba="0.2 0.2 0.8 1"/>
-                    </body>
-                    <body name="left_foot_sphere_7_link" pos="0.0 -0.045 -0.03">
-                      <inertial pos="0 0 0" mass="0.001" diaginertia="1e-7 1e-7 1e-7"/>
-                      <geom name="left_foot_sphere_7_link" type="sphere" size="0.005" rgba="0.2 0.2 0.8 1"/>
-                    </body>
+                    <!-- Foot contact: 4 longitudinal capsules spanning the sole.
+                         Replaces 7 point-spheres (near-singular contacts that
+                         chattered) with a fat, line-spread contact patch.
+                         r=0.012, sole bottom at z=-0.035 (unchanged spawn height).
+                         Footprint matches the real foot (x -0.10..0.12, y +-0.045). -->
+                    <geom name="left_foot1_collision" class="collision" type="capsule"
+                      size="0.012" fromto="-0.088 0.033 -0.023 0.108 0.033 -0.023"/>
+                    <geom name="left_foot2_collision" class="collision" type="capsule"
+                      size="0.012" fromto="-0.088 0.011 -0.023 0.108 0.011 -0.023"/>
+                    <geom name="left_foot3_collision" class="collision" type="capsule"
+                      size="0.012" fromto="-0.088 -0.011 -0.023 0.108 -0.011 -0.023"/>
+                    <geom name="left_foot4_collision" class="collision" type="capsule"
+                      size="0.012" fromto="-0.088 -0.033 -0.023 0.108 -0.033 -0.023"/>
+                    <!-- Inner-face vertical capsule (medial side = -y for left foot):
+                         rises from the sole to z=0.05 so the inside of the foot can
+                         push the ball above its base (dribble inside-foot touch). -->
+                    <geom name="left_foot5_collision" class="collision" type="capsule"
+                      size="0.012" fromto="0.04 -0.033 -0.023 0.04 -0.033 0.05"/>
                   </body>
                 </body>
               </body>
@@ -314,36 +302,24 @@
                     <geom name="right_foot_link" class="collision" type="mesh" mesh="right_foot_link"/>
 
 
-                    <!-- Foot contact spheres -->
-                    <body name="right_foot_sphere_1_link" pos="-0.1 0.025 -0.03">
-                      <inertial pos="0 0 0" mass="0.001" diaginertia="1e-7 1e-7 1e-7"/>
-                      <geom name="right_foot_sphere_1_link" type="sphere" size="0.005" rgba="0.2 0.2 0.2 1"/>
-                    </body>
-                    <body name="right_foot_sphere_2_link" pos="-0.1 -0.025 -0.03">
-                      <inertial pos="0 0 0" mass="0.001" diaginertia="1e-7 1e-7 1e-7"/>
-                      <geom name="right_foot_sphere_2_link" type="sphere" size="0.005" rgba="0.2 0.2 0.2 1"/>
-                    </body>
-                    <body name="right_foot_sphere_3_link" pos="0.11 0.03 -0.03">
-                      <inertial pos="0 0 0" mass="0.001" diaginertia="1e-7 1e-7 1e-7"/>
-                      <geom name="right_foot_sphere_3_link" type="sphere" size="0.005" rgba="0.2 0.2 0.2 1"/>
-                    </body>
-                    <body name="right_foot_sphere_4_link" pos="0.11 -0.03 -0.03">
-                      <inertial pos="0 0 0" mass="0.001" diaginertia="1e-7 1e-7 1e-7"/>
-                      <geom name="right_foot_sphere_4_link" type="sphere" size="0.005" rgba="0.2 0.2 0.2 1"/>
-                    </body>
-                    <body name="right_foot_sphere_5_link" pos="0.12 0 -0.03">
-                      <inertial pos="0 0 0" mass="0.001" diaginertia="1e-7 1e-7 1e-7"/>
-                      <geom name="right_foot_sphere_5_link" type="sphere" size="0.005" rgba="0.2 0.2 0.2 1"/>
-                    </body>
-                    <!-- Lateral edge spheres at sole level for ankle-roll stability -->
-                    <body name="right_foot_sphere_6_link" pos="0.0 0.045 -0.03">
-                      <inertial pos="0 0 0" mass="0.001" diaginertia="1e-7 1e-7 1e-7"/>
-                      <geom name="right_foot_sphere_6_link" type="sphere" size="0.005" rgba="0.2 0.2 0.8 1"/>
-                    </body>
-                    <body name="right_foot_sphere_7_link" pos="0.0 -0.045 -0.03">
-                      <inertial pos="0 0 0" mass="0.001" diaginertia="1e-7 1e-7 1e-7"/>
-                      <geom name="right_foot_sphere_7_link" type="sphere" size="0.005" rgba="0.2 0.2 0.8 1"/>
-                    </body>
+                    <!-- Foot contact: 4 longitudinal capsules spanning the sole.
+                         Replaces 7 point-spheres (near-singular contacts that
+                         chattered) with a fat, line-spread contact patch.
+                         r=0.012, sole bottom at z=-0.035 (unchanged spawn height).
+                         Footprint matches the real foot (x -0.10..0.12, y +-0.045). -->
+                    <geom name="right_foot1_collision" class="collision" type="capsule"
+                      size="0.012" fromto="-0.088 0.033 -0.023 0.108 0.033 -0.023"/>
+                    <geom name="right_foot2_collision" class="collision" type="capsule"
+                      size="0.012" fromto="-0.088 0.011 -0.023 0.108 0.011 -0.023"/>
+                    <geom name="right_foot3_collision" class="collision" type="capsule"
+                      size="0.012" fromto="-0.088 -0.011 -0.023 0.108 -0.011 -0.023"/>
+                    <geom name="right_foot4_collision" class="collision" type="capsule"
+                      size="0.012" fromto="-0.088 -0.033 -0.023 0.108 -0.033 -0.023"/>
+                    <!-- Inner-face vertical capsule (medial side = +y for right foot):
+                         rises from the sole to z=0.05 so the inside of the foot can
+                         push the ball above its base (dribble inside-foot touch). -->
+                    <geom name="right_foot5_collision" class="collision" type="capsule"
+                      size="0.012" fromto="0.04 0.033 -0.023 0.04 0.033 0.05"/>
                   </body>
                 </body>
               </body>

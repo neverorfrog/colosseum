@@ -303,25 +303,21 @@ ACTION_SCALE: dict[str, float] = {name: 0.25 for name in JOINT_NAMES}
 # Foot geom names (for events like friction randomization)
 ##
 
-# All foot geometry names including sphere contacts
-# Each foot has 1 main link + 5 contact spheres for stable multi-point contact
+# All foot geometry names. Each foot has the disabled mesh geom plus 5 collision
+# capsules: 4 longitudinal sole capsules + 1 inner-face vertical capsule.
 FOOT_GEOM_NAMES = (
   "left_foot_link",
-  "left_foot_sphere_1_link",
-  "left_foot_sphere_2_link",
-  "left_foot_sphere_3_link",
-  "left_foot_sphere_4_link",
-  "left_foot_sphere_5_link",
-  "left_foot_sphere_6_link",
-  "left_foot_sphere_7_link",
+  "left_foot1_collision",
+  "left_foot2_collision",
+  "left_foot3_collision",
+  "left_foot4_collision",
+  "left_foot5_collision",
   "right_foot_link",
-  "right_foot_sphere_1_link",
-  "right_foot_sphere_2_link",
-  "right_foot_sphere_3_link",
-  "right_foot_sphere_4_link",
-  "right_foot_sphere_5_link",
-  "right_foot_sphere_6_link",
-  "right_foot_sphere_7_link",
+  "right_foot1_collision",
+  "right_foot2_collision",
+  "right_foot3_collision",
+  "right_foot4_collision",
+  "right_foot5_collision",
 )
 
 FOOT_SITE_NAMES = ("left_foot", "right_foot")

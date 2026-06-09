@@ -12,7 +12,7 @@ from mjlab.utils.spec_config import CollisionCfg
 # - No self-collisions
 # - Most stable for training
 FEET_ONLY_COLLISION = CollisionCfg(
-  geom_names_expr=(r"^(left|right)_foot_sphere.*link$",),  # Only match sphere links
+  geom_names_expr=(r"^(left|right)_foot[1-7]_collision$",),  # Only match foot collision capsules
   contype=0,
   conaffinity=1,
   condim=4,
@@ -25,7 +25,7 @@ FEET_ONLY_COLLISION = CollisionCfg(
 # - contype=3 (bits 0+1), conaffinity=3 (bits 0+1)
 # - Ground must have contype=1 (default) so bit 0 matches
 FEET_SELF_COLLISION = CollisionCfg(
-  geom_names_expr=(r"^(left|right)_foot_sphere.*link$",),
+  geom_names_expr=(r"^(left|right)_foot[1-7]_collision$",),
   contype=3,
   conaffinity=3,
   condim=3,
@@ -58,33 +58,33 @@ FULL_COLLISION = CollisionCfg(
 )
 
 # Feet + forearm/hand vs lower-body self-collision (for locomotion with arm penalty)
-# - Foot spheres collide with terrain via bit 0 (contype=0 so they can only be hit)
+# - Foot capsules collide with terrain via bit 0 (contype=0 so they can only be hit)
 # - Forearms/hands and lower-body geoms share bit 1 so they only collide with each
 #   other, not with the terrain or any other body part
 _FOREARM_HAND = r"^(AL3|AR3|left_hand_link|right_hand_link)$"
 _LOWER_BODY = r"^(Waist|Hip_Pitch_Left|Hip_Roll_Left|Hip_Yaw_Left|Shank_Left|Hip_Pitch_Right|Hip_Roll_Right|Hip_Yaw_Right|Shank_Right)$"
 FEET_FOREARM_WAIST_COLLISION = CollisionCfg(
   geom_names_expr=(
-    r"^(left|right)_foot_sphere.*link$",
+    r"^(left|right)_foot[1-7]_collision$",
     _FOREARM_HAND,
     _LOWER_BODY,
   ),
   contype={
-    r"^(left|right)_foot_sphere.*link$": 0,
+    r"^(left|right)_foot[1-7]_collision$": 0,
     _FOREARM_HAND: 2,
     _LOWER_BODY: 2,
   },
   conaffinity={
-    r"^(left|right)_foot_sphere.*link$": 1,
+    r"^(left|right)_foot[1-7]_collision$": 1,
     _FOREARM_HAND: 2,
     _LOWER_BODY: 2,
   },
   condim={
-    r"^(left|right)_foot_sphere.*link$": 3,
+    r"^(left|right)_foot[1-7]_collision$": 3,
     r".*": 1,
   },
-  priority={r"^(left|right)_foot_sphere.*link$": 1},
-  friction={r"^(left|right)_foot_sphere.*link$": (0.6,)},
+  priority={r"^(left|right)_foot[1-7]_collision$": 1},
+  friction={r"^(left|right)_foot[1-7]_collision$": (0.6,)},
 )
 
 # Hands and feet collision (for manipulation tasks)
