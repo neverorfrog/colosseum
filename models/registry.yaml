@@ -165,6 +165,11 @@ t1-velocity:
       run: t1-velocity-PPO-123-20260610_163538
       step: 0
       created: '2026-06-11T06:51:47.108960+00:00'
+    jun11_1:
+      file: jun11_1/t1-velocity_ppo_jun11_1.onnx
+      run: t1-velocity-PPO-123-20260611_124011
+      step: 0
+      created: '2026-06-11T13:24:13.493169+00:00'
   default: v0
 t1-velocity-rma:
   models:
