@@ -1,12 +1,13 @@
 import math
 from typing import Dict
 
+from mjlab.envs.mdp.actions import JointPositionActionCfg
 from mjlab.envs.mdp.terminations import bad_orientation, nan_detection, time_out
 from mjlab.managers import CommandTermCfg
 from mjlab.managers.action_manager import ActionTermCfg
 from mjlab.managers.termination_manager import TerminationTermCfg
 
-from colosseum.mdp.actions import DelayedJointPositionActionCfg, HeadPerturbActionCfg
+from colosseum.mdp.actions import HeadPerturbActionCfg
 from colosseum.mdp.velocity_command import CurriculumVelocityCommandCfg
 from colosseum.robots.t1_23dof.constants import ACTION_SCALE
 from colosseum.tasks.dribbling.mdp.gait_phase_command import GaitPhaseCommandCfg
@@ -73,12 +74,11 @@ VELOCITY_ACTION_SCALE = {
 VELOCITY_ACTION_SCALE.update({name: 0.0 for name in ARM_JOINT_NAMES})
 
 actions: dict[str, ActionTermCfg] = {
-  "joint_pos": DelayedJointPositionActionCfg(
+  "joint_pos": JointPositionActionCfg(
     entity_name="robot",
     actuator_names=("^(?!AAHead_yaw$|Head_pitch$).*$",),
     scale=VELOCITY_ACTION_SCALE,
     use_default_offset=True,
-    max_delay_steps=2,
   ),
   "head_perturb": HeadPerturbActionCfg(
     entity_name="robot",

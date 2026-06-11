@@ -15,11 +15,7 @@ except ImportError:
   _MJLAB_AVAILABLE = False
 
 if _MJLAB_AVAILABLE:
-  from colosseum.robots.t1_23dof.actuators import (
-    DEPLOY_ACTUATORS,
-    MJLAB_ACTUATORS,
-    mjlab_action_scale,
-  )
+  from colosseum.robots.t1_23dof.actuators import ACTUATORS, action_scale
   from colosseum.robots.t1_23dof.collisions import (
     FEET_FOREARM_WAIST_COLLISION,
     FEET_ONLY_COLLISION,
@@ -153,11 +149,7 @@ JOINT_NAMES = [
 
 
 if _MJLAB_AVAILABLE:
-  # Actuator gain set. Swap manually to A/B the mjlab-derived gains.
-  ACTUATORS = DEPLOY_ACTUATORS
-  # ACTUATORS = MJLAB_ACTUATORS
-
-  # 23-DOF Full Body
+  # 23-DOF Full Body. Single canonical actuator set (see actuators.py).
   ARTICULATION = EntityArticulationInfoCfg(
     actuators=ACTUATORS,
     soft_joint_pos_limit_factor=0.9,
@@ -286,18 +278,14 @@ FLIP_SIGN_JOINT_NAMES: list[str] = [
 ##
 # Action Scale: target = scale * action + default.
 #
-# The deploy pipeline (colosseum_can) applies uniform 0.25 and requires training
-# to match it ("NO effort_limit/stiffness calculation in training"), so the
-# deployable (deploy-gains) model uses uniform 0.25. The mjlab recipe instead
-# uses 0.25 * effort/stiffness per joint (constant torque authority, decoupled
-# from kp) and is selected together with MJLAB_ACTUATORS — experiment only, NOT
-# deployable as-is (the deploy action_scale would need the same per-joint dict).
-# See docs/research/t1_model_comparison.md.
+# booster_train recipe: 0.25 * effort / stiffness per joint, so kp * scale =
+# 0.25 * effort gives every joint torque authority proportional to its motor's
+# effort (decoupled from kp). Guarded because it reads the actuator set, which
+# needs mjlab. See docs/research/t1_actuator_comparison.md.
 ##
 
-ACTION_SCALE: dict[str, float] = {name: 0.25 for name in JOINT_NAMES}
-# mjlab recipe (pair with MJLAB_ACTUATORS above): uncomment to swap.
-# ACTION_SCALE = mjlab_action_scale(tuple(JOINT_NAMES))
+if _MJLAB_AVAILABLE:
+  ACTION_SCALE: dict[str, float] = action_scale()
 
 ##
 # Foot geom names (for events like friction randomization)

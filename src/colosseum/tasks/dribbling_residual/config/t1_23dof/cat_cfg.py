@@ -1,12 +1,11 @@
 import math
 from typing import Dict
 
+from mjlab.envs.mdp.actions import JointPositionActionCfg
 from mjlab.envs.mdp.terminations import bad_orientation, nan_detection, time_out
 from mjlab.managers import CommandTermCfg
 from mjlab.managers.action_manager import ActionTermCfg
 from mjlab.managers.termination_manager import TerminationTermCfg
-
-from colosseum.mdp.actions import DelayedJointPositionActionCfg
 from colosseum.mdp.velocity_command import CurriculumVelocityCommandCfg
 from colosseum.robots.t1_23dof.constants import ACTION_SCALE
 from colosseum.tasks.dribbling.mdp.gait_phase_command import GaitPhaseCommandCfg
@@ -40,12 +39,11 @@ VELOCITY_ACTION_SCALE = {
 }
 
 actions: dict[str, ActionTermCfg] = {
-  "joint_pos": DelayedJointPositionActionCfg(
+  "joint_pos": JointPositionActionCfg(
     entity_name="robot",
     actuator_names=(".*",),
     scale=VELOCITY_ACTION_SCALE,
     use_default_offset=True,
-    max_delay_steps=2,
   ),
   # IK head tracking: runs after joint_pos and overrides the head targets with
   # analytic yaw/pitch toward the ball, returning to (0, 0) when out of view.
