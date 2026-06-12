@@ -57,12 +57,28 @@ def forward_velocity(
   return asset.data.root_link_lin_vel_b[:, 0]
 
 
-def commanded_velocity(
+def cmd_lin_vel_x(
   env: ManagerBasedRlEnv,
   command_name: str,
 ) -> torch.Tensor:
-  """Commanded forward (base-x) linear velocity (m/s) — pairs with forward_velocity."""
+  """Commanded base-x linear velocity (m/s)."""
   return env.command_manager.get_command(command_name)[:, 0]
+
+
+def cmd_lin_vel_y(
+  env: ManagerBasedRlEnv,
+  command_name: str,
+) -> torch.Tensor:
+  """Commanded base-y linear velocity (m/s)."""
+  return env.command_manager.get_command(command_name)[:, 1]
+
+
+def cmd_ang_vel_yaw(
+  env: ManagerBasedRlEnv,
+  command_name: str,
+) -> torch.Tensor:
+  """Commanded yaw angular velocity (rad/s)."""
+  return env.command_manager.get_command(command_name)[:, 2]
 
 
 def lin_vel_error(
@@ -194,3 +210,22 @@ def feet_contact_force(
   sensor: ContactSensor = env.scene[sensor_name]
   assert sensor.data.force is not None
   return sensor.data.force.norm(dim=-1).mean(dim=-1)
+
+
+# =========================
+# Joint limits
+# =========================
+def joint_pos_limits_violation(
+  env: ManagerBasedRlEnv,
+  asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+) -> torch.Tensor:
+  """Fraction of joints in the group exceeding soft joint position limits.
+
+  Returns a [num_envs] tensor with values in [0, 1].
+  """
+  asset: Entity = env.scene[asset_cfg.name]
+  soft = asset.data.soft_joint_pos_limits[:, asset_cfg.joint_ids]  # (N, J, 2)
+  pos = asset.data.joint_pos[:, asset_cfg.joint_ids]  # (N, J)
+  lower_violation = (pos < soft[:, :, 0]).float()
+  upper_violation = (pos > soft[:, :, 1]).float()
+  return (lower_violation + upper_violation).mean(dim=-1)

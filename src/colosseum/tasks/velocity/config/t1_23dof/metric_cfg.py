@@ -4,12 +4,15 @@ from mjlab.managers.scene_entity_config import SceneEntityCfg
 from colosseum.mdp.metrics import (
   ang_vel_error,
   base_tilt,
-  commanded_velocity,
+  cmd_ang_vel_yaw,
+  cmd_lin_vel_x,
+  cmd_lin_vel_y,
   feet_air_time,
   feet_clearance,
   feet_contact_force,
   forward_velocity,
   joint_jerk,
+  joint_pos_limits_violation,
   joint_torque,
   joint_vibration,
   lin_vel_error,
@@ -34,8 +37,14 @@ metrics = {
   "root_height": MetricsTermCfg(func=root_height),
   "base_tilt": MetricsTermCfg(func=base_tilt),
   # ---- Velocity tracking (physical units) ----
-  "commanded_velocity": MetricsTermCfg(
-    func=commanded_velocity, params={"command_name": "twist"}
+  "cmd_lin_vel_x": MetricsTermCfg(
+    func=cmd_lin_vel_x, params={"command_name": "twist"}
+  ),
+  "cmd_lin_vel_y": MetricsTermCfg(
+    func=cmd_lin_vel_y, params={"command_name": "twist"}
+  ),
+  "cmd_ang_vel_yaw": MetricsTermCfg(
+    func=cmd_ang_vel_yaw, params={"command_name": "twist"}
   ),
   "forward_velocity": MetricsTermCfg(func=forward_velocity),
   "lin_vel_error": MetricsTermCfg(func=lin_vel_error, params={"command_name": "twist"}),
@@ -65,5 +74,9 @@ for _group, _patterns in JOINT_GROUPS.items():
   )
   metrics[f"joint_torque/{_group}"] = MetricsTermCfg(
     func=joint_torque,
+    params={"asset_cfg": SceneEntityCfg("robot", joint_names=_patterns)},
+  )
+  metrics[f"joint_pos_limits/{_group}"] = MetricsTermCfg(
+    func=joint_pos_limits_violation,
     params={"asset_cfg": SceneEntityCfg("robot", joint_names=_patterns)},
   )
