@@ -4,9 +4,9 @@ Key differences from SAC networks:
 - Actor: No tanh squashing, state-independent learned std parameter
 - Critic: Outputs scalar value V(s) instead of Q(s,a)
 
-Initialization follows RSL-RL/holosoma conventions:
+Initialization:
 - Backbone: orthogonal init with gain=sqrt(2)
-- Actor mean head: orthogonal init with std=0.01 (near-zero initial actions)
+- Actor mean head: default nn.Linear init (holosoma/booster_gym/RSL-RL convention)
 - Critic value head: orthogonal init with std=1.0
 - std parameterized directly (not log_std) for self-limiting gradient (1/std)
 """
@@ -51,13 +51,13 @@ class PpoActor(Network):
             activation_name=cfg.activation,
         )
 
+        # Default nn.Linear init for the mean head (holosoma/booster_gym/RSL-RL
+        # convention). The previous orthogonal gain=0.01 init pinned initial
+        # means near zero, producing artificially tiny KL that ramped the
+        # adaptive LR to its ceiling before the means started moving.
         self.mean_head = nn.Linear(int(self.last_dim), action_dim)
         self.std = nn.Parameter(cfg.init_noise_std * torch.ones(action_dim))
         self.min_noise_std = cfg.min_noise_std  # type: ignore[assignment]
-
-        # Re-init specific heads (backbone already done by Network._init_weights)
-        nn.init.orthogonal_(self.mean_head.weight, gain=0.01)
-        nn.init.zeros_(self.mean_head.bias)
 
         # Disable default validation for speed (RSL-RL pattern)
         torch.distributions.Normal.set_default_validate_args(False)

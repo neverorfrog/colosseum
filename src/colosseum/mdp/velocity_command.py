@@ -161,8 +161,12 @@ class CurriculumVelocityCommand(TrueErrorVelocityCommand):
         1.0 - self.cfg.episode_length_toler
       )
       cmd = self.vel_command_b[env_ids]
+      # Standing envs have their command zeroed every step by the base
+      # _update_command, so they pass the tracking check while doing nothing
+      # and would promote grid cells they never executed. Exclude them.
       ok = (
         survived
+        & ~self.is_standing_env[env_ids]
         & (torch.abs(self.filtered_lin_vel[env_ids, 0] - cmd[:, 0]) < self.cfg.x_toler)
         & (torch.abs(self.filtered_lin_vel[env_ids, 1] - cmd[:, 1]) < self.cfg.y_toler)
         & (

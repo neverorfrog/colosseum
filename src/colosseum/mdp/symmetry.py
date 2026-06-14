@@ -148,6 +148,23 @@ def mirror_gait_phase(x: torch.Tensor) -> torch.Tensor:
   return x[..., [1, 0, 3, 2]]
 
 
+def mirror_gait_clock(x: torch.Tensor) -> torch.Tensor:
+  """Mirror booster's 2D single-clock gait phase [cos φ, sin φ].
+
+  Swapping left/right legs shifts the shared clock by half a period
+  (φ → φ + π), so both components negate.
+  """
+  return -x
+
+
+def mirror_base_mass_com(x: torch.Tensor) -> torch.Tensor:
+  """Mirror base [com_x, com_y, com_z, mass] under y → -y reflection.
+
+  The com offset is a position vector (y flips); mass is a scalar (unchanged).
+  """
+  return x * x.new_tensor([1.0, -1.0, 1.0, 1.0])
+
+
 # ---------------------------------------------------------------------------
 # Compiled symmetry spec
 # ---------------------------------------------------------------------------

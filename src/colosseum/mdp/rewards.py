@@ -165,6 +165,52 @@ def dof_acc_penalty(
   return torch.sum(torch.square(asset.data.joint_acc[:, asset_cfg.joint_ids]), dim=-1)
 
 
+def torques_penalty(
+  env: ManagerBasedRlEnv,
+  asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+  """Penalize sum of squared actuator torques (booster_gym ``torques``)."""
+  asset: Entity = env.scene[asset_cfg.name]
+  torques = asset.data.qfrc_actuator[:, asset_cfg.joint_ids]
+  return torch.sum(torch.square(torques), dim=-1)
+
+
+def torque_tiredness_penalty(
+  env: ManagerBasedRlEnv,
+  asset_cfg: SceneEntityCfg,
+  effort_limits: dict[str, float],
+) -> torch.Tensor:
+  """Penalize torque as a fraction of each joint's limit (booster_gym
+  ``torque_tiredness``): sum of (tau/tau_max)^2, clipped at 1 per joint.
+
+  ``effort_limits`` maps joint name -> torque limit (Nm).
+  """
+  asset: Entity = env.scene[asset_cfg.name]
+  torques = asset.data.qfrc_actuator[:, asset_cfg.joint_ids]
+  # joint_ids collapses to slice(None) when the cfg matches every joint.
+  names = (
+    asset.joint_names[asset_cfg.joint_ids]
+    if isinstance(asset_cfg.joint_ids, slice)
+    else [asset.joint_names[i] for i in asset_cfg.joint_ids]
+  )
+  limits = torch.tensor(
+    [effort_limits[n] for n in names],
+    device=torques.device,
+  )
+  return torch.sum(torch.square(torques / limits).clip(max=1.0), dim=-1)
+
+
+def power_penalty(
+  env: ManagerBasedRlEnv,
+  asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+  """Penalize positive mechanical power tau * qd (booster_gym ``power``)."""
+  asset: Entity = env.scene[asset_cfg.name]
+  torques = asset.data.qfrc_actuator[:, asset_cfg.joint_ids]
+  joint_vel = asset.data.joint_vel[:, asset_cfg.joint_ids]
+  return torch.sum((torques * joint_vel).clip(min=0.0), dim=-1)
+
+
 def feet_distance_penalty(
   env: ManagerBasedRlEnv,
   asset_cfg: SceneEntityCfg,
@@ -689,3 +735,53 @@ def track_angular_velocity_filtered(
   z_error = torch.square(command[:, 2] - filtered[:, 2])
   xy_error = torch.sum(torch.square(filtered[:, :2]), dim=1)
   return torch.exp(-(z_error + xy_error) / std**2)
+
+
+def track_lin_vel_axis_filtered(
+  env: ManagerBasedRlEnv,
+  std: float,
+  command_name: str,
+  axis: int,
+) -> torch.Tensor:
+  """Track one linear velocity axis (0=x, 1=y) with the EMA-filtered velocity.
+
+  Per-axis split of ``track_linear_velocity_filtered``, mirroring booster_gym's
+  separate ``tracking_lin_vel_x`` / ``tracking_lin_vel_y``: each axis earns
+  reward and gradient independently instead of multiplying inside one kernel,
+  so a large error on one axis doesn't zero the learning signal on the others.
+  """
+  command = env.command_manager.get_command(command_name)
+  assert command is not None, f"Command '{command_name}' not found."
+  filtered = env.command_manager.get_term(command_name).filtered_lin_vel
+  error = torch.square(command[:, axis] - filtered[:, axis])
+  return torch.exp(-error / std**2)
+
+
+def track_ang_vel_yaw_filtered(
+  env: ManagerBasedRlEnv,
+  std: float,
+  command_name: str,
+) -> torch.Tensor:
+  """Track commanded yaw rate only, with the EMA-filtered angular velocity.
+
+  Unlike ``track_angular_velocity_filtered``, roll/pitch rates are not part of
+  the kernel (booster_gym handles them via the separate ang_vel_xy penalty,
+  here ``penalty_body_ang_vel``).
+  """
+  command = env.command_manager.get_command(command_name)
+  assert command is not None, f"Command '{command_name}' not found."
+  filtered = env.command_manager.get_term(command_name).filtered_ang_vel
+  z_error = torch.square(command[:, 2] - filtered[:, 2])
+  return torch.exp(-z_error / std**2)
+
+
+def lin_vel_z_filtered_penalty(
+  env: ManagerBasedRlEnv,
+  command_name: str,
+) -> torch.Tensor:
+  """Penalize vertical base velocity (EMA-filtered), booster_gym's lin_vel_z.
+
+  Replaces the vz term that used to sit inside the combined tracking kernel.
+  """
+  filtered = env.command_manager.get_term(command_name).filtered_lin_vel
+  return torch.square(filtered[:, 2])

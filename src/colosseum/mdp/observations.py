@@ -94,6 +94,81 @@ def base_height(
   return height.unsqueeze(-1)
 
 
+def gait_clock(
+  env: ManagerBasedRlEnv,
+  command_name: str = "gait_phase",
+  twist_command_name: str = "twist",
+  speed_threshold: float = 0.05,
+) -> torch.Tensor:
+  """booster_gym's single-clock gait observation: [cos φ, sin φ]. Returns [N, 2].
+
+  Reads the left-foot phase from the 4D GaitPhaseCommand and gates it to zero
+  for standing envs (‖cmd_xy‖ and |ω_z| both below ``speed_threshold``), matching
+  booster's ``cos/sin * (gait_freq > 0)`` gate.
+  """
+  gait = env.command_manager.get_command(command_name)  # [cos_L, cos_R, sin_L, sin_R]
+  cos_phi = gait[:, 0:1]
+  sin_phi = gait[:, 2:3]
+  cmd = env.command_manager.get_command(twist_command_name)
+  moving = (torch.norm(cmd[:, :2], dim=-1, keepdim=True) > speed_threshold) | (
+    cmd[:, 2:3].abs() > speed_threshold
+  )
+  gate = moving.float()
+  return torch.cat([cos_phi * gate, sin_phi * gate], dim=-1)
+
+
+# ---------------------------------------------------------------------------
+# Privileged critic observations (booster_gym parity)
+# ---------------------------------------------------------------------------
+
+
+def base_external_force(
+  env: ManagerBasedRlEnv,
+  asset_cfg: SceneEntityCfg = SceneEntityCfg("robot", body_names="Trunk"),
+) -> torch.Tensor:
+  """External force currently applied to the base body (booster push_force). [N, 3]."""
+  asset: Entity = env.scene[asset_cfg.name]
+  return asset.data.body_external_force[:, asset_cfg.body_ids[0]]
+
+
+def base_external_torque(
+  env: ManagerBasedRlEnv,
+  asset_cfg: SceneEntityCfg = SceneEntityCfg("robot", body_names="Trunk"),
+) -> torch.Tensor:
+  """External torque currently applied to the base body (booster push_torque). [N, 3]."""
+  asset: Entity = env.scene[asset_cfg.name]
+  return asset.data.body_external_torque[:, asset_cfg.body_ids[0]]
+
+
+_BASE_NOMINAL_CACHE: dict = {}
+
+
+def base_mass_com_offset(
+  env: ManagerBasedRlEnv,
+  asset_cfg: SceneEntityCfg = SceneEntityCfg("robot", body_names="Trunk"),
+) -> torch.Tensor:
+  """Base com-offset (3) and mass-offset (1) from the nominal model (booster
+  base_mass_scaled). Per-env perturbed model field minus the nominal compiled
+  value, so it reflects exactly the startup DR applied to the base body. [N, 4]."""
+  asset: Entity = env.scene[asset_cfg.name]
+  gid = int(asset.indexing.body_ids[asset_cfg.body_ids[0]])
+  model = env.sim.model
+  # Nominal (pre-DR) values from the compiled MjModel, cached per (model, body).
+  key = (id(env.sim.mj_model), gid)
+  nominal = _BASE_NOMINAL_CACHE.get(key)
+  if nominal is None:
+    mjm = env.sim.mj_model
+    dev, dt = model.body_mass.device, model.body_mass.dtype
+    com_def = torch.as_tensor(mjm.body_ipos[gid], device=dev, dtype=dt)
+    mass_def = torch.as_tensor(float(mjm.body_mass[gid]), device=dev, dtype=dt)
+    nominal = (com_def, mass_def)
+    _BASE_NOMINAL_CACHE[key] = nominal
+  com_def, mass_def = nominal
+  com_delta = model.body_ipos[:, gid, :] - com_def
+  mass_delta = (model.body_mass[:, gid] - mass_def).unsqueeze(-1)
+  return torch.cat([com_delta, mass_delta], dim=-1)
+
+
 __all__ = [
   "base_height",
   "compute_projected_gravity",

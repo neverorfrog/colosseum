@@ -268,6 +268,28 @@ class RmaPPOConfig(PpoConfig):
 
 
 @dataclass(frozen=True)
+class BoosterPpoConfig(PpoConfig):
+  """PPO faithfully matching booster_gym's runner.py mechanics.
+
+  Differences from the base PPO (all implemented in BoosterPPO):
+  - only_positive_rewards: total per-step reward clipped at >= 0.
+  - bound_loss on action means outside [-1, 1] (weight ``bound_coef``).
+  - Single combined loss, no value clipping, no symmetry.
+  - Full-batch update with GAE (and value estimate) recomputed every epoch.
+  - Timeout bootstrap implemented as reward[timeout] = V(timeout).
+  """
+
+  name: str = "BoosterPPO"
+  target: str = "colosseum.algorithm.booster_ppo:BoosterPPO"
+
+  bound_coef: float = 1.0
+  """Weight on the action-bound penalty (booster ``bound_coef``)."""
+
+  only_positive_rewards: bool = True
+  """Clip the total per-step reward at >= 0 (booster ``only_positive_rewards``)."""
+
+
+@dataclass(frozen=True)
 class PretrainedSkillConfig:
   """A frozen base skill: what to load, how to build it, what it observes.
 
