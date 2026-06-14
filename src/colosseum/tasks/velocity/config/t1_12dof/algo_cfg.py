@@ -47,8 +47,9 @@ def booster_t1_12dof_ppo_cfg() -> PpoConfig:
 
 
 def booster_t1_12dof_booster_ppo_cfg() -> BoosterPpoConfig:
-  """Faithful booster_gym PPO (runner.py): only_positive_rewards, bound_loss,
-  full-batch GAE recomputed each epoch, no symmetry, single shared LR."""
+  """booster_gym PPO (runner.py): only_positive_rewards, bound_loss, full-batch
+  GAE recomputed each epoch, single shared LR. Adds left-right symmetry via
+  rollout data augmentation (a deliberate divergence from booster's runner)."""
   return BoosterPpoConfig(
     learning_steps=750_000_000,
     num_steps_per_env=24,  # booster horizon_length
@@ -69,8 +70,9 @@ def booster_t1_12dof_booster_ppo_cfg() -> BoosterPpoConfig:
     desired_kl=0.01,
     schedule="adaptive",
     obs_normalization=False,
-    symmetry_loss_coef=0.0,  # booster's runner has no symmetry term
-    symmetry_data_augmentation=False,
+    symmetry_loss_coef=1.0,
+    symmetry_critic_coef=0.0,
+    symmetry_data_augmentation=True,
     actor=PpoActorConfig(
       hidden_layers=[256, 128, 128],
       activation="elu",

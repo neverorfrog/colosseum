@@ -10,11 +10,18 @@ collection and learning phases to match booster's train() exactly:
   the value estimate AND GAE recomputed each epoch.
 - Timeout bootstrap implemented as reward[timeout] = V(timeout).
 - Combined single loss: value + surrogate + bound_coef*bound + entropy bonus.
-  No value clipping, no symmetry.
+  No value clipping.
 - Adaptive-KL LR (booster bounds 1e-5..1e-2), one LR shared by actor and critic.
 
 booster's runner.py does not use its config's ``symmetric_coef`` — there is no
-symmetry term in the loss — so BoosterPPO has none either.
+symmetry term in its loss. As a deliberate divergence, BoosterPPO honors the same
+three symmetry flags as the base PPO:
+- ``symmetry_data_augmentation`` doubles the rollout along the env dimension with
+  left-right mirrored copies before the epoch loop, so the per-env GAE, per-epoch
+  value recompute, and all losses run unchanged on 2N envs.
+- ``symmetry_loss_coef`` / ``symmetry_critic_coef`` add actor/critic equivariance
+  MSE terms to the combined loss (reusing the augmented halves when augmentation is
+  on, else computed via a separate mirrored forward).
 """
 
 from __future__ import annotations
@@ -26,6 +33,7 @@ from colosseum.algorithm.base_algorithm import ObsType
 from colosseum.algorithm.ppo import PPO
 from colosseum.algorithm.utils.rollout_buffer import RolloutBuffer
 from colosseum.config.types.algorithm import BoosterPpoConfig, register_algorithm
+from colosseum.mdp.symmetry import mirror_obs
 from colosseum.utils.logger import extract_episode_metrics
 
 
@@ -157,6 +165,30 @@ class BoosterPPO(PPO):
     dones = buf.dones
     time_outs = buf._extras["time_outs"]
 
+    # Symmetry support. ``augmented`` doubles the rollout along the env dimension
+    # with left-right mirrored copies (rewards/dones/time_outs are mirror-invariant
+    # scalars, so they are simply repeated); everything downstream (per-env GAE,
+    # per-epoch value recompute, surrogate/bound/entropy) then runs on 2N envs.
+    # ``n_orig`` is the pre-augmentation env count, used to split the two halves
+    # for the equivariance loss terms in the epoch loop below.
+    has_symmetry = self._use_symmetry and self._action_mirror_fn is not None
+    augmented = has_symmetry and cfg.symmetry_data_augmentation
+    n_orig = actor_obs.shape[1]
+    if augmented:
+      actor_obs = torch.cat(
+        [actor_obs, mirror_obs(actor_obs, self._actor_sym_spec)], dim=1
+      )
+      critic_obs = torch.cat(
+        [critic_obs, mirror_obs(critic_obs, self._critic_sym_spec)], dim=1
+      )
+      last_critic_obs = torch.cat(
+        [last_critic_obs, mirror_obs(last_critic_obs, self._critic_sym_spec)], dim=0
+      )
+      actions = torch.cat([actions, self._action_mirror_fn(actions)], dim=1)
+      rewards0 = rewards0.repeat(1, 2, 1)
+      dones = dones.repeat(1, 2, 1)
+      time_outs = time_outs.repeat(1, 2, 1)
+
     # Old policy reference (computed once, as in booster's runner).
     with torch.no_grad():
       old_dist = self.actor.get_distribution(actor_obs)
@@ -164,7 +196,14 @@ class BoosterPPO(PPO):
       old_means = old_dist.loc
       old_stds = old_dist.scale
 
-    sums = {"surrogate_loss": 0.0, "value_loss": 0.0, "bound_loss": 0.0, "entropy": 0.0}
+    sums = {
+      "surrogate_loss": 0.0,
+      "value_loss": 0.0,
+      "bound_loss": 0.0,
+      "entropy": 0.0,
+      "symmetry_actor_loss": 0.0,
+      "symmetry_critic_loss": 0.0,
+    }
     kl_mean = 0.0
     n_updates = 0
 
@@ -200,11 +239,40 @@ class BoosterPPO(PPO):
       )
       entropy = dist.entropy().sum(dim=-1)
 
+      # Left-right equivariance penalties (parity with base PPO). When augmented,
+      # the two halves are already split at n_orig along the env dim; otherwise a
+      # separate mirrored forward is run. Actor: pi(mirror(o)) == mirror(pi(o)).
+      # Critic: V(o) == V(mirror(o)).
+      symmetry_actor_loss = values.new_zeros(())
+      symmetry_critic_loss = values.new_zeros(())
+      if has_symmetry:
+        if cfg.symmetry_loss_coef > 0.0:
+          if augmented:
+            mu = dist.loc
+            symmetry_actor_loss = F.mse_loss(
+              mu[:, n_orig:], self._action_mirror_fn(mu[:, :n_orig])
+            )
+          else:
+            mu_mirror = self.actor.get_distribution(
+              mirror_obs(actor_obs, self._actor_sym_spec)
+            ).loc
+            symmetry_actor_loss = F.mse_loss(
+              mu_mirror, self._action_mirror_fn(dist.loc)
+            )
+        if cfg.symmetry_critic_coef > 0.0:
+          if augmented:
+            symmetry_critic_loss = F.mse_loss(values[:, :n_orig], values[:, n_orig:])
+          else:
+            val_mirror = self.value_net(mirror_obs(critic_obs, self._critic_sym_spec))
+            symmetry_critic_loss = F.mse_loss(values, val_mirror)
+
       loss = (
         value_loss
         + surrogate
         + cfg.bound_coef * bound_loss
         - cfg.entropy_coef * entropy.mean()
+        + cfg.symmetry_loss_coef * symmetry_actor_loss
+        + cfg.symmetry_critic_coef * symmetry_critic_loss
       )
 
       self.actor_optimizer.zero_grad()
@@ -245,11 +313,13 @@ class BoosterPPO(PPO):
       sums["value_loss"] += value_loss.item()
       sums["bound_loss"] += bound_loss.item()
       sums["entropy"] += entropy.mean().item()
+      sums["symmetry_actor_loss"] += symmetry_actor_loss.item()
+      sums["symmetry_critic_loss"] += symmetry_critic_loss.item()
       n_updates += 1
 
     self.rollout_buffer.clear()
     d = max(n_updates, 1)
-    return {
+    out = {
       "surrogate_loss": sums["surrogate_loss"] / d,
       "value_loss": sums["value_loss"] / d,
       "bound_loss": sums["bound_loss"] / d,
@@ -258,3 +328,7 @@ class BoosterPPO(PPO):
       "actor_learning_rate": self.actor_learning_rate,
       "critic_learning_rate": self.critic_learning_rate,
     }
+    if has_symmetry:
+      out["symmetry_actor_loss"] = sums["symmetry_actor_loss"] / d
+      out["symmetry_critic_loss"] = sums["symmetry_critic_loss"] / d
+    return out
