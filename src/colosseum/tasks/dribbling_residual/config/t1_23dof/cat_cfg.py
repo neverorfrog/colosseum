@@ -7,7 +7,7 @@ from mjlab.managers import CommandTermCfg
 from mjlab.managers.action_manager import ActionTermCfg
 from mjlab.managers.termination_manager import TerminationTermCfg
 from colosseum.mdp.velocity_command import CurriculumVelocityCommandCfg
-from colosseum.robots.t1_23dof.constants import ACTION_SCALE
+from colosseum.robots.t1_23dof.constants import LOCOMOTION_ACTION_SCALE
 from colosseum.tasks.dribbling.mdp.gait_phase_command import GaitPhaseCommandCfg
 from colosseum.tasks.dribbling_residual.mdp.ball_twist_command import (
   BallTwistCommandCfg,
@@ -34,15 +34,15 @@ commands: Dict[str, CommandTermCfg] = {
 # Head joints get scale=0: their targets are overridden by HeadIKActionCfg, so
 # the policy (frozen walk + residual) should not waste action on them.
 _HEAD_JOINTS = {"AAHead_yaw", "Head_pitch"}
-VELOCITY_ACTION_SCALE = {
-  k: (0.0 if k in _HEAD_JOINTS else v) for k, v in ACTION_SCALE.items()
+VELOCITY_LOCOMOTION_ACTION_SCALE = {
+  k: (0.0 if k in _HEAD_JOINTS else v) for k, v in LOCOMOTION_ACTION_SCALE.items()
 }
 
 actions: dict[str, ActionTermCfg] = {
   "joint_pos": JointPositionActionCfg(
     entity_name="robot",
     actuator_names=(".*",),
-    scale=VELOCITY_ACTION_SCALE,
+    scale=VELOCITY_LOCOMOTION_ACTION_SCALE,
     use_default_offset=True,
   ),
   # IK head tracking: runs after joint_pos and overrides the head targets with

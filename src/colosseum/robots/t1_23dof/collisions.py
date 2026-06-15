@@ -12,12 +12,14 @@ from mjlab.utils.spec_config import CollisionCfg
 # - No self-collisions
 # - Most stable for training
 FEET_ONLY_COLLISION = CollisionCfg(
-  geom_names_expr=(r"^(left|right)_foot[1-7]_collision$",),  # Only match foot collision capsules
+  geom_names_expr=(
+    r"^(left|right)_foot[1-7]_collision$",
+  ),  # Only match foot collision capsules
   contype=0,
   conaffinity=1,
   condim=4,
   priority=1,
-  friction=(0.6, 0.04),
+  friction=(1.0, 0.04),
 )
 
 # Feet collision with inter-foot contacts enabled (for dribbling)

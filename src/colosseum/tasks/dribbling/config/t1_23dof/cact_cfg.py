@@ -8,7 +8,7 @@ from mjlab.managers.action_manager import ActionTermCfg
 from mjlab.managers.curriculum_manager import CurriculumTermCfg
 from mjlab.managers.termination_manager import TerminationTermCfg
 
-from colosseum.robots.t1_23dof.constants import ACTION_SCALE
+from colosseum.robots.t1_23dof.constants import LOCOMOTION_ACTION_SCALE
 from colosseum.tasks.dribbling.mdp.ball_velocity_command import BallVelocityCommandCfg
 from colosseum.tasks.dribbling.mdp.curriculum import (
   obstacle_curriculum,
@@ -37,9 +37,9 @@ _ARM_JOINTS = {
 }
 _HEAD_JOINTS = {"AAHead_yaw", "Head_pitch"}
 # Arms and head scale=0: head targets are overridden by HeadIKActionCfg below.
-_DRIBBLING_ACTION_SCALE = {
+_DRIBBLING_LOCOMOTION_ACTION_SCALE = {
   k: (0.0 if k in _ARM_JOINTS or k in _HEAD_JOINTS else v)
-  for k, v in ACTION_SCALE.items()
+  for k, v in LOCOMOTION_ACTION_SCALE.items()
 }
 
 commands: Dict[str, CommandTermCfg] = {
@@ -72,7 +72,7 @@ actions: dict[str, ActionTermCfg] = {
   "joint_pos": JointPositionActionCfg(
     entity_name="robot",
     actuator_names=(".*",),
-    scale=_DRIBBLING_ACTION_SCALE,
+    scale=_DRIBBLING_LOCOMOTION_ACTION_SCALE,
     use_default_offset=True,
   ),
   # IK head tracking: runs after joint_pos, overrides the frozen head targets

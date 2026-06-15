@@ -15,7 +15,10 @@ except ImportError:
   _MJLAB_AVAILABLE = False
 
 if _MJLAB_AVAILABLE:
-  from colosseum.robots.t1_23dof.actuators import ACTUATORS, action_scale
+  from colosseum.robots.t1_23dof.actuators import (
+    LOCOMOTION_ACTUATORS,
+    WHOLEBODY_ACTUATORS,
+  )
   from colosseum.robots.t1_23dof.collisions import (
     FEET_FOREARM_WAIST_COLLISION,
     FEET_ONLY_COLLISION,
@@ -121,7 +124,7 @@ JOINT_NAMES = [
   # Head - 2 DOF
   "AAHead_yaw",
   "Head_pitch",
-  # Upper body (arms) - 8 DOF
+  # Upper body (arms) - 9 DOF
   "Left_Shoulder_Pitch",
   "Left_Shoulder_Roll",
   "Left_Elbow_Pitch",
@@ -130,9 +133,8 @@ JOINT_NAMES = [
   "Right_Shoulder_Roll",
   "Right_Elbow_Pitch",
   "Right_Elbow_Yaw",
-  # Torso - 1 DOF
   "Waist",
-  # Lower body (legs) - 12 DOF
+  # Lower body - 12 DOF
   "Left_Hip_Pitch",
   "Left_Hip_Roll",
   "Left_Hip_Yaw",
@@ -148,12 +150,19 @@ JOINT_NAMES = [
 ]
 
 
-if _MJLAB_AVAILABLE:
-  # 23-DOF Full Body. Single canonical actuator set (see actuators.py).
-  ARTICULATION = EntityArticulationInfoCfg(
-    actuators=ACTUATORS,
-    soft_joint_pos_limit_factor=0.9,
-  )
+# 23-DOF Full Body. Uses booster_train-derived datasheet motor models
+# (kp = I*(2*pi*f)², kd = 2*zeta*I*(2*pi*f); f=10 Hz, zeta=2).
+ARTICULATION = EntityArticulationInfoCfg(
+  actuators=WHOLEBODY_ACTUATORS,
+  soft_joint_pos_limit_factor=0.9,
+)
+
+# Legs-only locomotion. Uses hand-tuned gains matching booster_gym's
+# velocity-tracking training (hip 200/5, knee 200/5, ankle 50/2).
+LOCOMOTION_ARTICULATION = EntityArticulationInfoCfg(
+  actuators=LOCOMOTION_ACTUATORS,
+  soft_joint_pos_limit_factor=0.9,
+)
 
 ##
 # Keyframe config
@@ -192,6 +201,21 @@ HOME_QPOS: dict[str, float] = {
   "Right_Ankle_Roll": 0.0,
 }
 
+# Locomotion-specific default pose (booster_gym convention).
+# Hip_Pitch=-0.2, Knee=0.4, Ankle_Pitch=-0.25, base_height=0.72.
+HOME_QPOS_LOCOMOTION: dict[str, float] = {
+  **HOME_QPOS,
+  "Left_Hip_Pitch": -0.2,
+  "Left_Knee_Pitch": 0.4,
+  "Left_Ankle_Pitch": -0.25,
+  "Right_Hip_Pitch": -0.2,
+  "Right_Knee_Pitch": 0.4,
+  "Right_Ankle_Pitch": -0.25,
+}
+
+# Locomotion-specific base height (booster_gym convention: 0.72).
+LOCOMOTION_BASE_HEIGHT = (0.0, 0.0, 0.72)
+
 ##
 # Robot Configuration Functions
 ##
@@ -226,6 +250,36 @@ if _MJLAB_AVAILABLE:
 
   # Convenience shorthand
   ROBOT_CFG = get_robot_cfg()
+
+  def get_locomotion_robot_cfg(
+    foot_self_collision: bool = False,
+    self_collision: bool = False,
+    full_collision: bool = False,
+    with_head_camera: bool = False,
+  ) -> EntityCfg:
+    """Locomotion-oriented robot config: hand-tuned PD gains, booster_gym
+    default pose, 0.72 m base height.  Identical collision and spec options
+    as ``get_robot_cfg``.
+    """
+    if self_collision:
+      collision = FEET_FOREARM_WAIST_COLLISION
+    elif foot_self_collision:
+      collision = FEET_SELF_COLLISION
+    elif full_collision:
+      collision = FULL_COLLISION_WITHOUT_SELF
+    else:
+      collision = FEET_ONLY_COLLISION
+    spec_fn = get_spec_with_head_camera if with_head_camera else get_spec
+    return EntityCfg(
+      init_state=EntityCfg.InitialStateCfg(
+        pos=LOCOMOTION_BASE_HEIGHT,
+        joint_pos=HOME_QPOS_LOCOMOTION,
+        joint_vel={".*": 0.0},
+      ),
+      collisions=(collision,),
+      spec_fn=spec_fn,
+      articulation=LOCOMOTION_ARTICULATION,
+    )
 
 ##
 # Symmetry configuration (left-right mirror about sagittal plane)
@@ -276,16 +330,36 @@ FLIP_SIGN_JOINT_NAMES: list[str] = [
 ]
 
 ##
-# Action Scale: target = scale * action + default.
-#
-# booster_train recipe: 0.25 * effort / stiffness per joint, so kp * scale =
-# 0.25 * effort gives every joint torque authority proportional to its motor's
-# effort (decoupled from kp). Guarded because it reads the actuator set, which
-# needs mjlab. See docs/research/t1_actuator_comparison.md.
+# Action scales: target = scale * action + default.
 ##
 
+_UPPER_BODY_JOINTS = frozenset(
+  [
+    "AAHead_yaw",
+    "Head_pitch",
+    "Left_Shoulder_Pitch",
+    "Left_Shoulder_Roll",
+    "Left_Elbow_Pitch",
+    "Left_Elbow_Yaw",
+    "Right_Shoulder_Pitch",
+    "Right_Shoulder_Roll",
+    "Right_Elbow_Pitch",
+    "Right_Elbow_Yaw",
+    "Waist",
+  ]
+)
+
+# 0.25 for leg joints, 0.0 for upper body (held at default pose).
+LOCOMOTION_ACTION_SCALE: dict[str, float] = {
+  name: (0.0 if name in _UPPER_BODY_JOINTS else 0.25) for name in JOINT_NAMES
+}
+
 if _MJLAB_AVAILABLE:
-  ACTION_SCALE: dict[str, float] = action_scale()
+  # booster_train recipe: kp * scale = 0.25 * effort, decoupled from kp.
+  WHOLEBODY_ACTION_SCALE: dict[str, float] = {
+    cfg.target_names_expr[0]: 0.25 * cfg.effort_limit / cfg.stiffness
+    for cfg in WHOLEBODY_ACTUATORS
+  }
 
 ##
 # Foot geom names (for events like friction randomization)

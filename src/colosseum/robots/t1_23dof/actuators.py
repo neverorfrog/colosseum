@@ -1,15 +1,4 @@
-"""Booster T1 actuators: explicit PD with a flat-top torque-speed limit.
-
-Single canonical actuator set, ported 1-to-1 from booster_train's T1 config
-(``BOOSTER_T1_CFG``). One mjlab actuator per joint: each joint is driven by its
-datasheet motor model (``BoosterJoint``), with stiffness/damping derived the
-booster_train way (``kp = I*(2*pi*f)^2``, ``kd = 2*zeta*I*(2*pi*f)``; ``f`` =
-10 Hz, ``zeta`` = 2). The T1 ankles are parallel (``BoosterT1AnkleParaWrapper``):
-pitch and roll share a doubled armature. Command delay is the 2-8 physics-step
-bus lag baked into ``BoosterPdActuatorCfg``.
-
-See docs/research/t1_actuator_comparison.md.
-"""
+"""Booster T1 actuator sets: WHOLEBODY_ACTUATORS and LOCOMOTION_ACTUATORS."""
 
 from __future__ import annotations
 
@@ -23,7 +12,6 @@ from mjlab.actuator import IdealPdActuator, IdealPdActuatorCfg
 if TYPE_CHECKING:
   import mujoco
   import mujoco_warp as mjwarp
-
   from mjlab.actuator.actuator import ActuatorCmd
 
 
@@ -175,7 +163,7 @@ JOINT_MOTORS: dict[str, BoosterJoint] = {
 }
 
 
-def actuator(joint: str, motor: BoosterJoint) -> BoosterPdActuatorCfg:
+def _actuator(joint: str, motor: BoosterJoint) -> BoosterPdActuatorCfg:
   return BoosterPdActuatorCfg(
     target_names_expr=(joint,),
     stiffness=motor.stiffness,
@@ -187,14 +175,97 @@ def actuator(joint: str, motor: BoosterJoint) -> BoosterPdActuatorCfg:
   )
 
 
-ACTUATORS = tuple(actuator(j, m) for j, m in JOINT_MOTORS.items())
+WHOLEBODY_ACTUATORS = tuple(_actuator(j, m) for j, m in JOINT_MOTORS.items())
 
+##
+# Locomotion actuator set: hand-tuned kp/kd (hip 200/5, knee 200/5, ankle 50/2).
+# No T-N curve, no command delay.
+##
 
-def action_scale(factor: float = 0.25) -> dict[str, float]:
-  """Per-joint action scale, booster_train recipe: ``factor * effort / stiffness``.
-  With ``kp * scale = factor * effort``, every joint gets torque authority
-  proportional to its motor's effort, independent of the chosen stiffness."""
-  return {
-    cfg.target_names_expr[0]: factor * cfg.effort_limit / cfg.stiffness
-    for cfg in ACTUATORS
-  }
+LOCOMOTION_ACTUATORS = (
+  # Head — held at default (not controlled by velocity policy).
+  BoosterPdActuatorCfg(
+    target_names_expr=("AAHead_yaw", "Head_pitch"),
+    stiffness=4.0,
+    damping=1.0,
+    effort_limit=7.0,
+    armature=0.0018,
+    delay_min_lag=2,
+    delay_max_lag=8,
+  ),
+  # Arms — held at default pose.
+  BoosterPdActuatorCfg(
+    target_names_expr=(".*Shoulder.*", ".*Elbow.*"),
+    stiffness=50.0,
+    damping=1.0,
+    effort_limit=18.0,
+    armature=0.0283,
+    delay_min_lag=2,
+    delay_max_lag=8,
+  ),
+  # Waist — held at default.
+  BoosterPdActuatorCfg(
+    target_names_expr=("Waist",),
+    stiffness=200.0,
+    damping=5.0,
+    effort_limit=30.0,
+    armature=0.0478,
+    delay_min_lag=2,
+    delay_max_lag=8,
+  ),
+  # Legs — locomotion control joints (booster_gym convention, no T-N curve).
+  BoosterPdActuatorCfg(
+    target_names_expr=(".*Hip_Pitch",),
+    stiffness=200.0,
+    damping=5.0,
+    effort_limit=45.0,
+    armature=0.0524,
+    delay_min_lag=2,
+    delay_max_lag=8,
+  ),
+  BoosterPdActuatorCfg(
+    target_names_expr=(".*Hip_Roll",),
+    stiffness=200.0,
+    damping=5.0,
+    effort_limit=30.0,
+    armature=0.0478,
+    delay_min_lag=2,
+    delay_max_lag=8,
+  ),
+  BoosterPdActuatorCfg(
+    target_names_expr=(".*Hip_Yaw",),
+    stiffness=200.0,
+    damping=5.0,
+    effort_limit=30.0,
+    armature=0.0478,
+    delay_min_lag=2,
+    delay_max_lag=8,
+  ),
+  BoosterPdActuatorCfg(
+    target_names_expr=(".*Knee_Pitch",),
+    stiffness=200.0,
+    damping=5.0,
+    effort_limit=60.0,
+    armature=0.0636,
+    delay_min_lag=2,
+    delay_max_lag=8,
+  ),
+  BoosterPdActuatorCfg(
+    target_names_expr=(".*Ankle_Pitch",),
+    stiffness=50.0,
+    damping=1.0,
+    effort_limit=24.0,
+    armature=0.0340,
+    delay_min_lag=2,
+    delay_max_lag=8,
+  ),
+  BoosterPdActuatorCfg(
+    target_names_expr=(".*Ankle_Roll",),
+    stiffness=50.0,
+    damping=1.0,
+    effort_limit=15.0,
+    armature=0.0340,
+    delay_min_lag=2,
+    delay_max_lag=8,
+  ),
+)

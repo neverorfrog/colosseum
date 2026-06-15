@@ -10,7 +10,7 @@ from mjlab.managers.curriculum_manager import CurriculumTermCfg
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.managers.termination_manager import TerminationTermCfg
 
-from colosseum.robots.t1_23dof.constants import ACTION_SCALE
+from colosseum.robots.t1_23dof.constants import LOCOMOTION_ACTION_SCALE
 from colosseum.mdp.abstraction.maze.abstraction_velocity_command import (
   AbstractionVelocityCommandCfg,
 )
@@ -35,7 +35,7 @@ actions: dict[str, ActionTermCfg] = {
   "joint_pos": JointPositionActionCfg(
     entity_name="robot",
     actuator_names=(".*",),
-    scale=ACTION_SCALE,
+    scale=LOCOMOTION_ACTION_SCALE,
     use_default_offset=True,
   )
 }
