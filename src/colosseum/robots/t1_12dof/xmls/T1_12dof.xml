@@ -149,6 +149,10 @@
                     size="0.012" fromto="-0.088 -0.033 -0.023 0.108 -0.033 -0.023"/>
                   <geom name="left_foot5_collision" class="collision" type="capsule"
                     size="0.012" fromto="0.04 -0.033 -0.023 0.04 -0.033 0.05"/>
+                  <!-- booster_gym foot collider (full fidelity): single flat box,
+                       used by the locomotion configs instead of the capsules. -->
+                  <geom name="left_foot_box_collision" class="collision" type="box"
+                    size="0.1115 0.05 0.015" pos="0.01 0 -0.015"/>
                 </body>
               </body>
             </body>
@@ -203,6 +207,10 @@
                     size="0.012" fromto="-0.088 -0.033 -0.023 0.108 -0.033 -0.023"/>
                   <geom name="right_foot5_collision" class="collision" type="capsule"
                     size="0.012" fromto="0.04 0.033 -0.023 0.04 0.033 0.05"/>
+                  <!-- booster_gym foot collider (full fidelity): single flat box,
+                       used by the locomotion configs instead of the capsules. -->
+                  <geom name="right_foot_box_collision" class="collision" type="box"
+                    size="0.1115 0.05 0.015" pos="0.01 0 -0.015"/>
                 </body>
               </body>
             </body>

@@ -160,12 +160,14 @@ FOOT_GEOM_NAMES = (
   "left_foot3_collision",
   "left_foot4_collision",
   "left_foot5_collision",
+  "left_foot_box_collision",
   "right_foot_link",
   "right_foot1_collision",
   "right_foot2_collision",
   "right_foot3_collision",
   "right_foot4_collision",
   "right_foot5_collision",
+  "right_foot_box_collision",
 )
 
 FOOT_SITE_NAMES = ("left_foot", "right_foot")

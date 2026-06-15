@@ -365,8 +365,9 @@ if _MJLAB_AVAILABLE:
 # Foot geom names (for events like friction randomization)
 ##
 
-# All foot geometry names. Each foot has the disabled mesh geom plus 5 collision
-# capsules: 4 longitudinal sole capsules + 1 inner-face vertical capsule.
+# All foot geometry names. Each foot has the disabled mesh geom, 5 collision
+# capsules (4 longitudinal sole + 1 inner-face vertical, for dribbling) and the
+# booster_gym flat box (used by the locomotion configs).
 FOOT_GEOM_NAMES = (
   "left_foot_link",
   "left_foot1_collision",
@@ -374,12 +375,14 @@ FOOT_GEOM_NAMES = (
   "left_foot3_collision",
   "left_foot4_collision",
   "left_foot5_collision",
+  "left_foot_box_collision",
   "right_foot_link",
   "right_foot1_collision",
   "right_foot2_collision",
   "right_foot3_collision",
   "right_foot4_collision",
   "right_foot5_collision",
+  "right_foot_box_collision",
 )
 
 FOOT_SITE_NAMES = ("left_foot", "right_foot")
