@@ -9,7 +9,10 @@ from mjlab.managers.termination_manager import TerminationTermCfg
 
 from colosseum.mdp.actions import HeadPerturbActionCfg
 from colosseum.mdp.velocity_command import CurriculumVelocityCommandCfg
-from colosseum.robots.t1_23dof.constants import ACTION_SCALE
+from colosseum.robots.t1_23dof.constants import (
+  LOCOMOTION_ACTION_SCALE,
+  WHOLEBODY_ACTION_SCALE,
+)
 from colosseum.tasks.dribbling.mdp.gait_phase_command import GaitPhaseCommandCfg
 
 commands: Dict[str, CommandTermCfg] = {
@@ -23,15 +26,15 @@ commands: Dict[str, CommandTermCfg] = {
     debug_vis=True,
     resampling_time_range=(7.0, 10.0),
     ranges=CurriculumVelocityCommandCfg.Ranges(
-      lin_vel_x=(-1.0, 1.5),
-      lin_vel_y=(-1.0, 1.0),
-      ang_vel_z=(-1.5, 1.5),
+      lin_vel_x=(-1.0, 1.0),
+      lin_vel_y=(-0.5, 0.5),
+      ang_vel_z=(-1.0, 1.0),
       heading=(-math.pi, math.pi),
     ),
     # Performance-gated 2D grid. Lateral is coupled to the forward level and
     # capped below it (res_y < res_x), so "max forward AND max lateral" is never
     # commanded; cells only open up once an env tracks the frontier within
-    # tolerance. Max |vx|=1.5, |vy|=0.6, |wz|=1.2 at the outermost levels.
+    # tolerance. Max |vx|=1.375, |vy|=0.5, |wz|=1.1 at the outermost levels.
     lin_levels=5,
     ang_levels=5,
     lin_vel_x_resolution=0.25,
@@ -39,9 +42,10 @@ commands: Dict[str, CommandTermCfg] = {
     ang_vel_resolution=0.20,
     # Gate mirrors t1.py: at episode reset, promote if the env survived
     # >=(1-episode_length_toler) of the episode AND its EMA-filtered velocity
-    # (filter_weight) tracked the command within these tolerances. Filtering is
-    # what forces walking, so the tolerances can stay loose (reference values).
-    x_toler=0.40,
+    # (filter_weight) tracked the command within these tolerances. x_toler is
+    # kept below lin_vel_x_resolution so standing still cannot satisfy the
+    # gate at level >= 1 (the gate ANDs all axes, x is the binding one).
+    x_toler=0.15,
     y_toler=0.20,
     yaw_toler=0.20,
     episode_length_toler=0.10,
@@ -66,18 +70,22 @@ ARM_JOINT_NAMES = (
   "Right_Elbow_Yaw",
 )
 
-VELOCITY_ACTION_SCALE = {
-  k: v for k, v in ACTION_SCALE.items() if k not in ("AAHead_yaw", "Head_pitch")
+VELOCITY_LOCOMOTION_ACTION_SCALE = {
+  k: v
+  for k, v in LOCOMOTION_ACTION_SCALE.items()
+  if k not in ("AAHead_yaw", "Head_pitch")
 }
 # Phase 1: arms fixed at default pose (scale 0 -> targets = default, inert).
 # Restore to 0.25 (shoulder-pitch only, or all) when reintroducing arm swing.
-VELOCITY_ACTION_SCALE.update({name: 0.0 for name in ARM_JOINT_NAMES})
+VELOCITY_LOCOMOTION_ACTION_SCALE.update({name: 0.0 for name in ARM_JOINT_NAMES})
+# VELOCITY_LOCOMOTION_ACTION_SCALE["Waist"] = 0.0
+
 
 actions: dict[str, ActionTermCfg] = {
   "joint_pos": JointPositionActionCfg(
     entity_name="robot",
     actuator_names=("^(?!AAHead_yaw$|Head_pitch$).*$",),
-    scale=VELOCITY_ACTION_SCALE,
+    scale=VELOCITY_LOCOMOTION_ACTION_SCALE,
     use_default_offset=True,
   ),
   "head_perturb": HeadPerturbActionCfg(

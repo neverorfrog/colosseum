@@ -1,6 +1,7 @@
 from mjlab.managers.curriculum_manager import CurriculumTermCfg
 
 from colosseum.mdp.curriculums import (
+  command_vel_curriculum,
   penalty_curriculum,
   push_force_curriculum_by_transitions,
 )
@@ -47,11 +48,10 @@ curriculum = {
         "penalty_feet_distance",
         "penalty_feet_ori",
         "penalty_landing",
-        "penalty_dof_vel",
-        "penalty_dof_acc",
-        "feet_slip",
+        "penalty_feet_slip",
         "penalty_feet_yaw_mean",
         "penalty_feet_yaw_diff",
+        "penalty_pose_deviation",
       ],
       "initial_scale": 0.1,
       "min_scale": 0.01,

@@ -19,8 +19,10 @@ from mjlab.viewer import ViewerConfig
 from colosseum.config.types.task import TaskConfig, register_task
 from colosseum.envs.colosseum_env import ColosseumEnvCfg
 from colosseum.mdp.actions import HeadPerturbActionCfg
+from colosseum.mdp.velocity_command import CurriculumVelocityCommandCfg
 from colosseum.robots.t1_23dof.constants import (
   BASE_BODY_NAME,
+  get_locomotion_robot_cfg,
   get_robot_cfg,
 )
 from colosseum.robots.t1_23dof.sensors import (
@@ -44,7 +46,7 @@ from .reward_cfg import rewards
 def scene_cfg(play: bool = False) -> SceneCfg:
   return SceneCfg(
     terrain=TerrainEntityCfg(),
-    entities={"robot": get_robot_cfg()},
+    entities={"robot": get_locomotion_robot_cfg()},
     sensors=(
       FEET_GROUND_CONTACT_SENSOR,
       FOOT_HEIGHT_SCAN,
@@ -131,6 +133,13 @@ def booster_t1_velocity_env_cfg(play: bool = False) -> ColosseumEnvCfg:
     assert isinstance(gait, GaitPhaseCommandCfg)
     gait.randomize_phase = False
 
+    # Grid curriculum is training-only: a fresh play process would start with
+    # just the seed cell unlocked and command ~zero velocities. Fall back to
+    # uniform-box sampling from `ranges`.
+    twist = cfg.commands["twist"]
+    assert isinstance(twist, CurriculumVelocityCommandCfg)
+    twist.curriculum = False
+
     if cfg.scene.terrain is not None:
       if cfg.scene.terrain.terrain_generator is not None:
         cfg.scene.terrain.terrain_generator.curriculum = False
@@ -160,7 +169,7 @@ def booster_t1_velocity_rough_env_cfg(play: bool = False) -> ColosseumEnvCfg:
   # adjacent tile surfaces and tunnel through. FULL_COLLISION_WITHOUT_SELF gives
   # every named body geom a terrain-collidable surface, so the shin/knee catches
   # the robot even when a foot sphere slips through a seam.
-  cfg.scene.entities["robot"] = get_robot_cfg(full_collision=True)
+  cfg.scene.entities["robot"] = get_locomotion_robot_cfg(full_collision=True)
 
   assert cfg.scene.terrain is not None
   cfg.scene.terrain.terrain_type = "generator"

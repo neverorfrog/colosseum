@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 from mjlab.envs.mdp.observations import (
   builtin_sensor,
   generated_commands,
@@ -6,8 +8,6 @@ from mjlab.envs.mdp.observations import (
   last_action,
   projected_gravity,
 )
-from dataclasses import replace
-
 from mjlab.managers.observation_manager import ObservationGroupCfg, ObservationTermCfg
 from mjlab.tasks.velocity.mdp.observations import (
   foot_contact,
@@ -90,8 +90,10 @@ actor_terms = {
 # Critic is privileged: same proprio terms but WITHOUT the actor's obs delay
 # (replace() makes fresh copies, so mutating delay here can't alias the actor).
 critic_terms = {
-  **{k: replace(v, delay_min_lag=0, delay_max_lag=0, delay_update_period=0)
-     for k, v in actor_terms.items()},
+  **{
+    k: replace(v, delay_min_lag=0, delay_max_lag=0, delay_update_period=0)
+    for k, v in actor_terms.items()
+  },
   "base_lin_vel": MirrorableObservationTermCfg(
     func=builtin_sensor,
     params={"sensor_name": "robot/imu_lin_vel"},
@@ -113,13 +115,6 @@ critic_terms = {
   "foot_contact_forces": ObservationTermCfg(
     func=foot_contact_forces,
     params={"sensor_name": "feet_ground_contact"},
-  ),
-}
-
-odom_terms = {
-  "base_lin_vel": ObservationTermCfg(
-    func=builtin_sensor,
-    params={"sensor_name": "robot/imu_lin_vel"},
   ),
 }
 
