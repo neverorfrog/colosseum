@@ -1,13 +1,13 @@
-"""Booster T1 actuator sets: WHOLEBODY_ACTUATORS and LOCOMOTION_ACTUATORS."""
+"""Booster T1 actuator sets: MANUFACTURER_ACTUATORS and LOCOMOTION_ACTUATORS."""
 
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import torch
-from mjlab.actuator import IdealPdActuator, IdealPdActuatorCfg
+from mjlab.actuator import DcMotorActuatorCfg, IdealPdActuator, IdealPdActuatorCfg
 
 if TYPE_CHECKING:
   import mujoco
@@ -80,22 +80,38 @@ class BoosterPdActuator(IdealPdActuator[BoosterPdActuatorCfg]):
 
 
 ##
-# Motor models (booster_train datasheets; see external/booster_train .../actuator.py).
+# Manufacturer datasheet motor models (Booster T1 official spec sheet).
+# Mapped onto mjlab's DcMotorActuator: peak torque -> saturation_effort,
+# rated torque -> effort_limit (continuous cap), peak speed -> velocity_limit
+# (no-load). Torque/speed are joint-side (post-gearbox); rotor inertia is
+# motor-side and reflected to the joint via the gear ratio.
 ##
+
+_RPM_TO_RAD_S = math.pi / 30.0
 
 
 @dataclass(frozen=True)
-class BoosterJoint:
-  """Datasheet motor model. stiffness/damping are derived from the armature and
-  the closed-loop natural frequency, matching booster_train's ``BoosterJointCfg``.
+class ManufacturerMotor:
+  """One motor model from the Booster T1 datasheet. stiffness/damping follow
+  booster_train's closed-loop convention (kp = I*(2*pi*f)^2,
+  kd = 2*zeta*I*(2*pi*f); f=10 Hz, zeta=2).
   """
 
-  effort_limit: float  # Nm
-  velocity_limit: float  # rad/s; available torque reaches zero here
-  knee_point_velocity: float  # rad/s; full effort below here
-  armature: float  # kg*m^2 reflected inertia
-  natural_freq: float = 10.0  # Hz (booster T1 default; K1 uses 4.0)
+  peak_torque: float  # Nm; stall torque -> saturation_effort
+  rated_torque: float  # Nm; continuous torque -> effort_limit
+  peak_speed_rpm: float  # rpm; no-load speed -> velocity_limit
+  rotor_inertia: float  # kg*m^2, motor side
+  gear_ratio: float
+  natural_freq: float = 10.0  # Hz
   damping_ratio: float = 2.0
+
+  @property
+  def armature(self) -> float:
+    return self.rotor_inertia * self.gear_ratio**2
+
+  @property
+  def velocity_limit(self) -> float:
+    return self.peak_speed_rpm * _RPM_TO_RAD_S
 
   @property
   def stiffness(self) -> float:
@@ -108,37 +124,14 @@ class BoosterJoint:
     )
 
 
-def parallel(
-  base: BoosterJoint,
-  serial_index: int,
-  *,
-  effort_ratio: tuple[float, float] = (1.0, 1.0),
-  velocity_ratio: tuple[float, float] = (1.0, 1.0),
-  armature_ratio: tuple[float, float] = (2.0, 2.0),
-  knee_ratio: tuple[float, float] = (1.0, 1.0),
-) -> BoosterJoint:
-  """Parallel-mechanism joint from a base motor (booster_train
-  ``ParallelJointWrapperCfg``). ``serial_index`` selects pitch (0) or roll (1);
-  defaults are the T1 ankle ratios (armature doubled)."""
-  i = serial_index
-  return replace(
-    base,
-    effort_limit=base.effort_limit * effort_ratio[i],
-    velocity_limit=base.velocity_limit * velocity_ratio[i],
-    knee_point_velocity=base.knee_point_velocity * knee_ratio[i],
-    armature=base.armature * armature_ratio[i],
-  )
-
-
-# Named by motor model: preserves identity and keeps the datasheet in one place.
-E4310 = BoosterJoint(38.3, 17.59, 7.85, 0.0282528)  # arms
-E6408 = BoosterJoint(68.0, 14.66, 1.88, 0.0478125)  # waist, hip roll/yaw
-E8112 = BoosterJoint(96.0, 16.76, 7.54, 0.0523908)  # hip pitch
-E8116 = BoosterJoint(130.0, 14.66, 6.28, 0.0636012)  # knee
-DM4310 = BoosterJoint(7.0, 12.57, 41.89, 0.0018)  # neck/head
-E4315 = BoosterJoint(76.0, 12.57, 2.62, 0.0339552)  # ankle base motor
-ANKLE_PITCH = parallel(E4315, 0)
-ANKLE_ROLL = parallel(E4315, 1)
+# Datasheet columns: peak/rated torque (Nm), peak speed (rpm), rotor inertia
+# (kg*m^2, motor side), gear ratio.
+NECK = ManufacturerMotor(7.0, 3.0, 250, 18.0e-6, 10)
+ARM = ManufacturerMotor(30.0, 10.0, 173, 21.8e-6, 36)
+WAIST_HIP_ROLL_YAW = ManufacturerMotor(60.0, 13.0, 68, 76.5e-6, 25)
+HIP_PITCH = ManufacturerMotor(90.0, 30.0, 146, 161.7e-6, 18)
+KNEE = ManufacturerMotor(120.0, 40.0, 141, 196.3e-6, 18)
+ANKLE = ManufacturerMotor(50.0, 16.0, 123, 26.2e-6, 36)
 
 
 ##
@@ -148,34 +141,34 @@ ANKLE_ROLL = parallel(E4315, 1)
 _SIDES = ("Left", "Right")
 _ARM_JOINTS = ("Shoulder_Pitch", "Shoulder_Roll", "Elbow_Pitch", "Elbow_Yaw")
 
-# Each joint -> its physical motor model.
-JOINT_MOTORS: dict[str, BoosterJoint] = {
-  "AAHead_yaw": DM4310,
-  "Head_pitch": DM4310,
-  **{f"{s}_{j}": E4310 for s in _SIDES for j in _ARM_JOINTS},
-  "Waist": E6408,
-  **{f"{s}_Hip_Pitch": E8112 for s in _SIDES},
-  **{f"{s}_Hip_Roll": E6408 for s in _SIDES},
-  **{f"{s}_Hip_Yaw": E6408 for s in _SIDES},
-  **{f"{s}_Knee_Pitch": E8116 for s in _SIDES},
-  **{f"{s}_Ankle_Pitch": ANKLE_PITCH for s in _SIDES},
-  **{f"{s}_Ankle_Roll": ANKLE_ROLL for s in _SIDES},
+# Each joint -> its datasheet motor model.
+JOINT_MOTORS: dict[str, ManufacturerMotor] = {
+  "AAHead_yaw": NECK,
+  "Head_pitch": NECK,
+  **{f"{s}_{j}": ARM for s in _SIDES for j in _ARM_JOINTS},
+  "Waist": WAIST_HIP_ROLL_YAW,
+  **{f"{s}_Hip_Pitch": HIP_PITCH for s in _SIDES},
+  **{f"{s}_Hip_Roll": WAIST_HIP_ROLL_YAW for s in _SIDES},
+  **{f"{s}_Hip_Yaw": WAIST_HIP_ROLL_YAW for s in _SIDES},
+  **{f"{s}_Knee_Pitch": KNEE for s in _SIDES},
+  **{f"{s}_Ankle_Pitch": ANKLE for s in _SIDES},
+  **{f"{s}_Ankle_Roll": ANKLE for s in _SIDES},
 }
 
 
-def _actuator(joint: str, motor: BoosterJoint) -> BoosterPdActuatorCfg:
-  return BoosterPdActuatorCfg(
+def _actuator(joint: str, motor: ManufacturerMotor) -> DcMotorActuatorCfg:
+  return DcMotorActuatorCfg(
     target_names_expr=(joint,),
     stiffness=motor.stiffness,
     damping=motor.damping,
-    effort_limit=motor.effort_limit,
-    armature=motor.armature,
+    saturation_effort=motor.peak_torque,
+    effort_limit=motor.rated_torque,
     velocity_limit=motor.velocity_limit,
-    knee_point_velocity=motor.knee_point_velocity,
+    armature=motor.armature,
   )
 
 
-WHOLEBODY_ACTUATORS = tuple(_actuator(j, m) for j, m in JOINT_MOTORS.items())
+MANUFACTURER_ACTUATORS = tuple(_actuator(j, m) for j, m in JOINT_MOTORS.items())
 
 ##
 # Locomotion actuator set: hand-tuned kp/kd (hip 200/5, knee 200/5, ankle 50/2).

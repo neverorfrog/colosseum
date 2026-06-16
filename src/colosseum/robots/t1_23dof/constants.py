@@ -17,7 +17,7 @@ except ImportError:
 if _MJLAB_AVAILABLE:
   from colosseum.robots.t1_23dof.actuators import (
     LOCOMOTION_ACTUATORS,
-    WHOLEBODY_ACTUATORS,
+    MANUFACTURER_ACTUATORS,
   )
   from colosseum.robots.t1_23dof.collisions import (
     FEET_FOREARM_WAIST_COLLISION,
@@ -150,10 +150,11 @@ JOINT_NAMES = [
 ]
 
 
-# 23-DOF Full Body. Uses booster_train-derived datasheet motor models
-# (kp = I*(2*pi*f)², kd = 2*zeta*I*(2*pi*f); f=10 Hz, zeta=2).
+# 23-DOF Full Body. Uses the manufacturer datasheet motor models on mjlab's
+# DcMotorActuator (peak->saturation, rated->effort_limit, peak speed->velocity
+# limit; kp = I*(2*pi*f)², kd = 2*zeta*I*(2*pi*f); f=10 Hz, zeta=2).
 ARTICULATION = EntityArticulationInfoCfg(
-  actuators=WHOLEBODY_ACTUATORS,
+  actuators=MANUFACTURER_ACTUATORS,
   soft_joint_pos_limit_factor=0.9,
 )
 
@@ -355,10 +356,12 @@ LOCOMOTION_ACTION_SCALE: dict[str, float] = {
 }
 
 if _MJLAB_AVAILABLE:
-  # booster_train recipe: kp * scale = 0.25 * effort, decoupled from kp.
-  WHOLEBODY_ACTION_SCALE: dict[str, float] = {
-    cfg.target_names_expr[0]: 0.25 * cfg.effort_limit / cfg.stiffness
-    for cfg in WHOLEBODY_ACTUATORS
+  # booster_train recipe: kp * scale = 0.25 * peak torque, decoupled from kp.
+  # Uses saturation_effort (peak), matching booster_train's single-plateau
+  # effort_limit; the DcMotor effort_limit is the (lower) continuous rating.
+  MANUFACTURER_ACTION_SCALE: dict[str, float] = {
+    cfg.target_names_expr[0]: 0.25 * cfg.saturation_effort / cfg.stiffness
+    for cfg in MANUFACTURER_ACTUATORS
   }
 
 ##

@@ -11,7 +11,6 @@ from colosseum.mdp.actions import HeadPerturbActionCfg
 from colosseum.mdp.velocity_command import CurriculumVelocityCommandCfg
 from colosseum.robots.t1_23dof.constants import (
   LOCOMOTION_ACTION_SCALE,
-  WHOLEBODY_ACTION_SCALE,
 )
 from colosseum.tasks.dribbling.mdp.gait_phase_command import GaitPhaseCommandCfg
 
