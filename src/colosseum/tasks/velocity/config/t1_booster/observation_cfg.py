@@ -1,11 +1,12 @@
 """Observations for the booster-mimic Waist+legs task.
 
-Identical layout to the 12-DOF task, but the joint blocks span the 13 actuated
-joints (Waist + 12 legs) instead of 12.
+The joint blocks span the full 23-DOF body (arms/head are observed though only
+Waist + 12 legs are policy-actuated). The action block stays 13-DOF (the policy
+action space).
 
-Actor (50): proj_gravity(3) ang_vel(3) command(3) gait[cos,sin](2)
-            dof_pos-default(13) 0.1*dof_vel(13) actions(13).
-Critic (64) = actor terms + booster's full 14-dim privileged vector, in order:
+Actor (70): proj_gravity(3) ang_vel(3) command(3) gait[cos,sin](2)
+            dof_pos-default(23) 0.1*dof_vel(23) actions(13).
+Critic (84) = actor terms + booster's full 14-dim privileged vector, in order:
             base_mass_scaled(4) base_lin_vel(3) base_height(1)
             push_force(3) push_torque(3).
 """
@@ -38,14 +39,7 @@ from colosseum.mdp.symmetry import (
   mirror_projected_gravity,
   mirror_velocity_command,
 )
-from colosseum.robots.t1_23dof.mdp.symmetry import mirror_legs_waist
-
-# Waist + 12 legs, in MuJoCo model index order (Waist first). Restricts the
-# joint_pos/joint_vel observations to the actuated set; without this the 23-DOF
-# model would emit all 23 joints.
-_ACTUATED = SceneEntityCfg(
-  "robot", joint_names=("Waist", ".*Hip.*", ".*Knee.*", ".*Ankle.*")
-)
+from colosseum.robots.t1_23dof.mdp.symmetry import mirror_joints, mirror_legs_waist
 
 # Noise half-widths from booster T1.yaml (gravity 0.01, ang_vel 0.1, dof_pos 0.01,
 # dof_vel 0.1, lin_vel 0.05, height 0.02).
@@ -73,17 +67,16 @@ actor_terms = {
   ),
   "joint_pos": MirrorableObservationTermCfg(
     func=joint_pos_rel,
-    params={"asset_cfg": _ACTUATED},
     noise=Unoise(n_min=-0.01, n_max=0.01),
-    mirror_fn=mirror_legs_waist,
+    mirror_fn=mirror_joints,
   ),
   "joint_vel": MirrorableObservationTermCfg(
     func=joint_vel_rel,
-    params={"asset_cfg": _ACTUATED},
     noise=Unoise(n_min=-0.1, n_max=0.1),
     scale=0.1,  # booster dof_vel normalization
-    mirror_fn=mirror_legs_waist,
+    mirror_fn=mirror_joints,
   ),
+  # Action block stays 13-DOF (Waist + 12 legs policy action).
   "actions": MirrorableObservationTermCfg(
     func=last_action,
     mirror_fn=mirror_legs_waist,

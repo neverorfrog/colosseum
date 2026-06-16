@@ -20,6 +20,7 @@ from mjlab.viewer import ViewerConfig
 
 from colosseum.config.types.task import TaskConfig, register_task
 from colosseum.envs.colosseum_env import ColosseumEnvCfg
+from colosseum.mdp.actions import HeadPerturbActionCfg
 from colosseum.mdp.velocity_command import CurriculumVelocityCommandCfg
 from colosseum.robots.t1_23dof.constants import (
   BASE_BODY_NAME,
@@ -113,6 +114,12 @@ def booster_t1_velocity_env_cfg(play: bool = False) -> ColosseumEnvCfg:
         "asset_cfg": SceneEntityCfg("robot", joint_names=(".*",)),
       },
     )
+
+    # Head perturbation is training-only; hold the head at default in play so
+    # the deployed head policy owns those joints.
+    head_perturb = cfg.actions["head_perturb"]
+    assert isinstance(head_perturb, HeadPerturbActionCfg)
+    head_perturb.enabled = False
 
     gait = cfg.commands["gait_phase"]
     assert isinstance(gait, GaitPhaseCommandCfg)

@@ -1,8 +1,9 @@
 """Actions / commands / terminations for the booster-mimic Waist+legs task.
 
-Identical to the 12-DOF task except the action space adds the Waist joint
-(13 DOF: Waist + 12 legs). Arms/head are excluded from the action and stay
-pinned at their default pose by their PD actuators.
+The policy action space is Waist + 12 legs (13 DOF, scale 1.0). The model and
+observations span the full 23-DOF body: arms stay pinned at their default pose
+by their PD actuators, and the head is driven by ``head_perturb`` (randomly
+perturbed during training, held at default in play).
 """
 
 from typing import Dict
@@ -17,6 +18,7 @@ from mjlab.managers import CommandTermCfg
 from mjlab.managers.action_manager import ActionTermCfg
 from mjlab.managers.termination_manager import TerminationTermCfg
 
+from colosseum.mdp.actions import HeadPerturbActionCfg
 from colosseum.mdp.velocity_command import CurriculumVelocityCommandCfg
 from colosseum.tasks.dribbling.mdp.gait_phase_command import GaitPhaseCommandCfg
 
@@ -70,14 +72,23 @@ commands: Dict[str, CommandTermCfg] = {
 # --------------------------------------------------------------------------- #
 
 # booster_gym: target = default + action_scale * action, action_scale = 1.0.
-# Applied to Waist + 12 leg joints (13 DOF). Arms/head are not selected, so
-# they are held at their default pose by their PD actuators.
+# Applied to Waist + 12 leg joints (13 DOF). Arms are not selected, so they are
+# held at their default pose by their PD actuators. The head is driven by a
+# separate perturbation term (training robustness; held at default in play).
 actions: dict[str, ActionTermCfg] = {
   "joint_pos": JointPositionActionCfg(
     entity_name="robot",
     actuator_names=("Waist", ".*Hip.*", ".*Knee.*", ".*Ankle.*"),
     scale=1.0,
     use_default_offset=True,
+  ),
+  "head_perturb": HeadPerturbActionCfg(
+    entity_name="robot",
+    head_joint_names=("AAHead_yaw", "Head_pitch"),
+    yaw_range=(-1.0, 1.0),
+    pitch_range=(-0.2, 0.8),
+    interval_range=(1.0, 3.0),
+    smoothing_duration=0.3,
   ),
 }
 

@@ -8,18 +8,22 @@ from mjlab.utils.spec_config import CollisionCfg
 ##
 
 # Feet-only collision (recommended for locomotion training)
-# - Only foot geoms collide with environment
-# - No self-collisions
-# - Most stable for training
+# - Each foot collides via a single flat box (booster_gym foot, full fidelity):
+#   rigid vertical-normal contacts at 4 corners instead of rockable capsule ends.
+# - The sole capsules and the vertical inner-face capsule (foot5) are disabled
+#   here (disable_other_geoms); they remain for dribbling (inside-foot ball touch).
+# - condim=3 like booster_gym: yaw is resisted geometrically by the box corners,
+#   no torsional-friction term.
+# - No self-collisions; most stable for training.
 FEET_ONLY_COLLISION = CollisionCfg(
   geom_names_expr=(
-    r"^(left|right)_foot[1-7]_collision$",
+    r"^(left|right)_foot[1-4]_collision$",
   ),  # Only match foot collision capsules
   contype=0,
   conaffinity=1,
   condim=4,
   priority=1,
-  friction=(1.0, 0.04),
+  friction=(1.0, 0.05),
 )
 
 # Feet collision with inter-foot contacts enabled (for dribbling)
