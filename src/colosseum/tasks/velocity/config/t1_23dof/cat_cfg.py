@@ -77,7 +77,6 @@ VELOCITY_LOCOMOTION_ACTION_SCALE = {
 # Phase 1: arms fixed at default pose (scale 0 -> targets = default, inert).
 # Restore to 0.25 (shoulder-pitch only, or all) when reintroducing arm swing.
 VELOCITY_LOCOMOTION_ACTION_SCALE.update({name: 0.0 for name in ARM_JOINT_NAMES})
-# VELOCITY_LOCOMOTION_ACTION_SCALE["Waist"] = 0.0
 
 
 actions: dict[str, ActionTermCfg] = {

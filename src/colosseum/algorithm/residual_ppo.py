@@ -29,7 +29,9 @@ from typing import Any, Callable
 
 import numpy as np
 import torch
+import torch.nn as nn
 import torch.optim as optim
+from loguru import logger
 from mjlab.envs import ManagerBasedRlEnv
 
 from colosseum.algorithm.base_algorithm import ObsType
@@ -716,3 +718,92 @@ class ResidualPPO(PPO):
       "metadata": checkpoint.get("metadata", {}),
       "config": checkpoint.get("config"),
     }
+
+  def _orch_indices_for_group(self, group: str) -> list[int]:
+    """Return the indices into orch obs that correspond to each term in `group`.
+
+    The orchestrator obs is the union of all skill groups (deduplicated). For any
+    sub-group, we can find which orch dims correspond to each of its terms by
+    matching term names and accumulating offsets within the orch group.
+    """
+    obs_manager = self.env.observation_manager
+    orch_group = self._ORCH_GROUP
+    orch_term_names = obs_manager._group_obs_term_names[orch_group]
+    orch_term_dims = obs_manager._group_obs_term_dim[orch_group]
+
+    # Build term → (start, end) offset map within orch obs.
+    orch_offsets: dict[str, tuple[int, int]] = {}
+    offset = 0
+    for name, dims in zip(orch_term_names, orch_term_dims):
+      dim = dims[0] if isinstance(dims, (tuple, list)) else int(dims)
+      orch_offsets[name] = (offset, offset + dim)
+      offset += dim
+
+    branch_term_names = obs_manager._group_obs_term_names[group]
+    indices: list[int] = []
+    for term in branch_term_names:
+      start, end = orch_offsets[term]
+      indices.extend(range(start, end))
+    return indices
+
+  def export_onnx(self, path: str | Path) -> Path:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    was_training = self.residual_actor.training
+    self.residual_actor.eval()
+    for norm in self.skill_normalizers.values():
+      norm.eval()
+
+    obs_dim = self.env.observation_manager.group_obs_dim
+    base_skills = list(self._base_skill_groups.items())  # [(name, group), ...]
+    residual_group = self._residual_group
+    orch_group = self._ORCH_GROUP
+    orch_dim = obs_dim[orch_group][0]
+
+    # Per-group index arrays into the orch obs vector (computed once, baked in).
+    base_indices = {name: self._orch_indices_for_group(g) for name, g in base_skills}
+    residual_indices = self._orch_indices_for_group(residual_group)
+
+    class _Wrapper(nn.Module):
+      def __init__(self, actor, normalizers):
+        super().__init__()
+        self.actor = actor
+        self.norms = nn.ModuleDict(normalizers)
+        for name, idxs in base_indices.items():
+          self.register_buffer(f"idx_{name}", torch.tensor(idxs, dtype=torch.long))
+        self.register_buffer("idx_residual", torch.tensor(residual_indices, dtype=torch.long))
+
+      def forward(self, obs: torch.Tensor) -> torch.Tensor:
+        # obs is raw orch obs (superset); slice and normalize per branch.
+        base_obs = {
+          name: self.norms[g](obs[:, getattr(self, f"idx_{name}")])
+          for name, g in base_skills
+        }
+        res_obs = self.norms[residual_group](obs[:, self.idx_residual])
+        orch_obs = self.norms[orch_group](obs)
+        return self.actor.act_inference(base_obs, res_obs, orch_obs)
+
+    wrapper = _Wrapper(self.residual_actor, self.skill_normalizers).cpu()
+    wrapper.eval()
+
+    torch.onnx.export(
+      wrapper,
+      (torch.zeros(1, orch_dim),),
+      str(path),
+      export_params=True,
+      opset_version=18,
+      input_names=["obs"],
+      output_names=["actions"],
+    )
+
+    if was_training:
+      self.residual_actor.train()
+      for norm in self.skill_normalizers.values():
+        norm.train()
+    self.residual_actor.to(self.device)
+    for norm in self.skill_normalizers.values():
+      norm.to(self.device)
+
+    logger.success(f"ONNX exported: {path}")
+    return path

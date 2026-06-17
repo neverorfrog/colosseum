@@ -24,7 +24,7 @@ from colosseum.mdp.symmetry import (
   mirror_projected_gravity,
   mirror_velocity_command,
 )
-from colosseum.robots.t1_23dof.mdp.symmetry import mirror_joints
+from colosseum.robots.t1_23dof.mdp.symmetry import mirror_actions, mirror_joints
 from colosseum.tasks.dribbling.mdp.observations import (
   ball_vel_command_body,
 )
@@ -63,7 +63,7 @@ proprio_terms = {
   ),
   "actions": MirrorableObservationTermCfg(
     func=last_action,
-    mirror_fn=mirror_joints,
+    mirror_fn=mirror_actions,
   ),
 }
 
