@@ -250,6 +250,16 @@ t1-velocity:
       run: t1-velocity-PPO-123-20260616_055045
       step: 0
       created: '2026-06-16T05:24:02.462702+00:00'
+    jun16_3:
+      file: jun16_3/t1-velocity_ppo_jun16_3.onnx
+      run: t1-velocity-PPO-123-20260616_072609
+      step: 0
+      created: '2026-06-16T13:37:33.684256+00:00'
+    jun16_4:
+      file: jun16_4/t1-velocity_ppo_jun16_4.onnx
+      run: t1-velocity-PPO-123-20260616_145148
+      step: 0
+      created: '2026-06-16T16:12:04.221906+00:00'
   default: v0
 t1-velocity-rma:
   models:
@@ -325,3 +335,11 @@ t1-velocity-booster:
       step: 0
       created: '2026-06-16T00:25:35.765993+00:00'
   default: jun15_1
+t1-velocity-manu:
+  models:
+    jun16_1:
+      file: jun16_1/t1-velocity-manu_ppo_jun16_1.onnx
+      run: t1-velocity-manu-PPO-123-20260616_074159
+      step: 0
+      created: '2026-06-16T12:26:58.591034+00:00'
+  default: jun16_1
