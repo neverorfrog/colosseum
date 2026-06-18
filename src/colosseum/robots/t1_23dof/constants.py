@@ -24,6 +24,7 @@ if _MJLAB_AVAILABLE:
     FEET_ONLY_COLLISION,
     FEET_SELF_COLLISION,
     FULL_COLLISION_WITHOUT_SELF,
+    DRIBBLING_FEET_ONLY_COLLISION,
   )
 from colosseum.utils import src_dir
 
@@ -240,7 +241,7 @@ if _MJLAB_AVAILABLE:
     spec_fn = get_spec_with_head_camera if with_head_camera else get_spec
     return EntityCfg(
       init_state=EntityCfg.InitialStateCfg(
-        pos=(0, 0, 0.66),
+        pos=(0, 0, 0.67),
         joint_pos=HOME_QPOS,
         joint_vel={".*": 0.0},
       ),
@@ -257,6 +258,7 @@ if _MJLAB_AVAILABLE:
     self_collision: bool = False,
     full_collision: bool = False,
     with_head_camera: bool = False,
+    dribbling: bool = False,
   ) -> EntityCfg:
     """Locomotion-oriented robot config: hand-tuned PD gains, booster_gym
     default pose, 0.72 m base height.  Identical collision and spec options
@@ -268,6 +270,8 @@ if _MJLAB_AVAILABLE:
       collision = FEET_SELF_COLLISION
     elif full_collision:
       collision = FULL_COLLISION_WITHOUT_SELF
+    elif dribbling:
+      collision = DRIBBLING_FEET_ONLY_COLLISION
     else:
       collision = FEET_ONLY_COLLISION
     spec_fn = get_spec_with_head_camera if with_head_camera else get_spec
@@ -329,31 +333,6 @@ FLIP_SIGN_JOINT_NAMES: list[str] = [
   "Left_Ankle_Roll",
   "Right_Ankle_Roll",
 ]
-
-##
-# Action scales: target = scale * action + default.
-##
-
-_UPPER_BODY_JOINTS = frozenset(
-  [
-    "AAHead_yaw",
-    "Head_pitch",
-    "Left_Shoulder_Pitch",
-    "Left_Shoulder_Roll",
-    "Left_Elbow_Pitch",
-    "Left_Elbow_Yaw",
-    "Right_Shoulder_Pitch",
-    "Right_Shoulder_Roll",
-    "Right_Elbow_Pitch",
-    "Right_Elbow_Yaw",
-    "Waist",
-  ]
-)
-
-# 0.25 for leg joints, 0.0 for upper body (held at default pose).
-LOCOMOTION_ACTION_SCALE: dict[str, float] = {
-  name: (0.0 if name in _UPPER_BODY_JOINTS else 0.25) for name in JOINT_NAMES
-}
 
 if _MJLAB_AVAILABLE:
   # booster_train recipe: kp * scale = 0.25 * peak torque, decoupled from kp.

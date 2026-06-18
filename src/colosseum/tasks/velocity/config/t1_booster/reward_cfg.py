@@ -92,12 +92,12 @@ rewards = {
   # ----------------------- regularization ----------------------- #
   "base_height": RewardTermCfg(
     func=base_height_penalty,
-    weight=-20.0,
+    weight=-15.0,
     params={"target_height": 0.68},
   ),
   "orientation": RewardTermCfg(
     func=orientation_penalty,
-    weight=-5.0,
+    weight=-8.0,
     params={"asset_cfg": SceneEntityCfg("robot", body_names=(BASE_BODY_NAME))},
   ),
   "lin_vel_z": RewardTermCfg(
@@ -107,7 +107,7 @@ rewards = {
   ),
   "ang_vel_xy": RewardTermCfg(
     func=body_angular_velocity_penalty,
-    weight=-0.2,
+    weight=-1.0,
     params={"asset_cfg": SceneEntityCfg("robot", body_names=(BASE_BODY_NAME))},
   ),
   "torques": RewardTermCfg(
@@ -168,7 +168,7 @@ rewards = {
   ),
   "feet_distance": RewardTermCfg(
     func=feet_distance_penalty,
-    weight=-1.0,
+    weight=-2.0,
     params={
       "asset_cfg": SceneEntityCfg("robot", site_names=(FOOT_SITE_NAMES)),
       "min_dist": 0.2,

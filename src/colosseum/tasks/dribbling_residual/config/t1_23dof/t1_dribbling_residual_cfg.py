@@ -33,7 +33,7 @@ from colosseum.config.types.task import TaskConfig, register_task
 from colosseum.envs.colosseum_env import ColosseumEnvCfg
 from colosseum.robots.t1_23dof.constants import (
   BASE_BODY_NAME,
-  get_robot_cfg,
+  get_locomotion_robot_cfg,
 )
 from colosseum.robots.t1_23dof.sensors import (
   FEET_GROUND_CONTACT_SENSOR,
@@ -58,7 +58,7 @@ from .reward_cfg import rewards
 def scene_cfg(play: bool = False) -> SceneCfg:
   return SceneCfg(
     terrain=TerrainEntityCfg(),
-    entities={"robot": get_robot_cfg(with_head_camera=True), "ball": get_ball_cfg()},
+    entities={"robot": get_locomotion_robot_cfg(with_head_camera=True, dribbling=True), "ball": get_ball_cfg()},
     sensors=(
       FEET_GROUND_CONTACT_SENSOR,
       FOOT_BALL_CONTACT_SENSOR,

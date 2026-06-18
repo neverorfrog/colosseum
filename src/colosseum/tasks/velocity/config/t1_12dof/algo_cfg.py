@@ -25,7 +25,7 @@ def booster_t1_12dof_ppo_cfg() -> PpoConfig:
     value_loss_coef=1.0,
     entropy_coef=0.01,
     num_learning_epochs=20,  # booster mini_epochs
-    num_mini_batches=4,
+    num_mini_batches=1,
     max_grad_norm=1.0,
     actor_learning_rate=1e-5,
     critic_learning_rate=1e-5,

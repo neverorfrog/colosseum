@@ -1,18 +1,15 @@
-import copy
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from mjlab.envs.mdp.events import reset_joints_by_offset
 from mjlab.managers import (
-  CurriculumTermCfg,
   EventTermCfg,
   SceneEntityCfg,
 )
 from mjlab.scene import SceneCfg
 from mjlab.sim import MujocoCfg, SimulationCfg
-from mjlab.tasks.velocity.mdp.curriculums import terrain_levels_vel
+
 from mjlab.terrains import TerrainEntityCfg
-from mjlab.terrains.config import ROUGH_TERRAINS_CFG
 from mjlab.utils.nan_guard import NanGuardCfg
 from mjlab.viewer import ViewerConfig
 
@@ -159,40 +156,6 @@ def get_t1_velocity_checkpoint(version: int) -> Path:
   return pts[0]
 
 
-def booster_t1_velocity_rough_env_cfg(play: bool = False) -> ColosseumEnvCfg:
-  cfg = booster_t1_velocity_env_cfg(play=play)
-
-  cfg.sim.nconmax = 120
-
-  # FEET_ONLY_COLLISION leaves all non-foot geoms physically transparent. At tile
-  # seam boundaries the 5mm foot spheres can momentarily lose contact with both
-  # adjacent tile surfaces and tunnel through. FULL_COLLISION_WITHOUT_SELF gives
-  # every named body geom a terrain-collidable surface, so the shin/knee catches
-  # the robot even when a foot sphere slips through a seam.
-  cfg.scene.entities["robot"] = get_locomotion_robot_cfg(full_collision=True)
-
-  assert cfg.scene.terrain is not None
-  cfg.scene.terrain.terrain_type = "generator"
-  cfg.scene.terrain.terrain_generator = copy.deepcopy(ROUGH_TERRAINS_CFG)
-
-  if play:
-    cfg.scene.terrain.terrain_generator.curriculum = False
-    cfg.scene.terrain.terrain_generator.num_cols = 5
-    cfg.scene.terrain.terrain_generator.num_rows = 5
-    cfg.scene.terrain.terrain_generator.border_width = 10.0
-  else:
-    cfg.scene.terrain.terrain_generator.curriculum = True
-    cfg.curriculum = {
-      **cfg.curriculum,
-      "terrain_levels": CurriculumTermCfg(
-        func=terrain_levels_vel,
-        params={"command_name": "twist"},
-      ),
-    }
-
-  return cfg
-
-
 @register_task("t1-velocity")
 @dataclass(frozen=True)
 class T1VelocityTask(TaskConfig):
@@ -206,29 +169,6 @@ class T1VelocityTask(TaskConfig):
   @property
   def play_env_cfg(self):
     return booster_t1_velocity_env_cfg(play=True)
-
-  @property
-  def algo_cfg(self):
-    return booster_t1_ppo_cfg()
-
-  @property
-  def rl_cfg(self):
-    return booster_t1_rsl_rl_runner_cfg()
-
-
-@register_task("t1-velocity-rough")
-@dataclass(frozen=True)
-class T1VelocityRoughTask(TaskConfig):
-  name: str = "t1-velocity-rough"
-  env: ColosseumEnvCfg = field(default_factory=booster_t1_velocity_rough_env_cfg)
-
-  @property
-  def train_env_cfg(self):
-    return self.env
-
-  @property
-  def play_env_cfg(self):
-    return booster_t1_velocity_rough_env_cfg(play=True)
 
   @property
   def algo_cfg(self):

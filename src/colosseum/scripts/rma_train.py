@@ -64,7 +64,7 @@ class RmaTrainConfig(TrainConfig):
   phase2_loss_threshold: float | None = None
   """Early-stop Phase 2 when the smoothed latent_mse falls below this value."""
 
-  phase3_steps: int = 250_000_000
+  phase3_steps: int = 500_000_000
   """Env steps for Phase 3 (policy fine-tuning with frozen encoders)."""
 
   phase2_num_envs: int | None = None

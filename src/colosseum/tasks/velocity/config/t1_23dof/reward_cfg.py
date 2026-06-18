@@ -41,6 +41,7 @@ from colosseum.robots.t1_23dof.constants import (
 )
 
 LEG_JOINT_PATTERNS = (".*Hip.*", ".*Knee.*", ".*Ankle.*")
+LOWER_BODY_JOINT_PATTERNS = (".*Hip.*", ".*Knee.*", ".*Ankle.*", "Waist")
 
 # Leg torque limits (Nm), matching LOCOMOTION_ACTUATORS (booster_gym URDF efforts).
 LEG_EFFORT_LIMITS = {
@@ -65,11 +66,16 @@ rewards = {
   # the gradient on every axis whenever one axis is far off.
   "track_lin_vel_x": RewardTermCfg(
     func=track_lin_vel_axis_filtered,
-    weight=3.0,
+    weight=4.0,
     params={"command_name": "twist", "std": math.sqrt(0.25), "axis": 0},
   ),
   "track_lin_vel_y": RewardTermCfg(
     func=track_lin_vel_axis_filtered,
+    weight=4.0,
+    params={"command_name": "twist", "std": math.sqrt(0.25), "axis": 1},
+  ),
+  "track_ang_vel_yaw": RewardTermCfg(
+    func=track_ang_vel_yaw_filtered,
     weight=3.0,
     params={"command_name": "twist", "std": math.sqrt(0.25), "axis": 1},
   ),
@@ -140,16 +146,14 @@ rewards = {
     weight=-2.0,
     params={"asset_cfg": SceneEntityCfg("robot", body_names=(BASE_BODY_NAME))},
   ),
-  # vz used to live inside the combined linear tracking kernel; now a separate
-  # penalty (booster_gym lin_vel_z, weight -2.0).
   "penalty_lin_vel_z": RewardTermCfg(
     func=lin_vel_z_filtered_penalty,
-    weight=-2.0,
+    weight=-0.1,
     params={"command_name": "twist"},
   ),
   "penalty_orientation": RewardTermCfg(
     func=orientation_penalty,
-    weight=-10.0,
+    weight=-15.0,
     params={"asset_cfg": SceneEntityCfg("robot", body_names=(BASE_BODY_NAME))},
   ),
   # Always-on vertical posture anchor (replaces the vertical role pose_deviation
@@ -157,7 +161,7 @@ rewards = {
   # Quadratic (Δh)² in meters above terrain; target = T1 spawn root z.
   "penalty_base_height": RewardTermCfg(
     func=base_height_penalty,
-    weight=-20.0,
+    weight=-15.0,
     params={"target_height": 0.68},
   ),
   "penalty_feet_ori": RewardTermCfg(
@@ -170,24 +174,18 @@ rewards = {
     weight=-1.0,
     params={"asset_cfg": SceneEntityCfg("robot", body_names=(FOOT_BODY_NAMES))},
   ),
-  # Aligns mean foot yaw to the base heading — catches the shared toe-out / yaw
-  # pivot that feet_yaw_diff (feet-parallel-to-each-other) is blind to.
   "penalty_feet_yaw_mean": RewardTermCfg(
     func=feet_yaw_mean_penalty,
     weight=-1.0,
     params={"asset_cfg": SceneEntityCfg("robot", body_names=(FOOT_BODY_NAMES))},
   ),
-  # Pose anchor on the leg joints that define stance width/orientation
-  # (holosoma loco `pose` term: weight -0.5, hip roll 1.0 / hip yaw 5.0 /
-  # ankles 5.0, while hip pitch and knee stay nearly free at 0.01 so the
-  # gait itself is not constrained). This is what prices the splayed-leg
-  # stance: feet_distance only fires when feet are too CLOSE.
   "penalty_pose_deviation": RewardTermCfg(
     func=pose_deviation_penalty,
-    weight=-0.5,
+    weight=-1.0,
     params={
-      "asset_cfg": SceneEntityCfg("robot", joint_names=LEG_JOINT_PATTERNS),
+      "asset_cfg": SceneEntityCfg("robot", joint_names=LOWER_BODY_JOINT_PATTERNS),
       "weights_standing": {
+        "Waist": 1.0,
         ".*Hip_Pitch": 0.01,
         ".*Hip_Roll": 1.0,
         ".*Hip_Yaw": 5.0,
@@ -232,12 +230,12 @@ rewards = {
   # PD-held and its holding torque is not under policy control).
   "penalty_torques": RewardTermCfg(
     func=torques_penalty,
-    weight=-2e-4,
-    params={"asset_cfg": SceneEntityCfg("robot", joint_names=LEG_JOINT_PATTERNS)},
+    weight=-2e-5,
+    params={"asset_cfg": SceneEntityCfg("robot", joint_names=LOWER_BODY_JOINT_PATTERNS)},
   ),
   "penalty_torque_tiredness": RewardTermCfg(
     func=torque_tiredness_penalty,
-    weight=-1e-2,
+    weight=-1e-3,
     params={
       "asset_cfg": SceneEntityCfg("robot", joint_names=LEG_JOINT_PATTERNS),
       "effort_limits": LEG_EFFORT_LIMITS,
@@ -245,7 +243,7 @@ rewards = {
   ),
   "penalty_power": RewardTermCfg(
     func=power_penalty,
-    weight=-2e-3,
-    params={"asset_cfg": SceneEntityCfg("robot", joint_names=LEG_JOINT_PATTERNS)},
+    weight=-2e-5,
+    params={"asset_cfg": SceneEntityCfg("robot", joint_names=LOWER_BODY_JOINT_PATTERNS)},
   ),
 }

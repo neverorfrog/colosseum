@@ -2,6 +2,7 @@ from mjlab.managers.curriculum_manager import CurriculumTermCfg
 
 from colosseum.mdp.curriculums import (
   command_vel_curriculum,
+  command_vel_curriculum,
   penalty_curriculum,
   push_force_curriculum_by_transitions,
 )
@@ -48,9 +49,10 @@ curriculum = {
         "penalty_feet_distance",
         "penalty_feet_ori",
         "penalty_landing",
-        "penalty_feet_slip",
+        "penalty_lin_vel_z",
         "penalty_feet_yaw_mean",
         "penalty_feet_yaw_diff",
+        "penalty_feet_slip",
         "penalty_pose_deviation",
       ],
       "initial_scale": 0.1,
@@ -61,4 +63,16 @@ curriculum = {
       "degree": 0.00025,
     },
   ),
+  "command_vel_curriculum": CurriculumTermCfg(
+      func=command_vel_curriculum,
+      params={
+        "command_name": "twist",
+        "velocity_stages": [
+          {"transitions": 0,           "lin_vel_x": (-0.5, 0.5), "lin_vel_y": (-0.5, 0.5), "ang_vel_z": (-0.5, 0.5)},
+          {"transitions": 50_000_000,  "lin_vel_x": (-0.75, 0.75), "lin_vel_y": (-0.75, 0.75), "ang_vel_z": (-0.75, 0.75)},
+          {"transitions": 100_000_000,  "lin_vel_x": (-1.0, 1.0), "lin_vel_y": (-0.75, 0.75), "ang_vel_z": (-1.0, 1.0)},
+          {"transitions": 150_000_000, "lin_vel_x": (-1.25, 1.25), "lin_vel_y": (-0.75, 0.75), "ang_vel_z": (-1.0, 1.0)},
+        ],
+      },
+    )
 }

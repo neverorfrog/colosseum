@@ -26,6 +26,17 @@ FEET_ONLY_COLLISION = CollisionCfg(
   friction=(1.0, 0.05),
 )
 
+DRIBBLING_FEET_ONLY_COLLISION = CollisionCfg(
+  geom_names_expr=(
+    r"^(left|right)_foot[1-5]_collision$",
+  ),  # Only match foot collision capsules
+  contype=0,
+  conaffinity=1,
+  condim=4,
+  priority=1,
+  friction=(1.0, 0.05),
+)
+
 # Feet collision with inter-foot contacts enabled (for dribbling)
 # - Foot geoms collide with environment (bit 0) AND each other (bit 1)
 # - contype=3 (bits 0+1), conaffinity=3 (bits 0+1)
@@ -36,7 +47,7 @@ FEET_SELF_COLLISION = CollisionCfg(
   conaffinity=3,
   condim=3,
   priority=1,
-  friction=(0.6,),
+  friction=(1.0,),
 )
 
 # Full collision without self-collision

@@ -52,7 +52,7 @@ LOCOMOTION_ACTUATORS = (
   BoosterPdActuatorCfg(
     target_names_expr=(".*Ankle_Pitch",),
     stiffness=50.0,
-    damping=1.0,
+    damping=2.0,
     effort_limit=24.0,
     armature=0.0340,
     delay_min_lag=2,
@@ -61,7 +61,7 @@ LOCOMOTION_ACTUATORS = (
   BoosterPdActuatorCfg(
     target_names_expr=(".*Ankle_Roll",),
     stiffness=50.0,
-    damping=1.0,
+    damping=2.0,
     effort_limit=15.0,
     armature=0.0340,
     delay_min_lag=2,

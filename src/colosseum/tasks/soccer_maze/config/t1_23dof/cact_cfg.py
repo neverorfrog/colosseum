@@ -12,14 +12,14 @@ from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.managers.termination_manager import TerminationTermCfg
 
 from colosseum.mdp.abstraction.maze.goal_command import MazeGoalCommandCfg
-from colosseum.robots.t1_23dof.constants import LOCOMOTION_ACTION_SCALE
+from colosseum.robots.t1_23dof.constants import JOINT_NAMES
 from colosseum.tasks.dribbling.mdp.gait_phase_command import GaitPhaseCommandCfg
 from colosseum.tasks.maze.mdp.terminations import arrived_at_goal
 from colosseum.tasks.soccer_maze.mdp.curriculums import sokoban_cache_curriculum
 from colosseum.tasks.soccer_maze.mdp.sokoban_command import SokobanCommandCfg
 from colosseum.tasks.soccer_maze.mdp.terminations import sokoban_plan_deviated
 
-_ARM_JOINTS = {
+UPPER_BODY_JOINTS = {
   "Left_Shoulder_Pitch",
   "Left_Shoulder_Roll",
   "Left_Elbow_Pitch",
@@ -28,12 +28,11 @@ _ARM_JOINTS = {
   "Right_Shoulder_Roll",
   "Right_Elbow_Pitch",
   "Right_Elbow_Yaw",
+  "AAHead_yaw", 
+  "Head_pitch"
 }
-_HEAD_JOINTS = {"Head_pitch", "AAHead_yaw"}
-# Arms are held at home pose; only leg joints are trained.
-_LOCOMOTION_ACTION_SCALE = {
-  k: (0.0 if k in _ARM_JOINTS or k in _HEAD_JOINTS else v)
-  for k, v in LOCOMOTION_ACTION_SCALE.items()
+ACTION_SCALE: dict[str, float] = {
+  name: (0.0 if name in UPPER_BODY_JOINTS else 0.25) for name in JOINT_NAMES
 }
 
 commands: Dict[str, CommandTermCfg] = {
@@ -51,7 +50,7 @@ actions: dict[str, ActionTermCfg] = {
   "joint_pos": JointPositionActionCfg(
     entity_name="robot",
     actuator_names=(".*",),
-    scale=_LOCOMOTION_ACTION_SCALE,
+    scale=ACTION_SCALE,
     use_default_offset=True,
   )
 }

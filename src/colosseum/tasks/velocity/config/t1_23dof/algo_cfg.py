@@ -8,7 +8,7 @@ def booster_t1_ppo_cfg() -> PpoConfig:
   return PpoConfig(
     name="PPO",
     target="colosseum.algorithm.ppo:PPO",
-    learning_steps=750_000_000,
+    learning_steps=1_000_000_000,
     num_steps_per_env=24,
     gamma=0.995,
     lam=0.95,
@@ -25,7 +25,7 @@ def booster_t1_ppo_cfg() -> PpoConfig:
     desired_kl=0.01,
     schedule="adaptive",
     obs_normalization=True,
-    symmetry_loss_coef=1.0,
+    symmetry_loss_coef=2.0,
     symmetry_critic_coef=0.0,
     symmetry_data_augmentation=True,
     actor=PpoActorConfig(

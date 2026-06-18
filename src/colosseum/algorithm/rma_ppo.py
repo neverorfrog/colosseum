@@ -175,7 +175,10 @@ class RmaPPO(PPO):
         values = self.value_net(norm_critic_obs)
 
         obs_dict, rewards, terminated, truncated, infos = self.env.step(actions)
-        dones = (terminated | truncated).float()
+        if terminated.is_floating_point():
+          dones = torch.clamp(terminated + truncated.float(), 0.0, 1.0)
+        else:
+          dones = (terminated | truncated).float()
 
         next_actor_obs = self.get_actor_obs(obs_dict)
         next_critic_obs = self.get_critic_obs(obs_dict)
@@ -194,7 +197,7 @@ class RmaPPO(PPO):
             rewards = rewards + self.config.gamma * truncated_values * truncated_mask
 
         self.episode_length_buf += 1
-        done_ids = dones.nonzero(as_tuple=False).squeeze(-1)
+        done_ids = (dones >= 1.0).nonzero(as_tuple=False).squeeze(-1)
         if len(done_ids) > 0:
           self.rewbuffer.extend(self.cur_reward_sum[done_ids].cpu().numpy().tolist())
           self.cur_reward_sum[done_ids] = 0.0
@@ -203,9 +206,12 @@ class RmaPPO(PPO):
           )
           self.episode_length_buf[done_ids] = 0
 
-        self.update_episode_counts(terminated, truncated)
+        hard_terminated = (
+          terminated >= 1.0 if terminated.is_floating_point() else terminated
+        )
+        self.update_episode_counts(hard_terminated, truncated)
 
-        if "log" in infos and dones.any():
+        if "log" in infos and (dones >= 1.0).any():
           self.latest_episode_metrics = extract_episode_metrics(infos["log"])
 
         self.rollout_buffer.add(

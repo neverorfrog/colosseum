@@ -20,16 +20,23 @@ from colosseum.mdp.ball_rewards import (
 )
 from colosseum.mdp.rewards import (
   arm_phase,
+  feet_no_slip,
+  base_height_penalty,
   dof_acc_penalty,
   dof_vel_penalty,
   feet_distance_penalty,
-  feet_no_slip,
   feet_phase,
   feet_slip,
+  feet_swing,
   feet_yaw_diff_penalty,
+  feet_yaw_mean_penalty,
   foot_orientation_penalty,
+  lin_vel_z_filtered_penalty,
   orientation_penalty,
   pose_deviation_penalty,
+  power_penalty,
+  torque_tiredness_penalty,
+  torques_penalty,
 )
 from colosseum.robots.t1_23dof.constants import (
   BASE_BODY_NAME,
@@ -40,6 +47,23 @@ from colosseum.tasks.dribbling.mdp.rewards import (
   ball_target_progress,
   ball_target_reached,
 )
+
+LEG_JOINT_PATTERNS = (".*Hip.*", ".*Knee.*", ".*Ankle.*")
+LOWER_BODY_JOINT_PATTERNS = (".*Hip.*", ".*Knee.*", ".*Ankle.*", "Waist")
+
+# Leg torque limits (Nm), matching LOCOMOTION_ACTUATORS (booster_gym URDF efforts).
+LEG_EFFORT_LIMITS = {
+  f"{side}_{joint}": limit
+  for side in ("Left", "Right")
+  for joint, limit in (
+    ("Hip_Pitch", 45.0),
+    ("Hip_Roll", 30.0),
+    ("Hip_Yaw", 30.0),
+    ("Knee_Pitch", 60.0),
+    ("Ankle_Pitch", 24.0),
+    ("Ankle_Roll", 15.0),
+  )
+}
 
 rewards = {
   # ==============================
@@ -64,7 +88,7 @@ rewards = {
   ),
   "robot_ball_distance": RewardTermCfg(
     func=robot_ball_distance,
-    weight=1.0,
+    weight=0.1,
     params={
       "close_distance": 0.3,
       "behind_close_penalty": 0.5,
@@ -77,7 +101,7 @@ rewards = {
   # has a gradient toward engagement before any ball-velocity reward can fire.
   "foot_ball_contact": RewardTermCfg(
     func=foot_ball_contact,
-    weight=1.0,
+    weight=0.5,
     params={
       "sensor_name": "foot_ball_contact",
       "command_name": "ball_vel",
@@ -108,36 +132,48 @@ rewards = {
   # =======================
   # Task Tracking Rewards
   # =======================
-  "feet_phase": RewardTermCfg(
-    func=feet_phase,
-    weight=1.0,
-    params={
-      "phase_command_name": "gait_phase",
-      "height_sensor_name": "foot_height_scan",
-      "swing_height": 0.08,
-      "tracking_sigma": 0.005,
-      "command_name": "twist",
-      "command_threshold": 0.05,
-    },
-  ),
-  "arm_phase": RewardTermCfg(
-    func=arm_phase,
-    weight=1.0,
-    params={
-      "phase_command_name": "gait_phase",
-      "asset_cfg": SceneEntityCfg(
-        "robot",
-        joint_names=("Left_Shoulder_Pitch", "Right_Shoulder_Pitch"),
-      ),
-      "swing_amplitude": 0.25,
-      "max_speed": 1.5,
-      "tracking_sigma": 0.25,
-      "command_name": "twist",
-    },
-  ),
+  # "feet_swing": RewardTermCfg(
+  #   func=feet_swing,
+  #   weight=1.0,
+  #   params={
+  #     "phase_command_name": "gait_phase",
+  #     "sensor_name": "feet_ground_contact",
+  #     "swing_period": 0.2,
+  #     "contact_threshold": 0.1,
+  #     "command_name": "twist",
+  #     "command_threshold": 0.05,
+  #   },
+  # ),
+  # "feet_phase": RewardTermCfg(
+  #   func=feet_phase,
+  #   weight=1.0,
+  #   params={
+  #     "phase_command_name": "gait_phase",
+  #     "height_sensor_name": "foot_height_scan",
+  #     "swing_height": 0.09,
+  #     "tracking_sigma": 0.005,
+  #     "command_name": "twist",
+  #     "command_threshold": 0.05,
+  #   },
+  # ),
+  # "arm_phase": RewardTermCfg(
+  #   func=arm_phase,
+  #   weight=1.0,
+  #   params={
+  #     "phase_command_name": "gait_phase",
+  #     "asset_cfg": SceneEntityCfg(
+  #       "robot",
+  #       joint_names=("Left_Shoulder_Pitch", "Right_Shoulder_Pitch"),
+  #     ),
+  #     "swing_amplitude": 0.25,
+  #     "max_speed": 1.5,
+  #     "tracking_sigma": 0.25,
+  #     "command_name": "twist",
+  #   },
+  # ),
   "alive": RewardTermCfg(
     func=is_alive,
-    weight=0.5,
+    weight=0.25,
   ),
   # =========================
   # Regularization penalties
@@ -153,7 +189,7 @@ rewards = {
   ),
   "penalty_body_ang_vel": RewardTermCfg(
     func=body_angular_velocity_penalty,
-    weight=-2.0,
+    weight=-1.0,
     params={"asset_cfg": SceneEntityCfg("robot", body_names=(BASE_BODY_NAME))},
   ),
   "penalty_orientation": RewardTermCfg(
@@ -161,110 +197,75 @@ rewards = {
     weight=-10.0,
     params={"asset_cfg": SceneEntityCfg("robot", body_names=(BASE_BODY_NAME))},
   ),
-  "penalty_feet_ori": RewardTermCfg(
-    func=foot_orientation_penalty,
-    weight=-5.0,
-    params={"asset_cfg": SceneEntityCfg("robot", body_names=(FOOT_BODY_NAMES))},
+  "penalty_base_height": RewardTermCfg(
+    func=base_height_penalty,
+    weight=-10.0,
+    params={"target_height": 0.68},
   ),
-  "penalty_feet_yaw_diff": RewardTermCfg(
-    func=feet_yaw_diff_penalty,
-    weight=-1.0,
-    params={"asset_cfg": SceneEntityCfg("robot", body_names=(FOOT_BODY_NAMES))},
-  ),
+  # "penalty_feet_ori": RewardTermCfg(
+  #   func=foot_orientation_penalty,
+  #   weight=-1.0,
+  #   params={"asset_cfg": SceneEntityCfg("robot", body_names=(FOOT_BODY_NAMES))},
+  # ),
+  # "penalty_feet_yaw_diff": RewardTermCfg(
+  #   func=feet_yaw_diff_penalty,
+  #   weight=-0.1,
+  #   params={"asset_cfg": SceneEntityCfg("robot", body_names=(FOOT_BODY_NAMES))},
+  # ),
+  # "penalty_feet_yaw_mean": RewardTermCfg(
+  #   func=feet_yaw_mean_penalty,
+  #   weight=-0.1,
+  #   params={"asset_cfg": SceneEntityCfg("robot", body_names=(FOOT_BODY_NAMES))},
+  # ),
   "penalty_action_rate": RewardTermCfg(func=action_rate_l2, weight=-1.0),
-  "penalty_pose_deviation": RewardTermCfg(
-    func=pose_deviation_penalty,
-    weight=-0.5,
-    params={
-      "asset_cfg": SceneEntityCfg("robot", joint_names=(".*",)),
-      "command_name": "twist",
-      "walking_threshold": 0.05,
-      "running_threshold": 1.5,
-      "weights_standing": {},
-      "weights_walking": {},
-      "weights_running": {},
-    },
-  ),
   "dof_pos_limits": RewardTermCfg(func=joint_pos_limits, weight=-1.0),
   "penalty_feet_distance": RewardTermCfg(
     func=feet_distance_penalty,
     weight=-5.0,
     params={
       "asset_cfg": SceneEntityCfg("robot", site_names=(FOOT_SITE_NAMES)),
-      "min_dist": 0.2,
+      "min_dist": 0.15,
     },
   ),
-  "feet_slip": RewardTermCfg(
+  # site_names → linear slip; body_names → foot yaw-rate for the rotational scrub.
+  "penalty_feet_slip": RewardTermCfg(
     func=feet_slip,
-    weight=-10.0,
+    weight=-1.0,
     params={
       "asset_cfg": SceneEntityCfg("robot", site_names=(FOOT_SITE_NAMES)),
       "sensor_name": "feet_ground_contact",
       "foot_body_cfg": SceneEntityCfg("robot", body_names=(FOOT_BODY_NAMES)),
     },
   ),
-  # Anchored L1 no-slip: catches slow standing creep (~1e-5 m/s) that the L2
-  # feet_slip is blind to. Weight needs tuning — start small and raise until the
-  # standing foot-creep disappears without hurting walking foot roll.
-  "feet_no_slip": RewardTermCfg(
-    func=feet_no_slip,
-    weight=-20.0,
-    params={
-      "asset_cfg": SceneEntityCfg("robot", site_names=(FOOT_SITE_NAMES)),
-      "sensor_name": "feet_ground_contact",
-    },
-  ),
   "penalty_dof_vel": RewardTermCfg(
     func=dof_vel_penalty,
-    weight=-1e-4,
+    weight=-1e-3,
     params={"asset_cfg": SceneEntityCfg("robot", joint_names=(".*",))},
   ),
   "penalty_dof_acc": RewardTermCfg(
     func=dof_acc_penalty,
-    weight=-1e-7,
+    weight=-1e-6,
     params={"asset_cfg": SceneEntityCfg("robot", joint_names=(".*",))},
   ),
-}
-
-# Standing: upper body tight + moderate leg constraint to prevent stance spread.
-rewards["penalty_pose_deviation"].params["weights_standing"] = {
-  r"(?i).*head.*": 50.0,
-  r"(?i).*shoulder_pitch.*": 1.0,
-  r"(?i).*shoulder_roll.*": 50.0,
-  r"(?i).*elbow.pitch": 50.0,
-  r"(?i).*elbow.yaw": 1.0,
-  r"Waist": 25.0,
-  r"(?i).*hip_pitch.*": 1.0,
-  r"(?i).*hip_roll.*": 5.0,
-  r"(?i).*hip_yaw.*": 5.0,
-  r"(?i).*knee.*": 1.0,
-  r"(?i).*ankle.*": 5.0,
-}
-# Walking: upper body tight (shoulder_pitch loose for arm_phase)
-rewards["penalty_pose_deviation"].params["weights_walking"] = {
-  r"(?i).*head.*": 50.0,
-  r"(?i).*shoulder_pitch.*": 1.0,
-  r"(?i).*shoulder_roll.*": 50.0,
-  r"(?i).*elbow.pitch": 50.0,
-  r"(?i).*elbow.yaw": 1.0,
-  r"Waist": 15.0,
-  r"(?i).*hip_pitch.*": 1.0,
-  r"(?i).*hip_roll.*": 5.0,
-  r"(?i).*hip_yaw.*": 5.0,
-  r"(?i).*knee.*": 1.0,
-  r"(?i).*ankle.*": 5.0,
-}
-# Running: same as walking — legs already nearly unconstrained.
-rewards["penalty_pose_deviation"].params["weights_running"] = {
-  r"(?i).*head.*": 50.0,
-  r"(?i).*shoulder_pitch.*": 1.0,
-  r"(?i).*shoulder_roll.*": 50.0,
-  r"(?i).*elbow.pitch": 50.0,
-  r"(?i).*elbow.yaw": 1.0,
-  r"Waist": 5.0,
-  r"(?i).*hip_pitch.*": 0.1,
-  r"(?i).*hip_roll.*": 0.5,
-  r"(?i).*hip_yaw.*": 0.5,
-  r"(?i).*knee.*": 0.1,
-  r"(?i).*ankle.*": 0.5,
+  # Effort penalties (booster_gym weights): price torque magnitude, proximity to
+  # the torque limit, and positive mechanical power. Legs only (upper body is
+  # PD-held and its holding torque is not under policy control).
+  "penalty_torques": RewardTermCfg(
+    func=torques_penalty,
+    weight=-2e-5,
+    params={"asset_cfg": SceneEntityCfg("robot", joint_names=LEG_JOINT_PATTERNS)},
+  ),
+  "penalty_torque_tiredness": RewardTermCfg(
+    func=torque_tiredness_penalty,
+    weight=-1e-3,
+    params={
+      "asset_cfg": SceneEntityCfg("robot", joint_names=LEG_JOINT_PATTERNS),
+      "effort_limits": LEG_EFFORT_LIMITS,
+    },
+  ),
+  "penalty_power": RewardTermCfg(
+    func=power_penalty,
+    weight=-2e-5,
+    params={"asset_cfg": SceneEntityCfg("robot", joint_names=LEG_JOINT_PATTERNS)},
+  ),
 }

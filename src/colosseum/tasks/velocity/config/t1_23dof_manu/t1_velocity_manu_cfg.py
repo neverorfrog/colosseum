@@ -19,7 +19,7 @@ from colosseum.robots.t1_23dof.constants import (
   get_robot_cfg,
 )
 from colosseum.tasks.velocity.config.t1_23dof.cat_cfg import (
-  VELOCITY_LOCOMOTION_ACTION_SCALE,
+  JOINT_NAMES,
 )
 from colosseum.tasks.velocity.config.t1_23dof.t1_velocity_cfg import (
   booster_t1_velocity_env_cfg,
@@ -30,14 +30,17 @@ from .algo_cfg import (
   booster_t1_rsl_rl_runner_cfg,
 )
 
+UNACTUATED_JOINTS = {
+  "AAHead_yaw",
+  "Head_pitch",
+}
 
 def _manufacturer_action_scale() -> dict[str, float]:
   """Manufacturer recipe (0.25 * peak torque / kp) applied to exactly the joints
   the locomotion task controls (legs); head/arms/waist stay pinned at the default
   pose so the only difference from ``t1-velocity`` is the actuator set."""
   return {
-    j: (MANUFACTURER_ACTION_SCALE[j] if scale != 0.0 else 0.0)
-    for j, scale in VELOCITY_LOCOMOTION_ACTION_SCALE.items()
+    name: (MANUFACTURER_ACTION_SCALE[name]) for name in JOINT_NAMES if name not in UNACTUATED_JOINTS
   }
 
 
