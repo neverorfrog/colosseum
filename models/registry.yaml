@@ -265,6 +265,11 @@ t1-velocity:
       run: t1-velocity-PPO-123-20260617_064240
       step: 0
       created: '2026-06-17T08:23:33.525508+00:00'
+    jun18_1:
+      file: jun18_1/t1-velocity_ppo_jun18_1.onnx
+      run: t1-velocity-PPO-123-20260618_102528
+      step: 0
+      created: '2026-06-19T01:31:06.433070+00:00'
   default: v0
 t1-velocity-rma:
   models:
@@ -298,6 +303,11 @@ t1-velocity-rma:
       run: t1-velocity-rma-RmaPPO-123-20260616_200258
       step: 0
       created: '2026-06-17T04:01:47.173028+00:00'
+    jun18_1:
+      file: jun18_1/t1-velocity-rma_rmappo_jun18_1.onnx
+      run: t1-velocity-rma-RmaPPO-123-20260618_155851
+      step: 0
+      created: '2026-06-19T01:25:02.848499+00:00'
   default: v0
 t1-velocity-12dof:
   models:
