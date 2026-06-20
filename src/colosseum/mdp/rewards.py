@@ -27,6 +27,20 @@ if TYPE_CHECKING:
 _DEFAULT_ASSET_CFG = SceneEntityCfg("robot")
 
 
+def lateral_velocity_penalty(
+  env: ManagerBasedRlEnv,
+  asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+) -> torch.Tensor:
+  """Penalize body-frame lateral (sideways) velocity: vy².
+
+  Discourages side-stepping/crab-walking; the robot should turn to face a
+  target and walk forward instead of sliding sideways toward it.
+  """
+  asset: Entity = env.scene[asset_cfg.name]
+  vy = asset.data.root_link_lin_vel_b[:, 1]
+  return vy.square()
+
+
 def base_height_penalty(
   env: ManagerBasedRlEnv,
   target_height: float,
