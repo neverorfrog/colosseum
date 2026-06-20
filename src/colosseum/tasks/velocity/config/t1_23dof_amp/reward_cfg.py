@@ -42,7 +42,7 @@ from colosseum.mdp.rewards import (
   torque_tiredness_penalty,
   torques_penalty,
   track_ang_vel_yaw_filtered,
-  track_lin_vel_axis_filtered,
+  track_linear_velocity_filtered,
 )
 from colosseum.robots.t1_23dof.constants import (
   BASE_BODY_NAME,
@@ -71,18 +71,14 @@ rewards = {
   # =======================
   # TASK — velocity tracking
   # =======================
-  # Per-axis kernels (booster_gym form): each axis earns reward and gradient
-  # independently. The combined-product form zeroes the gradient on every axis
-  # whenever one axis is far off.
-  "track_lin_vel_x": RewardTermCfg(
-    func=track_lin_vel_axis_filtered,
-    weight=3.0,
-    params={"command_name": "twist", "std": math.sqrt(0.25), "axis": 0},
-  ),
-  "track_lin_vel_y": RewardTermCfg(
-    func=track_lin_vel_axis_filtered,
-    weight=3.0,
-    params={"command_name": "twist", "std": math.sqrt(0.25), "axis": 1},
+  # Combined xy kernel (mjlab stock form): a single Gaussian over both linear
+  # axes, so an uncommanded axis (usually y) can't pay full reward for standing
+  # still. Per-axis splitting let the y-tracker hand out ~3.0 for zero motion,
+  # which created a standing optimum.
+  "track_lin_vel": RewardTermCfg(
+    func=track_linear_velocity_filtered,
+    weight=2.0,
+    params={"command_name": "twist", "std": math.sqrt(0.25)},
   ),
   "track_ang_vel_yaw": RewardTermCfg(
     func=track_ang_vel_yaw_filtered,
@@ -124,7 +120,7 @@ rewards = {
     weight=-5.0,
     params={"asset_cfg": SceneEntityCfg("robot", body_names=(BASE_BODY_NAME))},
   ),
-  "penalty_action_rate": RewardTermCfg(func=action_rate_l2, weight=-1.0),
+  "penalty_action_rate": RewardTermCfg(func=action_rate_l2, weight=-0.1),
   "dof_pos_limits": RewardTermCfg(func=joint_pos_limits, weight=-1.0),
   "penalty_feet_distance": RewardTermCfg(
     func=feet_distance_penalty,
