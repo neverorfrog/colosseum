@@ -1,383 +1,92 @@
 t1-velocity:
   models:
-    v0:
-      file: v0/t1-velocity_rmappo_v0.onnx
-      run: t1-velocity-RmaPPO_phase2-123-20260528_131718
-      step: 0
-      created: '2026-05-28T12:12:52.364213+00:00'
-    v1:
-      file: v1/t1-velocity_rmappo_v1.onnx
-      run: t1-velocity-RmaPPO_phase2-123-20260528_141300
-      step: 0
-      created: '2026-05-28T12:15:40.269682+00:00'
-    v2:
-      file: v2/t1-velocity_rmappo_v2.onnx
-      run: t1-velocity-RmaPPO_phase2-123-20260528_182056~
-      step: 0
-      created: '2026-05-28T16:57:55.170718+00:00'
-    v3:
-      file: v3/t1-velocity_rmappo_v3.onnx
-      run: t1-velocity-RmaPPO_rma-123-20260529_104847
-      step: 0
-      created: '2026-05-29T10:13:32.272828+00:00'
-    v4:
-      file: v4/t1-velocity_ppo_v4.onnx
-      run: t1-velocity-PPO-42-20260531_042405
-      step: 887040000
-      created: '2026-05-31T07:21:22.862264+00:00'
-    v5:
-      file: v5/t1-velocity_ppo_v5.onnx
-      run: t1-velocity-PPO-42-20260531_131208
-      step: 0
-      created: '2026-06-01T14:59:44.883613+00:00'
-    jun4_0:
-      file: jun4_0/t1-velocity_ppo_jun4_0.onnx
-      run: t1-velocity-PPO-42-20260604_123256
-      step: 80216064
-      created: '2026-06-04T11:07:51.359208+00:00'
-    jun4_1:
-      file: jun4_1/t1-velocity_ppo_jun4_1.onnx
-      run: t1-velocity-PPO-42-20260604_130912
-      step: 30081024
-      created: '2026-06-04T11:24:27.154944+00:00'
-    jun4_2:
-      file: jun4_2/t1-velocity_ppo_jun4_2.onnx
-      run: t1-velocity-PPO-42-20260604_132739
-      step: 10027008
-      created: '2026-06-04T11:32:57.110053+00:00'
-    jun4_3:
-      file: jun4_3/t1-velocity_ppo_jun4_3.onnx
-      run: t1-velocity-PPO-42-20260604_135235
-      step: 50135040
-      created: '2026-06-04T12:13:55.766208+00:00'
-    jun4_4:
-      file: jun4_4/t1-velocity_ppo_jun4_4.onnx
-      run: t1-velocity-PPO-42-20260604_141527
-      step: 100270080
-      created: '2026-06-04T13:00:20.169318+00:00'
-    jun4_5:
-      file: jun4_5/t1-velocity_ppo_jun4_5.onnx
-      run: t1-velocity-PPO-123-20260604_150422
-      step: 0
-      created: '2026-06-04T13:40:03.376159+00:00'
-    jun4_6:
-      file: jun4_6/t1-velocity_ppo_jun4_6.onnx
-      run: t1-velocity-PPO-123-20260604_154010
-      step: 70189056
-      created: '2026-06-04T14:11:33.551753+00:00'
-    jun4_7:
-      file: jun4_7/t1-velocity_ppo_jun4_7.onnx
-      run: t1-velocity-PPO-123-20260604_161259
-      step: 210567168
-      created: '2026-06-04T15:37:12.449164+00:00'
-    jun4_8:
-      file: jun4_8/t1-velocity_ppo_jun4_8.onnx
-      run: t1-velocity-PPO-123-20260604_184853
-      step: 0
-      created: '2026-06-04T17:32:32.555734+00:00'
-    jun4_9:
-      file: jun4_9/t1-velocity_ppo_jun4_9.onnx
-      run: t1-velocity-PPO-123-20260604_161259
-      step: 541458432
-      created: '2026-06-04T17:57:08.930556+00:00'
-    jun5_0:
-      file: jun5_0/t1-velocity_ppo_jun5_0.onnx
-      run: t1-velocity-PPO-123-20260605_013007
-      step: 741998592
-      created: '2026-06-05T07:33:43.086487+00:00'
-    jun5_1:
-      file: jun5_1/t1-velocity_ppo_jun5_1.onnx
-      run: t1-velocity-PPO-123-20260605_090625
-      step: 240648192
-      created: '2026-06-05T08:43:16.037589+00:00'
-    jun5_2:
-      file: jun5_2/t1-velocity_ppo_jun5_2.onnx
-      run: t1-velocity-PPO-123-20260605_110216
-      step: 90243072
-      created: '2026-06-05T09:38:33.024369+00:00'
-    jun5_3:
-      file: jun5_3/t1-velocity_ppo_jun5_3.onnx
-      run: t1-velocity-PPO-123-20260605_110216
-      step: 451215360
-      created: '2026-06-05T12:03:35.854574+00:00'
-    jun5_4:
-      file: jun5_4/t1-velocity_ppo_jun5_4.onnx
-      run: t1-velocity-PPO-123-20260605_111415
-      step: 0
-      created: '2026-06-05T12:51:10.585096+00:00'
-    jun5_5:
-      file: jun5_5/t1-velocity_ppo_jun5_5.onnx
-      run: t1-velocity-PPO-123-20260605_124340
-      step: 0
-      created: '2026-06-05T12:50:39.465264+00:00'
-    jun5_6:
-      file: jun5_6/t1-velocity_ppo_jun5_6.onnx
-      run: t1-velocity-PPO-123-20260605_134712
-      step: 0
-      created: '2026-06-05T13:39:45.469815+00:00'
-    jun5_7:
-      file: jun5_7/t1-velocity_ppo_jun5_7.onnx
-      run: t1-velocity-PPO-123-20260605_134712
-      step: 230
-      created: '2026-06-05T13:51:01.765223+00:00'
-    jun8_0:
-      file: jun8_0/t1-velocity_ppo_jun8_0.onnx
-      run: t1-velocity-PPO-123-20260608_110631
-      step: 0
-      created: '2026-06-08T14:04:52.784464+00:00'
-    jun8_1:
-      file: jun8_1/t1-velocity_ppo_jun8_1.onnx
-      run: t1-velocity-PPO-123-20260608_095408
-      step: 0
-      created: '2026-06-08T14:08:27.576361+00:00'
-    jun9_1:
-      file: jun9_1/t1-velocity_ppo_jun9_1.onnx
-      run: t1-velocity-PPO-123-20260609_091809
-      step: 0
-      created: '2026-06-09T08:14:07.009534+00:00'
-    jun9_2:
-      file: jun9_2/t1-velocity_ppo_jun9_2.onnx
-      run: t1-velocity-PPO-123-20260609_101755
-      step: 0
-      created: '2026-06-09T09:28:34.566770+00:00'
-    jun9_3:
-      file: jun9_3/t1-velocity_ppo_jun9_3.onnx
-      run: t1-velocity-PPO-123-20260609_114519
-      step: 0
-      created: '2026-06-09T16:19:39.948113+00:00'
-    jun9_4:
-      file: jun9_4/t1-velocity_ppo_jun9_4.onnx
-      run: t1-velocity-PPO-123-20260609_182546
-      step: 0
-      created: '2026-06-09T20:44:33.330451+00:00'
-    jun9_5:
-      file: jun9_5/t1-velocity_ppo_jun9_5.onnx
-      run: t1-velocity-PPO-123-20260609_225257
-      step: 0
-      created: '2026-06-10T14:25:17.180962+00:00'
-    jun10_1:
-      file: jun10_1/t1-velocity_ppo_jun10_1.onnx
-      run: t1-velocity-PPO-123-20260610_083208
-      step: 0
-      created: '2026-06-10T14:29:12.246506+00:00'
-    jun10_2:
-      file: jun10_2/t1-velocity_ppo_jun10_2.onnx
-      run: t1-velocity-PPO-123-20260610_163538
-      step: 0
-      created: '2026-06-11T06:51:47.108960+00:00'
-    jun11_1:
-      file: jun11_1/t1-velocity_ppo_jun11_1.onnx
-      run: t1-velocity-PPO-123-20260611_124011
-      step: 0
-      created: '2026-06-11T13:24:13.493169+00:00'
-    jun11_2:
-      file: jun11_2/t1-velocity_ppo_jun11_2.onnx
-      run: t1-velocity-PPO-123-20260611_153056
-      step: 0
-      created: '2026-06-12T06:57:22.878851+00:00'
-    jun12_1:
-      file: jun12_1/t1-velocity_ppo_jun12_1.onnx
-      run: t1-velocity-PPO-123-20260612_124140
-      step: 0
-      created: '2026-06-12T11:08:14.752911+00:00'
-    jun12_2:
-      file: jun12_2/t1-velocity_ppo_jun12_2.onnx
-      run: t1-velocity-PPO-123-20260612_161014
-      step: 0
-      created: '2026-06-12T15:23:34.065827+00:00'
-    jun12_3:
-      file: jun12_3/t1-velocity_ppo_jun12_3.onnx
-      run: t1-velocity-PPO-123-20260612_173301
-      step: 0
-      created: '2026-06-12T17:05:03.466122+00:00'
-    jun12_4:
-      file: jun12_4/t1-velocity_ppo_jun12_4.onnx
-      run: t1-velocity-PPO-123-20260612_190923
-      step: 0
-      created: '2026-06-13T05:38:45.930008+00:00'
-    jun12_5:
-      file: jun12_5/t1-velocity_ppo_jun12_5.onnx
-      run: t1-velocity-PPO-123-20260612_205501
-      step: 0
-      created: '2026-06-13T05:41:15.113057+00:00'
-    jun13_4:
-      file: jun13_4/t1-velocity_ppo_jun13_4.onnx
-      run: t1-velocity-PPO-123-20260613_074836
-      step: 0
-      created: '2026-06-13T13:36:03.647406+00:00'
-    jun13_3:
-      file: jun13_3/t1-velocity_ppo_jun13_3.onnx
-      run: t1-velocity-PPO-123-20260613_074319
-      step: 0
-      created: '2026-06-13T13:52:57.952224+00:00'
-    jun13_2:
-      file: jun13_2/t1-velocity_ppo_jun13_2.onnx
-      run: t1-velocity-PPO-123-20260613_011633
-      step: 0
-      created: '2026-06-13T14:02:40.906834+00:00'
-    jun13_1:
-      file: jun13_1/t1-velocity_ppo_jun13_1.onnx
-      run: t1-velocity-PPO-123-20260613_011156
-      step: 0
-      created: '2026-06-13T14:04:59.718899+00:00'
-    jun13_5:
-      file: jun13_5/t1-velocity_ppo_jun13_5.onnx
-      run: t1-velocity-PPO-123-20260613_163406
-      step: 0
-      created: '2026-06-14T10:18:13.072065+00:00'
-    jun13_6:
-      file: jun13_6/t1-velocity_ppo_jun13_6.onnx
-      run: t1-velocity-PPO-123-20260613_163001
-      step: 0
-      created: '2026-06-14T10:21:36.549853+00:00'
-    jun14_1:
-      file: jun14_1/t1-velocity_ppo_jun14_1.onnx
-      run: t1-velocity-PPO-123-20260614_123302
-      step: 0
-      created: '2026-06-14T21:10:57.549552+00:00'
-    jun14_2:
-      file: jun14_2/t1-velocity_ppo_jun14_2.onnx
-      run: t1-velocity-PPO-123-20260614_235131
-      step: 0
-      created: '2026-06-15T07:40:03.086887+00:00'
-    jun16_1:
-      file: jun16_1/t1-velocity_ppo_jun16_1.onnx
-      run: t1-velocity-PPO-123-20260616_052901
-      step: 0
-      created: '2026-06-16T05:22:44.357153+00:00'
-    jun16_2:
-      file: jun16_2/t1-velocity_ppo_jun16_2.onnx
-      run: t1-velocity-PPO-123-20260616_055045
-      step: 0
-      created: '2026-06-16T05:24:02.462702+00:00'
-    jun16_3:
-      file: jun16_3/t1-velocity_ppo_jun16_3.onnx
-      run: t1-velocity-PPO-123-20260616_072609
-      step: 0
-      created: '2026-06-16T13:37:33.684256+00:00'
-    jun16_4:
-      file: jun16_4/t1-velocity_ppo_jun16_4.onnx
-      run: t1-velocity-PPO-123-20260616_145148
-      step: 0
-      created: '2026-06-16T16:12:04.221906+00:00'
     jun17_1:
       file: jun17_1/t1-velocity_ppo_jun17_1.onnx
       run: t1-velocity-PPO-123-20260617_064240
       step: 0
-      created: '2026-06-17T08:23:33.525508+00:00'
+      created: "2026-06-17T08:23:33.525508+00:00"
     jun18_1:
       file: jun18_1/t1-velocity_ppo_jun18_1.onnx
       run: t1-velocity-PPO-123-20260618_102528
       step: 0
-      created: '2026-06-19T01:31:06.433070+00:00'
-  default: v0
+      created: "2026-06-19T01:31:06.433070+00:00"
+    jun19_1:
+      file: jun19_1/t1-velocity_ppo_jun19_1.onnx
+      run: t1-velocity-PPO-123-20260619_175543
+      step: 0
+      created: "2026-06-19T20:04:21.500292+00:00"
+    jun19_2:
+      file: jun19_2/t1-velocity_ppo_jun19_2.onnx
+      run: t1-velocity-PPO-123-20260619_223034
+      step: 0
+      created: "2026-06-20T03:25:19.823711+00:00"
+  default: jun19_2
 t1-velocity-rma:
   models:
-    v0:
-      file: v0/t1-velocity-rma_rmappo_v0.onnx
-      run: t1-velocity-RmaPPO_phase2-123-20260528_131718
-      step: 0
-      created: '2026-05-28T12:12:52.364213+00:00'
-    v1:
-      file: v1/t1-velocity-rma_rmappo_v1.onnx
-      run: t1-velocity-rma-RmaPPO-42-20260604_010638
-      step: 0
-      created: '2026-06-04T07:19:38.253188+00:00'
-    v2:
-      file: v2/t1-velocity-rma_rmappo_v2.onnx
-      run: t1-velocity-rma-RmaPPO-123-20260604_160835
-      step: 0
-      created: '2026-06-04T17:01:07.245996+00:00'
-    jun5_0:
-      file: jun5_0/t1-velocity-rma_rmappo_jun5_0.onnx
-      run: t1-velocity-rma-RmaPPO-123-20260605_014329
-      step: 0
-      created: '2026-06-05T06:42:12.752595+00:00'
-    jun5_1:
-      file: jun5_1/t1-velocity-rma_rmappo_jun5_1.onnx
-      run: t1-velocity-rma-RmaPPO-123-20260605_084527
-      step: 0
-      created: '2026-06-05T08:48:25.610561+00:00'
     jun16_1:
       file: jun16_1/t1-velocity-rma_rmappo_jun16_1.onnx
       run: t1-velocity-rma-RmaPPO-123-20260616_200258
       step: 0
-      created: '2026-06-17T04:01:47.173028+00:00'
+      created: "2026-06-20T07:41:20.306916+00:00"
     jun18_1:
       file: jun18_1/t1-velocity-rma_rmappo_jun18_1.onnx
       run: t1-velocity-rma-RmaPPO-123-20260618_155851
       step: 0
-      created: '2026-06-19T01:25:02.848499+00:00'
-  default: v0
-t1-velocity-12dof:
-  models:
-    jun14_1:
-      file: jun14_1/t1-velocity-12dof_ppo_jun14_1.onnx
-      run: t1-velocity-12dof-PPO-123-20260614_124122
+      created: "2026-06-20T07:39:40.451134+00:00"
+    jun19_1:
+      file: jun19_1/t1-velocity-rma_rmappo_jun19_1.onnx
+      run: t1-velocity-rma-RmaPPO-123-20260619_114300
       step: 0
-      created: '2026-06-14T21:51:44.948977+00:00'
-    jun14_2:
-      file: jun14_2/t1-velocity-12dof_ppo_jun14_2.onnx
-      run: t1-velocity-12dof-PPO-123-20260615_001304
-      step: 0
-      created: '2026-06-15T07:47:12.009789+00:00'
-    jun15_3:
-      file: jun15_3/t1-velocity-12dof_ppo_jun15_3.onnx
-      run: t1-velocity-12dof-PPO-123-20260615_155940
-      step: 0
-      created: '2026-06-16T00:26:51.418927+00:00'
-    jun15_1:
-      file: jun15_1/t1-velocity-12dof_ppo_jun15_1.onnx
-      run: t1-velocity-12dof-PPO-123-20260615_001304
-      step: 0
-      created: '2026-06-15T13:26:54.917062+00:00'
-    jun15_2:
-      file: jun15_2/t1-velocity-12dof_ppo_jun15_2.onnx
-      run: t1-velocity-12dof-PPO-123-20260615_122907
-      step: 0
-      created: '2026-06-15T13:27:50.474299+00:00'
-    jun15_4:
-      file: jun15_4/t1-velocity-12dof_ppo_jun15_4.onnx
-      run: t1-velocity-12dof-PPO-123-20260615_160217
-      step: 0
-      created: '2026-06-16T00:27:27.799690+00:00'
-    jun15_5:
-      file: jun15_5/t1-velocity-12dof_ppo_jun15_5.onnx
-      run: t1-velocity-12dof-PPO-123-20260615_193255
-      step: 0
-      created: '2026-06-16T00:27:48.868341+00:00'
-  default: jun14_1
-t1-velocity-booster:
-  models:
-    jun15_1:
-      file: jun15_1/t1-velocity-booster_ppo_jun15_1.onnx
-      run: t1-velocity-booster-PPO-123-20260615_164446
-      step: 0
-      created: '2026-06-16T00:25:35.765993+00:00'
-  default: jun15_1
+      created: "2026-06-20T07:39:51.458878+00:00"
+  default: jun16_1
 t1-velocity-manu:
   models:
     jun16_1:
       file: jun16_1/t1-velocity-manu_ppo_jun16_1.onnx
       run: t1-velocity-manu-PPO-123-20260616_074159
       step: 0
-      created: '2026-06-16T12:26:58.591034+00:00'
-  default: jun16_1
+      created: "2026-06-16T12:26:58.591034+00:00"
+    jun19_1:
+      file: jun19_1/t1-velocity-manu_ppo_jun19_1.onnx
+      run: t1-velocity-manu-PPO-123-20260619_053208
+      step: 621674496
+      created: "2026-06-19T07:34:14.819781+00:00"
+    jun19_2:
+      file: jun19_2/t1-velocity-manu_ppo_jun19_2.onnx
+      run: t1-velocity-manu-PPO-123-20260619_044735
+      step: 0
+      created: "2026-06-19T07:50:53.376706+00:00"
+    jun19_3:
+      file: jun19_3/t1-velocity-manu_ppo_jun19_3.onnx
+      run: t1-velocity-manu-PPO-123-20260619_095314
+      step: 0
+      created: "2026-06-20T07:42:32.654411+00:00"
+    jun19_4:
+      file: jun19_4/t1-velocity-manu_ppo_jun19_4.onnx
+      run: t1-velocity-manu-PPO-123-20260619_223036
+      step: 0
+      created: "2026-06-20T07:41:56.795394+00:00"
+    jun20_1:
+      file: jun20_1/t1-velocity-manu_ppo_jun20_1.onnx
+      run: t1-velocity-manu-PPO-123-20260620_034815
+      step: 280756224
+      created: "2026-06-20T03:56:48.201472+00:00"
+  default: jun20_1
 t1-dribbling-residual:
   models:
     jun17_1:
       file: jun17_1/t1-dribbling-residual_residualppo_jun17_1.onnx
       run: t1-dribbling-residual-ResidualPPO-123-20260617_073013
       step: 0
-      created: '2026-06-17T06:41:08.527946+00:00'
+      created: "2026-06-20T07:40:14.613594+00:00"
     jun17_2:
       file: jun17_2/t1-dribbling-residual_residualppo_jun17_2.onnx
       run: t1-dribbling-residual-ResidualPPO-123-20260617_084731
       step: 0
-      created: '2026-06-17T07:16:18.484820+00:00'
+      created: "2026-06-17T07:16:18.484820+00:00"
     jun17_3:
       file: jun17_3/t1-dribbling-residual_residualppo_jun17_3.onnx
       run: t1-dribbling-residual-ResidualPPO-123-20260617_092127
       step: 0
-      created: '2026-06-17T07:43:55.447307+00:00'
+      created: "2026-06-17T07:43:55.447307+00:00"
   default: jun17_1

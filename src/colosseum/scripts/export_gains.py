@@ -24,6 +24,7 @@ Output (one field per line, joint-name keyed -> robust to joint-order drift):
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -39,84 +40,105 @@ DEFAULT_FRICTIONLOSS = 0.03
 FIELDS = ("kp", "kd", "armature", "frictionloss", "effort_limit", "default_pos", "action_scale")
 
 
-def _find_actuators(node: object) -> list[dict] | None:
-  """Return the first ``actuators`` list found anywhere in the config tree.
+def _find_robot_entity(node: object) -> dict | None:
+  """Return the entity node holding ``articulation.actuators``.
 
-  Path-robust: we search by key rather than hardcoding the (deep, mjlab-versioned)
-  ``task.env...articulation.actuators`` path.
+  The robot entity carries both its ``articulation.actuators`` and its
+  ``init_state.joint_pos`` as siblings, so finding this node ties the actuator
+  gains to the correct default pose (other ``joint_pos`` blocks in the config —
+  randomization ranges, env-level defaults — must not be used).
+  Path-robust: we search by key rather than hardcoding the deep mjlab path.
   """
   if isinstance(node, dict):
-    acts = node.get("actuators")
-    if isinstance(acts, list) and acts and isinstance(acts[0], dict) and "target_names_expr" in acts[0]:
-      return acts
+    art = node.get("articulation")
+    if isinstance(art, dict):
+      acts = art.get("actuators")
+      if isinstance(acts, list) and acts and isinstance(acts[0], dict) and "target_names_expr" in acts[0]:
+        return node
     for v in node.values():
-      found = _find_actuators(v)
+      found = _find_robot_entity(v)
       if found is not None:
         return found
   elif isinstance(node, list):
     for v in node:
-      found = _find_actuators(v)
+      found = _find_robot_entity(v)
       if found is not None:
         return found
   return None
 
 
-def _find_default_pos(node: object, joint_names: set[str]) -> dict[str, float]:
-  """Return the ``joint_pos`` dict whose keys are concrete joint names.
+def _is_pattern(name: str) -> bool:
+  """True if a name is a regex pattern rather than a concrete joint name."""
+  return any(c in name for c in ".*+?[]()^$|\\")
 
-  Several ``init_state.joint_pos`` blocks exist (env- and entity-level), and some
-  use regex keys (``.*``). We pick the one that best matches the actuator joints.
+
+def _find_action_scale(node: object) -> dict | float | None:
+  """Return the joint-position action term's ``scale`` (per-joint dict or scalar).
+
+  Identified by the ``use_default_offset`` key (unique to JointPositionAction).
+  This is the scale the policy was trained with — the source of truth, not a
+  derived formula (it is 0.25 flat for the locomotion set, per-joint for manu).
   """
-  best: dict[str, float] = {}
-  best_score = -1
-
-  def visit(n: object) -> None:
-    nonlocal best, best_score
-    if isinstance(n, dict):
-      jp = n.get("joint_pos")
-      if isinstance(jp, dict):
-        score = sum(1 for k in jp if k in joint_names)
-        if score > best_score:
-          best, best_score = jp, score
-      for v in n.values():
-        visit(v)
-    elif isinstance(n, list):
-      for v in n:
-        visit(v)
-
-  visit(node)
-  return best
+  if isinstance(node, dict):
+    if "use_default_offset" in node and "scale" in node:
+      return node["scale"]
+    for v in node.values():
+      found = _find_action_scale(v)
+      if found is not None:
+        return found
+  elif isinstance(node, list):
+    for v in node:
+      found = _find_action_scale(v)
+      if found is not None:
+        return found
+  return None
 
 
 def _gains_from_config(config_path: Path) -> dict[str, dict[str, float]]:
   cfg = yaml.safe_load(config_path.read_text())
 
-  actuators = _find_actuators(cfg)
-  if not actuators:
-    raise ValueError(f"{config_path}: no actuators block found")
+  robot = _find_robot_entity(cfg)
+  if robot is None:
+    raise ValueError(f"{config_path}: no robot entity with actuators found")
 
-  # joint -> raw actuator entry (one joint per actuator in colosseum's set).
-  per_joint: dict[str, dict] = {}
+  actuators = robot["articulation"]["actuators"]
+  joint_pos = robot.get("init_state", {}).get("joint_pos", {})
+
+  # Action scale the policy trained with (per-joint dict or a single scalar).
+  action_scale = _find_action_scale(cfg)
+  if action_scale is None:
+    raise ValueError(f"{config_path}: no joint-position action term found")
+
+  # Concrete joint set (and default pose) comes from the entity's init_state.
+  # Actuators may target joints individually (manufacturer set) or by regex group
+  # (locomotion set, e.g. ".*Hip_Pitch"); expand patterns against these names.
+  joint_names = [j for j in joint_pos if not _is_pattern(j)]
+  if not joint_names:
+    raise ValueError(f"{config_path}: no concrete joints in init_state.joint_pos")
+
+  joint_to_act: dict[str, dict] = {}
   for act in actuators:
-    for joint in act["target_names_expr"]:
-      per_joint[joint] = act
-
-  default_pos = _find_default_pos(cfg, set(per_joint))
+    for pattern in act["target_names_expr"]:
+      for joint in joint_names:
+        if re.fullmatch(pattern, joint):
+          joint_to_act[joint] = act
 
   gains: dict[str, dict[str, float]] = {}
-  for joint, act in per_joint.items():
-    kp = float(act["stiffness"])
-    effort = float(act.get("saturation_effort") or act["effort_limit"])
+  for joint in joint_names:
+    act = joint_to_act.get(joint)
+    if act is None:
+      continue  # joint has no actuator (held passive) — nothing to deploy
     friction = act.get("frictionloss")
+    # action_scale: per-joint dict entry, or the scalar if scale is a single value.
+    scale = action_scale.get(joint, 0.0) if isinstance(action_scale, dict) else action_scale
     gains[joint] = {
-      "kp": kp,
+      "kp": float(act["stiffness"]),
       "kd": float(act["damping"]),
       "armature": float(act["armature"]),
       "frictionloss": DEFAULT_FRICTIONLOSS if friction is None else float(friction),
       "effort_limit": float(act["effort_limit"]),
-      "default_pos": float(default_pos.get(joint, 0.0)),
-      # booster_train recipe: action_scale * kp = 0.25 * peak torque.
-      "action_scale": 0.25 * effort / kp,
+      "default_pos": float(joint_pos[joint]),
+      "action_scale": float(scale),
     }
   return gains
 

@@ -20,6 +20,7 @@ from pydantic.dataclasses import dataclass
 
 from colosseum.config.types.experiment import BaseExperimentConfig
 from colosseum.config.types.task import get_task
+from colosseum.scripts.export_gains import export_gains
 from colosseum.utils.export import export_policy_to_onnx
 from colosseum.utils.model_registry import ModelRegistry
 
@@ -179,6 +180,8 @@ def _export_onnx(config: ImportRunConfig, run_dir: Path, ckpt_path: Path) -> Non
   if config_path.exists():
     shutil.copy2(config_path, out_dir / "config.yaml")
     logger.info(f"Copied config: {out_dir / 'config.yaml'}")
+    # Regenerate the deploy gains.yaml from the fresh config (never leave it stale).
+    export_gains(out_dir)
 
   # Register in models/registry.yaml
   rel_file = f"{config.name}/{result.name}"

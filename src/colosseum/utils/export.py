@@ -69,6 +69,12 @@ def export_policy_to_onnx(
 
   result = algo.export_onnx(output_path)
   env.close()
+
+  # ONNX is exported as a single self-contained file (external_data=False). Remove
+  # any stale sidecar left by a previous split export so it is not shipped/copied.
+  sidecar = Path(str(result) + ".data")
+  sidecar.unlink(missing_ok=True)
+
   return result
 
 

@@ -95,8 +95,22 @@ fi
 SRC_MODEL_DIR="$(dirname "$SRC")"
 DST_MODEL_DIR="$DEST/models/$POLICY/$VERSION"
 mkdir -p "$DST_MODEL_DIR"
+
+# arena loads per-joint deploy gains from gains.yaml next to the ONNX (the Policy
+# base constructor requires it). Always (re)generate from config.yaml so a stale
+# gains.yaml is never shipped, then port it alongside the ONNX.
+if [[ -f "$SRC_MODEL_DIR/config.yaml" ]]; then
+    python -m colosseum.scripts.export_gains "$SRC_MODEL_DIR"
+fi
+
 cp -r "$SRC_MODEL_DIR"/*.onnx* "$DST_MODEL_DIR/"
-echo "Copied $SRC_MODEL_DIR/*.onnx* → $DST_MODEL_DIR/"
+if [[ -f "$SRC_MODEL_DIR/gains.yaml" ]]; then
+    cp "$SRC_MODEL_DIR/gains.yaml" "$DST_MODEL_DIR/"
+    echo "Copied *.onnx* + gains.yaml → $DST_MODEL_DIR/"
+else
+    echo "WARNING: no gains.yaml for $SRC_MODEL_DIR — arena deploy will fail to load gains"
+    echo "Copied $SRC_MODEL_DIR/*.onnx* → $DST_MODEL_DIR/"
+fi
 
 # ── Update per-policy models.yaml ────────────────────────────────────────
 POLICY_YAML="$DEST/models/$POLICY/models.yaml"
