@@ -317,6 +317,7 @@ class ResidualPPO(PPO):
         )
         values = self.value_net(norm_critic_obs)
 
+        prev_obs_dict = obs_dict
         obs_dict, rewards, terminated, truncated, infos = self.env.step(actions)
         assert isinstance(obs_dict, dict)
         if terminated.is_floating_point():
@@ -332,6 +333,12 @@ class ResidualPPO(PPO):
           self.critic_obs_normalizer.update(next_critic_obs)
 
         self.cur_reward_sum += rewards
+
+        # AMP hook: blend a discriminator style reward into `rewards` and stash
+        # policy transitions. No-op in base ResidualPPO; overridden by ResidualAMPPPO.
+        # Placed AFTER cur_reward_sum (so episodic logging stays task-only) and
+        # BEFORE timeout bootstrapping (so the bootstrap applies on the blend).
+        rewards = self._blend_amp_reward(prev_obs_dict, obs_dict, rewards, dones)
 
         # Timeout bootstrapping (RSL-RL/holosoma) for infinite-horizon tasks.
         if not getattr(self.env.cfg, "is_finite_horizon", True):
@@ -393,6 +400,16 @@ class ResidualPPO(PPO):
       )
 
     return self.get_actor_obs(obs_dict), current_critic_obs, current_dones, obs_dict
+
+  def _blend_amp_reward(
+    self,
+    prev_obs_dict: dict[str, torch.Tensor],
+    obs_dict: dict[str, torch.Tensor],
+    rewards: torch.Tensor,
+    dones: torch.Tensor,
+  ) -> torch.Tensor:
+    """Hook to fold an AMP style reward into the per-step reward (no-op here)."""
+    return rewards
 
   # ------------------------------------------------------------------ #
   # Learning
@@ -795,6 +812,8 @@ class ResidualPPO(PPO):
       opset_version=18,
       input_names=["obs"],
       output_names=["actions"],
+      # Embed weights in the single .onnx (no sidecar .onnx.data file).
+      external_data=False,
     )
 
     if was_training:

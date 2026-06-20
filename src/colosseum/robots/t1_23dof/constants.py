@@ -20,11 +20,11 @@ if _MJLAB_AVAILABLE:
     MANUFACTURER_ACTUATORS,
   )
   from colosseum.robots.t1_23dof.collisions import (
+    DRIBBLING_FEET_ONLY_COLLISION,
     FEET_FOREARM_WAIST_COLLISION,
     FEET_ONLY_COLLISION,
     FEET_SELF_COLLISION,
     FULL_COLLISION_WITHOUT_SELF,
-    DRIBBLING_FEET_ONLY_COLLISION,
   )
 from colosseum.utils import src_dir
 
@@ -203,20 +203,8 @@ HOME_QPOS: dict[str, float] = {
   "Right_Ankle_Roll": 0.0,
 }
 
-# Locomotion-specific default pose (booster_gym convention).
-# Hip_Pitch=-0.2, Knee=0.4, Ankle_Pitch=-0.25, base_height=0.72.
-HOME_QPOS_LOCOMOTION: dict[str, float] = {
-  **HOME_QPOS,
-  "Left_Hip_Pitch": -0.2,
-  "Left_Knee_Pitch": 0.4,
-  "Left_Ankle_Pitch": -0.25,
-  "Right_Hip_Pitch": -0.2,
-  "Right_Knee_Pitch": 0.4,
-  "Right_Ankle_Pitch": -0.25,
-}
-
 # Locomotion-specific base height (booster_gym convention: 0.72).
-LOCOMOTION_BASE_HEIGHT = (0.0, 0.0, 0.72)
+BASE_HEIGHT = (0.0, 0.0, 0.72)
 
 ##
 # Robot Configuration Functions
@@ -229,6 +217,7 @@ if _MJLAB_AVAILABLE:
     self_collision: bool = False,
     full_collision: bool = False,
     with_head_camera: bool = False,
+    dribbling: bool = False,
   ) -> EntityCfg:
     if self_collision:
       collision = FEET_FOREARM_WAIST_COLLISION
@@ -236,12 +225,14 @@ if _MJLAB_AVAILABLE:
       collision = FEET_SELF_COLLISION
     elif full_collision:
       collision = FULL_COLLISION_WITHOUT_SELF
+    elif dribbling:
+      collision = DRIBBLING_FEET_ONLY_COLLISION
     else:
       collision = FEET_ONLY_COLLISION
     spec_fn = get_spec_with_head_camera if with_head_camera else get_spec
     return EntityCfg(
       init_state=EntityCfg.InitialStateCfg(
-        pos=(0, 0, 0.67),
+        pos=BASE_HEIGHT,
         joint_pos=HOME_QPOS,
         joint_vel={".*": 0.0},
       ),
@@ -277,15 +268,14 @@ if _MJLAB_AVAILABLE:
     spec_fn = get_spec_with_head_camera if with_head_camera else get_spec
     return EntityCfg(
       init_state=EntityCfg.InitialStateCfg(
-        pos=LOCOMOTION_BASE_HEIGHT,
-        joint_pos=HOME_QPOS_LOCOMOTION,
+        pos=BASE_HEIGHT,
+        joint_pos=HOME_QPOS,
         joint_vel={".*": 0.0},
       ),
       collisions=(collision,),
       spec_fn=spec_fn,
       articulation=LOCOMOTION_ARTICULATION,
     )
-
 ##
 # Symmetry configuration (left-right mirror about sagittal plane)
 ##
@@ -336,8 +326,8 @@ FLIP_SIGN_JOINT_NAMES: list[str] = [
 
 if _MJLAB_AVAILABLE:
   # booster_train recipe: kp * scale = 0.25 * peak torque, decoupled from kp.
-  # Uses saturation_effort (peak), matching booster_train's single-plateau
-  # effort_limit; the DcMotor effort_limit is the (lower) continuous rating.
+  # Uses saturation_effort (peak), which now also equals the DcMotor effort_limit
+  # (booster clamps at peak; rated is a thermal spec handled via reward penalties).
   MANUFACTURER_ACTION_SCALE: dict[str, float] = {
     cfg.target_names_expr[0]: 0.25 * cfg.saturation_effort / cfg.stiffness
     for cfg in MANUFACTURER_ACTUATORS

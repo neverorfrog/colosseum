@@ -708,6 +708,7 @@ class BaseAlgorithm(ABC):
       opset_version=18,
       input_names=["obs"],
       output_names=["actions"],
+      external_data=False,
     )
 
     if was_training:

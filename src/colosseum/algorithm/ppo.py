@@ -343,6 +343,16 @@ class PPO(BaseAlgorithm):
         steps_per_log_step=self.config.num_steps_per_env,
       )
 
+  def _blend_amp_reward(
+    self,
+    prev_obs_dict: ObsType,
+    obs_dict: ObsType,
+    rewards: torch.Tensor,
+    dones: torch.Tensor,
+  ) -> torch.Tensor:
+    """Hook to fold an AMP style reward into the per-step reward (no-op here)."""
+    return rewards
+
   def _collect_rollout(
     self,
     current_actor_obs: torch.Tensor,
@@ -367,6 +377,7 @@ class PPO(BaseAlgorithm):
         values = self.value_net(norm_critic_obs)
 
         # Step environment (action clipping handled by vecenv_wrapper)
+        prev_obs_dict = obs_dict
         obs_dict, rewards, terminated, truncated, infos = self.env.step(actions)
         if terminated.is_floating_point():
           dones = torch.clamp(terminated + truncated.float(), 0.0, 1.0)
@@ -386,6 +397,12 @@ class PPO(BaseAlgorithm):
         # logger.process_env_step in RSL-RL receives the original rewards
         # BEFORE bootstrapping inflates them at truncation boundaries.
         self.cur_reward_sum += rewards
+
+        # AMP hook: blend a discriminator style reward into `rewards` and stash
+        # policy transitions. No-op in base PPO; overridden by AmpPPO. Placed
+        # AFTER cur_reward_sum (so episodic logging stays task-only) and BEFORE
+        # timeout bootstrapping (so the bootstrap applies on the blend).
+        rewards = self._blend_amp_reward(prev_obs_dict, obs_dict, rewards, dones)
 
         # Timeout bootstrapping (RSL-RL/holosoma pattern)
         # For infinite-horizon tasks, bootstrap value at truncation.

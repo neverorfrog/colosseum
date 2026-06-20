@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 import torch
@@ -81,10 +81,13 @@ class BoosterPdActuator(IdealPdActuator[BoosterPdActuatorCfg]):
 
 ##
 # Manufacturer datasheet motor models (Booster T1 official spec sheet).
-# Mapped onto mjlab's DcMotorActuator: peak torque -> saturation_effort,
-# rated torque -> effort_limit (continuous cap), peak speed -> velocity_limit
-# (no-load). Torque/speed are joint-side (post-gearbox); rotor inertia is
-# motor-side and reflected to the joint via the gear ratio.
+# Mapped onto mjlab's DcMotorActuator following booster_train's convention: the
+# per-step clamp is the *peak* (availability) torque, so peak -> both
+# saturation_effort and effort_limit, with the DC speed-droop tapering it toward
+# zero at peak speed -> velocity_limit (no-load). Rated/continuous torque is a
+# thermal/duty-cycle spec, not an instantaneous clamp; it is left to the reward's
+# torque penalties rather than hard-capped here. Torque/speed are joint-side
+# (post-gearbox); rotor inertia is motor-side, reflected via the gear ratio.
 ##
 
 _RPM_TO_RAD_S = math.pi / 30.0
@@ -97,8 +100,8 @@ class ManufacturerMotor:
   kd = 2*zeta*I*(2*pi*f); f=10 Hz, zeta=2).
   """
 
-  peak_torque: float  # Nm; stall torque -> saturation_effort
-  rated_torque: float  # Nm; continuous torque -> effort_limit
+  peak_torque: float  # Nm; stall torque -> saturation_effort AND effort_limit
+  rated_torque: float  # Nm; continuous/thermal rating (datasheet ref; not clamped)
   peak_speed_rpm: float  # rpm; no-load speed -> velocity_limit
   rotor_inertia: float  # kg*m^2, motor side
   gear_ratio: float
@@ -141,18 +144,28 @@ ANKLE = ManufacturerMotor(50.0, 16.0, 123, 26.2e-6, 36)
 _SIDES = ("Left", "Right")
 _ARM_JOINTS = ("Shoulder_Pitch", "Shoulder_Roll", "Elbow_Pitch", "Elbow_Yaw")
 
+# Leg PD tuning. booster_train's T1 config leaves the legs on the library default
+# (f=10 Hz, zeta=2 -> stiff and heavily over-damped, the "sluggish" feel), but its
+# K1 config -- the platform they actually tuned -- softens the legs to f=4 Hz with
+# zeta=1.5 on hips/ankles and zeta=1.0 (critical) on the knee. We adopt the K1
+# recipe for the T1 legs; arms/head/waist stay on the manufacturer default.
+# Lowering f drops kp (kp ~ f^2), so MANUFACTURER_ACTION_SCALE (0.25*peak/kp) rises
+# accordingly -- it is derived from stiffness, so it stays consistent automatically.
+_LEG_TUNING = {"natural_freq": 5.0, "damping_ratio": 1.5}
+_KNEE_TUNING = {"natural_freq": 5.0, "damping_ratio": 1.0}
+
 # Each joint -> its datasheet motor model.
 JOINT_MOTORS: dict[str, ManufacturerMotor] = {
   "AAHead_yaw": NECK,
   "Head_pitch": NECK,
   **{f"{s}_{j}": ARM for s in _SIDES for j in _ARM_JOINTS},
   "Waist": WAIST_HIP_ROLL_YAW,
-  **{f"{s}_Hip_Pitch": HIP_PITCH for s in _SIDES},
-  **{f"{s}_Hip_Roll": WAIST_HIP_ROLL_YAW for s in _SIDES},
-  **{f"{s}_Hip_Yaw": WAIST_HIP_ROLL_YAW for s in _SIDES},
-  **{f"{s}_Knee_Pitch": KNEE for s in _SIDES},
-  **{f"{s}_Ankle_Pitch": ANKLE for s in _SIDES},
-  **{f"{s}_Ankle_Roll": ANKLE for s in _SIDES},
+  **{f"{s}_Hip_Pitch": replace(HIP_PITCH, **_LEG_TUNING) for s in _SIDES},
+  **{f"{s}_Hip_Roll": replace(WAIST_HIP_ROLL_YAW, **_LEG_TUNING) for s in _SIDES},
+  **{f"{s}_Hip_Yaw": replace(WAIST_HIP_ROLL_YAW, **_LEG_TUNING) for s in _SIDES},
+  **{f"{s}_Knee_Pitch": replace(KNEE, **_KNEE_TUNING) for s in _SIDES},
+  **{f"{s}_Ankle_Pitch": replace(ANKLE, **_LEG_TUNING) for s in _SIDES},
+  **{f"{s}_Ankle_Roll": replace(ANKLE, **_LEG_TUNING) for s in _SIDES},
 }
 
 
@@ -162,7 +175,7 @@ def _actuator(joint: str, motor: ManufacturerMotor) -> DcMotorActuatorCfg:
     stiffness=motor.stiffness,
     damping=motor.damping,
     saturation_effort=motor.peak_torque,
-    effort_limit=motor.rated_torque,
+    effort_limit=motor.peak_torque,
     velocity_limit=motor.velocity_limit,
     armature=motor.armature,
   )

@@ -359,3 +359,97 @@ class ResidualPpoConfig(PpoConfig):
 
   residual_weight_penalty_coef: float = 0.01
   """Penalty on the orchestrator's residual weight (favors the frozen base)."""
+
+
+@dataclass(frozen=True)
+class AmpPpoConfig(PpoConfig):
+  """Plain PPO + an AMP discriminator (BeyondAMP-style, from-scratch training).
+
+  Adds an adversarial style prior on top of vanilla PPO: an extra ``amp``
+  observation group feeds a discriminator trained against a reference motion
+  clip; its score is blended into the per-step reward. No frozen base skill /
+  residual — the policy learns the full task (e.g. velocity-tracked walking)
+  from scratch, with the discriminator supplying the gait style. The AMP fields
+  mirror ``ResidualAmpPpoConfig``; both are consumed by ``AmpMixin``.
+  """
+
+  name: str = "AmpPPO"
+  target: str = "colosseum.algorithm.amp_ppo:AmpPPO"
+
+  amp_motion_files: list[str] = field(default_factory=list)
+  """BeyondMimic-format ``.npz`` reference clip(s) for the discriminator's expert."""
+
+  amp_obs_group: str = "amp"
+  """Observation group holding the AMP state (joint_pos_rel, joint_vel, base vels)."""
+
+  amp_include_base_vel: bool = True
+  """If True, the AMP state is "classic" (joints + base lin/ang vel). If False,
+    "basic" (joints only) → speed-agnostic discriminator. Must match the env's
+    amp obs group: amp_classic_obs_group vs amp_basic_obs_group."""
+
+  amp_joint_names: list[str] | None = None
+  """Joint name patterns the AMP state covers (default = all joints). Mirror of the
+    amp obs group's ``joint_names`` so the expert dataset slices the same columns
+    (e.g. exclude the head). ``None`` keeps all joints."""
+
+  amp_anchor_body: str = "Trunk"
+  """Name of the base/root body in the npz, used for yaw-frame base velocities."""
+
+  amp_reward_coef: float = 0.5
+  """Scale of the (unblended) AMP style reward."""
+
+  amp_task_reward_lerp: float = 0.3
+  """Blend lambda: (1-lambda)*r_amp + lambda*r_task. 1.0=task only, 0.0=AMP only."""
+
+  amp_discr_hidden_dims: list[int] = field(default_factory=lambda: [256, 256])
+  """Discriminator trunk widths."""
+
+  amp_replay_buffer_size: int = 100_000
+  """Capacity of the policy AMP-transition replay buffer."""
+
+  amp_learning_rate: float = 1e-3
+  """Learning rate for the discriminator optimizer."""
+
+  amp_grad_pen_lambda: float = 10.0
+  """Weight of the discriminator gradient penalty."""
+
+
+@dataclass(frozen=True)
+class ResidualAmpPpoConfig(ResidualPpoConfig):
+  """ResidualPPO + an AMP discriminator that rewards motion resembling a clip.
+
+  Adds an adversarial style prior on top of the residual setup: an extra ``amp``
+  observation group feeds a discriminator trained against the reference motion;
+  its score is blended into the per-step reward. The frozen-walk / residual /
+  orchestrator / symmetry machinery is unchanged.
+  """
+
+  name: str = "ResidualAMPPPO"
+  target: str = "colosseum.algorithm.residual_amp_ppo:ResidualAMPPPO"
+
+  amp_motion_files: list[str] = field(default_factory=list)
+  """BeyondMimic-format ``.npz`` reference clip(s) for the discriminator's expert."""
+
+  amp_obs_group: str = "amp"
+  """Observation group holding the AMP state (joint_pos_rel, joint_vel, base vels)."""
+
+  amp_anchor_body: str = "Trunk"
+  """Name of the base/root body in the npz, used for yaw-frame base velocities."""
+
+  amp_reward_coef: float = 0.5
+  """Scale of the (unblended) AMP style reward."""
+
+  amp_task_reward_lerp: float = 0.3
+  """Blend lambda: (1-lambda)*r_amp + lambda*r_task. 1.0=task only, 0.0=AMP only."""
+
+  amp_discr_hidden_dims: list[int] = field(default_factory=lambda: [256, 256])
+  """Discriminator trunk widths."""
+
+  amp_replay_buffer_size: int = 100_000
+  """Capacity of the policy AMP-transition replay buffer."""
+
+  amp_learning_rate: float = 1e-3
+  """Learning rate for the discriminator optimizer."""
+
+  amp_grad_pen_lambda: float = 10.0
+  """Weight of the discriminator gradient penalty."""
