@@ -18,6 +18,7 @@ from pydantic import ConfigDict
 from pydantic.dataclasses import dataclass
 
 from colosseum.config.types.experiment import BaseExperimentConfig
+from colosseum.scripts.export_gains import export_gains
 from colosseum.utils.checkpoint import resolve_checkpoint
 from colosseum.utils.export import export_policy_to_onnx
 from colosseum.utils.model_registry import ModelRegistry
@@ -121,6 +122,9 @@ def main() -> None:
     if config_path.exists():
       shutil.copy2(config_path, out_dir / "config.yaml")
       logger.info(f"Copied config: {out_dir / 'config.yaml'}")
+      # Distill the deploy gains.yaml (PD gains, default pose, action scale) so the
+      # C++ deploy repos load them by name instead of hardcoding.
+      export_gains(out_dir)
 
   # Register in models/registry.yaml
   rel_file = f"{config.name}/{result.name}"

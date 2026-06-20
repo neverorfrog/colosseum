@@ -31,6 +31,7 @@ play = { cmd = "python -m colosseum.scripts.play", description = "Evaluate train
 play-rsl-rl = { cmd = "python -m colosseum.scripts.play_rsl_rl", description = "Evaluate RSL-RL trained policy in simulation" }
 export-onnx = { cmd = "python -m colosseum.scripts.export_onnx", description = "Export checkpoint to ONNX" }
 export-model = { cmd = "src/colosseum/scripts/export_model.sh", description = "Export checkpoint to model registry in external repo" }
+export-gains = { cmd = "python -m colosseum.scripts.export_gains", description = "Distill deploy gains.yaml from a model's config.yaml" }
 import-run = { cmd = "python -m colosseum.scripts.import_run", description = "Import a run from W&B into the model registry" }
 
 # Dribbling tasks
