@@ -18,7 +18,6 @@ from colosseum.mdp.observations import base_height
 from colosseum.mdp.symmetry import (
   MirrorableObservationTermCfg,
   mirror_ang_vel,
-  mirror_ball_state,
   mirror_base_lin_vel,
   mirror_gait_phase,
   mirror_projected_gravity,
@@ -26,11 +25,14 @@ from colosseum.mdp.symmetry import (
 )
 from colosseum.robots.t1_23dof.mdp.symmetry import mirror_actions, mirror_joints
 from colosseum.tasks.dribbling.mdp.observations import (
+  # ball_position,
   ball_vel_command_body,
+  # ball_velocity_xy,
 )
 from colosseum.tasks.dribbling_residual.mdp.ball_perception import (
   BallPerceptionModel,
   ball_state_gt,
+  ball_velocity_xy,
 )
 
 # ---------------------------------------------------------------------------
@@ -78,17 +80,11 @@ gait_phase_term = MirrorableObservationTermCfg(
   mirror_fn=mirror_gait_phase,
 )
 
-# Ball state estimate in robot body frame, (N, 4) = [px, py, vx, vy]. This is
-# NOT the GT ball state: BallPerceptionModel reproduces the on-robot
-# YOLO->Kalman pipeline's output (noise, velocity lag, dropout/coast, latency)
-# so the actor trains on a deployment-shaped signal. Per-episode DR over the
-# noise band makes the policy robust across it. Mirrorable: under left-right
-# (y → -y) reflection the body-frame y components flip. The critic instead sees
-# clean GT (ball_state_gt) — asymmetric actor-critic.
 ball_terms = {
-  "ball_state": MirrorableObservationTermCfg(
+  # "ball_pos": ObservationTermCfg(func=ball_position),
+  # "ball_vel_xy": ObservationTermCfg(func=ball_velocity_xy),
+  "ball_state": ObservationTermCfg(
     func=BallPerceptionModel,
-    mirror_fn=mirror_ball_state,
   ),  # (N, 4)
 }
 
@@ -112,10 +108,9 @@ dribble_actor_terms = {
   **proprio_terms,
   "gait_phase": gait_phase_term,
   **ball_terms,
-  "ball_vel_command": MirrorableObservationTermCfg(
+  "ball_vel_command": ObservationTermCfg(
     func=ball_vel_command_body,
     params={"command_name": "ball_vel"},
-    mirror_fn=mirror_velocity_command,
   ),
 }
 

@@ -64,15 +64,35 @@ curriculum = {
     },
   ),
   "command_vel_curriculum": CurriculumTermCfg(
-      func=command_vel_curriculum,
-      params={
-        "command_name": "twist",
-        "velocity_stages": [
-          {"transitions": 0,           "lin_vel_x": (-0.5, 0.5), "lin_vel_y": (-0.5, 0.5), "ang_vel_z": (-0.5, 0.5)},
-          {"transitions": 50_000_000,  "lin_vel_x": (-0.75, 0.75), "lin_vel_y": (-0.75, 0.75), "ang_vel_z": (-0.75, 0.75)},
-          {"transitions": 100_000_000,  "lin_vel_x": (-1.0, 1.0), "lin_vel_y": (-0.75, 0.75), "ang_vel_z": (-1.0, 1.0)},
-          {"transitions": 150_000_000, "lin_vel_x": (-1.25, 1.25), "lin_vel_y": (-0.75, 0.75), "ang_vel_z": (-1.0, 1.0)},
-        ],
-      },
-    )
+    func=command_vel_curriculum,
+    params={
+      "command_name": "twist",
+      "velocity_stages": [
+        {
+          "transitions": 0,
+          "lin_vel_x": (-0.5, 0.5),
+          "lin_vel_y": (-0.5, 0.5),
+          "ang_vel_z": (-0.5, 0.5),
+        },
+        {
+          "transitions": 50_000_000,
+          "lin_vel_x": (-0.75, 0.75),
+          "lin_vel_y": (-0.75, 0.75),
+          "ang_vel_z": (-0.75, 0.75),
+        },
+        {
+          "transitions": 100_000_000,
+          "lin_vel_x": (-1.0, 1.0),
+          "lin_vel_y": (-0.75, 0.75),
+          "ang_vel_z": (-1.0, 1.0),
+        },
+        {
+          "transitions": 150_000_000,
+          "lin_vel_x": (-1.25, 1.25),
+          "lin_vel_y": (-0.75, 0.75),
+          "ang_vel_z": (-1.0, 1.0),
+        },
+      ],
+    },
+  ),
 }

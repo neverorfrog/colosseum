@@ -42,6 +42,7 @@ from colosseum.robots.t1_23dof.constants import (
 
 LEG_JOINT_PATTERNS = (".*Hip.*", ".*Knee.*", ".*Ankle.*")
 LOWER_BODY_JOINT_PATTERNS = (".*Hip.*", ".*Knee.*", ".*Ankle.*", "Waist")
+ALL_JOINTS_PATTERNS = ("^(?!AAHead_yaw$|Head_pitch$).*$",)
 
 # Leg torque limits (Nm), matching LOCOMOTION_ACTUATORS (booster_gym URDF efforts).
 LEG_EFFORT_LIMITS = {
@@ -77,11 +78,6 @@ rewards = {
   "track_ang_vel_yaw": RewardTermCfg(
     func=track_ang_vel_yaw_filtered,
     weight=3.0,
-    params={"command_name": "twist", "std": math.sqrt(0.25), "axis": 1},
-  ),
-  "track_ang_vel_yaw": RewardTermCfg(
-    func=track_ang_vel_yaw_filtered,
-    weight=2.0,
     params={"command_name": "twist", "std": math.sqrt(0.25)},
   ),
   "feet_swing": RewardTermCfg(
@@ -110,21 +106,30 @@ rewards = {
   ),
   # Phase 1: arms are fixed (action scale 0), so shoulder-pitch swing is
   # impossible — disable arm_phase. Re-enable when restoring arm action scale.
-  # "arm_phase": RewardTermCfg(
-  #   func=arm_phase,
-  #   weight=1.0,
-  #   params={
-  #     "phase_command_name": "gait_phase",
-  #     "asset_cfg": SceneEntityCfg(
-  #       "robot",
-  #       joint_names=("Left_Shoulder_Pitch", "Right_Shoulder_Pitch"),
-  #     ),
-  #     "swing_amplitude": 0.25,
-  #     "max_speed": 1.5,
-  #     "tracking_sigma": 0.25,
-  #     "command_name": "twist",
-  #   },
-  # ),
+  "arm_phase": RewardTermCfg(
+    func=arm_phase,
+    weight=1.0,
+    params={
+      "phase_command_name": "gait_phase",
+      # (left, right) pairs; shoulder swings wide, elbow follows with a smaller amplitude.
+      "asset_cfg": SceneEntityCfg(
+        "robot",
+        joint_names=(
+          "Left_Shoulder_Pitch",
+          "Right_Shoulder_Pitch",
+          "Left_Elbow_Pitch",
+          "Right_Elbow_Pitch",
+        ),
+        # Keep (left, right) pair order; otherwise ids resolve to global-index
+        # order [L_Sh, L_El, R_Sh, R_El], breaking contralateral pairing.
+        preserve_order=True,
+      ),
+      "swing_amplitude": (0.25, 0.25, 0.15, 0.15),
+      "max_speed": 1.5,
+      "tracking_sigma": 0.25,
+      "command_name": "twist",
+    },
+  ),
   "alive": RewardTermCfg(
     func=is_alive,
     weight=0.25,
@@ -153,7 +158,7 @@ rewards = {
   ),
   "penalty_orientation": RewardTermCfg(
     func=orientation_penalty,
-    weight=-15.0,
+    weight=-20.0,
     params={"asset_cfg": SceneEntityCfg("robot", body_names=(BASE_BODY_NAME))},
   ),
   # Always-on vertical posture anchor (replaces the vertical role pose_deviation
@@ -183,9 +188,13 @@ rewards = {
     func=pose_deviation_penalty,
     weight=-1.0,
     params={
-      "asset_cfg": SceneEntityCfg("robot", joint_names=LOWER_BODY_JOINT_PATTERNS),
+      "asset_cfg": SceneEntityCfg("robot", joint_names=ALL_JOINTS_PATTERNS),
       "weights_standing": {
-        "Waist": 1.0,
+        ".*Shoulder_Pitch": 1.0,
+        ".*Shoulder_Roll": 50.0,
+        ".*Elbow_Pitch": 1.0,
+        ".*Elbow_Yaw": 5.0,
+        "Waist": 25.0,
         ".*Hip_Pitch": 0.01,
         ".*Hip_Roll": 1.0,
         ".*Hip_Yaw": 5.0,
@@ -218,12 +227,12 @@ rewards = {
   "penalty_dof_vel": RewardTermCfg(
     func=dof_vel_penalty,
     weight=-1e-3,
-    params={"asset_cfg": SceneEntityCfg("robot", joint_names=(".*",))},
+    params={"asset_cfg": SceneEntityCfg("robot", joint_names=ALL_JOINTS_PATTERNS)},
   ),
   "penalty_dof_acc": RewardTermCfg(
     func=dof_acc_penalty,
     weight=-1e-6,
-    params={"asset_cfg": SceneEntityCfg("robot", joint_names=(".*",))},
+    params={"asset_cfg": SceneEntityCfg("robot", joint_names=ALL_JOINTS_PATTERNS)},
   ),
   # Effort penalties (booster_gym weights): price torque magnitude, proximity to
   # the torque limit, and positive mechanical power. Legs only (upper body is
@@ -231,7 +240,7 @@ rewards = {
   "penalty_torques": RewardTermCfg(
     func=torques_penalty,
     weight=-2e-5,
-    params={"asset_cfg": SceneEntityCfg("robot", joint_names=LOWER_BODY_JOINT_PATTERNS)},
+    params={"asset_cfg": SceneEntityCfg("robot", joint_names=ALL_JOINTS_PATTERNS)},
   ),
   "penalty_torque_tiredness": RewardTermCfg(
     func=torque_tiredness_penalty,
@@ -244,6 +253,6 @@ rewards = {
   "penalty_power": RewardTermCfg(
     func=power_penalty,
     weight=-2e-5,
-    params={"asset_cfg": SceneEntityCfg("robot", joint_names=LOWER_BODY_JOINT_PATTERNS)},
+    params={"asset_cfg": SceneEntityCfg("robot", joint_names=ALL_JOINTS_PATTERNS)},
   ),
 }

@@ -12,10 +12,7 @@ from colosseum.mdp.velocity_command import (
   CurriculumVelocityCommandCfg,
   TrueErrorVelocityCommandCfg,
 )
-from colosseum.robots.t1_23dof.constants import (
-  JOINT_NAMES,
-)
-
+from colosseum.robots.t1_23dof.constants import JOINT_NAMES, MANUFACTURER_ACTION_SCALE
 from colosseum.tasks.dribbling.mdp.gait_phase_command import GaitPhaseCommandCfg
 
 commands: Dict[str, CommandTermCfg] = {
@@ -71,11 +68,12 @@ FIXED_JOINTS = {
   # "Right_Shoulder_Roll",
   # "Right_Elbow_Pitch",
   # "Right_Elbow_Yaw",
+  # "Waist",
 }
 UNACTUATED_JOINTS = {"AAHead_yaw", "Head_pitch"}
 ACTION_SCALE: dict[str, float] = {
-  name: (0.0 if name in FIXED_JOINTS else 0.25)
-  for name in JOINT_NAMES
+  name: (0.0 if name in FIXED_JOINTS else value)
+  for name, value in MANUFACTURER_ACTION_SCALE.items()
   if name not in UNACTUATED_JOINTS
 }
 

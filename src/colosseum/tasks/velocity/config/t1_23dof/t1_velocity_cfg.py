@@ -8,7 +8,6 @@ from mjlab.managers import (
 )
 from mjlab.scene import SceneCfg
 from mjlab.sim import MujocoCfg, SimulationCfg
-
 from mjlab.terrains import TerrainEntityCfg
 from mjlab.utils.nan_guard import NanGuardCfg
 from mjlab.viewer import ViewerConfig
@@ -133,9 +132,9 @@ def booster_t1_velocity_env_cfg(play: bool = False) -> ColosseumEnvCfg:
     # Grid curriculum is training-only: a fresh play process would start with
     # just the seed cell unlocked and command ~zero velocities. Fall back to
     # uniform-box sampling from `ranges`.
-    twist = cfg.commands["twist"]
-    assert isinstance(twist, CurriculumVelocityCommandCfg)
-    twist.curriculum = False
+    # twist = cfg.commands["twist"]
+    # assert isinstance(twist, CurriculumVelocityCommandCfg)
+    # twist.curriculum = False
 
     if cfg.scene.terrain is not None:
       if cfg.scene.terrain.terrain_generator is not None:

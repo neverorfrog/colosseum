@@ -6,6 +6,7 @@ These training wrapper functions work across all robots and tasks.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 import torch
@@ -647,19 +648,19 @@ def arm_phase(
   env: ManagerBasedRlEnv,
   phase_command_name: str,
   asset_cfg: SceneEntityCfg,
-  swing_amplitude: float = 0.25,
+  swing_amplitude: float | Sequence[float] = 0.25,
   max_speed: float = 1.5,
   tracking_sigma: float = 0.05,
   command_name: str | None = None,
 ) -> torch.Tensor:
-  """Reward shoulder pitch tracking a cosine arm-swing profile.
+  """Reward sagittal arm joints tracking a cosine arm-swing profile.
 
   Contralateral coupling: left arm tracks right foot phase, right arm tracks
   left foot phase.
-      target = default_shoulder_pitch - amplitude(speed) * cos(phi_contralateral)
+      target = q_default - amplitude(speed) * cos(phi_contralateral)
 
-  The oscillation is centered on the default pose (-cos sweeps [-1, +1]), so the
-  shoulder swings q_default ± amplitude — q_default is the swing center, never an
+  The oscillation is centered on the default pose (-cos sweeps [-1, +1]), so each
+  joint swings q_default ± amplitude — q_default is the swing center, never an
   edge. A forward walking posture belongs in HOME_QPOS, not here.
 
   amplitude and tracking_sigma both scale with speed up to max_speed. The reward
@@ -667,28 +668,36 @@ def arm_phase(
   to zero at standstill instead of switching off at a threshold — no discontinuity
   for the policy to jerk against on stop.
 
-  asset_cfg must resolve [Left_Shoulder_Pitch, Right_Shoulder_Pitch] in
-  that order, matching gait phase order (left=0, right=1).
+  asset_cfg must resolve sagittal arm joints ordered in (left, right) pairs, e.g.
+  [Left_Shoulder_Pitch, Right_Shoulder_Pitch, Left_Elbow_Pitch, Right_Elbow_Pitch],
+  matching gait phase order (left=0, right=1). swing_amplitude is either a scalar
+  (uniform) or a per-joint sequence in that joint order (e.g. larger for shoulder,
+  smaller for elbow).
   """
   gait_term = env.command_manager.get_term(phase_command_name)
   phi = gait_term.phase  # (N, 2): col0=left foot, col1=right foot
 
   asset: Entity = env.scene[asset_cfg.name]
-  q = asset.data.joint_pos[:, asset_cfg.joint_ids]  # (N, 2)
-  q_default = asset.data.default_joint_pos[:, asset_cfg.joint_ids]  # (N, 2)
+  q = asset.data.joint_pos[:, asset_cfg.joint_ids]  # (N, J)
+  q_default = asset.data.default_joint_pos[:, asset_cfg.joint_ids]  # (N, J)
 
-  phi_contra = phi[:, [1, 0]]  # contralateral coupling
+  # (left, right) pairs -> even joints track right foot (col 1), odd track left (0).
+  n_joints = q.shape[-1]
+  contra_idx = [1 - (j % 2) for j in range(n_joints)]
+  phi_contra = phi[:, contra_idx]  # (N, J)
+
+  amplitude = torch.as_tensor(swing_amplitude, dtype=q.dtype, device=q.device)  # (J,) or ()
 
   if command_name is not None:
     cmd = env.command_manager.get_command(command_name)
     speed = torch.norm(cmd[:, :2], dim=-1)  # (N,)
     speed_scale = torch.clamp(speed / max_speed, 0.0, 1.0)  # (N,)
-    effective_amplitude = (swing_amplitude * speed_scale).unsqueeze(-1)  # (N, 1)
+    effective_amplitude = speed_scale.unsqueeze(-1) * amplitude  # (N, J) or (N, 1)
     effective_sigma = tracking_sigma / (
       1.0 + speed_scale
     )  # (N,), tighter at high speed
   else:
-    effective_amplitude = swing_amplitude
+    effective_amplitude = amplitude
     effective_sigma = tracking_sigma
 
   target = q_default - effective_amplitude * torch.cos(phi_contra)  # (N, 2)

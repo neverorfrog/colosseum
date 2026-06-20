@@ -29,29 +29,20 @@ from .algo_cfg import (
   booster_t1_ppo_cfg,
   booster_t1_rsl_rl_runner_cfg,
 )
+from .cat_cfg import actions
+from .reward_cfg import rewards
 
 UNACTUATED_JOINTS = {
   "AAHead_yaw",
   "Head_pitch",
 }
 
-def _manufacturer_action_scale() -> dict[str, float]:
-  """Manufacturer recipe (0.25 * peak torque / kp) applied to exactly the joints
-  the locomotion task controls (legs); head/arms/waist stay pinned at the default
-  pose so the only difference from ``t1-velocity`` is the actuator set."""
-  return {
-    name: (MANUFACTURER_ACTION_SCALE[name]) for name in JOINT_NAMES if name not in UNACTUATED_JOINTS
-  }
-
 
 def booster_t1_velocity_manu_env_cfg(play: bool = False) -> ColosseumEnvCfg:
   cfg = booster_t1_velocity_env_cfg(play=play)
   cfg.scene.entities["robot"] = get_robot_cfg()
-  # Swap the action scale without mutating the module-level `actions` dict
-  # shared with the locomotion task.
-  joint_pos = copy.deepcopy(cfg.actions["joint_pos"])
-  joint_pos.scale = _manufacturer_action_scale()
-  cfg.actions = {**cfg.actions, "joint_pos": joint_pos}
+  cfg.actions = actions
+  cfg.rewards = rewards
   return cfg
 
 
