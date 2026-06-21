@@ -21,6 +21,7 @@ from colosseum.tasks.kicking_residual.mdp.ball_velocity_command import (
 )
 from colosseum.tasks.kicking_residual.mdp.commands import BallAngleCommandCfg
 from colosseum.tasks.kicking_residual.mdp.head_ik_action import HeadIKActionCfg
+from colosseum.tasks.kicking_residual.mdp.terminations import terminate_after_kick
 
 # twist steers the frozen walk straight at the ball (same proven command as the
 # dribbling residual); the kick *direction* is handled by the rewards + residual,
@@ -79,4 +80,16 @@ terminations = {
     params={"limit_angle": math.radians(70.0)},
   ),
   "nan": TerminationTermCfg(func=nan_detection),
+  # One strike per episode: terminate 2 s (100 control steps @ 50 Hz) after the
+  # first foot-ball contact. Kills repeated-kick farming (the crouch-and-hug
+  # pathology). min_contact_force must match ball_speed_kick's gate, and
+  # delay_steps must exceed its kick_credit_steps so the credit window resolves.
+  "kicked": TerminationTermCfg(
+    func=terminate_after_kick,
+    params={
+      "sensor_name": "foot_ball_contact",
+      "min_contact_force": 250.0,
+      "delay_steps": 60,
+    },
+  ),
 }

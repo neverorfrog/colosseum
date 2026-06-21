@@ -203,6 +203,26 @@ def feet_clearance(
   return sensor.data.heights.mean(dim=-1)
 
 
+def contact_force_peak(
+  env: ManagerBasedRlEnv,
+  sensor_name: str,
+) -> torch.Tensor:
+  """Peak contact-force magnitude over the control step (N).
+
+  Reads the sensor's per-substep ``force_history`` ([B, P, H, 3]) and takes the
+  max magnitude across primaries and substeps. A kick is a brief impulse that can
+  resolve mid-decimation-loop and read ~0 in the instantaneous ``force`` (the
+  last substep only); the history peak catches it. This is the quantity a robust
+  kick gate should threshold on, so logging it shows the real strike forces and
+  what ``min_contact_force`` needs to be. Requires ``history_length > 0`` on the
+  sensor (foot_ball_contact has 4 = decimation).
+  """
+  sensor: ContactSensor = env.scene[sensor_name]
+  fh = sensor.data.force_history
+  assert fh is not None, f"sensor '{sensor_name}' needs history_length>0"
+  return fh.norm(dim=-1).amax(dim=(1, 2))
+
+
 def feet_contact_force(
   env: ManagerBasedRlEnv,
   sensor_name: str,

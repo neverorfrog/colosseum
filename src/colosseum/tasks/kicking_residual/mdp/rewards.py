@@ -12,6 +12,7 @@ from colosseum.mdp.ball_rewards import ball_vel_body
 
 if TYPE_CHECKING:
   from mjlab.envs import ManagerBasedRlEnv
+  from mjlab.managers.scene_entity_config import SceneEntityCfg
 
   from colosseum.tasks.kicking_residual.mdp.commands import BallAngleCommand
 
@@ -115,8 +116,11 @@ def _get_kick_gate(
       if done_mask.any():
         credit[done_mask] = 0
 
-    sensor = env.scene[sensor_name]
-    contact_force = sensor.data.force.flatten(start_dim=1).norm(dim=-1)
+    # Peak force over the step from per-substep force_history ([B, P, H, 3]), not
+    # the instantaneous last-substep force: a kick is a ~5 ms impulse that often
+    # resolves before the sense substep and reads ~0 in `data.force`.
+    fh = env.scene[sensor_name].data.force_history
+    contact_force = fh.norm(dim=-1).amax(dim=(1, 2))  # [B] over feet & substeps
     strike_now = contact_force >= min_contact_force
 
     credit[strike_now] = kick_credit_steps

@@ -51,6 +51,7 @@ from .algo_cfg import booster_t1_residual_ppo_cfg
 from .cat_cfg import actions, commands, terminations
 from .curriculum_cfg import curriculum
 from .event_cfg import events
+from .metric_cfg import metrics
 from .observation_cfg import observations
 from .reward_cfg import rewards
 
@@ -108,7 +109,7 @@ def booster_t1_kicking_residual_env_cfg(play: bool = False) -> ColosseumEnvCfg:
     rewards=rewards,
     terminations=terminations,
     curriculum=curriculum,
-    metrics={},
+    metrics=metrics,
     viewer=viewer_cfg(),
     sim=sim_cfg(),
     decimation=4,
