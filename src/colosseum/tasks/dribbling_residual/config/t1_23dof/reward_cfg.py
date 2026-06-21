@@ -45,8 +45,8 @@ from colosseum.robots.t1_23dof.constants import (
 )
 from colosseum.tasks.dribbling.mdp.rewards import (
   ball_target_progress,
-  ball_target_reached,
 )
+from colosseum.tasks.dribbling_residual.mdp.terminations import ball_lost_penalty
 
 LEG_JOINT_PATTERNS = (".*Hip.*", ".*Knee.*", ".*Ankle.*")
 LOWER_BODY_JOINT_PATTERNS = (".*Hip.*", ".*Knee.*", ".*Ankle.*", "Waist")
@@ -124,10 +124,13 @@ rewards = {
       "distance_scale_max": 1.5,
     },
   ),
-  "ball_target_reached": RewardTermCfg(  # Reduced from dribbling's 50.0 for stabler early residual learning.
-    func=ball_target_reached,
-    weight=10.0,
-    params={"command_name": "ball_vel"},
+  # Penalty for losing the ball (out of the head's FOV for > 3 s -> episode ends).
+  # The target is a dribble-direction proxy with no arrival bonus, so the only
+  # discrete event is this failure.
+  "ball_lost": RewardTermCfg(
+    func=ball_lost_penalty,
+    weight=-10.0,
+    params={"term_name": "ball_lost"},
   ),
   # =======================
   # Task Tracking Rewards

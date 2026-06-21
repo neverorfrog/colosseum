@@ -97,7 +97,7 @@ NONFOOT_BALL_CONTACT_SENSOR = ContactSensorCfg(
   ),
   secondary=ContactMatch(mode="body", pattern="ball", entity="ball"),
   fields=("found", "force"),
-  reduce="none",
+  reduce="netforce",
   num_slots=1,
   history_length=4,
 )
@@ -115,6 +115,7 @@ FOOT_BALL_CONTACT_SENSOR = ContactSensorCfg(
   fields=("found", "force"),
   reduce="netforce",
   num_slots=1,
+  history_length=4,
 )
 
 FOOT_HEIGHT_SCAN = TerrainHeightSensorCfg(

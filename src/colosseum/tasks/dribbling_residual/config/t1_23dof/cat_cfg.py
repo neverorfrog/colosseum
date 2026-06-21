@@ -8,7 +8,7 @@ from mjlab.managers.action_manager import ActionTermCfg
 from mjlab.managers.termination_manager import TerminationTermCfg
 
 from colosseum.mdp.velocity_command import CurriculumVelocityCommandCfg
-from colosseum.robots.t1_23dof.constants import JOINT_NAMES
+from colosseum.robots.t1_23dof.constants import JOINT_NAMES, MANUFACTURER_ACTION_SCALE
 from colosseum.tasks.dribbling.mdp.gait_phase_command import GaitPhaseCommandCfg
 from colosseum.tasks.dribbling_residual.mdp.ball_twist_command import (
   BallTwistCommandCfg,
@@ -17,12 +17,13 @@ from colosseum.tasks.dribbling_residual.mdp.ball_velocity_command import (
   BallVelocityCommandCfg,
 )
 from colosseum.tasks.dribbling_residual.mdp.head_ik_action import HeadIKActionCfg
+from colosseum.tasks.dribbling_residual.mdp.terminations import BallLostTermination
 
 commands: Dict[str, CommandTermCfg] = {
   "twist": BallTwistCommandCfg(stop_distance=0.25),
+  # Fixed dribble-direction target for the whole episode (no mid-episode
+  # resampling); see BallVelocityCommandCfg defaults.
   "ball_vel": BallVelocityCommandCfg(
-    resampling_time_range=(5.0, 10.0),
-    target_reached_threshold=0.5,
     speed_range=(0.1, 1.0),
   ),
   "gait_phase": GaitPhaseCommandCfg(
@@ -32,19 +33,12 @@ commands: Dict[str, CommandTermCfg] = {
   ),
 }
 
-FIXED_JOINTS = {
-  "Left_Shoulder_Pitch",
-  "Left_Shoulder_Roll",
-  "Left_Elbow_Pitch",
-  "Left_Elbow_Yaw",
-  "Right_Shoulder_Pitch",
-  "Right_Shoulder_Roll",
-  "Right_Elbow_Pitch",
-  "Right_Elbow_Yaw",
-}
+FIXED_JOINTS = {}
 UNACTUATED_JOINTS = {"AAHead_yaw", "Head_pitch"}
 ACTION_SCALE: dict[str, float] = {
-  name: (0.0 if name in FIXED_JOINTS else 0.25) for name in JOINT_NAMES if name not in UNACTUATED_JOINTS
+  name: (0.0 if name in FIXED_JOINTS else value)
+  for name, value in MANUFACTURER_ACTION_SCALE.items()
+  if name not in UNACTUATED_JOINTS
 }
 
 
@@ -67,4 +61,9 @@ terminations = {
     params={"limit_angle": math.radians(70.0)},
   ),
   "nan": TerminationTermCfg(func=nan_detection),
+  # Failure: the ball stays out of the head's field of view for > 3 s.
+  "ball_lost": TerminationTermCfg(
+    func=BallLostTermination,
+    params={"loss_timeout": 3.0},
+  ),
 }

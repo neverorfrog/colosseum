@@ -17,6 +17,7 @@ import torch
 from mjlab.entity import Entity
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.sensor import ContactSensor
+from mjlab.utils.lab_api.math import quat_apply
 
 if TYPE_CHECKING:
   from mjlab.envs import ManagerBasedRlEnv
@@ -210,6 +211,25 @@ def feet_contact_force(
   sensor: ContactSensor = env.scene[sensor_name]
   assert sensor.data.force is not None
   return sensor.data.force.norm(dim=-1).mean(dim=-1)
+
+
+def feet_lateral_distance(
+  env: ManagerBasedRlEnv,
+  asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+  """Body-frame lateral (y) distance between the two feet (m) — stance width.
+
+  The two foot world positions are differenced and rotated into the base frame,
+  so the value is the side-to-side foot separation regardless of heading.
+  ``asset_cfg.site_ids`` must resolve to exactly the two foot sites.
+  """
+  asset: Entity = env.scene[asset_cfg.name]
+  foot_pos_w = asset.data.site_pos_w[:, asset_cfg.site_ids, :3]  # (N, 2, 3)
+  rel_w = foot_pos_w[:, 0] - foot_pos_w[:, 1]  # (N, 3)
+  quat_w = asset.data.root_link_quat_w
+  quat_conj = torch.cat([quat_w[:, :1], -quat_w[:, 1:]], dim=-1)
+  rel_b = quat_apply(quat_conj, rel_w)
+  return rel_b[:, 1].abs()
 
 
 # =========================

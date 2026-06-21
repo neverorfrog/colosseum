@@ -1,18 +1,19 @@
 """Command term: target-driven ball velocity in world frame (trimmed).
 
-At resampling time the term samples a persistent world-frame target from the
-current ball position (radius from ``target_distance_range``, heading relative
-to the robot yaw). Each step it recomputes the desired ball velocity toward that
-target:
+At episode start the term samples a single world-frame target from the ball
+position (radius from ``target_distance_range``, heading relative to the robot
+yaw) and holds it for the whole episode -- the target is a fixed dribble
+*direction* proxy, not a waypoint to reach. Each step it recomputes the desired
+ball velocity toward that target:
 
     dir   = normalize(target - ball_pos)
     speed = clip(speed_gain * distance, speed_range), zeroed within reach
     cmd   = speed * dir   (world-frame [vx, vy, 0])
 
 This is a trimmed variant of the dribbling task's BallVelocityCommand: it keeps
-the persistent target, speed ramp, and resample-on-reach, but drops the
-obstacle/adversary coupling and the extra metrics/debug since the residual task
-has no adversary.
+the persistent target and speed ramp but drops all mid-episode resampling
+(reach/timer/drift) and the obstacle/adversary coupling. Losing the ball is
+handled by the ball-lost termination, not by resampling the target.
 """
 
 from __future__ import annotations
@@ -38,10 +39,6 @@ class BallVelocityCommand(CommandTerm):
     super().__init__(cfg, env)
     self.velocity_command = torch.zeros((env.num_envs, 3), device=env.device)
     self.target_position = torch.zeros((env.num_envs, 2), device=env.device)
-    # True on the step the ball reaches its target (before the resample fires).
-    self.target_reached_mask = torch.zeros(
-      env.num_envs, dtype=torch.bool, device=env.device
-    )
     self.metrics["target_distance"] = torch.zeros(env.num_envs, device=env.device)
     self.metrics["cmd_ball_vel_error"] = torch.zeros(env.num_envs, device=env.device)
     # Per-episode count of foot->ball contact onsets ("hits"). Auto-zeroed and
@@ -112,26 +109,11 @@ class BallVelocityCommand(CommandTerm):
     self._recompute_velocity_command(env_ids)
 
   def _update_command(self) -> None:
+    # The target is a fixed dribble-direction proxy: sampled once at reset and
+    # held for the whole episode (no resample on reach, timer, or drift). The
+    # only thing that updates each step is the velocity setpoint toward it.
     all_env_ids = torch.arange(self.num_envs, device=self.device)
     self._recompute_velocity_command(all_env_ids)
-
-    ball_pos = self._env.scene[self.cfg.ball_entity].data.root_link_pos_w[:, :2]
-    target_distance = (self.target_position - ball_pos).norm(dim=-1)
-
-    # Latch the reach event for ball_target_reached before resampling moves the
-    # target away (fires once: next step the fresh target is far again).
-    self.target_reached_mask = target_distance <= self.cfg.target_reached_threshold
-
-    # Resample on reach, or if a stale target has drifted far out of range
-    # (e.g. the ball was knocked backward).
-    resample_mask = (
-      (target_distance <= self.cfg.target_reached_threshold)
-      | (~torch.isfinite(target_distance))
-      | (target_distance > self.cfg.target_distance_range[1] * 1.5)
-    )
-    resample_env_ids = torch.where(resample_mask)[0]
-    if len(resample_env_ids) > 0:
-      self._resample(resample_env_ids)
 
   def _foot_ball_contact(self) -> torch.Tensor:
     """Per-env bool: any foot geom in contact with the ball this step."""
@@ -206,8 +188,9 @@ class BallVelocityCommandCfg(CommandTermCfg):
 
   debug_vis: bool = True
 
-  # Resample target every 5–10 seconds (like UniformVelocityCommand).
-  resampling_time_range: tuple[float, float] = (5.0, 10.0)
+  # Never time-resample: the target is fixed for the whole episode (set the
+  # interval past any episode length, like BallTwistCommand).
+  resampling_time_range: tuple[float, float] = (1e9, 1e9)
 
   robot_entity: str = "robot"
   ball_entity: str = "ball"
@@ -217,8 +200,10 @@ class BallVelocityCommandCfg(CommandTermCfg):
   # Desired ball speed, recomputed each step and clipped to this range.
   speed_range: tuple[float, float] = (0.1, 1.0)
 
-  # Sampled target radius (m) drawn from the current ball position at resample.
-  target_distance_range: tuple[float, float] = (1.0, 2.0)
+  # Sampled target radius (m) drawn from the ball position at episode start.
+  # Far targets keep the ball from arriving, so the command stays a steady
+  # dribble-direction setpoint for the whole episode.
+  target_distance_range: tuple[float, float] = (3.0, 6.0)
 
   # Gain mapping target distance -> desired speed before clipping.
   speed_gain: float = 1.0

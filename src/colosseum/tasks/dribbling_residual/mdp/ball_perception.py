@@ -35,6 +35,10 @@ from colosseum.tasks.dribbling.mdp.observations import (
   ball_position,
   ball_velocity_xy,
 )
+from colosseum.tasks.dribbling_residual.mdp.head_ik_action import (
+  HEAD_FOV_HALF,
+  HEAD_MAX_RANGE,
+)
 
 if TYPE_CHECKING:
   from mjlab.envs import ManagerBasedRlEnv
@@ -72,8 +76,10 @@ class BallPerceptionModel:
     # Dropout drivers.
     self._p_miss_range = tuple(p.get("p_miss_range", (0.02, 0.15)))
     self._close_range = float(p.get("close_range_dropout", 0.3))
-    self._max_range = float(p.get("max_range", 6.0))
-    self._fov_half = float(p.get("fov_half_angle", 0.6))
+    # FOV matches the head's reach (the camera rides the tracking head), shared
+    # with head IK and the ball-lost termination via the HEAD_* constants.
+    self._max_range = float(p.get("max_range", HEAD_MAX_RANGE))
+    self._fov_half = float(p.get("fov_half_angle", HEAD_FOV_HALF))
     # Sensing + filtering latency, in control steps.
     self._latency = int(p.get("latency_steps", 2))
 
