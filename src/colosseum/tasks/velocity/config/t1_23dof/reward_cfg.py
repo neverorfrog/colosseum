@@ -167,11 +167,11 @@ rewards = {
   "penalty_base_height": RewardTermCfg(
     func=base_height_penalty,
     weight=-15.0,
-    params={"target_height": 0.68},
+    params={"target_height": 0.64},
   ),
   "penalty_feet_ori": RewardTermCfg(
     func=foot_orientation_penalty,
-    weight=-5.0,
+    weight=-2.0,
     params={"asset_cfg": SceneEntityCfg("robot", body_names=(FOOT_BODY_NAMES))},
   ),
   "penalty_feet_yaw_diff": RewardTermCfg(
@@ -191,9 +191,9 @@ rewards = {
       "asset_cfg": SceneEntityCfg("robot", joint_names=ALL_JOINTS_PATTERNS),
       "weights_standing": {
         ".*Shoulder_Pitch": 1.0,
-        ".*Shoulder_Roll": 50.0,
+        ".*Shoulder_Roll": 20.0,
         ".*Elbow_Pitch": 1.0,
-        ".*Elbow_Yaw": 5.0,
+        ".*Elbow_Yaw": 20.0,
         "Waist": 25.0,
         ".*Hip_Pitch": 0.01,
         ".*Hip_Roll": 1.0,

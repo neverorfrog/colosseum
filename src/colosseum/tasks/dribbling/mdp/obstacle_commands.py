@@ -127,6 +127,13 @@ class ObstacleCommand(CommandTerm):
     dt = self._env.step_dt
     replay_ids = self._replay_mask.nonzero(as_tuple=False).flatten()
 
+    # Event-coordinated refresh: resample when the followed command resampled.
+    if self.cfg.follow_command_name:
+      followed = self._env.command_manager.get_term(self.cfg.follow_command_name)
+      trig = followed.just_resampled.nonzero(as_tuple=False).flatten()
+      if len(trig) > 0:
+        self._resample_command(trig)
+
     for k in range(self.cfg.num_obstacles):
       if k >= self.cfg.num_active:
         self._park_obstacle(k, all_ids)
@@ -430,6 +437,9 @@ class ObstacleCommandCfg(CommandTermCfg):
   # the curriculum has num_active > 0. Prevents catastrophic forgetting of the
   # no-obstacle dribbling behavior across curriculum stages.
   replay_fraction: float = 0.0
+
+  # When set, obstacles refresh iff this command resampled (D4 coordination).
+  follow_command_name: str = ""
 
   # Spawn distance in metres along the behavior-specific forward/radial direction.
   distance_range: tuple[float, float] = (1.5, 3.0)

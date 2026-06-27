@@ -165,7 +165,7 @@ rewards = {
   "penalty_base_height": RewardTermCfg(
     func=base_height_penalty,
     weight=-15.0,
-    params={"target_height": 0.68},
+    params={"target_height": 0.64},
   ),
   "penalty_feet_ori": RewardTermCfg(
     func=foot_orientation_penalty,

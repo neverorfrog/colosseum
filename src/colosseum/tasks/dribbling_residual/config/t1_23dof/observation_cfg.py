@@ -85,6 +85,19 @@ ball_terms = {
   # "ball_vel_xy": ObservationTermCfg(func=ball_velocity_xy),
   "ball_state": ObservationTermCfg(
     func=BallPerceptionModel,
+    params={
+      "sigma_pos_base": 0.05,
+      "sigma_pos_per_m": 0.05,
+      "sigma_pos_scale_range": (0.5, 2.0),
+      "sigma_vel_range": (0.1, 0.5),
+      "vel_filter_alpha": 0.3,
+      "coast_vel_decay": 0.98,
+      "p_miss_range": (0.02, 0.3),
+      "close_range_dropout": 0.3,
+      "max_range": 6.0,
+      "fov_half_angle": 0.6,
+      "latency_steps": 2,
+    },
   ),  # (N, 4)
 }
 

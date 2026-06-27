@@ -152,7 +152,8 @@ _ARM_JOINTS = ("Shoulder_Pitch", "Shoulder_Roll", "Elbow_Pitch", "Elbow_Yaw")
 # Lowering f drops kp (kp ~ f^2), so MANUFACTURER_ACTION_SCALE (0.25*peak/kp) rises
 # accordingly -- it is derived from stiffness, so it stays consistent automatically.
 _LEG_TUNING = {"natural_freq": 5.0, "damping_ratio": 1.5}
-_KNEE_TUNING = {"natural_freq": 5.0, "damping_ratio": 1.0}
+_KNEE_TUNING = {"natural_freq": 5.0, "damping_ratio": 1.25}
+FRICTIONLOSS = 0.05
 
 # Each joint -> its datasheet motor model.
 JOINT_MOTORS: dict[str, ManufacturerMotor] = {
@@ -178,6 +179,7 @@ def _actuator(joint: str, motor: ManufacturerMotor) -> DcMotorActuatorCfg:
     effort_limit=motor.peak_torque,
     velocity_limit=motor.velocity_limit,
     armature=motor.armature,
+    frictionloss=FRICTIONLOSS,
   )
 
 

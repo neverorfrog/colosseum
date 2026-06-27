@@ -188,18 +188,18 @@ HOME_QPOS: dict[str, float] = {
   # Waist
   "Waist": 0.0,
   # Left leg
-  "Left_Hip_Pitch": -0.2,
+  "Left_Hip_Pitch": -0.24,
   "Left_Hip_Roll": 0.0,
   "Left_Hip_Yaw": 0.0,
-  "Left_Knee_Pitch": 0.4,
-  "Left_Ankle_Pitch": -0.25,
+  "Left_Knee_Pitch": 0.5,
+  "Left_Ankle_Pitch": -0.3,
   "Left_Ankle_Roll": 0.0,
   # Right leg
-  "Right_Hip_Pitch": -0.2,
+  "Right_Hip_Pitch": -0.24,
   "Right_Hip_Roll": 0.0,
   "Right_Hip_Yaw": 0.0,
-  "Right_Knee_Pitch": 0.4,
-  "Right_Ankle_Pitch": -0.25,
+  "Right_Knee_Pitch": 0.5,
+  "Right_Ankle_Pitch": -0.3,
   "Right_Ankle_Roll": 0.0,
 }
 

@@ -367,6 +367,13 @@ def main() -> None:
           sys.exit(1)
         algo.load(checkpoint_path)
         algo.global_step = 0
+      elif config.warm_start is not None:
+        ws_path = Path(config.warm_start)
+        if not ws_path.exists():
+          logger.error(f"Warm-start checkpoint not found: {ws_path}")
+          sys.exit(1)
+        logger.info(f"Warm-starting Phase 1 from: {ws_path}")
+        algo.warm_start(ws_path)
       _barrier()
       try:
         algo._ppo_loop(title="RMA Phase 1", total_steps=phase1_steps)
@@ -385,10 +392,16 @@ def main() -> None:
     if config.start_phase <= 2:
       logger.info("--- Phase 2: adaptation encoder regression ---")
       _barrier()
-      p2_source = Path(config.checkpoint) if config.start_phase == 2 else phase1_ckpt
+      p2_source = (
+        Path(config.checkpoint)
+        if config.start_phase == 2 and config.checkpoint is not None
+        else phase1_ckpt
+      )
       if p2_source is None or not p2_source.exists():
         logger.error(
-          "Phase 2 requires a Phase 1 checkpoint (--checkpoint or from Phase 1)."
+          "Phase 2 requires a Phase 1 RMA checkpoint via --checkpoint. To warm-start "
+          "from a plain/manu policy, run --start-phase 1 --warm-start <ckpt> instead: "
+          "Phase 1 trains the privileged encoder that Phase 2 regresses against."
         )
         sys.exit(1)
       algo = _make_algo(phase2_env_cfg)
@@ -416,7 +429,11 @@ def main() -> None:
     # ------------------------------------------------------------------
     logger.info("--- Phase 3: policy fine-tuning with frozen encoders ---")
     _barrier()
-    p3_source = Path(config.checkpoint) if config.start_phase == 3 else phase2_ckpt
+    p3_source = (
+      Path(config.checkpoint)
+      if config.start_phase == 3 and config.checkpoint is not None
+      else phase2_ckpt
+    )
     if p3_source is None or not p3_source.exists():
       logger.error(
         "Phase 3 requires a Phase 2 checkpoint (--checkpoint or from Phase 2)."

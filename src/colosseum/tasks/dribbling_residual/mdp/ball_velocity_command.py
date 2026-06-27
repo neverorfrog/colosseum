@@ -47,6 +47,7 @@ class BallVelocityCommand(CommandTerm):
     self._prev_foot_ball_contact = torch.zeros(
       env.num_envs, dtype=torch.bool, device=env.device
     )
+    self.just_resampled = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
 
     # Commands must be valid from the first step: a stale zero target at the
     # global origin is tens of metres away in a tiled multi-env world.
@@ -85,6 +86,8 @@ class BallVelocityCommand(CommandTerm):
   def _resample_command(self, env_ids: torch.Tensor) -> None:
     n = len(env_ids)
     device = self._env.device
+
+    self.just_resampled[env_ids] = True
 
     lo, hi = -self.cfg.heading_range, self.cfg.heading_range
     heading_offsets = torch.rand(n, device=device) * (hi - lo) + lo
@@ -127,6 +130,7 @@ class BallVelocityCommand(CommandTerm):
     return (found.flatten(start_dim=1) > 0).any(dim=-1)
 
   def _update_metrics(self) -> None:
+    self.just_resampled[:] = False
     ball_pos = self._env.scene[self.cfg.ball_entity].data.root_link_pos_w[:, :2]
     ball_vel = self._env.scene[self.cfg.ball_entity].data.root_link_lin_vel_w[:, :2]
     self.metrics["target_distance"] = (self.target_position - ball_pos).norm(dim=-1)

@@ -41,7 +41,7 @@ events = {
     func=dr.geom_friction,
     params={
       "asset_cfg": SceneEntityCfg("robot", geom_names=FOOT_GEOM_NAMES),
-      "ranges": {0: (0.8, 1.5), 1: (0.02, 0.05)},
+      "ranges": {0: (0.8, 1.5), 1: (0.02, 0.1)},
       "axes": [0, 1],
       "operation": "abs",
       "shared_random": True,
@@ -105,9 +105,9 @@ events = {
       "asset_cfg": SceneEntityCfg("robot", body_names=(BASE_BODY_NAME,)),
       "operation": "add",
       "ranges": {
-        0: (-0.02, 0.02),
-        1: (-0.02, 0.02),
-        2: (-0.02, 0.02),
+        0: (-0.05, 0.05),
+        1: (-0.05, 0.05),
+        2: (-0.05, 0.05),
       },
     },
   ),
@@ -136,7 +136,7 @@ events = {
     func=dr.joint_friction,
     params={
       "asset_cfg": SceneEntityCfg("robot", joint_names=(".*",)),
-      "ranges": (1.0, 20.0),
+      "ranges": (0.5, 5.0),
       "operation": "scale",
     },
   ),
@@ -173,7 +173,7 @@ events = {
     func=dr.effort_limits,
     params={
       "asset_cfg": SceneEntityCfg("robot"),
-      "effort_limit_range": (0.7, 1.0),
+      "effort_limit_range": (0.7, 1.1),
       "operation": "scale",
     },
   ),
