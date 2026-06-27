@@ -103,8 +103,38 @@ class MlpBaseSkill(BaseSkill):
     self.norm.eval()
 
   def load_pretrained(self, checkpoint: dict) -> None:
-    self.actor.load_state_dict(checkpoint["actor_state_dict"])
-    self.norm.load_state_dict(checkpoint["actor_obs_normalizer_state_dict"])
+    if "actor_state_dict" in checkpoint:
+      self.actor.load_state_dict(checkpoint["actor_state_dict"])
+      self.norm.load_state_dict(checkpoint["actor_obs_normalizer_state_dict"])
+    elif "residual_actor_state_dict" in checkpoint:
+      import re
+
+      r_state = checkpoint["residual_actor_state_dict"]
+      base_prefix = None
+      for k in r_state:
+        m = re.match(r"base_branches\.([^.]+)\.actor\.", k)
+        if m:
+          base_prefix = f"base_branches.{m.group(1)}."
+          break
+      if base_prefix is None:
+        raise KeyError(
+          "Could not find any base_branches.*.actor key in residual_actor_state_dict"
+        )
+      remapped = {}
+      for key, value in r_state.items():
+        if key.startswith(base_prefix):
+          m = re.match(r"base_branches\.[^.]+\.(actor\..+)", key)
+          if m:
+            remapped[m.group(1)] = value
+      self.actor.load_state_dict(remapped, strict=False)
+      norms = checkpoint.get("skill_normalizer_state_dicts", {})
+      if self._group in norms:
+        self.norm.load_state_dict(norms[self._group])
+    else:
+      raise KeyError(
+        "Checkpoint has neither 'actor_state_dict' (plain PPO) nor "
+        f"'residual_actor_state_dict' (ResidualPPO). Keys: {list(checkpoint.keys())[:10]}"
+      )
 
 
 # ============================================================================ #
