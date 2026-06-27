@@ -4,18 +4,273 @@ See `residual_ppo_plan.md` §4-5 for the design. The orchestrator observes the
 deduplicated union of all skill observations (NOT privileged critic info) and
 outputs softmax blending weights. The residual actor blends frozen base skills
 with a trainable residual via product-of-experts-style fusion.
+
+Base skills are polymorphic (BaseSkill ABC). Three implementations:
+  - MlpBaseSkill: plain PpoActor + normalizer (today's behaviour, latent_dim=0).
+  - RmaBaseSkill: RMA-trained adaptation policy whose encoder latent ẑ feeds the
+    residual branch.
+  - ResidualBaseSkill: a frozen ResidualActor composite (residual-of-residual).
 """
 
 from __future__ import annotations
 
+import abc
 from typing import Iterator, Sequence
 
 import torch
 import torch.nn as nn
+from torch import Tensor
 
 from colosseum.algorithm.networks import Network
 from colosseum.algorithm.networks.ppo_networks import PpoActor
+from colosseum.algorithm.networks.proprio_encoder import ProprioWindowEncoder
+from colosseum.algorithm.utils.normalization import EmpiricalNormalization
 from colosseum.config.types.networks import PpoActorConfig
+
+
+class _OdomHeadContainer(nn.Module):
+  def forward(self, x: Tensor) -> Tensor:
+    return self.net(x)
+
+
+# ============================================================================ #
+# BaseSkill ABC
+# ============================================================================ #
+
+
+class BaseSkill(nn.Module, abc.ABC):
+  """A frozen pretrained skill: obs dict → action Gaussian.
+
+  Owns its normalizer(s) and any internal state. May expose a latent for
+  downstream consumers (e.g. the residual branch)."""
+
+  obs_groups: tuple[str, ...]
+  latent_dim: int = 0
+  last_latent: Tensor | None = None
+
+  @abc.abstractmethod
+  def get_distribution_params(
+    self, obs: dict[str, Tensor], window: Tensor | None = None
+  ) -> tuple[Tensor, Tensor]: ...
+
+  @abc.abstractmethod
+  def freeze(self) -> None: ...
+
+  @abc.abstractmethod
+  def load_pretrained(self, checkpoint: dict) -> None: ...
+
+  def update_state(self, obs: dict[str, Tensor]) -> None:
+    pass
+
+  def reset_state(self, env_ids: Tensor) -> None:
+    pass
+
+
+# ============================================================================ #
+# MlpBaseSkill
+# ============================================================================ #
+
+
+class MlpBaseSkill(BaseSkill):
+  """A plain frozen PpoActor with its own EmpiricalNormalization.
+
+  Wraps today's behaviour: one obs group, no latent, no state."""
+
+  def __init__(
+    self,
+    obs_group: str,
+    obs_dim: int,
+    action_dim: int,
+    actor_config: PpoActorConfig,
+    device: str | torch.device,
+  ):
+    super().__init__()
+    self.obs_groups = (obs_group,)
+    self.latent_dim = 0
+    self._group = obs_group
+    self.actor = PpoActor(obs_dim, action_dim, actor_config)
+    self.norm = EmpiricalNormalization(shape=obs_dim, device=device)
+
+  def get_distribution_params(
+    self, obs: dict[str, Tensor], window: Tensor | None = None
+  ) -> tuple[Tensor, Tensor]:
+    return self.actor.get_distribution_params(self.norm(obs[self._group]))
+
+  def freeze(self) -> None:
+    for p in self.parameters():
+      p.requires_grad_(False)
+    self.eval()
+    self.norm.eval()
+
+  def load_pretrained(self, checkpoint: dict) -> None:
+    self.actor.load_state_dict(checkpoint["actor_state_dict"])
+    self.norm.load_state_dict(checkpoint["actor_obs_normalizer_state_dict"])
+
+
+# ============================================================================ #
+# RmaBaseSkill
+# ============================================================================ #
+
+
+class RmaBaseSkill(BaseSkill):
+  """RMA-trained adaptation policy whose encoder latent ẑ feeds the residual.
+
+  Maintains a rolling proprioceptive window; the adaptation encoder consumes the
+  raw window to produce ẑ, and the actor MLP consumes normalized obs ⊕ ẑ."""
+
+  def __init__(
+    self,
+    actor_obs_group: str,
+    actor_obs_dim: int,
+    latent_dim: int,
+    window_size: int,
+    action_dim: int,
+    actor_config: PpoActorConfig,
+    term_name: str,
+    device: str | torch.device,
+  ):
+    super().__init__()
+    self.obs_groups = (actor_obs_group,)
+    self.latent_dim = latent_dim
+    self._group = actor_obs_group
+    self._term_name = term_name
+    self.window_size = window_size
+
+    self.actor = PpoActor(actor_obs_dim + latent_dim, action_dim, actor_config)
+    self.adapt_enc = ProprioWindowEncoder(actor_obs_dim, latent_dim, window_size)
+    self.norm = EmpiricalNormalization(shape=actor_obs_dim, device=device)
+    self.odom_head: nn.Module | None = None
+
+    self.register_buffer(
+      "_window",
+      torch.zeros(0, window_size, actor_obs_dim, device=device),
+      persistent=False,
+    )
+
+  def get_distribution_params(
+    self, obs: dict[str, Tensor], window: Tensor | None = None
+  ) -> tuple[Tensor, Tensor]:
+    if window is not None:
+      z = self.adapt_enc(window)
+    else:
+      z = self.adapt_enc(self._window)
+    self.last_latent = z
+    return self.actor.get_distribution_params(
+      torch.cat([self.norm(obs[self._group]), z], -1)
+    )
+
+  def latent_for(self, window: Tensor) -> Tensor:
+    return self.adapt_enc(window)
+
+  def update_state(self, obs: dict[str, Tensor]) -> None:
+    x = obs[self._group].detach()
+    if self._window.shape[0] != x.shape[0]:
+      self._window = x.unsqueeze(1).expand(-1, self.window_size, -1).clone()
+      return
+    self._window = torch.roll(self._window, -1, dims=1)
+    self._window[:, -1, :] = x
+
+  def reset_state(self, env_ids: Tensor) -> None:
+    if env_ids is None or len(env_ids) == 0:
+      return
+    x = self._window[env_ids, -1, :]
+    self._window[env_ids] = x.unsqueeze(1).expand(-1, self.window_size, -1)
+
+  def freeze(self) -> None:
+    for p in self.parameters():
+      p.requires_grad_(False)
+    self.eval()
+    self.norm.eval()
+
+  def load_pretrained(self, checkpoint: dict) -> None:
+    self.actor.load_state_dict(checkpoint["actor_state_dict"])
+    self.norm.load_state_dict(checkpoint["actor_obs_normalizer_state_dict"])
+    term = checkpoint["rma_manager_state_dict"][self._term_name]["adaptation"]
+    enc = {k[2:]: v for k, v in term.items() if k.startswith("0.")}
+    self.adapt_enc.load_state_dict(enc)
+
+    odom_state = {k[2:]: v for k, v in term.items() if k.startswith("1.")}
+    if odom_state:
+      if self.odom_head is None:
+        hidden_dim = odom_state["net.0.weight"].shape[0]
+        odom_net = nn.Sequential(
+          nn.Linear(self.latent_dim, hidden_dim),
+          nn.ELU(),
+          nn.Linear(hidden_dim, 2),
+        )
+        self.odom_head = _OdomHeadContainer()
+        self.odom_head.add_module("net", odom_net)
+      self.odom_head.load_state_dict(odom_state)
+
+
+# ============================================================================ #
+# ResidualBaseSkill
+# ============================================================================ #
+
+
+class ResidualBaseSkill(BaseSkill):
+  """A whole frozen ResidualActor (e.g. trained dribbling_residual) as one base
+  skill. Reads its inner obs groups, owns its inner per-group normalizers, and
+  outputs a single combined (mean, std). latent_dim=0 (no latent feed)."""
+
+  def __init__(
+    self,
+    inner: "ResidualActor",
+    inner_norms: dict[str, "EmpiricalNormalization"],
+    obs_groups: tuple[str, ...],
+    residual_group: str,
+    orch_group: str,
+    base_group_for: dict[str, str],
+  ):
+    super().__init__()
+    self.obs_groups = obs_groups
+    self.latent_dim = 0
+    self.inner = inner
+    self.norms = nn.ModuleDict(inner_norms)
+    self._residual_group = residual_group
+    self._orch_group = orch_group
+    self._base_group_for = base_group_for
+
+  def get_distribution_params(
+    self, obs: dict[str, Tensor], window: Tensor | None = None
+  ) -> tuple[Tensor, Tensor]:
+    inner_base = {n: {g: obs[g]} for n, g in self._base_group_for.items()}
+    residual = self.norms[self._residual_group](obs[self._residual_group])
+    orch = self.norms[self._orch_group](obs[self._orch_group])
+    return self.inner.get_distribution_params(inner_base, residual, orch)
+
+  def freeze(self) -> None:
+    for p in self.parameters():
+      p.requires_grad_(False)
+    self.eval()
+    for n in self.norms.values():
+      n.eval()
+
+  def load_pretrained(self, checkpoint: dict) -> None:
+    import re
+
+    state_dict = checkpoint["residual_actor_state_dict"]
+    remapped = {}
+    for key, value in state_dict.items():
+      new_key = key
+      m = re.match(
+        r"(base_branches\.[^.]+)\.(backbone|mean_head|std|min_noise_std)(\..*|$)", key
+      )
+      if m:
+        new_key = f"{m.group(1)}.actor.{m.group(2)}{m.group(3)}"
+      remapped[new_key] = value
+
+    self.inner.load_state_dict(remapped, strict=False)
+    for g, n in self.norms.items():
+      n.load_state_dict(checkpoint["skill_normalizer_state_dicts"][g])
+    for name, inner_skill in self.inner.base_branches.items():
+      g = self._base_group_for[name]
+      inner_skill.norm.load_state_dict(checkpoint["skill_normalizer_state_dicts"][g])
+
+
+# ============================================================================ #
+# Orchestrator
+# ============================================================================ #
 
 
 class Orchestrator(Network):
@@ -53,12 +308,21 @@ class Orchestrator(Network):
     return nn.functional.softmax(logits, dim=-1)
 
 
+# ============================================================================ #
+# ResidualActor
+# ============================================================================ #
+
+
 class ResidualActor(nn.Module):
   """Composite actor: frozen base skills + trainable residual, blended by an orchestrator.
 
   A composite (not a single MLP), so it extends nn.Module directly. Each base
-  skill and the residual is a PpoActor; the orchestrator outputs per-skill
+  skill and the residual is a participant; the orchestrator outputs per-skill
   weights that fuse their Gaussians into one action distribution (PoE-style).
+
+  Base skills are polymorphic (BaseSkill ABC). Each may optionally expose an
+  adaptation-encoder latent ẑ that feeds the residual branch's input (via
+  ``latent_feed_skills``).
 
   Skill-ordering invariant: base branches (ModuleDict, insertion-ordered) come
   first, the residual is appended *last*. The orchestrator's output columns must
@@ -68,27 +332,31 @@ class ResidualActor(nn.Module):
 
   def __init__(
     self,
-    base_skill_obs_dims: dict[str, int],
-    base_skill_configs: dict[str, PpoActorConfig],
+    base_skills: Sequence[BaseSkill],
+    base_skill_names: Sequence[str],
     residual_obs_dim: int,
     residual_config: PpoActorConfig,
     action_dim: int,
     orchestrator_obs_dim: int,
     orchestrator_hidden_layers: Sequence[int],
     orchestrator_activation: str,
+    latent_feed_skills: tuple[str, ...] = (),
   ):
     super().__init__()
 
-    # Base branches first (insertion order == orchestrator column order).
     self.base_branches = nn.ModuleDict(
-      {
-        name: PpoActor(base_skill_obs_dims[name], action_dim, base_skill_configs[name])
-        for name in base_skill_configs
-      }
+      {name: skill for name, skill in zip(base_skill_names, base_skills)}
     )
-    self.residual_branch = PpoActor(residual_obs_dim, action_dim, residual_config)
 
-    self.num_skills = len(self.base_branches) + 1  # base skills + residual
+    feed_dim = sum(self.base_branches[n].latent_dim for n in latent_feed_skills)
+    self.residual_branch = PpoActor(
+      residual_obs_dim + feed_dim, action_dim, residual_config
+    )
+
+    self._latent_feed_skills = latent_feed_skills
+    self._feed_dim = feed_dim
+
+    self.num_skills = len(self.base_branches) + 1
     self.orchestrator = Orchestrator(
       input_dim=orchestrator_obs_dim,
       num_skills=self.num_skills,
@@ -97,10 +365,12 @@ class ResidualActor(nn.Module):
     )
 
     self.distribution: torch.distributions.Normal | None = None
-    # Differentiable penalty side effects (set by update_distribution). Kept as
-    # live tensors with grad — only .item() them when logging.
     self.residual_action_magnitude: torch.Tensor = torch.zeros(())
     self.residual_weights_: torch.Tensor = torch.zeros(())
+
+    self._last_base_means: list[Tensor] = []
+    self._last_base_stds: list[Tensor] = []
+    self._last_z_feed: Tensor = torch.zeros(0)
 
   # ----------------------------------------------------------------------- #
   # Forward / distribution
@@ -124,39 +394,94 @@ class ResidualActor(nn.Module):
       (combined_mean [B, A], combined_std [B, A]).
     """
     stds = stds + 1e-2
-    sw = weights.unsqueeze(-1) / stds  # [B, N, A]
-    sw_sum = sw.sum(dim=1)  # [B, A]
+    sw = weights.unsqueeze(-1) / stds
+    sw_sum = sw.sum(dim=1)
     combined_std = 1.0 / sw_sum
     combined_mean = combined_std * (means * sw).sum(dim=1)
     return combined_mean, combined_std
+
+  def _collect_latents(self) -> Tensor:
+    """Collect latents from fed skills into a concatenated [B, feed_dim]."""
+    latents: list[Tensor] = []
+    for name in self._latent_feed_skills:
+      z = self.base_branches[name].last_latent
+      if z is None:
+        raise RuntimeError(
+          f"RmaBaseSkill '{name}' has no last_latent — call "
+          "get_distribution_params first."
+        )
+      latents.append(z)
+    return (
+      torch.cat(latents, dim=-1)
+      if latents
+      else torch.zeros(1, 0, device=self.orchestrator.weight_head.weight.device)
+    )
 
   def update_distribution(
     self,
     base_obs: dict[str, torch.Tensor],
     residual_obs: torch.Tensor,
     orch_obs: torch.Tensor,
+    precomputed_windows: dict[str, Tensor] | None = None,
   ) -> None:
-    """Central forward pass: run all branches + orchestrator, set self.distribution."""
+    """Central forward pass (collection time): run all branches + orchestrator, set self.distribution.
+
+    precomputed_windows: if provided, each RMA skill uses this external window
+    instead of its internal buffer (used for ONNX export)."""
     means: list[torch.Tensor] = []
     stds: list[torch.Tensor] = []
-    # Base branches first, in ModuleDict insertion order.
+
     for name, branch in self.base_branches.items():
-      mean, std = branch.get_distribution_params(base_obs[name])
+      window = precomputed_windows.get(name) if precomputed_windows else None
+      mean, std = branch.get_distribution_params(base_obs[name], window=window)
       means.append(mean)
       stds.append(std)
-    # Residual appended last (skill-ordering invariant).
-    res_mean, res_std = self.residual_branch.get_distribution_params(residual_obs)
+    z_feed = self._collect_latents()
+    self._last_base_means = list(means)
+    self._last_base_stds = list(stds)
+    self._last_z_feed = z_feed
+
+    res_input = (
+      residual_obs
+      if self._feed_dim == 0
+      else torch.cat([residual_obs, z_feed.expand(residual_obs.shape[0], -1)], dim=-1)
+    )
+    res_mean, res_std = self.residual_branch.get_distribution_params(res_input)
     means.append(res_mean)
     stds.append(res_std)
 
-    weights = self.orchestrator(orch_obs)  # [B, num_skills], post-softmax
-
-    means_stack = torch.stack(means, dim=1)  # [B, num_skills, A]
-    stds_stack = torch.stack(stds, dim=1)  # [B, num_skills, A]
+    weights = self.orchestrator(orch_obs)
+    means_stack = torch.stack(means, dim=1)
+    stds_stack = torch.stack(stds, dim=1)
     combined_mean, combined_std = self.combine_skills(means_stack, stds_stack, weights)
     self.distribution = torch.distributions.Normal(combined_mean, combined_std)
 
-    # Differentiable penalty quantities (residual is the last column).
+    self.residual_action_magnitude = torch.norm(res_mean, p=2, dim=-1).mean()
+    self.residual_weights_ = weights[:, -1].abs().mean()
+
+  def update_distribution_cached(
+    self,
+    base_means: list[Tensor],
+    base_stds: list[Tensor],
+    z_feed: Tensor,
+    residual_obs: torch.Tensor,
+    orch_obs: torch.Tensor,
+  ) -> None:
+    """Learning-time forward: base params + z come pre-computed from the buffer."""
+    res_input = (
+      residual_obs if self._feed_dim == 0 else torch.cat([residual_obs, z_feed], dim=-1)
+    )
+    res_mean, res_std = self.residual_branch.get_distribution_params(res_input)
+
+    means = base_means + [res_mean]
+    stds = base_stds + [res_std]
+
+    weights = self.orchestrator(orch_obs)
+    means_stack = torch.stack(means, dim=1)
+    stds_stack = torch.stack(stds, dim=1)
+    combined_mean, combined_std = self.combine_skills(means_stack, stds_stack, weights)
+    self.distribution = torch.distributions.Normal(combined_mean, combined_std)
+
     self.residual_action_magnitude = torch.norm(res_mean, p=2, dim=-1).mean()
     self.residual_weights_ = weights[:, -1].abs().mean()
 
@@ -182,6 +507,24 @@ class ResidualActor(nn.Module):
   ) -> tuple[torch.Tensor, torch.Tensor]:
     """Re-evaluate stored actions for the PPO update; sets penalty side effects."""
     self.update_distribution(base_obs, residual_obs, orch_obs)
+    assert self.distribution is not None
+    log_prob = self.distribution.log_prob(actions).sum(dim=-1)
+    entropy = self.distribution.entropy().sum(dim=-1)
+    return log_prob, entropy
+
+  def evaluate_cached(
+    self,
+    base_means: list[Tensor],
+    base_stds: list[Tensor],
+    z_feed: Tensor,
+    residual_obs: torch.Tensor,
+    orch_obs: torch.Tensor,
+    actions: torch.Tensor,
+  ) -> tuple[torch.Tensor, torch.Tensor]:
+    """Re-evaluate actions from cached base params (learning-time)."""
+    self.update_distribution_cached(
+      base_means, base_stds, z_feed, residual_obs, orch_obs
+    )
     assert self.distribution is not None
     log_prob = self.distribution.log_prob(actions).sum(dim=-1)
     entropy = self.distribution.entropy().sum(dim=-1)
@@ -213,15 +556,10 @@ class ResidualActor(nn.Module):
   # Lifecycle management (called by ResidualPPO)
   # ----------------------------------------------------------------------- #
 
-  def load_base_skill(self, name: str, state_dict: dict) -> None:
-    """Load a PPO actor checkpoint into one base branch."""
-    self.base_branches[name].load_state_dict(state_dict)
-
   def freeze_base_skills(self) -> None:
     """Disable grad on all base branch parameters."""
     for branch in self.base_branches.values():
-      for param in branch.parameters():
-        param.requires_grad = False
+      branch.freeze()
 
   def init_orchestrator_bias(self, favored_logit: float) -> None:
     """Bias the orchestrator toward the frozen base skills at init.
@@ -230,7 +568,7 @@ class ResidualActor(nn.Module):
     so the residual starts near-off (e.g. softmax([4,0]) ~= [0.98, 0.02]).
     """
     bias = torch.zeros(self.num_skills)
-    bias[:-1] = favored_logit  # base skills favored; residual (last) stays 0
+    bias[:-1] = favored_logit
     with torch.no_grad():
       self.orchestrator.weight_head.bias.copy_(bias)
 
@@ -238,3 +576,15 @@ class ResidualActor(nn.Module):
     """Yield residual branch + orchestrator parameters (frozen base excluded)."""
     yield from self.residual_branch.parameters()
     yield from self.orchestrator.parameters()
+
+  @property
+  def last_base_means(self) -> list[Tensor]:
+    return self._last_base_means
+
+  @property
+  def last_base_stds(self) -> list[Tensor]:
+    return self._last_base_stds
+
+  @property
+  def last_z_feed(self) -> Tensor:
+    return self._last_z_feed

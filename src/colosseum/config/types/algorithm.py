@@ -305,6 +305,25 @@ class PretrainedSkillConfig:
   obs_group: str = "actor"
   """Name of the observation group this skill reads."""
 
+  kind: str = "mlp"
+  """Whether this is a plain MLP policy, an RMA-trained adaptation policy,
+    or a frozen ResidualActor composite (residual-of-residual)."""
+
+  latent_dim: int = 0
+  """(RMA-only) Adaptation-encoder latent dimension."""
+
+  window_size: int = 0
+  """(RMA-only) Proprioceptive window size (number of past steps)."""
+
+  term_name: str = ""
+  """(RMA-only) Key into ``rma_manager_state_dict`` (e.g. ``"main"``)."""
+
+  inner_residual_obs_group: str = ""
+  """(residual-only) Observation group the inner residual branch reads."""
+
+  inner_orch_obs_group: str = "orchestrator"
+  """(residual-only) Observation group the inner orchestrator reads."""
+
 
 @dataclass(frozen=True)
 class ResidualActorCfg:
@@ -324,6 +343,10 @@ class ResidualActorCfg:
   residual_obs_group: str = "dribble_actor"
   """Observation group the residual branch reads."""
 
+  orchestrator_obs_group: str = "orchestrator"
+  """Observation group the orchestrator reads. Defaults to ``"orchestrator"``
+    for backward compat; obstacle tasks set ``"obstacle_orchestrator"``."""
+
   orchestrator: OrchestratorConfig = field(
     default_factory=lambda: OrchestratorConfig(
       hidden_layers=[512, 256], activation="elu"
@@ -334,6 +357,10 @@ class ResidualActorCfg:
   init_favored_logit: float = 4.0
   """Logit assigned to base skill(s) at init; residual gets 0.0.
     softmax([4.0, 0.0]) ~= [0.98, 0.02] -> residual starts near-off."""
+
+  latent_feed_skills: tuple = ()
+  """Names of base skills whose adaptation-encoder latent ẑ is concatenated onto
+    the residual branch's input. Only effective when ``kind="rma"`` on that skill."""
 
 
 @dataclass(frozen=True)
@@ -358,7 +385,18 @@ class ResidualPpoConfig(PpoConfig):
   """L2 penalty on residual action magnitude (keeps corrections small)."""
 
   residual_weight_penalty_coef: float = 0.01
-  """Penalty on the orchestrator's residual weight (favors the frozen base)."""
+  """Penalty on the orchestrator's residual weight (favors the frozen base). This
+  is the *maximum* (end) value when the linear ramp below is enabled."""
+
+  residual_weight_penalty_coef_min: float = 0.0
+  """Initial residual-weight penalty coef at global_step=0 — the start of the
+  linear ramp. Low early lets the residual gain authority to discover the kick
+  before the penalty tightens."""
+
+  residual_weight_penalty_ramp_transitions: int = 0
+  """Global env transitions over which the coef ramps linearly from
+  residual_weight_penalty_coef_min up to residual_weight_penalty_coef. 0 disables
+  the ramp (constant at residual_weight_penalty_coef)."""
 
 
 @dataclass(frozen=True)

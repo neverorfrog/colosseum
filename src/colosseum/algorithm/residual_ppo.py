@@ -36,7 +36,13 @@ from mjlab.envs import ManagerBasedRlEnv
 
 from colosseum.algorithm.base_algorithm import ObsType
 from colosseum.algorithm.networks.ppo_networks import PpoValueNet
-from colosseum.algorithm.networks.residual_ppo_networks import ResidualActor
+from colosseum.algorithm.networks.residual_ppo_networks import (
+  BaseSkill,
+  MlpBaseSkill,
+  ResidualActor,
+  ResidualBaseSkill,
+  RmaBaseSkill,
+)
 from colosseum.algorithm.ppo import PPO
 from colosseum.algorithm.utils.normalization import (
   EmpiricalNormalization,
@@ -83,9 +89,11 @@ class ResidualPPO(PPO):
 
   def _all_skill_groups(self) -> set[str]:
     """All actor-side obs groups: every base skill group + residual + orchestrator."""
-    groups = set(self._base_skill_groups.values())
+    groups: set[str] = set()
+    for skill in self.residual_actor.base_branches.values():
+      groups.update(skill.obs_groups)
     groups.add(self._residual_group)
-    groups.add(self._ORCH_GROUP)
+    groups.add(self._orch_group)
     return groups
 
   def _build_networks(self) -> None:
@@ -98,25 +106,135 @@ class ResidualPPO(PPO):
 
     self._base_skill_groups = {n: s.obs_group for n, s in ra.base_skills.items()}
     self._residual_group = ra.residual_obs_group
+    self._orch_group = ra.orchestrator_obs_group
 
     self.action_dim = int(np.prod(self.env.single_action_space.shape))
     self.critic_obs_dim = gdim("critic")
-    self.actor_obs_dim = 1  # dummy: the buffer's actor_obs slot is unused
+    self.actor_obs_dim = 1
+
+    self._base_skill_names = list(ra.base_skills)
+    self._feed_dim = sum(
+      (ra.base_skills[n].latent_dim if ra.base_skills[n].kind == "rma" else 0)
+      for n in ra.latent_feed_skills
+    )
+
+    base_skills: list[BaseSkill] = []
+    for name in self._base_skill_names:
+      skill_cfg = ra.base_skills[name]
+      group = skill_cfg.obs_group
+      if skill_cfg.kind == "rma":
+        s = RmaBaseSkill(
+          actor_obs_group=group,
+          actor_obs_dim=gdim(group),
+          latent_dim=skill_cfg.latent_dim,
+          window_size=skill_cfg.window_size,
+          action_dim=self.action_dim,
+          actor_config=skill_cfg.actor,
+          term_name=skill_cfg.term_name,
+          device=self.device,
+        )
+      elif skill_cfg.kind == "residual":
+        s = self._build_residual_base_skill(name, skill_cfg)
+      else:
+        s = MlpBaseSkill(
+          obs_group=group,
+          obs_dim=gdim(group),
+          action_dim=self.action_dim,
+          actor_config=skill_cfg.actor,
+          device=self.device,
+        )
+      base_skills.append(s)
 
     self.residual_actor = ResidualActor(
-      base_skill_obs_dims={n: gdim(g) for n, g in self._base_skill_groups.items()},
-      base_skill_configs={n: s.actor for n, s in ra.base_skills.items()},
+      base_skills=base_skills,
+      base_skill_names=self._base_skill_names,
       residual_obs_dim=gdim(self._residual_group),
       residual_config=ra.residual_actor,
       action_dim=self.action_dim,
-      orchestrator_obs_dim=gdim(self._ORCH_GROUP),
+      orchestrator_obs_dim=gdim(self._orch_group),
       orchestrator_hidden_layers=ra.orchestrator.hidden_layers,
       orchestrator_activation=ra.orchestrator.activation,
+      latent_feed_skills=ra.latent_feed_skills,
     ).to(self.device)
-    # Alias so inherited references (.train(), _synchronize_model_weights) work.
     self.actor = self.residual_actor
 
     self.value_net = PpoValueNet(self.critic_obs_dim, self.config.critic).to(self.device)
+
+  def _build_residual_base_skill(self, name: str, skill_cfg) -> BaseSkill:
+    from colosseum.algorithm.utils.normalization import EmpiricalNormalization
+
+    ckpt = torch.load(skill_cfg.checkpoint, map_location=self.device, weights_only=False)
+    inner_cfg = ckpt["config"]
+    obs_dim = self.env.observation_manager.group_obs_dim
+
+    inner_base_skill_groups: dict[str, str] = {}
+    for bname, bsc in inner_cfg.residual_actor.base_skills.items():
+      inner_base_skill_groups[bname] = bsc.obs_group
+    inner_residual_group = inner_cfg.residual_actor.residual_obs_group
+    inner_orch_group = skill_cfg.inner_orch_obs_group
+
+    inner_base_skill_names = list(inner_base_skill_groups)
+    inner_action_dim = int(np.prod(self.env.single_action_space.shape))
+    inner_num_skills = len(inner_base_skill_names) + 1
+
+    inner_base_skills: list[BaseSkill] = []
+    for bname in inner_base_skill_names:
+      bsc = inner_cfg.residual_actor.base_skills[bname]
+      bg = bsc.obs_group
+      inner_s = MlpBaseSkill(
+        obs_group=bg,
+        obs_dim=obs_dim[bg][0],
+        action_dim=inner_action_dim,
+        actor_config=bsc.actor,
+        device=self.device,
+      )
+      inner_base_skills.append(inner_s)
+
+    inner_norms: dict[str, EmpiricalNormalization] = {}
+    all_skill_groups = set(inner_base_skill_groups.values())
+    all_skill_groups.add(inner_residual_group)
+    all_skill_groups.add(inner_orch_group)
+    for g in all_skill_groups:
+      inner_norms[g] = EmpiricalNormalization(shape=obs_dim[g][0], device=self.device)
+
+    obs_groups = tuple(all_skill_groups)
+
+    inner_actor = ResidualActor(
+      base_skills=inner_base_skills,
+      base_skill_names=inner_base_skill_names,
+      residual_obs_dim=obs_dim[inner_residual_group][0],
+      residual_config=inner_cfg.residual_actor.residual_actor,
+      action_dim=inner_action_dim,
+      orchestrator_obs_dim=obs_dim[inner_orch_group][0],
+      orchestrator_hidden_layers=inner_cfg.residual_actor.orchestrator.hidden_layers,
+      orchestrator_activation=inner_cfg.residual_actor.orchestrator.activation,
+      latent_feed_skills=(),
+    ).to(self.device)
+
+    state_dict = ckpt["residual_actor_state_dict"]
+    orch_w_key = "orchestrator.weight_head.weight"
+    if orch_w_key in state_dict:
+      w = state_dict[orch_w_key]
+      if w.shape[0] == inner_num_skills:
+        inner_actor.orchestrator.weight_head = nn.Linear(
+          int(inner_actor.orchestrator.weight_head.in_features), inner_num_skills
+        ).to(self.device)
+        inner_actor.orchestrator.num_skills = inner_num_skills
+        def _old_forward(obs):
+          logits = inner_actor.orchestrator.weight_head(
+            inner_actor.orchestrator.backbone(obs)
+          )
+          return nn.functional.softmax(logits, dim=-1)
+        inner_actor.orchestrator.forward = _old_forward
+
+    return ResidualBaseSkill(
+      inner=inner_actor,
+      inner_norms=inner_norms,
+      obs_groups=obs_groups,
+      residual_group=inner_residual_group,
+      orch_group=inner_orch_group,
+      base_group_for=inner_base_skill_groups,
+    )
 
   def _build_optimizers(self) -> None:
     """Actor optimizer over residual + orchestrator only; critic unchanged."""
@@ -132,9 +250,34 @@ class ResidualPPO(PPO):
     )
 
   def _build_rollout_buffer(self) -> None:
-    """Dummy actor_obs slot; per-skill raw obs ride the privileged-obs channel."""
+    assert isinstance(self.config, ResidualPpoConfig)
     obs_dim = self.env.observation_manager.group_obs_dim
-    skill_obs_dims = {g: obs_dim[g][0] for g in self._all_skill_groups()}
+
+    privileged_obs_dims = {
+      g: obs_dim[g][0] for g in self._all_skill_groups()
+    }
+
+    extras: dict[str, int] = {}
+    for name in self._base_skill_names:
+      extras[f"base_mean_{name}"] = self.action_dim
+      extras[f"base_std_{name}"] = self.action_dim
+
+    if self._feed_dim > 0:
+      extras["z_feed"] = self._feed_dim
+
+    cfg = self.config
+    aug = (
+      cfg.symmetry_loss_coef > 0.0
+      or cfg.symmetry_critic_coef > 0.0
+      or cfg.symmetry_data_augmentation
+    )
+    if aug and cfg.symmetry_data_augmentation:
+      for name in self._base_skill_names:
+        extras[f"base_mean_mirror_{name}"] = self.action_dim
+        extras[f"base_std_mirror_{name}"] = self.action_dim
+      if self._feed_dim > 0:
+        extras["z_feed_mirror"] = self._feed_dim
+
     self.rollout_buffer = RolloutBuffer(
       num_envs=self.env.num_envs,
       num_steps=self.config.num_steps_per_env,
@@ -142,37 +285,33 @@ class ResidualPPO(PPO):
       critic_obs_dim=self.critic_obs_dim,
       action_dim=self.action_dim,
       device=self.device,
-      privileged_obs_dims=skill_obs_dims,
+      privileged_obs_dims=privileged_obs_dims,
+      extras=extras,
     )
 
   def _build_normalizer(self) -> None:
-    """Per-skill normalizers + critic normalizer. Base-skill ones are frozen."""
     assert isinstance(self.config, ResidualPpoConfig)
     obs_dim = self.env.observation_manager.group_obs_dim
 
     self.skill_normalizers: dict[str, EmpiricalNormalization | IdentityNormalizer] = {}
-    self._frozen_normalizer_groups: set[str] = set()
 
     if not self.config.obs_normalization:
-      for g in self._all_skill_groups():
-        self.skill_normalizers[g] = IdentityNormalizer()
+      self.skill_normalizers[self._residual_group] = IdentityNormalizer()
+      self.skill_normalizers[self._orch_group] = IdentityNormalizer()
       self.critic_obs_normalizer = IdentityNormalizer()
       self.actor_obs_normalizer = IdentityNormalizer()
       return
 
-    for g in self._all_skill_groups():
-      self.skill_normalizers[g] = EmpiricalNormalization(
-        shape=obs_dim[g][0], device=self.device
-      )
+    self.skill_normalizers[self._residual_group] = EmpiricalNormalization(
+      shape=obs_dim[self._residual_group][0], device=self.device
+    )
+    self.skill_normalizers[self._orch_group] = EmpiricalNormalization(
+      shape=obs_dim[self._orch_group][0], device=self.device
+    )
     self.critic_obs_normalizer = EmpiricalNormalization(
       shape=self.critic_obs_dim, device=self.device
     )
-    # Placeholder: the inherited _ppo_loop prewarms self.actor_obs_normalizer,
-    # which is a no-op here (real prewarm happens in _prewarm_actor_obs).
     self.actor_obs_normalizer = IdentityNormalizer()
-
-    if self.config.freeze_base_normalizers:
-      self._frozen_normalizer_groups = set(self._base_skill_groups.values())
 
   def _setup_symmetry(self) -> None:
     """Build one mirror spec per actor-side group (residual mode has no 'actor' group)."""
@@ -205,17 +344,12 @@ class ResidualPPO(PPO):
         break
 
   def _load_frozen_skills(self) -> None:
-    """Load PPO checkpoints into base branches, freeze them, (optionally) freeze norms."""
     assert isinstance(self.config, ResidualPpoConfig)
-    for name, skill in self.config.residual_actor.base_skills.items():
+    for name, skill_cfg in self.config.residual_actor.base_skills.items():
       checkpoint = torch.load(
-        skill.checkpoint, map_location=self.device, weights_only=False
+        skill_cfg.checkpoint, map_location=self.device, weights_only=False
       )
-      self.residual_actor.load_base_skill(name, checkpoint["actor_state_dict"])
-      if self.config.freeze_base_normalizers:
-        norm = self.skill_normalizers[skill.obs_group]
-        norm.load_state_dict(checkpoint["actor_obs_normalizer_state_dict"])
-        norm.eval()  # freeze running stats (EmpiricalNormalization skips update in eval)
+      self.residual_actor.base_branches[name].load_pretrained(checkpoint)
     self.residual_actor.freeze_base_skills()
 
   # ------------------------------------------------------------------ #
@@ -225,51 +359,45 @@ class ResidualPPO(PPO):
   def _normalized_skill_inputs(
     self, obs: dict[str, torch.Tensor]
   ) -> tuple[dict[str, torch.Tensor], torch.Tensor, torch.Tensor]:
-    """Normalize per-skill obs and return (base_obs, residual_obs, orch_obs)."""
+    """Return (base_obs dict-of-dicts per skill, normalized residual, normalized orch)."""
     base_obs = {
-      name: self.skill_normalizers[g](obs[g])
-      for name, g in self._base_skill_groups.items()
+      name: {g: obs[g] for g in skill.obs_groups}
+      for name, skill in self.residual_actor.base_branches.items()
     }
     residual_obs = self.skill_normalizers[self._residual_group](obs[self._residual_group])
-    orch_obs = self.skill_normalizers[self._ORCH_GROUP](obs[self._ORCH_GROUP])
+    orch_obs = self.skill_normalizers[self._orch_group](obs[self._orch_group])
     return base_obs, residual_obs, orch_obs
 
   def _raw_skill_obs(self, obs: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-    """Raw (un-normalized) per-skill obs for the rollout buffer."""
+    """Raw per-skill obs for the rollout buffer (used by symmetry)."""
     return {g: obs[g] for g in self._all_skill_groups()}
 
-  def _spec_for_skill(self, name: str) -> list[TermMirrorSpec]:
-    return self._actor_sym_specs[self._base_skill_groups[name]]
+  def _update_skill_normalizers(self, obs: dict[str, torch.Tensor]) -> None:
+    for g in (self._residual_group, self._orch_group):
+      if g in self.skill_normalizers:
+        self.skill_normalizers[g].update(obs[g])
+
+  # ------------------------------------------------------------------
+  # Symmetry helpers for residual + orch only (base params are cached)
+  # ------------------------------------------------------------------
 
   def _augment_skill_inputs(
     self,
-    base_obs: dict[str, torch.Tensor],
     residual_obs: torch.Tensor,
     orch_obs: torch.Tensor,
-  ) -> tuple[dict[str, torch.Tensor], torch.Tensor, torch.Tensor]:
-    """Double each group's batch with its left-right mirror."""
-    base_aug = {n: augment_obs(o, self._spec_for_skill(n)) for n, o in base_obs.items()}
+  ) -> tuple[torch.Tensor, torch.Tensor]:
     residual_aug = augment_obs(residual_obs, self._actor_sym_specs[self._residual_group])
-    orch_aug = augment_obs(orch_obs, self._actor_sym_specs[self._ORCH_GROUP])
-    return base_aug, residual_aug, orch_aug
+    orch_aug = augment_obs(orch_obs, self._actor_sym_specs[self._orch_group])
+    return residual_aug, orch_aug
 
   def _mirror_skill_inputs(
     self,
-    base_obs: dict[str, torch.Tensor],
     residual_obs: torch.Tensor,
     orch_obs: torch.Tensor,
-  ) -> tuple[dict[str, torch.Tensor], torch.Tensor, torch.Tensor]:
-    """Mirror each group's batch (no doubling)."""
-    base_m = {n: mirror_obs(o, self._spec_for_skill(n)) for n, o in base_obs.items()}
+  ) -> tuple[torch.Tensor, torch.Tensor]:
     residual_m = mirror_obs(residual_obs, self._actor_sym_specs[self._residual_group])
-    orch_m = mirror_obs(orch_obs, self._actor_sym_specs[self._ORCH_GROUP])
-    return base_m, residual_m, orch_m
-
-  def _update_skill_normalizers(self, obs: dict[str, torch.Tensor]) -> None:
-    """Update non-frozen per-skill normalizers from new observations."""
-    for g, norm in self.skill_normalizers.items():
-      if g not in self._frozen_normalizer_groups:
-        norm.update(obs[g])
+    orch_m = mirror_obs(orch_obs, self._actor_sym_specs[self._orch_group])
+    return residual_m, orch_m
 
   def get_actor_obs(self, obs: ObsType) -> torch.Tensor:
     """Residual mode has no single 'actor' group.
@@ -280,7 +408,7 @@ class ResidualPPO(PPO):
     """
     assert isinstance(obs, dict)
     self._cached_obs_dict = obs
-    return obs[self._ORCH_GROUP]
+    return obs[self._orch_group]
 
   def _prewarm_actor_obs(self, actor_obs: torch.Tensor) -> torch.Tensor:
     """Prewarm the fresh (non-frozen) per-skill normalizers from initial obs."""
@@ -306,8 +434,11 @@ class ResidualPPO(PPO):
     dummy_actor_obs = torch.zeros(self.env.num_envs, 1, device=self.device)
 
     with torch.no_grad():
+      for skill in self.residual_actor.base_branches.values():
+        skill.update_state({g: obs_dict[g] for g in skill.obs_groups})
+
+    with torch.no_grad():
       for _step in range(self.config.num_steps_per_env):
-        # Raw per-skill obs (stored in the buffer) + normalized inputs (forward).
         raw_skill_obs = self._raw_skill_obs(obs_dict)
         base_obs, residual_obs, orch_obs = self._normalized_skill_inputs(obs_dict)
         norm_critic_obs = self.critic_obs_normalizer(current_critic_obs)
@@ -316,6 +447,10 @@ class ResidualPPO(PPO):
           self.residual_actor.act_with_log_prob(base_obs, residual_obs, orch_obs)
         )
         values = self.value_net(norm_critic_obs)
+
+        base_means = [m.detach().clone() for m in self.residual_actor.last_base_means]
+        base_stds = [s.detach().clone() for s in self.residual_actor.last_base_stds]
+        z_feed = self.residual_actor.last_z_feed.detach().clone()
 
         prev_obs_dict = obs_dict
         obs_dict, rewards, terminated, truncated, infos = self.env.step(actions)
@@ -327,20 +462,14 @@ class ResidualPPO(PPO):
 
         next_critic_obs = self.get_critic_obs(obs_dict)
 
-        # Update normalizers AFTER env.step on new obs (RSL-RL pattern).
         if self.config.obs_normalization:
           self._update_skill_normalizers(obs_dict)
           self.critic_obs_normalizer.update(next_critic_obs)
 
         self.cur_reward_sum += rewards
 
-        # AMP hook: blend a discriminator style reward into `rewards` and stash
-        # policy transitions. No-op in base ResidualPPO; overridden by ResidualAMPPPO.
-        # Placed AFTER cur_reward_sum (so episodic logging stays task-only) and
-        # BEFORE timeout bootstrapping (so the bootstrap applies on the blend).
         rewards = self._blend_amp_reward(prev_obs_dict, obs_dict, rewards, dones)
 
-        # Timeout bootstrapping (RSL-RL/holosoma) for infinite-horizon tasks.
         if not getattr(self.env.cfg, "is_finite_horizon", True):
           truncated_mask = truncated.float()
           if truncated_mask.any():
@@ -368,6 +497,43 @@ class ResidualPPO(PPO):
         if "log" in infos and (dones >= 1.0).any():
           self.latest_episode_metrics = extract_episode_metrics(infos["log"])
 
+        for skill in self.residual_actor.base_branches.values():
+          skill.update_state({g: obs_dict[g] for g in skill.obs_groups})
+
+        episode_done_ids_for_skill = episode_done_ids if len(episode_done_ids) > 0 else None
+        for skill in self.residual_actor.base_branches.values():
+          skill.reset_state(episode_done_ids_for_skill)
+
+        extras: dict[str, torch.Tensor] = {}
+        for i, name in enumerate(self._base_skill_names):
+          extras[f"base_mean_{name}"] = base_means[i]
+          extras[f"base_std_{name}"] = base_stds[i]
+        if self._feed_dim > 0:
+          extras["z_feed"] = z_feed
+
+        if self._use_symmetry and self.config.symmetry_data_augmentation:
+          for name, g in self._base_skill_groups.items():
+            skill = self.residual_actor.base_branches[name]
+            mirrored = {grp: mirror_obs(obs_dict[grp], self._actor_sym_specs[grp]) for grp in skill.obs_groups}
+            mean_m, std_m = skill.get_distribution_params(mirrored)
+            extras[f"base_mean_mirror_{name}"] = mean_m.detach()
+            extras[f"base_std_mirror_{name}"] = std_m.detach()
+
+          if self._feed_dim > 0:
+            latents_m: list[torch.Tensor] = []
+            for name in self.config.residual_actor.latent_feed_skills:
+              g = self._base_skill_groups[name]
+              skill = self.residual_actor.base_branches[name]
+              if isinstance(skill, RmaBaseSkill):
+                window = skill._window
+                mirrored_win = mirror_obs(
+                  window.reshape(-1, window.shape[-1]),
+                  self._actor_sym_specs[g]
+                ).reshape_as(window)
+                latents_m.append(skill.latent_for(mirrored_win))
+            if latents_m:
+              extras["z_feed_mirror"] = torch.cat(latents_m, dim=-1).detach()
+
         self.rollout_buffer.add(
           actor_obs=dummy_actor_obs,
           critic_obs=current_critic_obs,
@@ -379,6 +545,7 @@ class ResidualPPO(PPO):
           action_means=action_means,
           action_stds=action_stds,
           privileged_obs=raw_skill_obs,
+          extras=extras,
         )
 
         current_critic_obs = next_critic_obs
@@ -450,15 +617,21 @@ class ResidualPPO(PPO):
       old_action_stds = batch["old_action_stds"]
       target_values = batch["values"]
 
-      base_obs, residual_obs, orch_obs = self._normalized_skill_inputs(raw_skill_obs)
+      base_means = [batch[f"base_mean_{name}"] for name in self._base_skill_names]
+      base_stds = [batch[f"base_std_{name}"] for name in self._base_skill_names]
+      z_feed = batch["z_feed"] if self._feed_dim > 0 else torch.zeros(1, 0, device=self.device)
+
+      residual_obs_raw = raw_skill_obs[self._residual_group]
+      orch_obs_raw = raw_skill_obs[self._orch_group]
+
+      residual_obs = self.skill_normalizers[self._residual_group](residual_obs_raw)
+      orch_obs = self.skill_normalizers[self._orch_group](orch_obs_raw)
+
       critic_obs = self.critic_obs_normalizer(batch["critic_obs"])
 
-      # --- Symmetry data augmentation: mirror each group, double the batch ---
       original_batch_size = actions.shape[0]
       if augment:
-        base_obs, residual_obs, orch_obs = self._augment_skill_inputs(
-          base_obs, residual_obs, orch_obs
-        )
+        residual_obs, orch_obs = self._augment_skill_inputs(residual_obs, orch_obs)
         critic_obs = augment_obs(critic_obs, self._critic_sym_spec)
         actions = augment_actions(actions, self._action_mirror_fn)
         old_log_probs = old_log_probs.repeat(2)
@@ -468,23 +641,21 @@ class ResidualPPO(PPO):
         old_action_means = old_action_means.repeat(2, 1)
         old_action_stds = old_action_stds.repeat(2, 1)
 
-      # Re-evaluate actions; this sets the differentiable penalty side effects.
-      new_log_probs, entropy_all = self.residual_actor.evaluate(
-        base_obs, residual_obs, orch_obs, actions
+        for i, name in enumerate(self._base_skill_names):
+          base_means[i] = torch.cat([base_means[i], batch[f"base_mean_mirror_{name}"]], dim=0)
+          base_stds[i] = torch.cat([base_stds[i], batch[f"base_std_mirror_{name}"]], dim=0)
+        z_feed = torch.cat([z_feed, batch["z_feed_mirror"]], dim=0) if self._feed_dim > 0 else z_feed
+
+      new_log_probs, entropy_all = self.residual_actor.evaluate_cached(
+        base_means, base_stds, z_feed, residual_obs, orch_obs, actions
       )
-      # Capture penalties NOW (live tensors with grad) before anything recomputes
-      # the distribution and overwrites the attributes.
       residual_magnitude = self.residual_actor.residual_action_magnitude
       residual_weight = self.residual_actor.residual_weights_
-      # Combined mean from this forward, for the symmetry loss (kept before any
-      # later get_distribution_params call replaces self.distribution).
       combined_mean = self.residual_actor.distribution.mean
       new_values = self.value_net(critic_obs)
 
-      # Entropy from the original batch only (holosoma convention).
       entropy = entropy_all[:original_batch_size] if augment else entropy_all
 
-      # --- KL from the combined distribution (original batch only) ---
       with torch.no_grad():
         mu_batch = self.residual_actor.distribution.mean
         sigma_batch = self.residual_actor.distribution.stddev
@@ -505,7 +676,6 @@ class ResidualPPO(PPO):
         )
         kl_mean = self._distributed_mean_scalar(float(kl.mean().item()))
 
-      # --- Adaptive KL LR scheduling (holosoma pattern) ---
       if self.config.schedule == "adaptive" and self.config.desired_kl is not None:
         if kl_mean > self.config.desired_kl * 2.0:
           self.actor_learning_rate = max(
@@ -526,7 +696,6 @@ class ResidualPPO(PPO):
         for g in self.critic_optimizer.param_groups:
           g["lr"] = self.critic_learning_rate
 
-      # --- Surrogate loss (PPO-clip) ---
       advantages_squeezed = advantages.squeeze(-1)
       ratio = torch.exp(new_log_probs - old_log_probs)
       surrogate = -advantages_squeezed * ratio
@@ -535,7 +704,6 @@ class ResidualPPO(PPO):
       )
       surrogate_loss = torch.max(surrogate, surrogate_clipped).mean()
 
-      # --- Value loss ---
       if self.config.use_clipped_value_loss:
         value_clipped = target_values + torch.clamp(
           new_values - target_values, -self.config.clip_param, self.config.clip_param
@@ -546,7 +714,6 @@ class ResidualPPO(PPO):
       else:
         value_loss = (returns - new_values).pow(2).mean()
 
-      # --- Symmetry losses (per-group mirroring; loss on the COMBINED mean) ---
       symmetry_actor_loss = torch.zeros((), device=self.device)
       symmetry_critic_loss = torch.zeros((), device=self.device)
       if self._use_symmetry and self._action_mirror_fn is not None:
@@ -558,11 +725,14 @@ class ResidualPPO(PPO):
               mu_mirrored, self._action_mirror_fn(mu_original)
             )
           else:
-            base_m, residual_m, orch_m = self._mirror_skill_inputs(
-              base_obs, residual_obs, orch_obs
-            )
+            residual_m, orch_m = self._mirror_skill_inputs(residual_obs, orch_obs)
             mu_mirrored, _ = self.residual_actor.get_distribution_params(
-              base_m, residual_m, orch_m
+              base_obs=(
+                {n: {g: raw_skill_obs[g] for g in skill.obs_groups}
+                 for n, skill in self.residual_actor.base_branches.items()}
+              ),
+              residual_obs=residual_m,
+              orch_obs=orch_m,
             )
             symmetry_actor_loss = torch.nn.functional.mse_loss(
               mu_mirrored, self._action_mirror_fn(combined_mean)
@@ -580,7 +750,18 @@ class ResidualPPO(PPO):
             val_mirrored = self.value_net(mirrored_critic)
             symmetry_critic_loss = torch.nn.functional.mse_loss(new_values, val_mirrored)
 
-      # --- Total loss + residual penalties (differentiable) ---
+      if self.config.residual_weight_penalty_ramp_transitions > 0:
+        ramp_fraction = min(
+          1.0, self.global_step / self.config.residual_weight_penalty_ramp_transitions
+        )
+        rwp_coef = (
+          self.config.residual_weight_penalty_coef_min
+          + ramp_fraction
+          * (self.config.residual_weight_penalty_coef - self.config.residual_weight_penalty_coef_min)
+        )
+      else:
+        rwp_coef = self.config.residual_weight_penalty_coef
+
       loss = (
         surrogate_loss
         + self.config.value_loss_coef * value_loss
@@ -588,7 +769,7 @@ class ResidualPPO(PPO):
         + self.config.symmetry_loss_coef * symmetry_actor_loss
         + self.config.symmetry_critic_coef * symmetry_critic_loss
         + self.config.residual_action_penalty_coef * residual_magnitude
-        + self.config.residual_weight_penalty_coef * residual_weight
+        + rwp_coef * residual_weight
       )
 
       self.actor_optimizer.zero_grad()
@@ -744,7 +925,7 @@ class ResidualPPO(PPO):
     matching term names and accumulating offsets within the orch group.
     """
     obs_manager = self.env.observation_manager
-    orch_group = self._ORCH_GROUP
+    orch_group = self._orch_group
     orch_term_names = obs_manager._group_obs_term_names[orch_group]
     orch_term_dims = obs_manager._group_obs_term_dim[orch_group]
 
@@ -775,7 +956,7 @@ class ResidualPPO(PPO):
     obs_dim = self.env.observation_manager.group_obs_dim
     base_skills = list(self._base_skill_groups.items())  # [(name, group), ...]
     residual_group = self._residual_group
-    orch_group = self._ORCH_GROUP
+    orch_group = self._orch_group
     orch_dim = obs_dim[orch_group][0]
 
     # Per-group index arrays into the orch obs vector (computed once, baked in).

@@ -79,7 +79,7 @@ HOME_QPOS: dict[str, float] = {
   "Left_Hip_Roll": 0.0,
   "Left_Hip_Yaw": 0.0,
   "Left_Knee_Pitch": 0.4,
-  "Left_Ankle_Pitch": -0.25,
+  "Left_Ankle_Pitch": -0.2,
   "Left_Ankle_Roll": 0.0,
   "Right_Hip_Pitch": -0.2,
   "Right_Hip_Roll": 0.0,

@@ -53,7 +53,7 @@ class VelocityRmaTermCfg(RmaTermCfg):
   latent_dim: int = 8
   latent_noise_std: float = 0.05
   window_size: int = 50
-  hidden_dim: int = 64
+  hidden_dim: int = 32
   lambda_odom: float = 1.0
 
   def build(self, env: ManagerBasedRlEnv) -> VelocityRmaTerm:
