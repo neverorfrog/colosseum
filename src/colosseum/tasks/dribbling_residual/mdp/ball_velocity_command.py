@@ -1,19 +1,18 @@
 """Command term: target-driven ball velocity in world frame (trimmed).
 
-At episode start the term samples a single world-frame target from the ball
-position (radius from ``target_distance_range``, heading relative to the robot
-yaw) and holds it for the whole episode -- the target is a fixed dribble
-*direction* proxy, not a waypoint to reach. Each step it recomputes the desired
-ball velocity toward that target:
+At episode start the term samples a world-frame target from the ball position
+(radius from ``target_distance_range``, heading relative to the robot yaw) and
+resamples a new target whenever the ball reaches it. Each step it recomputes the
+desired ball velocity toward the current target:
 
     dir   = normalize(target - ball_pos)
     speed = clip(speed_gain * distance, speed_range), zeroed within reach
     cmd   = speed * dir   (world-frame [vx, vy, 0])
 
 This is a trimmed variant of the dribbling task's BallVelocityCommand: it keeps
-the persistent target and speed ramp but drops all mid-episode resampling
-(reach/timer/drift) and the obstacle/adversary coupling. Losing the ball is
-handled by the ball-lost termination, not by resampling the target.
+the persistent target and speed ramp but drops timer/drift resampling and the
+obstacle/adversary coupling. Losing the ball is handled by the ball-lost
+termination, not by resampling the target.
 """
 
 from __future__ import annotations
@@ -31,7 +30,7 @@ if TYPE_CHECKING:
 
 
 class BallVelocityCommand(CommandTerm):
-  """World-frame ball velocity command induced by a persistent target."""
+  """World-frame ball velocity command induced by a persistent target, resampled on reach."""
 
   cfg: BallVelocityCommandCfg
 
@@ -39,6 +38,9 @@ class BallVelocityCommand(CommandTerm):
     super().__init__(cfg, env)
     self.velocity_command = torch.zeros((env.num_envs, 3), device=env.device)
     self.target_position = torch.zeros((env.num_envs, 2), device=env.device)
+    self.target_reached_mask = torch.zeros(
+      env.num_envs, dtype=torch.bool, device=env.device
+    )
     self.metrics["target_distance"] = torch.zeros(env.num_envs, device=env.device)
     self.metrics["cmd_ball_vel_error"] = torch.zeros(env.num_envs, device=env.device)
     # Per-episode count of foot->ball contact onsets ("hits"). Auto-zeroed and
@@ -47,7 +49,9 @@ class BallVelocityCommand(CommandTerm):
     self._prev_foot_ball_contact = torch.zeros(
       env.num_envs, dtype=torch.bool, device=env.device
     )
-    self.just_resampled = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+    self.just_resampled = torch.zeros(
+      self.num_envs, dtype=torch.bool, device=self.device
+    )
 
     # Commands must be valid from the first step: a stale zero target at the
     # global origin is tens of metres away in a tiled multi-env world.
@@ -112,11 +116,18 @@ class BallVelocityCommand(CommandTerm):
     self._recompute_velocity_command(env_ids)
 
   def _update_command(self) -> None:
-    # The target is a fixed dribble-direction proxy: sampled once at reset and
-    # held for the whole episode (no resample on reach, timer, or drift). The
-    # only thing that updates each step is the velocity setpoint toward it.
     all_env_ids = torch.arange(self.num_envs, device=self.device)
+    self.target_reached_mask[:] = False
     self._recompute_velocity_command(all_env_ids)
+
+    ball_pos = self._env.scene[self.cfg.ball_entity].data.root_link_pos_w[:, :2]
+    target_distance = (self.target_position - ball_pos).norm(dim=-1)
+    reached_env_ids = torch.where(target_distance <= self.cfg.target_reached_threshold)[
+      0
+    ]
+    if len(reached_env_ids) > 0:
+      self.target_reached_mask[reached_env_ids] = True
+      self._resample(reached_env_ids)
 
   def _foot_ball_contact(self) -> torch.Tensor:
     """Per-env bool: any foot geom in contact with the ball this step."""
@@ -207,7 +218,7 @@ class BallVelocityCommandCfg(CommandTermCfg):
   # Sampled target radius (m) drawn from the ball position at episode start.
   # Far targets keep the ball from arriving, so the command stays a steady
   # dribble-direction setpoint for the whole episode.
-  target_distance_range: tuple[float, float] = (3.0, 6.0)
+  target_distance_range: tuple[float, float] = (2.0, 6.0)
 
   # Gain mapping target distance -> desired speed before clipping.
   speed_gain: float = 1.0
