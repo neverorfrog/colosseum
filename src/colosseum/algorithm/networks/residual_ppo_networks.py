@@ -112,20 +112,23 @@ class MlpBaseSkill(BaseSkill):
       r_state = checkpoint["residual_actor_state_dict"]
       base_prefix = None
       for k in r_state:
-        m = re.match(r"base_branches\.([^.]+)\.actor\.", k)
+        m = re.match(r"base_branches\.([^.]+)\.(backbone|mean_head|std|min_noise_std)", k)
         if m:
           base_prefix = f"base_branches.{m.group(1)}."
           break
       if base_prefix is None:
         raise KeyError(
-          "Could not find any base_branches.*.actor key in residual_actor_state_dict"
+          "Could not find any base_branches.<name>.(backbone|mean_head|std|min_noise_std) "
+          "key in residual_actor_state_dict"
         )
       remapped = {}
       for key, value in r_state.items():
         if key.startswith(base_prefix):
-          m = re.match(r"base_branches\.[^.]+\.(actor\..+)", key)
+          inner = key[len(base_prefix):]
+          m = re.match(r"(backbone|mean_head|std|min_noise_std)(\..*|$)", inner)
           if m:
-            remapped[m.group(1)] = value
+            new_key = f"actor.{inner}"
+            remapped[new_key] = value
       self.actor.load_state_dict(remapped, strict=False)
       norms = checkpoint.get("skill_normalizer_state_dicts", {})
       if self._group in norms:
