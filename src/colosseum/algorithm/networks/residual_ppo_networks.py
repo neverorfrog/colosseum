@@ -568,9 +568,10 @@ class ResidualActor(nn.Module):
     base_obs: dict[str, torch.Tensor],
     residual_obs: torch.Tensor,
     orch_obs: torch.Tensor,
+    precomputed_windows: dict[str, Tensor] | None = None,
   ) -> torch.Tensor:
     """Deterministic combined mean for deployment."""
-    self.update_distribution(base_obs, residual_obs, orch_obs)
+    self.update_distribution(base_obs, residual_obs, orch_obs, precomputed_windows)
     assert self.distribution is not None
     return self.distribution.mean
 

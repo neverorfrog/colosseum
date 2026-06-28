@@ -963,6 +963,15 @@ class ResidualPPO(PPO):
     base_indices = {name: self._orch_indices_for_group(g) for name, g in base_skills}
     residual_indices = self._orch_indices_for_group(residual_group)
 
+    # RMA base skills carry a stateful proprio window: each becomes an extra
+    # ONNX input/output pair so the deployment runtime feeds it back every step
+    # (same convention as RmaPPO.export_onnx: "<name>_window" / "<name>_window_out").
+    rma_skills = [
+      (name, self.residual_actor.base_branches[name].window_size, len(base_indices[name]))
+      for name, _ in base_skills
+      if isinstance(self.residual_actor.base_branches[name], RmaBaseSkill)
+    ]
+
     class _Wrapper(nn.Module):
       def __init__(self, actor, normalizers):
         super().__init__()
@@ -971,28 +980,44 @@ class ResidualPPO(PPO):
         for name, idxs in base_indices.items():
           self.register_buffer(f"idx_{name}", torch.tensor(idxs, dtype=torch.long))
         self.register_buffer("idx_residual", torch.tensor(residual_indices, dtype=torch.long))
+        self.rma_names = [name for name, _, _ in rma_skills]
 
-      def forward(self, obs: torch.Tensor) -> torch.Tensor:
-        # obs is raw orch obs (superset); slice and normalize per branch.
+      def forward(self, obs: torch.Tensor, *windows_in: torch.Tensor):
+        # obs is raw orch obs (superset). Base branches normalize internally,
+        # so feed them raw per-group slices as {name: {group: slice}}.
         base_obs = {
-          name: self.norms[g](obs[:, getattr(self, f"idx_{name}")])
+          name: {g: obs[:, getattr(self, f"idx_{name}")]}
           for name, g in base_skills
         }
+        # Roll each RMA window with the current (raw) base-obs slice; the encoder
+        # consumes the rolled window, the runtime feeds it back next step.
+        precomputed_windows: dict[str, torch.Tensor] = {}
+        windows_out: list[torch.Tensor] = []
+        for i, name in enumerate(self.rma_names):
+          base_slice = obs[:, getattr(self, f"idx_{name}")]
+          w_out = torch.cat([windows_in[i][:, 1:, :], base_slice.unsqueeze(1)], dim=1)
+          precomputed_windows[name] = w_out
+          windows_out.append(w_out)
         res_obs = self.norms[residual_group](obs[:, self.idx_residual])
         orch_obs = self.norms[orch_group](obs)
-        return self.actor.act_inference(base_obs, res_obs, orch_obs)
+        actions = self.actor.act_inference(
+          base_obs, res_obs, orch_obs, precomputed_windows=precomputed_windows or None
+        )
+        return (actions, *windows_out)
 
     wrapper = _Wrapper(self.residual_actor, self.skill_normalizers).cpu()
     wrapper.eval()
 
+    window_dummies = tuple(torch.zeros(1, w, d) for _, w, d in rma_skills)
+    state_names = [f"{name}_window" for name, _, _ in rma_skills]
     torch.onnx.export(
       wrapper,
-      (torch.zeros(1, orch_dim),),
+      (torch.zeros(1, orch_dim), *window_dummies),
       str(path),
       export_params=True,
       opset_version=18,
-      input_names=["obs"],
-      output_names=["actions"],
+      input_names=["obs"] + state_names,
+      output_names=["actions"] + [n + "_out" for n in state_names],
       # Embed weights in the single .onnx (no sidecar .onnx.data file).
       external_data=False,
     )
