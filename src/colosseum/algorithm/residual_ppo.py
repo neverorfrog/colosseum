@@ -383,20 +383,26 @@ class ResidualPPO(PPO):
 
   def _augment_skill_inputs(
     self,
-    residual_obs: torch.Tensor,
-    orch_obs: torch.Tensor,
+    residual_raw: torch.Tensor,
+    orch_raw: torch.Tensor,
   ) -> tuple[torch.Tensor, torch.Tensor]:
-    residual_aug = augment_obs(residual_obs, self._actor_sym_specs[self._residual_group])
-    orch_aug = augment_obs(orch_obs, self._actor_sym_specs[self._orch_group])
+    # Mirror in raw obs space (where the mirror specs are defined), then
+    # normalize — matching how base skills mirror their obs.
+    rnorm = self.skill_normalizers[self._residual_group]
+    onorm = self.skill_normalizers[self._orch_group]
+    residual_aug = rnorm(augment_obs(residual_raw, self._actor_sym_specs[self._residual_group]))
+    orch_aug = onorm(augment_obs(orch_raw, self._actor_sym_specs[self._orch_group]))
     return residual_aug, orch_aug
 
   def _mirror_skill_inputs(
     self,
-    residual_obs: torch.Tensor,
-    orch_obs: torch.Tensor,
+    residual_raw: torch.Tensor,
+    orch_raw: torch.Tensor,
   ) -> tuple[torch.Tensor, torch.Tensor]:
-    residual_m = mirror_obs(residual_obs, self._actor_sym_specs[self._residual_group])
-    orch_m = mirror_obs(orch_obs, self._actor_sym_specs[self._orch_group])
+    rnorm = self.skill_normalizers[self._residual_group]
+    onorm = self.skill_normalizers[self._orch_group]
+    residual_m = rnorm(mirror_obs(residual_raw, self._actor_sym_specs[self._residual_group]))
+    orch_m = onorm(mirror_obs(orch_raw, self._actor_sym_specs[self._orch_group]))
     return residual_m, orch_m
 
   def get_actor_obs(self, obs: ObsType) -> torch.Tensor:
@@ -451,6 +457,16 @@ class ResidualPPO(PPO):
         base_means = [m.detach().clone() for m in self.residual_actor.last_base_means]
         base_stds = [s.detach().clone() for s in self.residual_actor.last_base_stds]
         z_feed = self.residual_actor.last_z_feed.detach().clone()
+
+        # Snapshot each RMA skill's pre-step window now: the symmetry mirror block
+        # below runs after update_state() rolls in the post-step obs, so reading
+        # skill._window there would use the next step's window (misaligned with the
+        # pre-step base_means / z_feed captured above).
+        prestep_windows = {
+          name: self.residual_actor.base_branches[name]._window.clone()
+          for name in self._base_skill_names
+          if isinstance(self.residual_actor.base_branches[name], RmaBaseSkill)
+        }
 
         prev_obs_dict = obs_dict
         obs_dict, rewards, terminated, truncated, infos = self.env.step(actions)
@@ -512,25 +528,30 @@ class ResidualPPO(PPO):
           extras["z_feed"] = z_feed
 
         if self._use_symmetry and self.config.symmetry_data_augmentation:
+          # Mirror of each RMA skill's pre-step window (used for both the base
+          # mirror-mean latent and the residual's z_feed_mirror).
+          mirrored_windows = {
+            name: mirror_obs(
+              w.reshape(-1, w.shape[-1]),
+              self._actor_sym_specs[self._base_skill_groups[name]],
+            ).reshape_as(w)
+            for name, w in prestep_windows.items()
+          }
           for name, g in self._base_skill_groups.items():
             skill = self.residual_actor.base_branches[name]
             mirrored = {grp: mirror_obs(prev_obs_dict[grp], self._actor_sym_specs[grp]) for grp in skill.obs_groups}
-            mean_m, std_m = skill.get_distribution_params(mirrored)
+            mean_m, std_m = skill.get_distribution_params(
+              mirrored, window=mirrored_windows.get(name)
+            )
             extras[f"base_mean_mirror_{name}"] = mean_m.detach()
             extras[f"base_std_mirror_{name}"] = std_m.detach()
 
           if self._feed_dim > 0:
             latents_m: list[torch.Tensor] = []
             for name in self.config.residual_actor.latent_feed_skills:
-              g = self._base_skill_groups[name]
               skill = self.residual_actor.base_branches[name]
               if isinstance(skill, RmaBaseSkill):
-                window = skill._window
-                mirrored_win = mirror_obs(
-                  window.reshape(-1, window.shape[-1]),
-                  self._actor_sym_specs[g]
-                ).reshape_as(window)
-                latents_m.append(skill.latent_for(mirrored_win))
+                latents_m.append(skill.latent_for(mirrored_windows[name]))
             if latents_m:
               extras["z_feed_mirror"] = torch.cat(latents_m, dim=-1).detach()
 
@@ -631,8 +652,10 @@ class ResidualPPO(PPO):
 
       original_batch_size = actions.shape[0]
       if augment:
-        residual_obs, orch_obs = self._augment_skill_inputs(residual_obs, orch_obs)
-        critic_obs = augment_obs(critic_obs, self._critic_sym_spec)
+        residual_obs, orch_obs = self._augment_skill_inputs(residual_obs_raw, orch_obs_raw)
+        critic_obs = self.critic_obs_normalizer(
+          augment_obs(batch["critic_obs"], self._critic_sym_spec)
+        )
         actions = augment_actions(actions, self._action_mirror_fn)
         old_log_probs = old_log_probs.repeat(2)
         target_values = target_values.repeat(2, 1)
@@ -725,10 +748,11 @@ class ResidualPPO(PPO):
               mu_mirrored, self._action_mirror_fn(mu_original)
             )
           else:
-            residual_m, orch_m = self._mirror_skill_inputs(residual_obs, orch_obs)
+            residual_m, orch_m = self._mirror_skill_inputs(residual_obs_raw, orch_obs_raw)
             mu_mirrored, _ = self.residual_actor.get_distribution_params(
               base_obs=(
-                {n: {g: raw_skill_obs[g] for g in skill.obs_groups}
+                {n: {g: mirror_obs(raw_skill_obs[g], self._actor_sym_specs[g])
+                     for g in skill.obs_groups}
                  for n, skill in self.residual_actor.base_branches.items()}
               ),
               residual_obs=residual_m,
