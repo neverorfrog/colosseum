@@ -514,7 +514,7 @@ class ResidualPPO(PPO):
         if self._use_symmetry and self.config.symmetry_data_augmentation:
           for name, g in self._base_skill_groups.items():
             skill = self.residual_actor.base_branches[name]
-            mirrored = {grp: mirror_obs(obs_dict[grp], self._actor_sym_specs[grp]) for grp in skill.obs_groups}
+            mirrored = {grp: mirror_obs(prev_obs_dict[grp], self._actor_sym_specs[grp]) for grp in skill.obs_groups}
             mean_m, std_m = skill.get_distribution_params(mirrored)
             extras[f"base_mean_mirror_{name}"] = mean_m.detach()
             extras[f"base_std_mirror_{name}"] = std_m.detach()
