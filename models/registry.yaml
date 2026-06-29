@@ -96,6 +96,11 @@ t1-velocity-manu:
       run: t1-velocity-manu-PPO-123-20260620_034815
       step: 280756224
       created: '2026-06-20T03:56:48.201472+00:00'
+    jun24_2:
+      file: jun24_2/t1-velocity-manu_ppo_jun24_2.onnx
+      run: t1-velocity-manu-PPO-123-20260624_104843
+      step: 0
+      created: '2026-06-29T00:26:48.599579+00:00'
   default: jun20_1
 t1-dribbling-residual:
   models:
