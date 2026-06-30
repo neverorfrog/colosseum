@@ -45,6 +45,7 @@ from colosseum.robots.t1_23dof.constants import (
 )
 from colosseum.tasks.dribbling.mdp.rewards import (
   ball_target_progress,
+  ball_target_reached,
 )
 from colosseum.tasks.dribbling_residual.mdp.terminations import ball_lost_penalty
 
@@ -88,7 +89,7 @@ rewards = {
   ),
   "robot_ball_distance": RewardTermCfg(
     func=robot_ball_distance,
-    weight=0.1,
+    weight=0.05,
     params={
       "close_distance": 0.3,
       "behind_close_penalty": 0.5,
@@ -114,7 +115,7 @@ rewards = {
   ),
   "ball_target_progress": RewardTermCfg(  # Obstacle gate auto-disables (no adversary term).
     func=ball_target_progress,
-    weight=2.0,
+    weight=2.5,
     params={
       "command_name": "ball_vel",
       "target_near_distance": 0.15,
@@ -147,13 +148,23 @@ rewards = {
       "command_threshold": 0.05,
     },
   ),
+  "penalty_hip_pose": RewardTermCfg(
+    func=pose_deviation_penalty,
+    weight=-1.0,
+    params={
+      "asset_cfg": SceneEntityCfg(
+        "robot", joint_names=(".*Hip_Roll", ".*Hip_Yaw", ".*Hip_Pitch", ".*Knee_Pitch")
+      ),
+      "weights_standing": {".*Hip_Yaw": 5.0, ".*Hip_Roll": 2.0, ".*Hip_Pitch": 1.0, ".*Knee_Pitch": 0.5},
+    },
+  ),
   "feet_phase": RewardTermCfg(
     func=feet_phase,
     weight=1.0,
     params={
       "phase_command_name": "gait_phase",
       "height_sensor_name": "foot_height_scan",
-      "swing_height": 0.09,
+      "swing_height": 0.1,
       "tracking_sigma": 0.005,
       "command_name": "twist",
       "command_threshold": 0.05,
@@ -183,7 +194,7 @@ rewards = {
   # =========================
   "penalty_landing": RewardTermCfg(
     func=soft_landing,
-    weight=-0.005,
+    weight=-0.01,
     params={
       "sensor_name": "feet_ground_contact",
       "command_name": "twist",
@@ -200,11 +211,11 @@ rewards = {
     weight=-5.0,
     params={"asset_cfg": SceneEntityCfg("robot", body_names=(BASE_BODY_NAME))},
   ),
-  # "penalty_base_height": RewardTermCfg(
-  #   func=base_height_penalty,
-  #   weight=-10.0,
-  #   params={"target_height": 0.68},
-  # ),
+  "penalty_base_height": RewardTermCfg(
+    func=base_height_penalty,
+    weight=-30.0,
+    params={"target_height": 0.64},
+  ),
   # "penalty_feet_ori": RewardTermCfg(
   #   func=foot_orientation_penalty,
   #   weight=-1.0,
@@ -220,6 +231,11 @@ rewards = {
   #   weight=-0.1,
   #   params={"asset_cfg": SceneEntityCfg("robot", body_names=(FOOT_BODY_NAMES))},
   # ),
+  "ball_target_reached": RewardTermCfg(  # Reduced from dribbling's 50.0 for stabler early residual learning.
+    func=ball_target_reached,
+    weight=10.0,
+    params={"command_name": "ball_vel"},
+  ),
   "penalty_action_rate": RewardTermCfg(func=action_rate_l2, weight=-1.0),
   "dof_pos_limits": RewardTermCfg(func=joint_pos_limits, weight=-1.0),
   "penalty_feet_distance": RewardTermCfg(

@@ -76,7 +76,7 @@ def booster_t1_dribbling_residual_obstacles_env_cfg(
     cfg.observations["dribble_actor"].enable_corruption = False
     cfg.observations["obstacle_residual"].enable_corruption = False
     cfg.curriculum.clear()
-    cfg.events.clear()
+    # cfg.events.clear()
 
   return cfg
 

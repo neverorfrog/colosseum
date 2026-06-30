@@ -881,6 +881,11 @@ class ResidualPPO(PPO):
 
   def _eval_get_action(self, normalized_obs: torch.Tensor) -> torch.Tensor:
     """Deterministic combined action. Routes from the cached obs dict."""
+    # Roll the RMA skills' proprio windows with the current obs (mirrors the
+    # collection loop). The first call sizes each window from the batch; without
+    # it RMA branches keep an empty (0, W, D) buffer and the latent cat fails.
+    for skill in self.residual_actor.base_branches.values():
+      skill.update_state({g: self._cached_obs_dict[g] for g in skill.obs_groups})
     base_obs, residual_obs, orch_obs = self._normalized_skill_inputs(
       self._cached_obs_dict
     )

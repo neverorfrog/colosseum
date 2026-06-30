@@ -144,6 +144,16 @@ t1-dribbling-residual:
       run: t1-dribbling-residual-ResidualPPO-123-20260628_191856
       step: 0
       created: '2026-06-29T00:30:57.634009+00:00'
+    jun29_1:
+      file: jun29_1/t1-dribbling-residual_residualppo_jun29_1.onnx
+      run: t1-dribbling-residual-ResidualPPO-123-20260629_032935
+      step: 0
+      created: '2026-06-29T16:55:54.612014+00:00'
+    jun29_2:
+      file: jun29_2/t1-dribbling-residual_residualppo_jun29_2.onnx
+      run: t1-dribbling-residual-ResidualPPO-123-20260629_192155
+      step: 0
+      created: '2026-06-30T01:15:58.433437+00:00'
   default: jun17_1
 t1-velocity-amp:
   models:
@@ -171,3 +181,16 @@ t1-kicking-residual:
       step: 0
       created: '2026-06-20T19:55:08.621530+00:00'
   default: jun20_1
+t1-dribbling-residual-obstacles:
+  models:
+    jun29_1:
+      file: jun29_1/t1-dribbling-residual-obstacles_residualppo_jun29_1.onnx
+      run: t1-dribbling-residual-obstacles-ResidualPPO-123-20260629_033019
+      step: 0
+      created: '2026-06-29T17:02:51.442791+00:00'
+    jun29_2:
+      file: jun29_2/t1-dribbling-residual-obstacles_residualppo_jun29_2.onnx
+      run: t1-dribbling-residual-obstacles-ResidualPPO-123-20260629_192345
+      step: 0
+      created: '2026-06-30T01:24:27.911548+00:00'
+  default: jun29_1

@@ -19,7 +19,8 @@ from colosseum.config.types.networks import (
   PpoCriticConfig,
 )
 
-WALK_CHECKPOINT = "models/t1-dribbling-residual/jun27_1/t1-dribbling-residual_residualppo_jun27_1.pt"
+WALK_CHECKPOINT = "models/t1-velocity-rma/jun26_1/t1-velocity-rma_rmappo_jun26_1.pt"
+# WALK_CHECKPOINT = "models/t1-velocity-manu/jun24_2/t1-velocity-manu_ppo_jun24_2.pt"
 
 
 def booster_t1_residual_ppo_cfg() -> ResidualPpoConfig:
@@ -45,7 +46,7 @@ def booster_t1_residual_ppo_cfg() -> ResidualPpoConfig:
     desired_kl=0.01,
     schedule="adaptive",
     obs_normalization=True,
-    symmetry_loss_coef=5.0,
+    symmetry_loss_coef=1.0,
     symmetry_critic_coef=0.0,
     symmetry_data_augmentation=True,
     critic=PpoCriticConfig(hidden_layers=[512, 256, 128], activation="elu"),
@@ -60,6 +61,10 @@ def booster_t1_residual_ppo_cfg() -> ResidualPpoConfig:
             min_noise_std=0.01,
           ),
           obs_group="loco_actor",
+          kind="rma",
+          latent_dim=8,
+          window_size=50,
+          term_name="env_params",
         ),
       },
       residual_actor=PpoActorConfig(
