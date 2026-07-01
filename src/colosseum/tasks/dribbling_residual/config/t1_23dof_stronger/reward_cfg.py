@@ -17,8 +17,16 @@ rewards = dict(_base)
 # (they went flat). This dense, easy-to-find "touch the ball at all" gradient
 # gets the ball to the feet; the higher-weighted inner terms then bias the touch
 # onto the inside face. Weight kept low (0.3, was 0.5) so it scaffolds without
-# out-voting the enforcement.
-rewards["foot_ball_contact"].weight = 0.3
+# out-voting the enforcement. Rebuilt as a fresh term (not a mutated weight) so
+# we don't alias/modify the base task's shared RewardTermCfg object.
+rewards["foot_ball_contact"] = RewardTermCfg(
+  func=foot_ball_contact,
+  weight=0.3,
+  params={
+    "sensor_name": "foot_ball_contact",
+    "command_name": "ball_vel",
+  },
+)
 
 # Bootstrap: pays for touching the ball *at all* on the inner face (foot5 medial
 # capsule), giving a gradient before the ball is ever fast so the policy can
