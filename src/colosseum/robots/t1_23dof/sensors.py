@@ -118,6 +118,24 @@ FOOT_BALL_CONTACT_SENSOR = ContactSensorCfg(
   history_length=4,
 )
 
+# Inner-foot (medial) contact with the ball. Matches only the foot5_collision
+# capsules — the vertical inside-face colliders meant for the inside-foot dribble
+# touch — so a reward can pay specifically for inside-of-the-foot ball contact,
+# which FOOT_BALL_CONTACT_SENSOR cannot isolate (it netforce-aggregates foot1-5).
+FOOT5_BALL_CONTACT_SENSOR = ContactSensorCfg(
+  name="foot_inner_ball_contact",
+  primary=ContactMatch(
+    mode="geom",
+    entity="robot",
+    pattern=r"^(left|right)_foot5_collision$",
+  ),
+  secondary=ContactMatch(mode="body", pattern="ball", entity="ball"),
+  fields=("found", "force"),
+  reduce="netforce",
+  num_slots=1,
+  history_length=4,
+)
+
 FOOT_HEIGHT_SCAN = TerrainHeightSensorCfg(
   name="foot_height_scan",
   frame=tuple(

@@ -289,3 +289,100 @@ def foot_ball_contact(
   proj = (ball_vel * cmd_dir).sum(dim=-1)
   good = (proj > 0.0) & (ball_vel.norm(dim=-1) > min_speed)
   return contact * good.float()
+
+
+def _kick_credit_gate(
+  env: ManagerBasedRlEnv,
+  sensor_name: str,
+  min_contact_force: float,
+  credit_steps: int,
+) -> torch.Tensor:
+  """Per-env 0/1 gate that stays hot for ``credit_steps`` after each strike.
+
+  Re-triggerable: any contact whose peak force over the step clears
+  ``min_contact_force`` refreshes the window, so during continuous dribbling the
+  gate is almost always live and a fresh kick re-arms it. Adapted from
+  ``kicking_residual``'s ``_get_kick_gate`` — same peak-force-over-substeps trick
+  (a kick is a ~5 ms impulse that often reads ~0 in the last-substep ``force``),
+  but keyed on its own env attribute so the two never share state. Updated at
+  most once per policy step.
+  """
+  credit = getattr(env, "_ball_kick_credit", None)
+  if credit is None or credit.shape[0] != env.num_envs:
+    credit = torch.zeros(env.num_envs, dtype=torch.long, device=env.device)
+    env._ball_kick_credit = credit  # type: ignore[attr-defined]
+    env._ball_kick_gate_step = -1  # type: ignore[attr-defined]
+    env._ball_kick_gate = torch.zeros(env.num_envs, device=env.device)  # type: ignore[attr-defined]
+
+  current_step = int(env.common_step_counter)
+  if current_step != env._ball_kick_gate_step:  # type: ignore[attr-defined]
+    env._ball_kick_gate_step = current_step  # type: ignore[attr-defined]
+
+    if hasattr(env, "episode_length_buf"):
+      done_mask = env.episode_length_buf == 0
+      if done_mask.any():
+        credit[done_mask] = 0
+
+    data = env.scene[sensor_name].data
+    if data.force_history is not None:
+      contact_force = data.force_history.norm(dim=-1).amax(dim=(1, 2))  # [B]
+      strike_now = contact_force >= min_contact_force
+    else:
+      strike_now = (data.found.flatten(start_dim=1) > 0).any(dim=-1)
+
+    credit[strike_now] = credit_steps
+    env._ball_kick_gate = (credit > 0).float()  # type: ignore[attr-defined]
+    credit -= 1
+    credit.clamp_(min=0)
+
+  return env._ball_kick_gate  # type: ignore[attr-defined]
+
+
+def ball_kick_impulse(
+  env: ManagerBasedRlEnv,
+  sensor_name: str,
+  command_name: str,
+  speed_ref: float = 2.0,
+  min_contact_force: float = 3.0,
+  credit_steps: int = 15,
+) -> torch.Tensor:
+  """Reward a strong foot->ball touch: ball speed along the command direction,
+  paid for a credit window after each strike.
+
+  Unlike ``foot_ball_contact`` (a 0/1 engagement bootstrap), this scales with the
+  ball's commanded-direction speed, so the gradient pushes toward harder,
+  target-aligned kicks rather than mere touches. The latched gate keeps paying
+  for ``credit_steps`` after contact (the impulse resolves in ~1 step but the
+  fast ball persists), giving a dense signal to "make each touch faster" instead
+  of a single sparse spike — and it re-arms on the next touch, so it rides along
+  with continuous dribbling. Normalized by ``speed_ref`` and clipped to 1.0.
+  """
+  gate = _kick_credit_gate(env, sensor_name, min_contact_force, credit_steps)
+
+  ball_vel = env.scene["ball"].data.root_link_lin_vel_w[:, :2]
+  cmd = env.command_manager.get_command(command_name)[:, :2]
+  cmd_dir = cmd / cmd.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+  v_along = (ball_vel * cmd_dir).sum(dim=-1).clamp(min=0.0)
+  return gate * (v_along / max(speed_ref, 1e-6)).clamp(max=1.0)
+
+
+def robot_wrong_side_penalty(
+  env: ManagerBasedRlEnv,
+  command_name: str,
+  engage_distance: float = 0.6,
+  max_excess: float = 0.5,
+) -> torch.Tensor:
+  """Penalize the robot for standing on the *target* side of the ball when close.
+
+  Projects robot->ball-origin onto the command direction: a positive projection
+  means the robot is past the ball along the dribble direction (the "wrong side",
+  where it would have to knock the ball backward). Active only within
+  ``engage_distance`` so it shapes the final approach, not the long walk-in.
+  """
+  robot_xy = env.scene["robot"].data.root_link_pos_w[:, :2]
+  ball_xy = env.scene["ball"].data.root_link_pos_w[:, :2]
+  cmd = env.command_manager.get_command(command_name)[:, :2]
+  cmd_dir = cmd / cmd.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+  s = ((robot_xy - ball_xy) * cmd_dir).sum(dim=-1)
+  close = (ball_xy - robot_xy).norm(dim=-1) < engage_distance
+  return s.clamp(min=0.0, max=max_excess) * close.float()

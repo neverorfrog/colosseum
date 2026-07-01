@@ -44,29 +44,81 @@ class BallTwistCommand(CommandTerm):
   def command(self) -> torch.Tensor:
     return self.twist
 
+  def _to_body(self, rel_xy_w: torch.Tensor) -> torch.Tensor:
+    """Rotate a world-frame XY vector into the robot body frame. Shape (N, 2)."""
+    robot = self._env.scene[self.cfg.robot_entity]
+    quat_w = robot.data.root_link_quat_w
+    quat_conj = torch.cat([quat_w[:, :1], -quat_w[:, 1:]], dim=-1)
+    zeros = torch.zeros(rel_xy_w.shape[0], 1, device=rel_xy_w.device)
+    rel_3d = torch.cat([rel_xy_w, zeros], dim=-1)
+    return quat_apply(quat_conj, rel_3d)[:, :2]
+
   def _ball_xy_b(self) -> torch.Tensor:
     """Ball position relative to robot base in robot body frame. Shape (N, 2)."""
     robot = self._env.scene[self.cfg.robot_entity]
     ball = self._env.scene[self.cfg.ball_entity]
-    relative_w = ball.data.root_link_pos_w[:, :3] - robot.data.root_link_pos_w[:, :3]
-    quat_w = robot.data.root_link_quat_w
-    quat_conj = torch.cat([quat_w[:, :1], -quat_w[:, 1:]], dim=-1)
-    return quat_apply(quat_conj, relative_w)[:, :2]
+    relative_w = ball.data.root_link_pos_w[:, :2] - robot.data.root_link_pos_w[:, :2]
+    return self._to_body(relative_w)
+
+  def _dribble_dir(self) -> torch.Tensor:
+    """Unit ball->target direction from the ball_vel command (world XY). Zero if undefined."""
+    try:
+      term = self._env.command_manager.get_term(self.cfg.ball_vel_command_name)
+      cmd = term.velocity_command[:, :2]
+    except Exception:
+      cmd = torch.zeros(self.num_envs, 2, device=self.device)
+    norm = cmd.norm(dim=-1, keepdim=True)
+    return torch.where(norm > 1e-6, cmd / norm.clamp(min=1e-6), torch.zeros_like(cmd))
+
+  @staticmethod
+  def _smoothstep(x: torch.Tensor, lo: float, hi: float) -> torch.Tensor:
+    t = ((x - lo) / max(hi - lo, 1e-6)).clamp(min=0.0, max=1.0)
+    return t * t * (3.0 - 2.0 * t)
 
   def _resample_command(self, env_ids: torch.Tensor) -> None:
     # Nothing to sample: the command is a deterministic function of the ball.
     pass
 
   def _update_command(self) -> None:
-    ball_xy_b = self._ball_xy_b()
-    dist = ball_xy_b.norm(dim=-1, keepdim=True)
-    direction = ball_xy_b / dist.clamp(min=1e-6)
+    robot = self._env.scene[self.cfg.robot_entity]
+    ball = self._env.scene[self.cfg.ball_entity]
+    robot_xy = robot.data.root_link_pos_w[:, :2]
+    ball_xy = ball.data.root_link_pos_w[:, :2]
 
+    # Circumnavigation: aim the walk at a point *behind* the ball (opposite the
+    # dribble target) until the robot is positioned behind it, then commit to the
+    # ball itself. This forces an approach from behind instead of a head-on rush.
+    dribble_dir = self._dribble_dir()
+    to_ball = ball_xy - robot_xy
+    to_ball_dir = to_ball / to_ball.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+    align = (to_ball_dir * dribble_dir).sum(dim=-1, keepdim=True)
+    w = self._smoothstep(align, self.cfg.align_lo, self.cfg.align_hi)
+
+    approach_pt = ball_xy - self.cfg.approach_offset * dribble_dir
+    goal_xy = w * ball_xy + (1.0 - w) * approach_pt
+    goal_b = self._to_body(goal_xy - robot_xy)
+
+    dist = goal_b.norm(dim=-1, keepdim=True)
+    direction = goal_b / dist.clamp(min=1e-6)
     speed = (self.cfg.speed_gain * dist).clamp(min=0.0, max=self.cfg.max_speed)
-    speed = torch.where(dist > self.cfg.stop_distance, speed, torch.zeros_like(speed))
+    # Ease into the kick: ramp the speed down across the slow zone (between
+    # slow_distance and stop_distance) so the robot decelerates before contact
+    # instead of barreling in. Neutral when slow_speed_scale == 1.0.
+    ball_dist = self._ball_xy_b().norm(dim=-1, keepdim=True)
+    ramp = (
+      (ball_dist - self.cfg.stop_distance)
+      / max(self.cfg.slow_distance - self.cfg.stop_distance, 1e-6)
+    ).clamp(min=0.0, max=1.0)
+    scale = self.cfg.slow_speed_scale + (1.0 - self.cfg.slow_speed_scale) * ramp
+    speed = speed * scale
+    # Stop based on proximity to the ball (not the goal) so the robot halts in
+    # contact range and lets the residual take over the push/kick.
+    speed = torch.where(
+      ball_dist > self.cfg.stop_distance, speed, torch.zeros_like(speed)
+    )
     self.twist[:, :2] = direction * speed
 
-    yaw_err = torch.atan2(ball_xy_b[:, 1], ball_xy_b[:, 0])
+    yaw_err = torch.atan2(goal_b[:, 1], goal_b[:, 0])
     self.twist[:, 2] = (self.cfg.stiffness * yaw_err).clamp(
       min=-self.cfg.max_wz, max=self.cfg.max_wz
     )
@@ -110,6 +162,20 @@ class BallTwistCommandCfg(CommandTermCfg):
   max_speed: float = 1.0
   # Stop commanding motion once the ball is within this radius.
   stop_distance: float = 0.4
+  # Deceleration zone before the stop: between slow_distance and stop_distance the
+  # commanded speed ramps down to slow_speed_scale * speed at the inner edge, so
+  # the robot eases into the kick. Neutral when slow_speed_scale == 1.0.
+  slow_distance: float = 0.0
+  slow_speed_scale: float = 1.0
+  # Circumnavigation: aim the walk at a point this far *behind* the ball (opposite
+  # the dribble target) until the robot is lined up behind it, then commit to the
+  # ball. ``approach_offset == 0`` disables it (aim straight at the ball, the
+  # original behavior). ``align_lo``/``align_hi`` are the smoothstep band on the
+  # robot->ball vs ball->target alignment that blends waypoint -> ball.
+  ball_vel_command_name: str = "ball_vel"
+  approach_offset: float = 0.0
+  align_lo: float = 0.0
+  align_hi: float = 0.7
   # Yaw controller turning the robot to face the ball.
   stiffness: float = 1.0
   max_wz: float = 1.0

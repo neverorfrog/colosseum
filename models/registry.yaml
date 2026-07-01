@@ -194,3 +194,36 @@ t1-dribbling-residual-obstacles:
       step: 0
       created: '2026-06-30T01:24:27.911548+00:00'
   default: jun29_1
+t1-dribbling-residual-stronger:
+  models:
+    jul1_1:
+      file: jul1_1/t1-dribbling-residual-stronger_residualppo_jul1_1.onnx
+      run: t1-dribbling-residual-stronger-ResidualPPO-123-20260630_204403
+      step: 0
+      created: '2026-07-01T01:15:06.325608+00:00'
+    jul1_2:
+      file: jul1_2/t1-dribbling-residual-stronger_residualppo_jul1_2.onnx
+      run: t1-dribbling-residual-stronger-ResidualPPO-123-20260630_204724
+      step: 0
+      created: '2026-07-01T01:15:07.444983+00:00'
+    jul1_3:
+      file: jul1_3/t1-dribbling-residual-stronger_residualppo_jul1_3.onnx
+      run: t1-dribbling-residual-stronger-ResidualPPO-123-20260701_020504
+      step: 0
+      created: '2026-07-01T03:27:56.615255+00:00'
+    jul1_4:
+      file: jul1_4/t1-dribbling-residual-stronger_residualppo_jul1_4.onnx
+      run: t1-dribbling-residual-stronger-ResidualPPO-123-20260701_053051
+      step: 0
+      created: '2026-07-01T09:51:30.313336+00:00'
+    jul1_5:
+      file: jul1_5/t1-dribbling-residual-stronger_residualppo_jul1_5.onnx
+      run: t1-dribbling-residual-stronger-ResidualPPO-123-20260701_055955
+      step: 0
+      created: '2026-07-01T05:49:51.311395+00:00'
+    jul1_6:
+      file: jul1_6/t1-dribbling-residual-stronger_residualppo_jul1_6.onnx
+      run: t1-dribbling-residual-stronger-ResidualPPO-123-20260701_103814
+      step: 0
+      created: '2026-07-01T09:53:18.299061+00:00'
+  default: jul1_1
