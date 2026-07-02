@@ -155,6 +155,7 @@ class ResidualPPO(PPO):
       orchestrator_hidden_layers=ra.orchestrator.hidden_layers,
       orchestrator_activation=ra.orchestrator.activation,
       latent_feed_skills=ra.latent_feed_skills,
+      orchestrator_per_joint=ra.orchestrator.per_joint,
     ).to(self.device)
     self.actor = self.residual_actor
 

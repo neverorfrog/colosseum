@@ -155,7 +155,7 @@ rewards = {
       "asset_cfg": SceneEntityCfg(
         "robot", joint_names=(".*Hip_Roll", ".*Hip_Yaw", ".*Hip_Pitch", ".*Knee_Pitch")
       ),
-      "weights_standing": {".*Hip_Yaw": 5.0, ".*Hip_Roll": 2.0, ".*Hip_Pitch": 1.0, ".*Knee_Pitch": 0.5},
+      "weights_standing": {".*Hip_Yaw": 5.0, ".*Hip_Roll": 2.0, ".*Hip_Pitch": 0.5, ".*Knee_Pitch": 0.5},
     },
   ),
   "feet_phase": RewardTermCfg(
@@ -170,21 +170,30 @@ rewards = {
       "command_threshold": 0.05,
     },
   ),
-  # "arm_phase": RewardTermCfg(
-  #   func=arm_phase,
-  #   weight=1.0,
-  #   params={
-  #     "phase_command_name": "gait_phase",
-  #     "asset_cfg": SceneEntityCfg(
-  #       "robot",
-  #       joint_names=("Left_Shoulder_Pitch", "Right_Shoulder_Pitch"),
-  #     ),
-  #     "swing_amplitude": 0.25,
-  #     "max_speed": 1.5,
-  #     "tracking_sigma": 0.25,
-  #     "command_name": "twist",
-  #   },
-  # ),
+  "arm_phase": RewardTermCfg(
+    func=arm_phase,
+    weight=2.0,
+    params={
+      "phase_command_name": "gait_phase",
+      # (left, right) pairs; shoulder swings wide, elbow follows with a smaller amplitude.
+      "asset_cfg": SceneEntityCfg(
+        "robot",
+        joint_names=(
+          "Left_Shoulder_Pitch",
+          "Right_Shoulder_Pitch",
+          "Left_Elbow_Pitch",
+          "Right_Elbow_Pitch",
+        ),
+        # Keep (left, right) pair order; otherwise ids resolve to global-index
+        # order [L_Sh, L_El, R_Sh, R_El], breaking contralateral pairing.
+        preserve_order=True,
+      ),
+      "swing_amplitude": (0.25, 0.25, 0.15, 0.15),
+      "max_speed": 1.0,
+      "tracking_sigma": 0.25,
+      "command_name": "twist",
+    },
+  ),
   "alive": RewardTermCfg(
     func=is_alive,
     weight=0.25,

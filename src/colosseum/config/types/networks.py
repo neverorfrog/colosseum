@@ -46,4 +46,8 @@ class OrchestratorConfig(NetworkConfig):
     optimizer (same pattern as PpoCriticConfig sharing the critic optimizer).
     """
 
-    pass
+    per_joint: bool = False
+    """If True, the gate outputs per-joint blend weights [B, num_skills, A]
+    (softmax over skills independently for each joint, SkillBlender-style) instead
+    of one global weight vector per skill. Lets the residual take authority on
+    individual joints (e.g. the swing leg) without a global all-or-nothing blend."""

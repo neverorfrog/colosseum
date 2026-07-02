@@ -81,3 +81,50 @@ def ball_lost_penalty(
   so it spikes exactly once per lost episode. Use with a negative weight.
   """
   return env.termination_manager.get_term(term_name).float()
+
+
+class BallKickedAway(ManagerTermBase):
+  """Terminate (success) once the ball, after being struck, leaves a radius.
+
+  For the single-kick variant: the robot walks up, hits the ball once, and the
+  episode ends when the ball has travelled away. Arms on the first foot-ball
+  contact of the episode so a far-spawned ball doesn't trigger it during the
+  walk-up; once armed, fires when robot->ball distance exceeds ``success_radius``.
+  """
+
+  def __init__(self, cfg: TerminationTermCfg, env: ManagerBasedRlEnv):
+    super().__init__(env)
+    p = cfg.params
+    self._radius = float(p.get("success_radius", 1.5))
+    self._sensor_name = str(p.get("sensor_name", "foot_ball_contact"))
+    self._armed = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
+
+  def reset(self, env_ids: torch.Tensor | slice | None = None) -> dict:
+    if env_ids is None:
+      self._armed.zero_()
+    else:
+      self._armed[env_ids] = False
+    return {}
+
+  def __call__(self, env: ManagerBasedRlEnv, **kwargs) -> torch.Tensor:
+    del kwargs
+    found = env.scene[self._sensor_name].data.found
+    if found is not None:
+      contact = (found.flatten(start_dim=1) > 0).any(dim=-1)
+      self._armed |= contact
+
+    robot_xy = env.scene["robot"].data.root_link_pos_w[:, :2]
+    ball_xy = env.scene["ball"].data.root_link_pos_w[:, :2]
+    dist = (ball_xy - robot_xy).norm(dim=-1)
+    return self._armed & (dist > self._radius)
+
+
+def ball_kicked_away_bonus(
+  env: ManagerBasedRlEnv, term_name: str = "ball_kicked_away"
+) -> torch.Tensor:
+  """Discrete success reward fired the step the ball-kicked-away term triggers.
+
+  Same one-shot pattern as ``ball_lost_penalty`` (reads the termination done
+  buffer, computed before rewards). Use with a positive weight.
+  """
+  return env.termination_manager.get_term(term_name).float()

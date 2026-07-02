@@ -311,10 +311,16 @@ class Orchestrator(Network):
 
   Input: the orchestrator observation group (deduplicated union of all skill
   observations, no privileged info — so it is deployable).
-  Output: softmax-normalized weights [w_0, ..., w_{num_skills-1}] over all skills.
+  Output (default): softmax-normalized weights [w_0, ..., w_{num_skills-1}] over
+  all skills, shape [B, num_skills].
+  Output (per_joint): per-joint softmax weights [B, num_skills, action_dim],
+  normalized over skills *independently for each joint* (SkillBlender-style). This
+  lets the gate route residual authority to individual joints (e.g. the swing leg)
+  without forcing a global all-or-nothing tradeoff with the frozen base.
 
   Architecture:
       obs -> backbone (MLP) -> weight_head -> softmax -> [B, num_skills]
+      (per_joint: -> reshape -> softmax(skills) -> [B, num_skills, action_dim])
   """
 
   def __init__(
@@ -323,6 +329,8 @@ class Orchestrator(Network):
     num_skills: int,
     hidden_layers: Sequence[int],
     activation: str,
+    action_dim: int = 1,
+    per_joint: bool = False,
   ):
     super().__init__(
       input_dim=input_dim,
@@ -330,14 +338,20 @@ class Orchestrator(Network):
       activation_name=activation,
     )
     self.num_skills = num_skills
-    self.weight_head = nn.Linear(int(self.last_dim), num_skills)
+    self.action_dim = action_dim
+    self.per_joint = per_joint
+    out_dim = num_skills * action_dim if per_joint else num_skills
+    self.weight_head = nn.Linear(int(self.last_dim), out_dim)
 
     nn.init.orthogonal_(self.weight_head.weight, gain=1.0)
     nn.init.zeros_(self.weight_head.bias)
 
   def forward(self, obs: torch.Tensor) -> torch.Tensor:
-    """Return softmax blending weights [B, num_skills]."""
+    """Return softmax blending weights [B, num_skills] (or [B, num_skills, A])."""
     logits = self.weight_head(self.backbone(obs))
+    if self.per_joint:
+      logits = logits.view(-1, self.num_skills, self.action_dim)
+      return nn.functional.softmax(logits, dim=1)  # over skills, per joint
     return nn.functional.softmax(logits, dim=-1)
 
 
@@ -374,6 +388,7 @@ class ResidualActor(nn.Module):
     orchestrator_hidden_layers: Sequence[int],
     orchestrator_activation: str,
     latent_feed_skills: tuple[str, ...] = (),
+    orchestrator_per_joint: bool = False,
   ):
     super().__init__()
 
@@ -395,6 +410,8 @@ class ResidualActor(nn.Module):
       num_skills=self.num_skills,
       hidden_layers=orchestrator_hidden_layers,
       activation=orchestrator_activation,
+      action_dim=action_dim,
+      per_joint=orchestrator_per_joint,
     )
 
     self.distribution: torch.distributions.Normal | None = None
@@ -421,13 +438,15 @@ class ResidualActor(nn.Module):
     Args:
       means: [B, N, A] per-skill action means.
       stds:  [B, N, A] per-skill action stds.
-      weights: [B, N] per-skill blend weights (softmax, sum to 1).
+      weights: [B, N] per-skill blend weights, or [B, N, A] per-joint weights
+        (softmax over skills, sum to 1 — globally, or independently per joint).
 
     Returns:
       (combined_mean [B, A], combined_std [B, A]).
     """
     stds = stds + 1e-2
-    sw = weights.unsqueeze(-1) / stds
+    w = weights if weights.dim() == 3 else weights.unsqueeze(-1)
+    sw = w / stds
     sw_sum = sw.sum(dim=1)
     combined_std = 1.0 / sw_sum
     combined_mean = combined_std * (means * sw).sum(dim=1)
@@ -599,12 +618,18 @@ class ResidualActor(nn.Module):
     """Bias the orchestrator toward the frozen base skills at init.
 
     Base-skill columns get `favored_logit`, the residual (last column) gets 0.0,
-    so the residual starts near-off (e.g. softmax([4,0]) ~= [0.98, 0.02]).
+    so the residual starts near-off (e.g. softmax([4,0]) ~= [0.98, 0.02]). In
+    per-joint mode the bias is [num_skills, action_dim], applied on every joint.
     """
-    bias = torch.zeros(self.num_skills)
-    bias[:-1] = favored_logit
+    if self.orchestrator.per_joint:
+      bias = torch.zeros(self.num_skills, self.orchestrator.action_dim)
+      bias[:-1, :] = favored_logit
+      flat_bias = bias.reshape(-1)
+    else:
+      flat_bias = torch.zeros(self.num_skills)
+      flat_bias[:-1] = favored_logit
     with torch.no_grad():
-      self.orchestrator.weight_head.bias.copy_(bias)
+      self.orchestrator.weight_head.bias.copy_(flat_bias)
 
   def trainable_parameters(self) -> Iterator[nn.Parameter]:
     """Yield residual branch + orchestrator parameters (frozen base excluded)."""

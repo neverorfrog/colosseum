@@ -38,6 +38,8 @@ class BallVelocityCommand(CommandTerm):
     super().__init__(cfg, env)
     self.velocity_command = torch.zeros((env.num_envs, 3), device=env.device)
     self.target_position = torch.zeros((env.num_envs, 2), device=env.device)
+    # Per-episode constant speed (only used when cfg.constant_speed).
+    self._sampled_speed = torch.zeros((env.num_envs, 1), device=env.device)
     self.target_reached_mask = torch.zeros(
       env.num_envs, dtype=torch.bool, device=env.device
     )
@@ -74,15 +76,18 @@ class BallVelocityCommand(CommandTerm):
       torch.zeros_like(target_delta),
     )
 
-    speed = (self.cfg.speed_gain * distance).clamp(
-      min=self.cfg.speed_range[0],
-      max=self.cfg.speed_range[1],
-    )
-    speed = torch.where(
-      distance > self.cfg.target_reached_threshold,
-      speed,
-      torch.zeros_like(speed),
-    )
+    if self.cfg.constant_speed:
+      speed = self._sampled_speed[env_ids]
+    else:
+      speed = (self.cfg.speed_gain * distance).clamp(
+        min=self.cfg.speed_range[0],
+        max=self.cfg.speed_range[1],
+      )
+      speed = torch.where(
+        distance > self.cfg.target_reached_threshold,
+        speed,
+        torch.zeros_like(speed),
+      )
 
     self.velocity_command[env_ids, 0:2] = direction * speed
     self.velocity_command[env_ids, 2] = 0.0
@@ -98,6 +103,9 @@ class BallVelocityCommand(CommandTerm):
 
     lo, hi = self.cfg.target_distance_range
     target_distances = torch.rand(n, device=device) * (hi - lo) + lo
+
+    lo, hi = self.cfg.speed_range
+    self._sampled_speed[env_ids, 0] = torch.rand(n, device=device) * (hi - lo) + lo
 
     robot_quat = self._env.scene[self.cfg.robot_entity].data.root_link_quat_w[env_ids]
     robot_yaw = torch.atan2(
@@ -214,6 +222,12 @@ class BallVelocityCommandCfg(CommandTermCfg):
 
   # Desired ball speed, recomputed each step and clipped to this range.
   speed_range: tuple[float, float] = (0.1, 1.0)
+
+  # Fixed-velocity mode: sample one constant speed from ``speed_range`` per
+  # episode and hold it (no distance ramp, no zeroing near the target), so the
+  # command is a steady "kick to this velocity in the target direction" setpoint.
+  # Off by default (base dribbling keeps the distance-proportional dribble speed).
+  constant_speed: bool = False
 
   # Sampled target radius (m) drawn from the ball position at episode start.
   # Far targets keep the ball from arriving, so the command stays a steady

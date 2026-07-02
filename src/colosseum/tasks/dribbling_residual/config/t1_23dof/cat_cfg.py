@@ -24,7 +24,7 @@ commands: Dict[str, CommandTermCfg] = {
   # Fixed dribble-direction target for the whole episode (no mid-episode
   # resampling); see BallVelocityCommandCfg defaults.
   "ball_vel": BallVelocityCommandCfg(
-    speed_range=(0.1, 2.0),
+    speed_range=(2.0, 5.0),
   ),
   "gait_phase": GaitPhaseCommandCfg(
     gait_freq_range=(1.5, 2.0),

@@ -386,3 +386,35 @@ def robot_wrong_side_penalty(
   s = ((robot_xy - ball_xy) * cmd_dir).sum(dim=-1)
   close = (ball_xy - robot_xy).norm(dim=-1) < engage_distance
   return s.clamp(min=0.0, max=max_excess) * close.float()
+
+
+def ball_kick_reach_penalty(
+  env: ManagerBasedRlEnv,
+  sensor_name: str,
+  command_name: str,
+  min_reach: float = 0.35,
+  min_contact_force: float = 3.0,
+  credit_steps: int = 5,
+) -> torch.Tensor:
+  """Penalize striking the ball when it is too close to the robot root along the
+  commanded kick direction.
+
+  Gated on an actual strike (peak contact force over the step, via the shared
+  ``_kick_credit_gate``). ``s`` is how far ahead the ball is from the root,
+  projected onto the command direction; the penalty grows as ``s`` falls below
+  ``min_reach``:
+
+      penalty = gate * (min_reach - s).clamp(min=0)
+
+  So poking a ball tucked under the torso costs reward, pushing the robot to reach
+  out — a longer swing/step — and meet the ball further ahead. Use with a negative
+  weight. ``min_reach`` is the elongation knob; too large (or too heavy a weight)
+  risks the robot learning to avoid contact entirely.
+  """
+  gate = _kick_credit_gate(env, sensor_name, min_contact_force, credit_steps)
+  root_xy = env.scene["robot"].data.root_link_pos_w[:, :2]
+  ball_xy = env.scene["ball"].data.root_link_pos_w[:, :2]
+  cmd = env.command_manager.get_command(command_name)[:, :2]
+  cmd_dir = cmd / cmd.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+  s = ((ball_xy - root_xy) * cmd_dir).sum(dim=-1)
+  return gate * (min_reach - s).clamp(min=0.0)
