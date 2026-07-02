@@ -25,8 +25,6 @@ on top of the simulator's GT ball position, matching the real tracker's design:
     *stretches* of consecutive frames (motion blur / occlusion), not just isolated
     single-frame misses. The belief never disappears -- it coasts, like the
     persisted ``lastBall*`` in WorldModelLocal;
-  * a ``time_since_seen`` output channel, mirroring ``LocalBall::timeSinceLastSeenMs``
-    (0 while seen), so the policy is told how stale the belief is;
   * fixed sensing+filtering latency (ring buffer).
 
 The state is kept in the *world* frame and transformed to the robot body frame
@@ -69,18 +67,16 @@ def _yaw_from_quat(quat_w: torch.Tensor) -> torch.Tensor:
 
 
 def ball_state_gt(env: ManagerBasedRlEnv) -> torch.Tensor:
-  """Clean GT body-frame ball state (N, 5) = [px, py, vx, vy, time_since_seen].
+  """Clean GT body-frame ball state (N, 4) = [px, py, vx, vy].
 
-  The privileged critic view: perfect position/velocity and a ``time_since_seen``
-  of 0 (GT is always "seen"), so its layout matches the noisy actor estimate.
+  The privileged critic view: perfect position/velocity, so its layout matches
+  the noisy actor estimate.
   """
-  n = env.num_envs
-  tsls = torch.zeros(n, 1, device=env.device)
-  return torch.cat([ball_position(env), ball_velocity_xy(env), tsls], dim=-1)
+  return torch.cat([ball_position(env), ball_velocity_xy(env)], dim=-1)
 
 
 class BallPerceptionModel:
-  """Noisy, lagged, droppable body-frame ball-state estimate. Returns (N, 5)."""
+  """Noisy, lagged, droppable body-frame ball-state estimate. Returns (N, 4)."""
 
   def __init__(self, cfg: ObservationTermCfg, env: ManagerBasedRlEnv):
     self._env = env
@@ -117,25 +113,22 @@ class BallPerceptionModel:
     self._fov_half = float(p.get("fov_half_angle", HEAD_FOV_HALF))
     # Sensing + filtering latency, in control steps.
     self._latency = int(p.get("latency_steps", 2))
-    # Cap (s) on the reported time-since-seen (past this the ball is "lost").
-    self._max_unseen_s = float(p.get("max_unseen_s", 3.0))
 
     self._dt = env.step_dt
     self._decay = max(0.0, 1.0 - self._friction * self._dt)
     self._det_period = 1.0 / self._detection_rate_hz
     n, dev = env.num_envs, env.device
 
-    # World-frame XY estimate state + staleness.
+    # World-frame XY estimate state.
     self._est_pos_w = torch.zeros(n, 2, device=dev)
     self._est_vel_w = torch.zeros(n, 2, device=dev)
-    self._time_since_seen = torch.zeros(n, device=dev)
 
     # Detection cadence phase + bursty-outage state.
     self._det_accum = torch.zeros(n, device=dev)
     self._in_outage = torch.zeros(n, dtype=torch.bool, device=dev)
 
-    # Latency ring buffer of past world-frame estimates: (L+1, N, 5).
-    self._buf = torch.zeros(self._latency + 1, n, 5, device=dev)
+    # Latency ring buffer of past world-frame estimates: (L+1, N, 4).
+    self._buf = torch.zeros(self._latency + 1, n, 4, device=dev)
     self._buf_ptr = 0
 
     # Per-episode domain-randomized band.
@@ -195,13 +188,12 @@ class BallPerceptionModel:
     self._est_pos_w[env_ids] = pos_w[env_ids]
     # Velocity starts at zero and ramps up via the filter, like KalmanFilter3D::init.
     self._est_vel_w[env_ids] = 0.0
-    self._time_since_seen[env_ids] = 0.0
     self._in_outage[env_ids] = False
     # Stagger the detection phase so envs don't all refresh on the same step.
     self._det_accum[env_ids] = torch.rand(len(env_ids), device=dev) * self._det_period
     # A freshly reset env has no history: seed its whole latency buffer with the
-    # zero-velocity, freshly-seen state.
-    seed = torch.zeros(len(env_ids), 5, device=dev)
+    # zero-velocity state.
+    seed = torch.zeros(len(env_ids), 4, device=dev)
     seed[:, :2] = pos_w[env_ids]
     self._buf[:, env_ids, :] = seed.unsqueeze(0)
     self._sample_dr(env_ids)
@@ -261,20 +253,11 @@ class BallPerceptionModel:
     self._est_pos_w = seen_f * pos_corr + (1.0 - seen_f) * pos_pred
     self._est_vel_w = seen_f * vel_corr + (1.0 - seen_f) * vel_pred
 
-    # Time since last seen: 0 when seen, else accumulates (capped).
-    self._time_since_seen = (1.0 - seen.float()) * (
-      self._time_since_seen + self._dt
-    )
-    tsls = self._time_since_seen.clamp(max=self._max_unseen_s)
-
     # Push current world estimate, read the L-step-delayed one back out.
-    self._buf[self._buf_ptr] = torch.cat(
-      [self._est_pos_w, self._est_vel_w, tsls.unsqueeze(-1)], dim=-1
-    )
+    self._buf[self._buf_ptr] = torch.cat([self._est_pos_w, self._est_vel_w], dim=-1)
     self._buf_ptr = (self._buf_ptr + 1) % (self._latency + 1)
     delayed = self._buf[self._buf_ptr]
-    body = self._to_body(delayed[:, :2], delayed[:, 2:4])
-    return torch.cat([body, delayed[:, 4:5]], dim=-1)
+    return self._to_body(delayed[:, :2], delayed[:, 2:4])
 
   def __call__(self, env: ManagerBasedRlEnv, **kwargs) -> torch.Tensor:
     # This term lives in a single obs group, so it is called exactly once per

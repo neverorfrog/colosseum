@@ -382,7 +382,7 @@ def stance_foot_ball_clearance_penalty(
   Use with a negative weight.
   """
   ball_xy = env.scene["ball"].data.root_link_pos_w[:, :2]
-  feet_xy = env.scene["robot"].data.body_pos_w[:, asset_cfg.body_ids, :2]
+  feet_xy = env.scene["robot"].data.body_link_pos_w[:, asset_cfg.body_ids, :2]
   d = (feet_xy - ball_xy.unsqueeze(1)).norm(dim=-1)
   d_stance = d.max(dim=-1).values
   return torch.exp(-d_stance / sigma)

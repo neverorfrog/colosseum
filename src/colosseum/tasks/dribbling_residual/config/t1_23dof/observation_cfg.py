@@ -100,12 +100,11 @@ ball_terms = {
       "max_range": 6.0,
       "fov_half_angle": 0.6,
       "latency_steps": 2,
-      "max_unseen_s": 3.0,
     },
     # 5 steps (0.1 s @ 50 Hz) of past ball estimates so the actor can track the
-    # velocity ramp and see the staleness (time_since_seen) trajectory itself.
+    # velocity ramp and spot a stale/coasting estimate (position stops moving).
     history_length=5,
-  ),  # (N, 5)
+  ),  # (N, 4)
 }
 
 # ---------------------------------------------------------------------------
