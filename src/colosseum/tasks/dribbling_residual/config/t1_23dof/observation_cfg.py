@@ -81,27 +81,31 @@ gait_phase_term = MirrorableObservationTermCfg(
 )
 
 ball_terms = {
-  # "ball_pos": ObservationTermCfg(func=ball_position),
-  # "ball_vel_xy": ObservationTermCfg(func=ball_velocity_xy),
   "ball_state": ObservationTermCfg(
     func=BallPerceptionModel,
     params={
-      "sigma_pos_base": 0.05,
-      "sigma_pos_per_m": 0.05,
+      "sigma_pos_base": 0.04,
+      "sigma_pos_per_m": 0.03,
       "sigma_pos_scale_range": (0.5, 3.0),
-      "sigma_vel_range": (0.1, 1.0),
-      "vel_filter_alpha": 0.3,
-      "coast_vel_decay": 0.98,
-      "p_miss_range": (0.02, 0.3),
+      "sigma_pos_max": 0.35,
+      "pos_bias_std": 0.05,
+      "pos_gain_alpha": 0.5,
+      "vel_gain_beta": 0.15,
+      "friction": 0.6,
+      "detection_rate_hz": 30.0,
+      "outage_mean_s_range": (0.15, 0.6),
+      "outage_frac_range": (0.1, 0.5),
+      "p_miss_range": (0.02, 0.1),
       "close_range_dropout": 0.3,
       "max_range": 6.0,
       "fov_half_angle": 0.6,
       "latency_steps": 2,
+      "max_unseen_s": 3.0,
     },
-    # 5 steps (0.1 s @ 50 Hz) of past ball estimates so the actor can re-derive
-    # velocity and spot a stale/coasting estimate (position stops moving) itself.
+    # 5 steps (0.1 s @ 50 Hz) of past ball estimates so the actor can track the
+    # velocity ramp and see the staleness (time_since_seen) trajectory itself.
     history_length=5,
-  ),  # (N, 4)
+  ),  # (N, 5)
 }
 
 # ---------------------------------------------------------------------------

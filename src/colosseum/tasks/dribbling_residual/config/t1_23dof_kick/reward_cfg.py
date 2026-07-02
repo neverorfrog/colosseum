@@ -19,8 +19,12 @@ the kick produce the commanded velocity vector" — no strike-gated term needed.
 from dataclasses import replace
 
 from mjlab.managers import RewardTermCfg
+from mjlab.managers.scene_entity_config import SceneEntityCfg
 
-from colosseum.mdp.ball_rewards import ball_kick_reach_penalty
+from colosseum.mdp.ball_rewards import (
+  ball_kick_reach_penalty,
+  stance_foot_ball_clearance_penalty,
+)
 from colosseum.tasks.dribbling_residual.mdp.terminations import ball_kicked_away_bonus
 
 from ..t1_23dof.reward_cfg import rewards as _base_rewards
@@ -43,13 +47,24 @@ rewards["ball_vel_norm"] = replace(rewards["ball_vel_norm"], weight=3.0)
 # learn to avoid contact.
 rewards["ball_kick_reach"] = RewardTermCfg(
   func=ball_kick_reach_penalty,
-  weight=-2.0,
+  weight=-5.0,
   params={
     "sensor_name": "foot_ball_contact",
     "command_name": "ball_vel",
-    "min_reach": 0.5,
+    "min_reach": 0.4,
     "min_contact_force": 10.0,
     "credit_steps": 25,
+  },
+)
+
+# Keep the stance foot clear of the ball: penalize both feet crowding it at
+# once, so only the kicking foot engages. sigma is the clearance knob.
+rewards["stance_foot_ball_clearance"] = RewardTermCfg(
+  func=stance_foot_ball_clearance_penalty,
+  weight=-2.0,
+  params={
+    "asset_cfg": SceneEntityCfg("robot", body_names=r"^(left|right)_foot_link$"),
+    "sigma": 0.07,
   },
 )
 

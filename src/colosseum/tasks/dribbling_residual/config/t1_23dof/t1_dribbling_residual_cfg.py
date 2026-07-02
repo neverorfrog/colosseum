@@ -51,6 +51,7 @@ from .algo_cfg import booster_t1_residual_ppo_cfg
 from .cat_cfg import actions, commands, terminations
 from .curriculum_cfg import curriculum
 from .event_cfg import events
+from .metric_cfg import metrics
 from .observation_cfg import observations
 from .reward_cfg import rewards
 
@@ -111,7 +112,7 @@ def booster_t1_dribbling_residual_env_cfg(play: bool = False) -> ColosseumEnvCfg
     rewards=rewards,
     terminations=terminations,
     curriculum=curriculum,
-    metrics={},
+    metrics=metrics,
     viewer=viewer_cfg(),
     sim=sim_cfg(),
     decimation=4,
@@ -128,34 +129,6 @@ def booster_t1_dribbling_residual_env_cfg(play: bool = False) -> ColosseumEnvCfg
     cfg.observations["loco_actor"].enable_corruption = False
     cfg.observations["dribble_actor"].enable_corruption = False
     cfg.curriculum = {}
-    # cfg.events = {}
-    # cfg.events["reset_base"] = EventTermCfg(
-    #   func=reset_root_state_uniform,
-    #   mode="reset",
-    #   params={
-    #     "pose_range": {
-    #       "x": (-0.0, 0.0),
-    #       "y": (-0.0, 0.0),
-    #       "z": (0.01, 0.05),
-    #       "yaw": (-3.14, 3.14),
-    #     },
-    #     "velocity_range": {},
-    #   },
-    # )
-
-    # cfg.commands["ball_vel"] = BallVelocityCommandCfg(
-    #   speed_range=(0.1, 0.5),
-    # )
-
-    # cfg.events["reset_ball"] = EventTermCfg(
-    #   func=reset_root_state_uniform,
-    #   mode="reset",
-    #   params={
-    #     "asset_cfg": SceneEntityCfg("ball"),
-    #     "pose_range": {"x": (-3.0, 3.0), "y": (-3.0, 3.0), "z": (0.11, 0.11)},
-    #     "velocity_range": {},
-    #   },
-    # )
 
     gait = cfg.commands["gait_phase"]
     assert isinstance(gait, GaitPhaseCommandCfg)

@@ -366,6 +366,28 @@ def ball_kick_impulse(
   return gate * (v_along / max(speed_ref, 1e-6)).clamp(max=1.0)
 
 
+def stance_foot_ball_clearance_penalty(
+  env: ManagerBasedRlEnv,
+  asset_cfg: SceneEntityCfg,
+  sigma: float = 0.07,
+) -> torch.Tensor:
+  """Penalize both feet crowding the ball at once (stance foot must stay clear).
+
+  Takes the XY distance from the ball to each foot body and penalizes the
+  *farther* one: the kicking foot must reach d≈0, so exp(-max(d_left, d_right)/sigma)
+  only fires when the second foot is also near the ball — the configuration where
+  the stance foot risks an accidental slow touch. Always-on and distance-based
+  (no contact-force gate), so it shapes the pre-kick posture before any touch
+  happens. ``sigma`` is the clearance knob (penalty ~vanishes beyond ~3*sigma).
+  Use with a negative weight.
+  """
+  ball_xy = env.scene["ball"].data.root_link_pos_w[:, :2]
+  feet_xy = env.scene["robot"].data.body_pos_w[:, asset_cfg.body_ids, :2]
+  d = (feet_xy - ball_xy.unsqueeze(1)).norm(dim=-1)
+  d_stance = d.max(dim=-1).values
+  return torch.exp(-d_stance / sigma)
+
+
 def robot_wrong_side_penalty(
   env: ManagerBasedRlEnv,
   command_name: str,
