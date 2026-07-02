@@ -20,11 +20,11 @@ from colosseum.mdp.ball_rewards import (
 )
 from colosseum.mdp.rewards import (
   arm_phase,
-  feet_no_slip,
   base_height_penalty,
   dof_acc_penalty,
   dof_vel_penalty,
   feet_distance_penalty,
+  feet_no_slip,
   feet_phase,
   feet_slip,
   feet_swing,
@@ -75,21 +75,21 @@ rewards = {
   "ball_vel_tracking": RewardTermCfg(
     func=ball_vel_tracking_body,
     weight=3.0,
-    params={"command_name": "ball_vel", "sharpness": 1.5},
+    params={"command_name": "ball_vel", "sharpness": 5.0},
   ),
   "ball_vel_norm": RewardTermCfg(
     func=ball_vel_norm,
     weight=2.0,
-    params={"command_name": "ball_vel", "sharpness": 1.5},
+    params={"command_name": "ball_vel", "sharpness": 5.0},
   ),
   "ball_vel_angle": RewardTermCfg(
     func=ball_vel_angle_body,
-    weight=2.0,
+    weight=1.0,
     params={"command_name": "ball_vel"},
   ),
   "robot_ball_distance": RewardTermCfg(
     func=robot_ball_distance,
-    weight=0.05,
+    weight=0.01,
     params={
       "close_distance": 0.3,
       "behind_close_penalty": 0.5,
@@ -155,7 +155,12 @@ rewards = {
       "asset_cfg": SceneEntityCfg(
         "robot", joint_names=(".*Hip_Roll", ".*Hip_Yaw", ".*Hip_Pitch", ".*Knee_Pitch")
       ),
-      "weights_standing": {".*Hip_Yaw": 5.0, ".*Hip_Roll": 2.0, ".*Hip_Pitch": 0.5, ".*Knee_Pitch": 0.5},
+      "weights_standing": {
+        ".*Hip_Yaw": 5.0,
+        ".*Hip_Roll": 2.0,
+        ".*Hip_Pitch": 0.5,
+        ".*Knee_Pitch": 0.5,
+      },
     },
   ),
   "feet_phase": RewardTermCfg(

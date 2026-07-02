@@ -29,6 +29,9 @@ rewards = dict(_base_rewards)
 
 # Relax the pose-deviation penalty so the swing leg can elongate the strike.
 rewards["penalty_hip_pose"] = replace(rewards["penalty_hip_pose"], weight=-0.5)
+rewards["feet_swing"] = replace(rewards["feet_swing"], weight=0.05)
+rewards["feet_phase"] = replace(rewards["feet_phase"], weight=0.05)
+rewards["arm_phase"] = replace(rewards["arm_phase"], weight=0.05)
 
 # Make matching the commanded ball velocity the dominant objective.
 rewards["ball_vel_tracking"] = replace(rewards["ball_vel_tracking"], weight=4.0)
@@ -46,7 +49,7 @@ rewards["ball_kick_reach"] = RewardTermCfg(
     "command_name": "ball_vel",
     "min_reach": 0.5,
     "min_contact_force": 10.0,
-    "credit_steps": 5,
+    "credit_steps": 25,
   },
 )
 

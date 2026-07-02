@@ -61,10 +61,6 @@ def booster_t1_residual_ppo_cfg() -> ResidualPpoConfig:
             min_noise_std=0.01,
           ),
           obs_group="loco_actor",
-          kind="mlp",
-          # latent_dim=8,
-          # window_size=50,
-          # term_name="env_params",
         ),
       },
       residual_actor=PpoActorConfig(
@@ -79,5 +75,5 @@ def booster_t1_residual_ppo_cfg() -> ResidualPpoConfig:
     ),
     freeze_base_normalizers=True,
     residual_action_penalty_coef=0.01,
-    residual_weight_penalty_coef=0.05,
+    residual_weight_penalty_coef=0.03,
   )

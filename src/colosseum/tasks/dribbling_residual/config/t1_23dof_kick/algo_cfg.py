@@ -20,6 +20,6 @@ def booster_t1_residual_ppo_cfg():
   new_ra = replace(
     ra,
     orchestrator=replace(ra.orchestrator, per_joint=True),
-    init_favored_logit=2.0,
+    init_favored_logit=3.0,
   )
   return replace(base, residual_actor=new_ra)

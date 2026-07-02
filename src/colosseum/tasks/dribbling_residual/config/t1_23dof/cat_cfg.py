@@ -20,7 +20,7 @@ from colosseum.tasks.dribbling_residual.mdp.head_ik_action import HeadIKActionCf
 from colosseum.tasks.dribbling_residual.mdp.terminations import BallLostTermination
 
 commands: Dict[str, CommandTermCfg] = {
-  "twist": BallTwistCommandCfg(stop_distance=0.25),
+  "twist": BallTwistCommandCfg(stop_distance=0.25, approach_offset=0.4),
   # Fixed dribble-direction target for the whole episode (no mid-episode
   # resampling); see BallVelocityCommandCfg defaults.
   "ball_vel": BallVelocityCommandCfg(

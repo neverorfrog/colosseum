@@ -165,7 +165,7 @@ class BallTwistCommandCfg(CommandTermCfg):
   # Deceleration zone before the stop: between slow_distance and stop_distance the
   # commanded speed ramps down to slow_speed_scale * speed at the inner edge, so
   # the robot eases into the kick. Neutral when slow_speed_scale == 1.0.
-  slow_distance: float = 0.0
+  slow_distance: float = 0.4
   slow_speed_scale: float = 1.0
   # Circumnavigation: aim the walk at a point this far *behind* the ball (opposite
   # the dribble target) until the robot is lined up behind it, then commit to the

@@ -84,26 +84,31 @@ def ball_lost_penalty(
 
 
 class BallKickedAway(ManagerTermBase):
-  """Terminate (success) once the ball, after being struck, leaves a radius.
+  """Terminate (success) a short window after the ball is first struck.
 
-  For the single-kick variant: the robot walks up, hits the ball once, and the
-  episode ends when the ball has travelled away. Arms on the first foot-ball
-  contact of the episode so a far-spawned ball doesn't trigger it during the
-  walk-up; once armed, fires when robot->ball distance exceeds ``success_radius``.
+  For the single-kick variant: the robot walks up and hits the ball once, and
+  the episode ends ``credit_steps`` steps after the first foot-ball contact.
+  That window is long enough for the struck ball to leave the foot -- so the
+  velocity reward and the success bonus register the kick -- but far shorter than
+  a swing-foot return, so the policy cannot take a second touch or micro-adjust
+  the ball while dribbling.
   """
 
   def __init__(self, cfg: TerminationTermCfg, env: ManagerBasedRlEnv):
     super().__init__(env)
     p = cfg.params
-    self._radius = float(p.get("success_radius", 1.5))
+    self._credit_steps = int(p.get("credit_steps", 8))
     self._sensor_name = str(p.get("sensor_name", "foot_ball_contact"))
     self._armed = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
+    self._steps_since = torch.zeros(env.num_envs, dtype=torch.long, device=env.device)
 
   def reset(self, env_ids: torch.Tensor | slice | None = None) -> dict:
     if env_ids is None:
       self._armed.zero_()
+      self._steps_since.zero_()
     else:
       self._armed[env_ids] = False
+      self._steps_since[env_ids] = 0
     return {}
 
   def __call__(self, env: ManagerBasedRlEnv, **kwargs) -> torch.Tensor:
@@ -113,10 +118,8 @@ class BallKickedAway(ManagerTermBase):
       contact = (found.flatten(start_dim=1) > 0).any(dim=-1)
       self._armed |= contact
 
-    robot_xy = env.scene["robot"].data.root_link_pos_w[:, :2]
-    ball_xy = env.scene["ball"].data.root_link_pos_w[:, :2]
-    dist = (ball_xy - robot_xy).norm(dim=-1)
-    return self._armed & (dist > self._radius)
+    self._steps_since += self._armed.long()
+    return self._armed & (self._steps_since >= self._credit_steps)
 
 
 def ball_kicked_away_bonus(

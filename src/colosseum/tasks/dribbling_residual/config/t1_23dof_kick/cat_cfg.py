@@ -22,13 +22,13 @@ from ..t1_23dof.cat_cfg import terminations as _base_terminations
 commands = dict(_base_commands)
 commands["ball_vel"] = BallVelocityCommandCfg(
   constant_speed=True,
-  speed_range=(2.0, 5.0),
+  speed_range=(1.0, 5.0),
 )
 
 terminations = dict(_base_terminations)
 terminations["ball_kicked_away"] = TerminationTermCfg(
   func=BallKickedAway,
-  params={"success_radius": 1.5, "sensor_name": "foot_ball_contact"},
+  params={"credit_steps": 50, "sensor_name": "foot_ball_contact"},
 )
 
 __all__ = ["actions", "commands", "terminations"]

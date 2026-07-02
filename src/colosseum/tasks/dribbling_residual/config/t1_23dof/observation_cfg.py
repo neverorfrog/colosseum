@@ -88,8 +88,8 @@ ball_terms = {
     params={
       "sigma_pos_base": 0.05,
       "sigma_pos_per_m": 0.05,
-      "sigma_pos_scale_range": (0.5, 2.0),
-      "sigma_vel_range": (0.1, 0.5),
+      "sigma_pos_scale_range": (0.5, 3.0),
+      "sigma_vel_range": (0.1, 1.0),
       "vel_filter_alpha": 0.3,
       "coast_vel_decay": 0.98,
       "p_miss_range": (0.02, 0.3),
@@ -98,6 +98,9 @@ ball_terms = {
       "fov_half_angle": 0.6,
       "latency_steps": 2,
     },
+    # 5 steps (0.1 s @ 50 Hz) of past ball estimates so the actor can re-derive
+    # velocity and spot a stale/coasting estimate (position stops moving) itself.
+    history_length=5,
   ),  # (N, 4)
 }
 
