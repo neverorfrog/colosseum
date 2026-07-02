@@ -91,9 +91,15 @@ def ball_vel_tracking_body(
   sharpness: float = 1.0,
   min_speed: float = 0.05,
 ) -> torch.Tensor:
-  """exp(-sharpness * |v_ball_b - v_cmd_b|²). Zero when ball is stationary."""
+  """exp(-sharpness * |v_ball_b - v_cmd_b|²). Zero when ball is stationary.
+
+  The command is planar, so upward ball velocity (a lofted kick) counts as
+  tracking error too: vz.clamp(min=0)² is added to the XY error inside the exp.
+  """
   ball_vel_b = ball_vel_body(env)
   error_sq = ((ball_vel_b - cmd_body(env, command_name)) ** 2).sum(dim=-1)
+  vz_up = env.scene["ball"].data.root_link_lin_vel_w[:, 2].clamp(min=0.0)
+  error_sq = error_sq + vz_up**2
   reward = torch.exp(-sharpness * error_sq)
   return reward * (ball_vel_b.norm(dim=-1) > min_speed).float()
 
