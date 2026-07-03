@@ -139,6 +139,10 @@ class VelocityRmaTerm(RmaTerm):
   def adaptation_encoder(self) -> nn.Module:
     return self._adapt_enc_module
 
+  @property
+  def odom_head(self) -> nn.Module:
+    return self._odom_head
+
   # ------------------------------------------------------------------
   # Encoding interface
   # ------------------------------------------------------------------

@@ -28,10 +28,10 @@ events = {
     mode="reset",
     params={
       "pose_range": {
-        "x": (-0.5, 0.5),
-        "y": (-0.5, 0.5),
+        "x": (0.0, 0.0),
+        "y": (0.0, 0.0),
         "z": (0.01, 0.05),
-        "yaw": (-3.14, 3.14),
+        "yaw": (0.0, 0.0),
       },
       "velocity_range": {},
     },
@@ -41,7 +41,7 @@ events = {
     mode="reset",
     params={
       "position_range": (-0.1, 0.1),
-      "velocity_range": (0.0, 0.0),
+      "velocity_range": (-0.01, 0.01),
       "asset_cfg": SceneEntityCfg("robot", joint_names=(".*",)),
     },
   ),

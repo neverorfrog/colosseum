@@ -153,13 +153,21 @@ rewards = {
     weight=-1.0,
     params={
       "asset_cfg": SceneEntityCfg(
-        "robot", joint_names=(".*Hip_Roll", ".*Hip_Yaw", ".*Hip_Pitch", ".*Knee_Pitch")
+        "robot",
+        joint_names=(
+          ".*Hip_Roll",
+          ".*Hip_Yaw",
+          ".*Hip_Pitch",
+          ".*Knee_Pitch",
+          ".*Ankle_Roll",
+        ),
       ),
       "weights_standing": {
         ".*Hip_Yaw": 5.0,
         ".*Hip_Roll": 2.0,
         ".*Hip_Pitch": 0.5,
         ".*Knee_Pitch": 0.5,
+        ".*Ankle_Roll": 2.0,
       },
     },
   ),
@@ -169,8 +177,8 @@ rewards = {
     params={
       "phase_command_name": "gait_phase",
       "height_sensor_name": "foot_height_scan",
-      "swing_height": 0.1,
-      "tracking_sigma": 0.005,
+      "swing_height": 0.15,
+      "tracking_sigma": 0.001,
       "command_name": "twist",
       "command_threshold": 0.05,
     },
@@ -235,21 +243,6 @@ rewards = {
   #   weight=-1.0,
   #   params={"asset_cfg": SceneEntityCfg("robot", body_names=(FOOT_BODY_NAMES))},
   # ),
-  # "penalty_feet_yaw_diff": RewardTermCfg(
-  #   func=feet_yaw_diff_penalty,
-  #   weight=-0.1,
-  #   params={"asset_cfg": SceneEntityCfg("robot", body_names=(FOOT_BODY_NAMES))},
-  # ),
-  # "penalty_feet_yaw_mean": RewardTermCfg(
-  #   func=feet_yaw_mean_penalty,
-  #   weight=-0.1,
-  #   params={"asset_cfg": SceneEntityCfg("robot", body_names=(FOOT_BODY_NAMES))},
-  # ),
-  "ball_target_reached": RewardTermCfg(  # Reduced from dribbling's 50.0 for stabler early residual learning.
-    func=ball_target_reached,
-    weight=10.0,
-    params={"command_name": "ball_vel"},
-  ),
   "penalty_action_rate": RewardTermCfg(func=action_rate_l2, weight=-1.0),
   "dof_pos_limits": RewardTermCfg(func=joint_pos_limits, weight=-1.0),
   "penalty_feet_distance": RewardTermCfg(

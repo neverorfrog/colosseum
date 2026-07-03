@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 
 from colosseum.config.types.task import TaskConfig, register_task
 from colosseum.envs.colosseum_env import ColosseumEnvCfg
+from colosseum.robots.t1_23dof.sensors import FOOT5_BALL_CONTACT_SENSOR
 
 from ..t1_23dof.t1_dribbling_residual_cfg import (
   booster_t1_dribbling_residual_env_cfg as _base_env_cfg,
@@ -22,6 +23,8 @@ from .reward_cfg import rewards
 
 def booster_t1_dribbling_residual_kick_env_cfg(play: bool = False) -> ColosseumEnvCfg:
   cfg = _base_env_cfg(play)
+  # Inner-face (foot5) ball contact sensor for the inside-foot kick rewards.
+  cfg.scene.sensors = cfg.scene.sensors + (FOOT5_BALL_CONTACT_SENSOR,)
   cfg.rewards = rewards
   cfg.terminations = terminations
   cfg.events = events

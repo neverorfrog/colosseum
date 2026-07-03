@@ -22,7 +22,7 @@ events["reset_ball"] = replace(
   _reset_ball,
   params={
     **_reset_ball.params,
-    "pose_range": {"x": (0.5, 1.5), "y": (-1.0, 1.0), "z": (0.11, 0.11)},
+    "pose_range": {"x": (0.5, 2.0), "y": (-1.0, 1.0), "z": (0.11, 0.11)},
   },
 )
 
@@ -32,5 +32,5 @@ events["reset_ball"] = replace(
 events["ball_initial_velocity"] = EventTermCfg(
   func=reset_ball_random_velocity,
   mode="reset",
-  params={"prob": 0.3, "speed_range": (0.5, 2.0)},
+  params={"prob": 0.3, "speed_range": (1.0, 2.0)},
 )

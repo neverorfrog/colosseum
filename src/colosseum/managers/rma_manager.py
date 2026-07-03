@@ -115,6 +115,16 @@ class RmaTerm(ManagerTermBase):
     """
     return None
 
+  @property
+  def odom_head(self) -> nn.Module | None:
+    """Optional decoder mapping the adaptation latent to an odometry estimate.
+
+    Returns None if this term has no odom head. Override in subclasses that
+    train an auxiliary odometry regression head and want it exported alongside
+    the policy (consumed on the robot to integrate base velocity into pose).
+    """
+    return None
+
   # ------------------------------------------------------------------
   # Encoding interface
   # ------------------------------------------------------------------

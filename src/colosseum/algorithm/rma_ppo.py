@@ -670,6 +670,11 @@ class RmaPPO(PPO):
       The window is both an input and output (different names: "<g>" / "<g>_out")
       so the caller can feed it back generically without any model knowledge.
       play.py pairs extra inputs with extra outputs positionally.
+
+      Terms with an odom head append their estimate as trailing outputs (named
+      "odom" for a single head, else "odom_<i>"), after all window outputs, so
+      positional state feedback is unaffected. The robot reads these by name to
+      integrate base linear velocity into odometry.
     """
     import torch.nn as nn
 
@@ -693,14 +698,27 @@ class RmaPPO(PPO):
       )
     else:
       # --- Phase 2/3: adaptation encoder with stateful rolling window ---
-      adapt_info: list[tuple[str, nn.Module, tuple[int, ...]]] = []
+      adapt_info: list[tuple[str, nn.Module, tuple[int, ...], nn.Module | None]] = []
       for term in rma_manager._terms.values():
         if term.adaptation_encoder is not None and term.cfg.adaptation_obs_group is not None:
           adapt_info.append((
             term.cfg.adaptation_obs_group,
             term.adaptation_encoder,
             tuple(term._window.shape),
+            term.odom_head,
           ))
+
+      # Terms with an odom head emit their estimate as trailing outputs (after
+      # the recurrent window states), so play.py's positional state feedback is
+      # unaffected; the robot reads them by name to integrate base velocity into
+      # pose. The head is already a submodule of the adaptation encoder, so it
+      # rides along with the encoder's .cpu()/.to(device) moves.
+      odom_indices = [
+        i for i, (_, _, _, head) in enumerate(adapt_info) if head is not None
+      ]
+      odom_names = (
+        ["odom"] if len(odom_indices) == 1 else [f"odom_{i}" for i in odom_indices]
+      )
 
       class _AdaptWrapper(nn.Module):
         def __init__(self) -> None:
@@ -708,7 +726,8 @@ class RmaPPO(PPO):
           self.obs_normalizer = obs_normalizer
           self.actor = actor
           self.num_encoders = len(adapt_info)
-          for i, (_, enc, _) in enumerate(adapt_info):
+          self.odom_indices = odom_indices
+          for i, (_, enc, _, _) in enumerate(adapt_info):
             self.add_module(f"encoder_{i}", enc)
 
         def forward(
@@ -723,16 +742,17 @@ class RmaPPO(PPO):
           z = torch.cat(latents, dim=-1)
           norm_obs = self.obs_normalizer(actor_obs)
           actions = self.actor(torch.cat([norm_obs, z], dim=-1))
-          return (actions, *windows_out)
+          odom_outs = [adapt_info[i][3](latents[i]) for i in self.odom_indices]
+          return (actions, *windows_out, *odom_outs)
 
       wrapper = _AdaptWrapper().cpu()
       wrapper.eval()
 
       actor_obs_dummy = torch.zeros(1, self.actor_obs_dim)
       window_dummies = tuple(
-        torch.zeros(1, shape[1], shape[2]) for _, _, shape in adapt_info
+        torch.zeros(1, shape[1], shape[2]) for _, _, shape, _ in adapt_info
       )
-      state_names = [name for name, _, _ in adapt_info]
+      state_names = [name for name, _, _, _ in adapt_info]
       torch.onnx.export(
         wrapper,
         (actor_obs_dummy,) + window_dummies,
@@ -740,10 +760,10 @@ class RmaPPO(PPO):
         export_params=True,
         opset_version=18,
         input_names=["obs"] + state_names,
-        output_names=["actions"] + [n + "_out" for n in state_names],
+        output_names=["actions"] + [n + "_out" for n in state_names] + odom_names,
         dynamo=False,
       )
-      for _, enc, _ in adapt_info:
+      for _, enc, _, _ in adapt_info:
         enc.to(self.device)
 
     self.actor.to(self.device)
