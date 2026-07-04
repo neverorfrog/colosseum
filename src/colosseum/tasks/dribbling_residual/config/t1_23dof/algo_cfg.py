@@ -20,8 +20,7 @@ from colosseum.config.types.networks import (
 )
 
 # WALK_CHECKPOINT = "models/t1-velocity-rma/jun26_1/t1-velocity-rma_rmappo_jun26_1.pt"
-WALK_CHECKPOINT = "models/t1-velocity-manu/jun24_2/t1-velocity-manu_ppo_jun24_2.pt"
-
+WALK_CHECKPOINT = "models/t1-velocity-manu/jul2_1/t1-velocity-manu_ppo_jul2_1.pt"
 
 def booster_t1_residual_ppo_cfg() -> ResidualPpoConfig:
   return ResidualPpoConfig(

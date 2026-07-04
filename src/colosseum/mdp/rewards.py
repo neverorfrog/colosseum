@@ -343,12 +343,17 @@ def orientation_penalty(
   return xy_squared
 
 
-def _bezier_foot_height(phi: torch.Tensor, swing_height: float) -> torch.Tensor:
+def _bezier_foot_height(
+  phi: torch.Tensor, swing_height: float | torch.Tensor
+) -> torch.Tensor:
   """Cubic Bézier foot height profile keyed to gait phase φ ∈ [-π, π].
 
   x ∈ [0, 0.5]: foot rises from 0 → swing_height (stance → swing).
   x ∈ [0.5, 1]: foot falls from swing_height → 0 (swing → stance).
   At φ=π (standing snap value): x=1.0, height=0 (feet on ground).
+
+  swing_height is a scalar or a tensor broadcastable against phi
+  (e.g. (N, 1) for a per-env height).
   """
 
   def _cubic_bezier(
@@ -358,8 +363,8 @@ def _bezier_foot_height(phi: torch.Tensor, swing_height: float) -> torch.Tensor:
     return y0 + (y1 - y0) * bezier
 
   x = (phi + math.pi) / (2.0 * math.pi)
-  h = torch.full_like(phi, swing_height)
   z = torch.zeros_like(phi)
+  h = z + swing_height
   rising = _cubic_bezier(z, h, 2.0 * x)
   falling = _cubic_bezier(h, z, 2.0 * x - 1.0)
   return torch.where(x <= 0.5, rising, falling)
@@ -412,6 +417,8 @@ def feet_phase(
   tracking_sigma: float = 0.008,
   command_name: str | None = None,
   command_threshold: float = 0.05,
+  max_speed: float = 1.5,
+  min_height_scale: float = 1.0,
 ) -> torch.Tensor:
   """Reward foot height tracking against a cubic Bézier gait profile.
 
@@ -419,17 +426,28 @@ def feet_phase(
   observation) and compares actual terrain-relative foot clearance to the
   Bézier target. When command_name is set, zeroes the reward for standing
   envs (‖cmd_xy‖ ≤ command_threshold) so static_stance can own that regime.
+
+  With min_height_scale < 1, the Bézier peak adapts to the commanded speed:
+  swing_height * clamp(‖cmd_xy‖ / max_speed, min_height_scale, 1), so slow
+  commands ask for proportionally lower steps instead of full-height marching.
+  The floor keeps near-threshold commands from targeting ground-scuffing
+  steps; feet_swing stays fixed as the hard clearance backstop.
   """
   gait_term = env.command_manager.get_term(phase_command_name)
   phi = gait_term.phase  # (N, 2), raw angles in [-π, π]
   height_sensor = env.scene[height_sensor_name]
   foot_heights = height_sensor.data.heights  # (N, 2)
-  expected = _bezier_foot_height(phi, swing_height)
+  if command_name is not None:
+    cmd = env.command_manager.get_command(command_name)
+    speed = torch.norm(cmd[:, :2], dim=-1)  # (N,)
+    height_scale = torch.clamp(speed / max_speed, min_height_scale, 1.0)
+    expected = _bezier_foot_height(phi, swing_height * height_scale.unsqueeze(-1))
+  else:
+    expected = _bezier_foot_height(phi, swing_height)
   error = torch.square(foot_heights - expected).sum(dim=-1)
   reward = torch.exp(-error / tracking_sigma)
   if command_name is not None:
-    cmd = env.command_manager.get_command(command_name)
-    moving = (torch.norm(cmd[:, :2], dim=-1) > command_threshold).float()
+    moving = (speed > command_threshold).float()
     reward = reward * moving
   return reward
 
