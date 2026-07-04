@@ -841,3 +841,56 @@ class RmaPPO(PPO):
       "metadata": checkpoint.get("metadata", {}),
       "config": checkpoint.get("config"),
     }
+
+  def warm_start(self, path: str | Path) -> None:
+    """Partial warm-start from a plain (non-RMA) PPO checkpoint, e.g. manu.
+
+    The RMA actor input is wider than a plain actor by ``total_latent_dim``
+    (proprio ⊕ z), so a strict load would shape-mismatch on the first layer.
+    This copies every actor layer that matches and, for the widened first layer,
+    copies the proprio input columns while zero-initialising the latent columns —
+    so the policy starts identical to the source (the latent contributes nothing)
+    and learns to use z during Phase 1. Critic and obs normalizers load directly
+    (same dims); the privileged encoder stays randomly initialised.
+    """
+    ckpt = self._load_checkpoint(path)
+
+    src = ckpt["actor_state_dict"]
+    dst = self.actor.state_dict()
+    with torch.no_grad():
+      for k, v in src.items():
+        if k not in dst:
+          logger.warning(f"warm-start: actor key '{k}' absent in target; skipped")
+          continue
+        t = dst[k]
+        if t.shape == v.shape:
+          t.copy_(v)
+        elif (
+          v.dim() == 2
+          and t.dim() == 2
+          and t.shape[0] == v.shape[0]
+          and t.shape[1] - v.shape[1] == self.rma_manager.total_latent_dim
+        ):
+          t.zero_()
+          t[:, : v.shape[1]].copy_(v)
+          logger.info(
+            f"warm-start: partial-copied '{k}' {tuple(v.shape)} -> {tuple(t.shape)} "
+            f"(latent cols {v.shape[1]}:{t.shape[1]} zeroed)"
+          )
+        else:
+          logger.warning(
+            f"warm-start: shape mismatch on '{k}' "
+            f"({tuple(v.shape)} vs {tuple(t.shape)}); skipped"
+          )
+    self.actor.load_state_dict(dst)
+
+    # Critic + normalizers share dims with the source (rma critic obs == base).
+    self.value_net.load_state_dict(ckpt["value_net_state_dict"])
+    self.actor_obs_normalizer.load_state_dict(ckpt["actor_obs_normalizer_state_dict"])
+    self.critic_obs_normalizer.load_state_dict(ckpt["critic_obs_normalizer_state_dict"])
+
+    self.global_step = 0
+    logger.success(
+      f"Warm-started actor (proprio cols) / critic / normalizers from {path}; "
+      "privileged encoder fresh; global_step=0"
+    )

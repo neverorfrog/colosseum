@@ -6,10 +6,11 @@ from colosseum.robots.t1_23dof.constants import get_robot_cfg
 from colosseum.tasks.velocity.config.t1_23dof.t1_velocity_cfg import (
   booster_t1_velocity_env_cfg,
 )
+from colosseum.tasks.velocity.config.t1_23dof_manu.cat_cfg import actions
+from colosseum.tasks.velocity.config.t1_23dof_manu.reward_cfg import rewards
 from colosseum.tasks.velocity.mdp.rma_term import VelocityRmaTermCfg
 
 from .algo_cfg import booster_t1_ppo_cfg, booster_t1_rsl_rl_runner_cfg
-from .cat_cfg import actions
 from .observation_cfg import observations
 
 
@@ -19,6 +20,7 @@ def booster_t1_velocity_rma_env_cfg(play: bool = False) -> ColosseumEnvCfg:
   cfg.scene.entities["robot"] = get_robot_cfg()
   cfg.observations = observations
   cfg.actions = actions
+  cfg.rewards = rewards
   return cfg
 
 

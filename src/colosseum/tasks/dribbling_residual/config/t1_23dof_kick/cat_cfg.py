@@ -25,7 +25,7 @@ from ..t1_23dof.cat_cfg import terminations as _base_terminations
 commands = dict(_base_commands)
 commands["ball_vel"] = BallVelocityCommandCfg(
   constant_speed=True,
-  speed_range=(0.8, 3.0),
+  speed_range=(3.0, 3.0),
 )
 
 terminations = dict(_base_terminations)

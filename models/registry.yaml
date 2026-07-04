@@ -269,4 +269,9 @@ t1-dribbling-residual-kick:
       run: t1-dribbling-residual-kick-ResidualPPO-123-20260702_221627
       step: 0
       created: '2026-07-03T01:28:11.543139+00:00'
+    jul2_7:
+      file: jul2_7/t1-dribbling-residual-kick_residualppo_jul2_7.onnx
+      run: t1-dribbling-residual-kick-ResidualPPO-123-20260703_074454
+      step: 0
+      created: '2026-07-03T10:51:08.979312+00:00'
   default: jul2_1

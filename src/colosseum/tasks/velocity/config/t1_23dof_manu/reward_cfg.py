@@ -94,12 +94,12 @@ rewards = {
   ),
   "feet_phase": RewardTermCfg(
     func=feet_phase,
-    weight=2.0,
+    weight=3.0,
     params={
       "phase_command_name": "gait_phase",
       "height_sensor_name": "foot_height_scan",
-      "swing_height": 0.11,
-      "tracking_sigma": 0.005,
+      "swing_height": 0.1,
+      "tracking_sigma": 0.001,
       "command_name": "twist",
       "command_threshold": 0.05,
     },
@@ -164,8 +164,8 @@ rewards = {
   # Quadratic (Δh)² in meters above terrain; target = T1 spawn root z.
   "penalty_base_height": RewardTermCfg(
     func=base_height_penalty,
-    weight=-15.0,
-    params={"target_height": 0.64},
+    weight=-25.0,
+    params={"target_height": 0.63},
   ),
   "penalty_feet_ori": RewardTermCfg(
     func=foot_orientation_penalty,
@@ -192,9 +192,9 @@ rewards = {
         ".*Shoulder_Roll": 20.0,
         ".*Elbow_Pitch": 1.0,
         ".*Elbow_Yaw": 20.0,
-        "Waist": 20.0,
+        "Waist": 5.0,
         ".*Hip_Pitch": 0.01,
-        ".*Hip_Roll": 1.0,
+        ".*Hip_Roll": 10.0,
         ".*Hip_Yaw": 5.0,
         ".*Knee_Pitch": 0.01,
         ".*Ankle_Pitch": 5.0,
@@ -215,7 +215,7 @@ rewards = {
   # site_names → linear slip; body_names → foot yaw-rate for the rotational scrub.
   "penalty_feet_slip": RewardTermCfg(
     func=feet_slip,
-    weight=-1.0,
+    weight=-2.0,
     params={
       "asset_cfg": SceneEntityCfg("robot", site_names=(FOOT_SITE_NAMES)),
       "sensor_name": "feet_ground_contact",
