@@ -78,6 +78,11 @@ t1-velocity-rma:
       run: t1-velocity-rma-RmaPPO-123-20260704_050104
       step: 0
       created: '2026-07-04T05:24:02.650971+00:00'
+    jul4_3:
+      file: jul4_3/t1-velocity-rma_rmappo_jul4_3.onnx
+      run: t1-velocity-rma-RmaPPO-123-20260704_110753
+      step: 0
+      created: '2026-07-04T12:13:26.584969+00:00'
   default: jun16_1
 t1-velocity-manu:
   models:
@@ -126,6 +131,11 @@ t1-velocity-manu:
       run: t1-velocity-manu-PPO-123-20260704_074921
       step: 0
       created: '2026-07-04T08:49:33.930325+00:00'
+    jul2_3:
+      file: jul2_3/t1-velocity-manu_ppo_jul2_3.onnx
+      run: t1-velocity-manu-PPO-123-20260704_110108
+      step: 0
+      created: '2026-07-04T12:10:10.300197+00:00'
   default: jun20_1
 t1-dribbling-residual:
   models:
@@ -294,4 +304,14 @@ t1-dribbling-residual-kick:
       run: t1-dribbling-residual-kick-ResidualPPO-123-20260704_052801
       step: 0
       created: '2026-07-04T05:24:19.964303+00:00'
+    jul4_2:
+      file: jul4_2/t1-dribbling-residual-kick_residualppo_jul4_2.onnx
+      run: t1-dribbling-residual-kick-ResidualPPO-123-20260704_063147
+      step: 0
+      created: '2026-07-04T08:58:14.185250+00:00'
+    jul5_1:
+      file: jul5_1/t1-dribbling-residual-kick_residualppo_jul5_1.onnx
+      run: t1-dribbling-residual-kick-ResidualPPO-123-20260705_010217
+      step: 0
+      created: '2026-07-04T23:49:48.977351+00:00'
   default: jul2_1
