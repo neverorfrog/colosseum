@@ -28,17 +28,16 @@ from colosseum.mdp.ball_rewards import (
   stance_foot_ball_clearance_penalty,
 )
 from colosseum.mdp.rewards import pose_deviation_penalty
+from colosseum.tasks.dribbling_residual.mdp.rewards import (
+  feet_phase_ball_gated,
+  feet_swing_ball_gated,
+)
 from colosseum.tasks.dribbling_residual.mdp.terminations import ball_kicked_away_bonus
 
 from ..t1_23dof.reward_cfg import rewards as _base_rewards
 
 rewards = dict(_base_rewards)
 
-# Relax the pose-deviation penalty so the swing leg can elongate the strike —
-# but only for hip yaw/roll (the stride joints). Pitch/knee stay at the base
-# task's effective strength (0.5 * 1.0) to cap leg elongation, and ankle roll
-# at full strength (0.5 * 4.0 = base 2.0) against erratic ankle flicks.
-# Fresh term (not replace) so we don't mutate the base task's shared params.
 rewards["penalty_hip_pose"] = RewardTermCfg(
   func=pose_deviation_penalty,
   weight=-0.5,
@@ -62,19 +61,24 @@ rewards["penalty_hip_pose"] = RewardTermCfg(
     },
   },
 )
-rewards["feet_swing"] = replace(rewards["feet_swing"], weight=0.05)
-rewards["feet_phase"] = replace(rewards["feet_phase"], weight=0.05)
-rewards["arm_phase"] = replace(rewards["arm_phase"], weight=0.05)
+rewards["feet_swing"] = replace(
+  rewards["feet_swing"],
+  func=feet_swing_ball_gated,
+  weight=1.0,
+  params={**rewards["feet_swing"].params, "gate_distance": 1.0},
+)
+rewards["feet_phase"] = replace(
+  rewards["feet_phase"],
+  func=feet_phase_ball_gated,
+  weight=1.0,
+  params={**rewards["feet_phase"].params, "gate_distance": 1.0},
+)
+rewards["arm_phase"] = replace(rewards["arm_phase"], weight=0.5)
 
 # Make matching the commanded ball velocity the dominant objective.
 rewards["ball_vel_tracking"] = replace(rewards["ball_vel_tracking"], weight=4.0)
 rewards["ball_vel_norm"] = replace(rewards["ball_vel_norm"], weight=3.0)
 
-# Inside-foot kick enforcement (recipe from t1_23dof_stronger): shrink the
-# whole-foot contact bootstrap so it scaffolds discovery without out-voting the
-# inner-face terms, add an inner-face (foot5 medial capsule) contact bootstrap,
-# and pay the high-value strike credit only for inner-face contact — a sole/toe
-# punt earns no impulse reward. Fresh terms, not mutated base cfgs.
 rewards["foot_ball_contact"] = RewardTermCfg(
   func=foot_ball_contact,
   weight=0.3,

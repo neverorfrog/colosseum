@@ -49,13 +49,11 @@ def scene_cfg(play: bool = False) -> SceneCfg:
 
 # Reuse the base command channels, then override the two we tune.
 DEFAULT_COMMANDS = dict(deepcopy(booster_t1_dribbling_residual_env_cfg().commands))
+# NOTE: the twist slow zone (slow_distance/slow_speed_scale, previously 0.7/0.4
+# here) was removed when BallTwistCommand was simplified.
 DEFAULT_COMMANDS["twist"] = BallTwistCommandCfg(
   stop_distance=0.25,
   approach_offset=0.4,
-  # Ease into the kick: from 0.7 m down to the 0.25 m stop, ramp the walk speed
-  # down to 40% so the robot decelerates before contact instead of rushing in.
-  slow_distance=0.7,
-  slow_speed_scale=0.4,
 )
 DEFAULT_COMMANDS["ball_vel"] = BallVelocityCommandCfg(
   speed_range=(0.1, 2.5),
