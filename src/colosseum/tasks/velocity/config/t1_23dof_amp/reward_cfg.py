@@ -97,24 +97,19 @@ rewards = {
       "command_threshold": 0.05,
     },
   ),
-  "feet_phase": RewardTermCfg(
-    func=feet_phase,
-    weight=1.0,
-    params={
-      "phase_command_name": "gait_phase",
-      "height_sensor_name": "foot_height_scan",
-      "swing_height": 0.09,
-      "tracking_sigma": 0.005,
-      "command_name": "twist",
-      "command_threshold": 0.05,
-    },
-  ),
+  # "feet_phase": RewardTermCfg(
+  #   func=feet_phase,
+  #   weight=1.0,
+  #   params={
+  #     "phase_command_name": "gait_phase",
+  #     "height_sensor_name": "foot_height_scan",
+  #     "swing_height": 0.09,
+  #     "tracking_sigma": 0.005,
+  #     "command_name": "twist",
+  #     "command_threshold": 0.05,
+  #   },
+  # ),
   "alive": RewardTermCfg(func=is_alive, weight=0.25),
-  # =========================
-  # SAFETY / sim2real regularization (AMP is blind to these).
-  # =========================
-  # Light fall-safety floor only (termination handles real falls); kept low so
-  # it doesn't fight the natural torso motion AMP supplies.
   "penalty_orientation": RewardTermCfg(
     func=orientation_penalty,
     weight=-5.0,

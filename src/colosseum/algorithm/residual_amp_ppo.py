@@ -83,6 +83,9 @@ class ResidualAMPPPO(ResidualPPO):
     )
     self.amp_replay = AMPReplayBuffer(amp_dim, cfg.amp_replay_buffer_size, self.device)
 
+    # Multi-GPU: same starting weights on every rank (no-op when not distributed).
+    self._synchronize_model_weights(self.discriminator)
+
     # Separate optimizer: the discriminator is a distinct learning signal from the
     # policy. Per-group weight decay mirrors beyondAMP (trunk light, head heavy).
     self.amp_optimizer = optim.Adam(
@@ -115,13 +118,15 @@ class ResidualAMPPPO(ResidualPPO):
       amp_obs, next_amp_obs, rewards, normalizer=self.amp_normalizer
     )
 
-    # Store only transitions that don't straddle a reset: on a done step the
-    # post-step amp obs is already the reset observation, so (s, s') is invalid.
+    # On a done step the post-step amp obs is already the reset observation, so
+    # (s, s') straddles the reset and the discriminator score is meaningless.
+    # Fall back to the raw task reward there (mjlab doesn't expose the pre-reset
+    # terminal obs that beyondAMP uses), and keep such pairs out of the replay.
     keep = dones < 0.5
+    blended = torch.where(keep, blended, rewards)
     if keep.any():
       self.amp_replay.insert(amp_obs[keep], next_amp_obs[keep])
-
-    self._last_amp_reward = float(amp_reward.mean().item())
+      self._last_amp_reward = float(amp_reward[keep].mean().item())
     return blended
 
   # ------------------------------------------------------------------ #
@@ -170,6 +175,7 @@ class ResidualAMPPPO(ResidualPPO):
 
       self.amp_optimizer.zero_grad()
       (amp_loss + grad_pen).backward()
+      self._distributed_average_optimizer_grads(self.amp_optimizer)
       self.amp_optimizer.step()
 
       # Update the running stats on RAW states (both policy and expert).
