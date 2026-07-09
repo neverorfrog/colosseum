@@ -398,6 +398,58 @@ def stance_foot_ball_clearance_penalty(
   return torch.exp(-d_stance / sigma)
 
 
+def stance_foot_placement_penalty(
+  env: ManagerBasedRlEnv,
+  command_name: str,
+  asset_cfg: SceneEntityCfg,
+  sensor_name: str,
+  engage_distance: float = 0.6,
+  lateral_margin: float = 0.15,
+  min_contact_force: float = 10.0,
+) -> torch.Tensor:
+  """Penalize the support foot for being off the ball's kick line.
+
+  The ideal strike plants the support foot *beside* the ball: on the line
+  through the ball center orthogonal to the commanded kick direction, offset
+  laterally. Per foot:
+
+      |longitudinal offset| + relu(lateral_margin - |lateral offset|)
+
+  where longitudinal is along the kick direction. The penalty is the minimum
+  over grounded feet (ground contact force > ``min_contact_force``): the
+  airborne kicking foot is never penalized (backswing stays free), and in
+  double support only one loaded foot needs to sit at ball depth. Lateral
+  placement beyond the margin — which side, how wide — is left to the policy.
+  Active only when the ball is within ``engage_distance`` of the root, so it
+  shapes the final setup steps rather than the walk-in. Use with a negative
+  weight.
+
+  ``asset_cfg`` must select the same foot bodies (in the same order) as the
+  ground contact sensor named by ``sensor_name``.
+  """
+  ball_xy = env.scene["ball"].data.root_link_pos_w[:, :2]
+  root_xy = env.scene["robot"].data.root_link_pos_w[:, :2]
+  cmd = env.command_manager.get_command(command_name)[:, :2]
+  kick_dir = cmd / cmd.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+  lat_dir = torch.stack([-kick_dir[:, 1], kick_dir[:, 0]], dim=-1)
+
+  feet_xy = env.scene["robot"].data.body_link_pos_w[:, asset_cfg.body_ids, :2]
+  rel = feet_xy - ball_xy.unsqueeze(1)  # (N, F, 2)
+  s_long = (rel * kick_dir.unsqueeze(1)).sum(dim=-1).abs()  # (N, F)
+  s_lat = (rel * lat_dir.unsqueeze(1)).sum(dim=-1).abs()
+  per_foot = s_long + (lateral_margin - s_lat).clamp(min=0.0)
+
+  force = env.scene[sensor_name].data.force
+  assert force is not None
+  grounded = force.norm(dim=-1) > min_contact_force  # (N, F)
+  per_foot = torch.where(grounded, per_foot, torch.full_like(per_foot, torch.inf))
+  penalty = per_foot.min(dim=-1).values
+  penalty = torch.where(grounded.any(dim=-1), penalty, torch.zeros_like(penalty))
+
+  near = (ball_xy - root_xy).norm(dim=-1) < engage_distance
+  return penalty * near.float()
+
+
 def robot_wrong_side_penalty(
   env: ManagerBasedRlEnv,
   command_name: str,

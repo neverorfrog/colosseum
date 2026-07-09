@@ -23,9 +23,8 @@ from mjlab.managers.scene_entity_config import SceneEntityCfg
 
 from colosseum.mdp.ball_rewards import (
   ball_kick_impulse,
-  ball_kick_reach_penalty,
   foot_ball_contact,
-  stance_foot_ball_clearance_penalty,
+  stance_foot_placement_penalty,
 )
 from colosseum.mdp.rewards import pose_deviation_penalty
 from colosseum.tasks.dribbling_residual.mdp.rewards import (
@@ -54,7 +53,7 @@ rewards["penalty_hip_pose"] = RewardTermCfg(
     ),
     "weights_standing": {
       ".*Hip_Yaw": 5.0,
-      ".*Hip_Roll": 2.0,
+      ".*Hip_Roll": 1.0,
       ".*Hip_Pitch": 1.0,
       ".*Knee_Pitch": 1.0,
       ".*Ankle_Roll": 4.0,
@@ -107,30 +106,19 @@ rewards["ball_kick_impulse"] = RewardTermCfg(
   },
 )
 
-# Elongate the step: penalize striking the ball when it is too close to the root
-# along the kick direction, so the robot reaches out to meet it further ahead.
-# min_reach is the elongation knob; keep the weight modest so the robot doesn't
-# learn to avoid contact.
-rewards["ball_kick_reach"] = RewardTermCfg(
-  func=ball_kick_reach_penalty,
-  weight=-5.0,
+# Stance-foot placement: the support (grounded) foot should sit on the line
+# through the ball center orthogonal to the commanded kick direction, at least
+# lateral_margin to the side (side and width are the policy's choice). Replaces
+# ball_kick_reach + stance_foot_ball_clearance with one setup-geometry term.
+rewards["stance_foot_placement"] = RewardTermCfg(
+  func=stance_foot_placement_penalty,
+  weight=-3.0,
   params={
-    "sensor_name": "foot_ball_contact",
     "command_name": "ball_vel",
-    "min_reach": 0.3,  # 0.4 over-elongated the leg on the real robot.
-    "min_contact_force": 10.0,
-    "credit_steps": 25,
-  },
-)
-
-# Keep the stance foot clear of the ball: penalize both feet crowding it at
-# once, so only the kicking foot engages. sigma is the clearance knob.
-rewards["stance_foot_ball_clearance"] = RewardTermCfg(
-  func=stance_foot_ball_clearance_penalty,
-  weight=-2.0,
-  params={
     "asset_cfg": SceneEntityCfg("robot", body_names=r"^(left|right)_foot_link$"),
-    "sigma": 0.07,
+    "sensor_name": "feet_ground_contact",
+    "engage_distance": 0.6,
+    "lateral_margin": 0.15,
   },
 )
 

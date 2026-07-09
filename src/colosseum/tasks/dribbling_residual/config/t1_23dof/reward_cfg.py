@@ -201,8 +201,8 @@ rewards = {
         # order [L_Sh, L_El, R_Sh, R_El], breaking contralateral pairing.
         preserve_order=True,
       ),
-      "swing_amplitude": (0.25, 0.25, 0.15, 0.15),
-      "max_speed": 1.0,
+      "swing_amplitude": (0.75, 0.75, 0.4, 0.4),
+      "max_speed": 1.5,
       "tracking_sigma": 0.25,
       "command_name": "twist",
     },
@@ -236,13 +236,8 @@ rewards = {
   "penalty_base_height": RewardTermCfg(
     func=base_height_penalty,
     weight=-30.0,
-    params={"target_height": 0.64},
+    params={"target_height": 0.62},
   ),
-  # "penalty_feet_ori": RewardTermCfg(
-  #   func=foot_orientation_penalty,
-  #   weight=-1.0,
-  #   params={"asset_cfg": SceneEntityCfg("robot", body_names=(FOOT_BODY_NAMES))},
-  # ),
   "penalty_action_rate": RewardTermCfg(func=action_rate_l2, weight=-1.0),
   "dof_pos_limits": RewardTermCfg(func=joint_pos_limits, weight=-1.0),
   "penalty_feet_distance": RewardTermCfg(
