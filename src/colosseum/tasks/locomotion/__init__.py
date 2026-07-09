@@ -1,5 +1,6 @@
 try:
-  import colosseum.tasks.locomotion.config.t1.locomotion_cfg  # noqa: F401
-  import colosseum.tasks.velocity.config.t1_rma.rma_locomotion_cfg  # noqa: F401
+  import colosseum.tasks.locomotion.config.t1.t1_locomotion_cfg  # noqa: F401
+  import colosseum.tasks.locomotion.config.t1_rma.t1_locomotion_rma_cfg  # noqa: F401
+  import colosseum.tasks.locomotion.config.t1_amp.t1_locomotion_amp_cfg  # noqa: F401
 except ImportError:
-  pass
+  print("ERROR IN IMPORTING TASK")

@@ -1,18 +1,18 @@
 """Command term: target-driven ball velocity in world frame (trimmed).
 
-At resampling time the term samples a persistent world-frame target from the
-current ball position (radius from ``target_distance_range``, heading relative
-to the robot yaw). Each step it recomputes the desired ball velocity toward that
-target:
+At episode start the term samples a world-frame target from the ball position
+(radius from ``target_distance_range``, heading relative to the robot yaw) and
+resamples a new target whenever the ball reaches it. Each step it recomputes the
+desired ball velocity toward the current target:
 
     dir   = normalize(target - ball_pos)
     speed = clip(speed_gain * distance, speed_range), zeroed within reach
     cmd   = speed * dir   (world-frame [vx, vy, 0])
 
 This is a trimmed variant of the dribbling task's BallVelocityCommand: it keeps
-the persistent target, speed ramp, and resample-on-reach, but drops the
-obstacle/adversary coupling and the extra metrics/debug since the residual task
-has no adversary.
+the persistent target and speed ramp but drops timer/drift resampling and the
+obstacle/adversary coupling. Losing the ball is handled by the ball-lost
+termination, not by resampling the target.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
 
 class BallVelocityCommand(CommandTerm):
-  """World-frame ball velocity command induced by a persistent target."""
+  """World-frame ball velocity command induced by a persistent target, resampled on reach."""
 
   cfg: BallVelocityCommandCfg
 
@@ -38,7 +38,8 @@ class BallVelocityCommand(CommandTerm):
     super().__init__(cfg, env)
     self.velocity_command = torch.zeros((env.num_envs, 3), device=env.device)
     self.target_position = torch.zeros((env.num_envs, 2), device=env.device)
-    # True on the step the ball reaches its target (before the resample fires).
+    # Per-episode constant speed (only used when cfg.constant_speed).
+    self._sampled_speed = torch.zeros((env.num_envs, 1), device=env.device)
     self.target_reached_mask = torch.zeros(
       env.num_envs, dtype=torch.bool, device=env.device
     )
@@ -49,6 +50,9 @@ class BallVelocityCommand(CommandTerm):
     self.metrics["foot_ball_hits"] = torch.zeros(env.num_envs, device=env.device)
     self._prev_foot_ball_contact = torch.zeros(
       env.num_envs, dtype=torch.bool, device=env.device
+    )
+    self.just_resampled = torch.zeros(
+      self.num_envs, dtype=torch.bool, device=self.device
     )
 
     # Commands must be valid from the first step: a stale zero target at the
@@ -72,15 +76,18 @@ class BallVelocityCommand(CommandTerm):
       torch.zeros_like(target_delta),
     )
 
-    speed = (self.cfg.speed_gain * distance).clamp(
-      min=self.cfg.speed_range[0],
-      max=self.cfg.speed_range[1],
-    )
-    speed = torch.where(
-      distance > self.cfg.target_reached_threshold,
-      speed,
-      torch.zeros_like(speed),
-    )
+    if self.cfg.constant_speed:
+      speed = self._sampled_speed[env_ids]
+    else:
+      speed = (self.cfg.speed_gain * distance).clamp(
+        min=self.cfg.speed_range[0],
+        max=self.cfg.speed_range[1],
+      )
+      speed = torch.where(
+        distance > self.cfg.target_reached_threshold,
+        speed,
+        torch.zeros_like(speed),
+      )
 
     self.velocity_command[env_ids, 0:2] = direction * speed
     self.velocity_command[env_ids, 2] = 0.0
@@ -89,11 +96,16 @@ class BallVelocityCommand(CommandTerm):
     n = len(env_ids)
     device = self._env.device
 
+    self.just_resampled[env_ids] = True
+
     lo, hi = -self.cfg.heading_range, self.cfg.heading_range
     heading_offsets = torch.rand(n, device=device) * (hi - lo) + lo
 
     lo, hi = self.cfg.target_distance_range
     target_distances = torch.rand(n, device=device) * (hi - lo) + lo
+
+    lo, hi = self.cfg.speed_range
+    self._sampled_speed[env_ids, 0] = torch.rand(n, device=device) * (hi - lo) + lo
 
     robot_quat = self._env.scene[self.cfg.robot_entity].data.root_link_quat_w[env_ids]
     robot_yaw = torch.atan2(
@@ -113,25 +125,17 @@ class BallVelocityCommand(CommandTerm):
 
   def _update_command(self) -> None:
     all_env_ids = torch.arange(self.num_envs, device=self.device)
+    self.target_reached_mask[:] = False
     self._recompute_velocity_command(all_env_ids)
 
     ball_pos = self._env.scene[self.cfg.ball_entity].data.root_link_pos_w[:, :2]
     target_distance = (self.target_position - ball_pos).norm(dim=-1)
-
-    # Latch the reach event for ball_target_reached before resampling moves the
-    # target away (fires once: next step the fresh target is far again).
-    self.target_reached_mask = target_distance <= self.cfg.target_reached_threshold
-
-    # Resample on reach, or if a stale target has drifted far out of range
-    # (e.g. the ball was knocked backward).
-    resample_mask = (
-      (target_distance <= self.cfg.target_reached_threshold)
-      | (~torch.isfinite(target_distance))
-      | (target_distance > self.cfg.target_distance_range[1] * 1.5)
-    )
-    resample_env_ids = torch.where(resample_mask)[0]
-    if len(resample_env_ids) > 0:
-      self._resample(resample_env_ids)
+    reached_env_ids = torch.where(target_distance <= self.cfg.target_reached_threshold)[
+      0
+    ]
+    if len(reached_env_ids) > 0:
+      self.target_reached_mask[reached_env_ids] = True
+      self._resample(reached_env_ids)
 
   def _foot_ball_contact(self) -> torch.Tensor:
     """Per-env bool: any foot geom in contact with the ball this step."""
@@ -145,6 +149,7 @@ class BallVelocityCommand(CommandTerm):
     return (found.flatten(start_dim=1) > 0).any(dim=-1)
 
   def _update_metrics(self) -> None:
+    self.just_resampled[:] = False
     ball_pos = self._env.scene[self.cfg.ball_entity].data.root_link_pos_w[:, :2]
     ball_vel = self._env.scene[self.cfg.ball_entity].data.root_link_lin_vel_w[:, :2]
     self.metrics["target_distance"] = (self.target_position - ball_pos).norm(dim=-1)
@@ -186,6 +191,17 @@ class BallVelocityCommand(CommandTerm):
       label=f"ball_vel |v|={actual_2d.norm():.2f}",
     )
 
+    target_pos = self.target_position[batch]
+    target_pos_3d = torch.cat(
+      [target_pos, torch.tensor([0.05], device=target_pos.device)]
+    )
+    visualizer.add_sphere(
+      center=target_pos_3d.cpu().numpy(),
+      radius=0.5,
+      color=(0.2, 0.4, 1.0, 0.65),
+      label="ball_target",
+    )
+
 
 @dataclass(kw_only=True)
 class BallVelocityCommandCfg(CommandTermCfg):
@@ -195,8 +211,9 @@ class BallVelocityCommandCfg(CommandTermCfg):
 
   debug_vis: bool = True
 
-  # Resample target every 5–10 seconds (like UniformVelocityCommand).
-  resampling_time_range: tuple[float, float] = (5.0, 10.0)
+  # Never time-resample: the target is fixed for the whole episode (set the
+  # interval past any episode length, like BallTwistCommand).
+  resampling_time_range: tuple[float, float] = (1e9, 1e9)
 
   robot_entity: str = "robot"
   ball_entity: str = "ball"
@@ -206,8 +223,16 @@ class BallVelocityCommandCfg(CommandTermCfg):
   # Desired ball speed, recomputed each step and clipped to this range.
   speed_range: tuple[float, float] = (0.1, 1.0)
 
-  # Sampled target radius (m) drawn from the current ball position at resample.
-  target_distance_range: tuple[float, float] = (1.0, 2.0)
+  # Fixed-velocity mode: sample one constant speed from ``speed_range`` per
+  # episode and hold it (no distance ramp, no zeroing near the target), so the
+  # command is a steady "kick to this velocity in the target direction" setpoint.
+  # Off by default (base dribbling keeps the distance-proportional dribble speed).
+  constant_speed: bool = False
+
+  # Sampled target radius (m) drawn from the ball position at episode start.
+  # Far targets keep the ball from arriving, so the command stays a steady
+  # dribble-direction setpoint for the whole episode.
+  target_distance_range: tuple[float, float] = (2.0, 6.0)
 
   # Gain mapping target distance -> desired speed before clipping.
   speed_gain: float = 1.0

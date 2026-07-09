@@ -79,22 +79,6 @@ def flat_orientation(
   return torch.exp(-xy_squared / std**2)
 
 
-def pose_deviation(
-  env: ManagerBasedRlEnv,
-  asset_cfg: SceneEntityCfg,
-  std: float,
-) -> torch.Tensor:
-  """Penalize joint deviation from default pose: exp(-mean(error²/std²)).
-
-  Register separate terms for arms and legs with different std and weight.
-  Smaller std = tighter constraint.
-  """
-  asset: Entity = env.scene[asset_cfg.name]
-  q = asset.data.joint_pos[:, asset_cfg.joint_ids]
-  q_default = asset.data.default_joint_pos[:, asset_cfg.joint_ids]
-  return torch.exp(-torch.mean(torch.square(q - q_default) / (std**2), dim=1))
-
-
 class pose_deviation_penalty:
   """Penalize joint deviation from default pose with per-joint weights.
 
@@ -380,11 +364,6 @@ def feet_swing(
   command_threshold: float = 0.05,
 ) -> torch.Tensor:
   """Reward feet being off the ground during their swing phases.
-
-  Port of TUM ADLR's _reward_feet_swing. For each foot, gives a binary
-  reward when the foot is NOT in contact during a fixed time window
-  centered on the expected swing peak (phase=0.5 in [0,1] scale).
-
   Complements feet_phase by providing a strong, unambiguous gradient for
   basic foot clearance, while feet_phase refines the height trajectory.
   """
@@ -425,13 +404,7 @@ def feet_phase(
   Reads raw phase angles from the GaitPhaseCommand term (not the cos/sin
   observation) and compares actual terrain-relative foot clearance to the
   Bézier target. When command_name is set, zeroes the reward for standing
-  envs (‖cmd_xy‖ ≤ command_threshold) so static_stance can own that regime.
-
-  With min_height_scale < 1, the Bézier peak adapts to the commanded speed:
-  swing_height * clamp(‖cmd_xy‖ / max_speed, min_height_scale, 1), so slow
-  commands ask for proportionally lower steps instead of full-height marching.
-  The floor keeps near-threshold commands from targeting ground-scuffing
-  steps; feet_swing stays fixed as the hard clearance backstop.
+  envs (‖cmd_xy‖ ≤ command_threshold)
   """
   gait_term = env.command_manager.get_term(phase_command_name)
   phi = gait_term.phase  # (N, 2), raw angles in [-π, π]
@@ -452,59 +425,6 @@ def feet_phase(
   return reward
 
 
-def swing_phase_schedule(
-  env: ManagerBasedRlEnv,
-  phase_command_name: str,
-  sensor_name: str,
-  sharpness: float = 0.1,
-  command_name: str | None = None,
-  command_threshold: float = 0.05,
-) -> torch.Tensor:
-  """During swing phase, penalize foot-ground contact force.
-
-  reward = sum_feet( [1 - κ] * exp(-sharpness * |f_foot|²) )
-  κ = (1 + cos(φ)) / 2  →  0 in full swing, 1 in full stance.
-  Zeroed when ||cmd_xy|| < command_threshold (standing envs).
-  """
-  phase = env.command_manager.get_command(phase_command_name)  # (N, 4)
-  kappa = (1.0 + phase[:, :2]) / 2.0  # (N, 2)
-  contact_sensor: ContactSensor = env.scene[sensor_name]
-  assert contact_sensor.data.force is not None
-  force_sq = (contact_sensor.data.force**2).sum(dim=-1)  # (N, 2)
-  reward = (kappa * torch.exp(-sharpness * force_sq)).sum(dim=-1)
-  if command_name is not None:
-    cmd = env.command_manager.get_command(command_name)
-    moving = (torch.norm(cmd[:, :2], dim=-1) > command_threshold).float()
-    reward = reward * moving
-  return reward
-
-
-def stance_phase_schedule(
-  env: ManagerBasedRlEnv,
-  phase_command_name: str,
-  asset_cfg: SceneEntityCfg,
-  sharpness: float = 0.1,
-  command_name: str | None = None,
-  command_threshold: float = 0.05,
-) -> torch.Tensor:
-  """During stance phase, penalize foot XY sliding velocity.
-
-  reward = sum_feet( κ * exp(-sharpness * |v_foot_xy|²) )
-  Zeroed when ||cmd_xy|| < command_threshold (standing envs).
-  """
-  phase = env.command_manager.get_command(phase_command_name)  # (N, 4)
-  kappa = (1.0 + phase[:, :2]) / 2.0  # (N, 2)
-  asset: Entity = env.scene[asset_cfg.name]
-  foot_vel_xy = asset.data.site_lin_vel_w[:, asset_cfg.site_ids, :2]  # (N, 2, 2)
-  vel_sq = (foot_vel_xy**2).sum(dim=-1)  # (N, 2)
-  reward = ((1.0 - kappa) * torch.exp(-sharpness * vel_sq)).sum(dim=-1)
-  if command_name is not None:
-    cmd = env.command_manager.get_command(command_name)
-    moving = (torch.norm(cmd[:, :2], dim=-1) > command_threshold).float()
-    reward = reward * moving
-  return reward
-
-
 def feet_slip(
   env: ManagerBasedRlEnv,
   asset_cfg: SceneEntityCfg,
@@ -517,16 +437,7 @@ def feet_slip(
 
   Gated on contact (‖force‖ > contact_threshold), not on command, so it discourages
   dragging a planted foot in both walking and standing regimes while leaving the
-  policy free to lift a foot to take a recovery step. Replaces the command-gated
-  static_stance, whose all-velocity penalty froze recovery stepping at standstill.
-
-  The yaw-pivot term catches in-place foot rotation that the site *linear* velocity
-  misses: a foot spinning about its own center has ~0 site velocity but a scrubbing
-  contact patch (cheap in sim with low torsional friction, a real scrub on rubber).
-  `yaw_scrub_scale` weights the rotational part (rad²/s²) against the linear part
-  (m²/s²) — tune it. `asset_cfg` carries the foot sites (linear); `foot_body_cfg`
-  carries the foot bodies (yaw rate) as a separate cfg, since combining site_names
-  and body_names in one SceneEntityCfg leaves body_ids unresolved.
+  policy free to lift a foot to take a recovery step. 
   """
   contact_sensor: ContactSensor = env.scene[sensor_name]
   assert contact_sensor.data.force is not None
@@ -537,143 +448,6 @@ def feet_slip(
   foot_yaw_rate = asset.data.body_link_ang_vel_w[:, foot_body_cfg.body_ids, 2]  # (N, 2)
   scrub = lin_sq + yaw_scrub_scale * foot_yaw_rate**2  # (N, 2)
   return (scrub * contact.float()).sum(dim=-1)
-
-
-def static_stance(
-  env: ManagerBasedRlEnv,
-  asset_cfg: SceneEntityCfg,
-  command_name: str,
-  command_threshold: float = 0.05,
-) -> torch.Tensor:
-  """Penalize foot XY sliding when velocity command ≈ 0 (use negative weight).
-
-  Penalizes all foot velocity regardless of contact state. The outer `standing`
-  gate already zeroes this during walking, so the contact gate is not needed —
-  and would create a perverse incentive to lift feet while standing.
-  """
-  cmd = env.command_manager.get_command(command_name)
-  standing = (torch.norm(cmd[:, :2], dim=-1) <= command_threshold).float()
-  asset: Entity = env.scene[asset_cfg.name]
-  foot_vel_xy = asset.data.site_lin_vel_w[:, asset_cfg.site_ids, :2]  # (N, 2, 2)
-  vel_sq = (foot_vel_xy**2).sum(dim=-1).mean(dim=-1)  # (N,) mean over feet
-  return vel_sq * standing
-
-
-class feet_no_slip:
-  """Penalize a planted foot's drift from where it first touched down (neg weight).
-
-  Velocity-based slip penalties (both this repo's L2 ``feet_slip`` and booster_gym's
-  L2 ``_reward_feet_slip``) have a gradient that vanishes quadratically as foot
-  velocity -> 0, so they are blind to a very slow standing creep (~1e-5 m/s) that
-  still drives stick-slip vibration on rubber soles. This term anchors the foot's
-  xy position at first contact and penalizes the *accumulated* L1 displacement from
-  that anchor while the foot stays in contact:
-
-    - L1 -> non-vanishing gradient: "perfectly still" is consistently preferred
-      over "creeping", down to arbitrarily small velocities.
-    - anchored displacement -> escalating pressure: sustained creep grows the
-      offset every step, so the penalty climbs the longer the foot drifts.
-
-  Contact-gated (not command-gated): a lifted foot is masked out and re-anchors on
-  the next touchdown, so recovery stepping at standstill stays free (unlike the old
-  command-gated ``static_stance``). The anchor re-initializes on episode reset, so
-  the first post-reset step sees zero displacement (no stale-anchor spike).
-  """
-
-  def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRlEnv):
-    del cfg
-    self._env = env
-    self.anchor_xy: torch.Tensor | None = None
-    self.was_contact: torch.Tensor | None = None
-
-  def _ensure(self, n_feet: int, device) -> None:
-    if self.anchor_xy is None:
-      n = self._env.num_envs
-      self.anchor_xy = torch.zeros(n, n_feet, 2, device=device)
-      self.was_contact = torch.zeros(n, n_feet, dtype=torch.bool, device=device)
-
-  def __call__(
-    self,
-    env: ManagerBasedRlEnv,
-    asset_cfg: SceneEntityCfg,
-    sensor_name: str,
-    contact_threshold: float = 0.5,
-  ) -> torch.Tensor:
-    contact_sensor: ContactSensor = env.scene[sensor_name]
-    assert contact_sensor.data.force is not None
-    contact = contact_sensor.data.force.norm(dim=-1) > contact_threshold  # (N, F)
-    asset: Entity = env.scene[asset_cfg.name]
-    foot_xy = asset.data.site_pos_w[:, asset_cfg.site_ids, :2]  # (N, F, 2)
-    self._ensure(foot_xy.shape[1], foot_xy.device)
-    assert self.anchor_xy is not None and self.was_contact is not None
-    # Re-anchor feet that just made contact (first contact, or first step post-reset).
-    new_contact = contact & ~self.was_contact  # (N, F)
-    self.anchor_xy[new_contact] = foot_xy[new_contact]
-    disp = (foot_xy - self.anchor_xy).abs().sum(dim=-1)  # (N, F) L1 drift
-    self.was_contact.copy_(contact)
-    return (disp * contact.float()).sum(dim=-1)  # (N,)
-
-  def reset(self, env_ids: torch.Tensor | slice | None = None) -> None:
-    if self.was_contact is None:
-      return
-    if env_ids is None:
-      env_ids = slice(None)
-    self.was_contact[env_ids] = False
-
-
-class arm_swing_penalty:
-  """Penalize arm motion that is not anti-phase with hip motion.
-
-  For each side: (shoulder_pitch_offset + hip_pitch_offset)²
-  Scaled by forward speed command so the penalty is stronger at higher speeds
-  and zero at standstill.
-
-  This encourages natural arm swing: when the hip pitches forward, the
-  shoulder pitches backward (opposite direction), like human walking.
-  """
-
-  def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRlEnv):
-    asset: Entity = env.scene[cfg.params["asset_cfg"].name]
-    jids = cfg.params["asset_cfg"].joint_ids
-    if isinstance(jids, slice):
-      jids = list(range(jids.start or 0, jids.stop or len(asset.joint_names)))
-    joint_names = [asset.joint_names[i] for i in jids]
-    name_to_local = {n: i for i, n in enumerate(joint_names)}
-
-    _, lsp = asset.find_joints("Left_Shoulder_Pitch", joint_names)
-    _, lhp = asset.find_joints("Left_Hip_Pitch", joint_names)
-    _, rsp = asset.find_joints("Right_Shoulder_Pitch", joint_names)
-    _, rhp = asset.find_joints("Right_Hip_Pitch", joint_names)
-
-    self.ls_idx = name_to_local[lsp[0]]
-    self.lh_idx = name_to_local[lhp[0]]
-    self.rs_idx = name_to_local[rsp[0]]
-    self.rh_idx = name_to_local[rhp[0]]
-
-  def __call__(
-    self,
-    env: ManagerBasedRlEnv,
-    asset_cfg: SceneEntityCfg,
-    command_name: str,
-    command_threshold: float = 0.05,
-  ) -> torch.Tensor:
-    del command_threshold
-    asset: Entity = env.scene[asset_cfg.name]
-    q = asset.data.joint_pos[:, asset_cfg.joint_ids]
-    q_default = asset.data.default_joint_pos[:, asset_cfg.joint_ids]
-
-    ls_off = q[:, self.ls_idx] - q_default[:, self.ls_idx]
-    lh_off = q[:, self.lh_idx] - q_default[:, self.lh_idx]
-    rs_off = q[:, self.rs_idx] - q_default[:, self.rs_idx]
-    rh_off = q[:, self.rh_idx] - q_default[:, self.rh_idx]
-
-    left_error = torch.square(ls_off + lh_off)
-    right_error = torch.square(rs_off + rh_off)
-
-    cmd = env.command_manager.get_command(command_name)
-    speed = torch.abs(cmd[:, 0])
-
-    return (left_error + right_error) * speed
 
 
 def arm_phase(

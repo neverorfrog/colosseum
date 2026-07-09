@@ -30,6 +30,15 @@ if TYPE_CHECKING:
   from mjlab.envs import ManagerBasedRlEnv
 
 
+# Effective head-camera field of view. The head swivels to keep the ball centred,
+# so "the robot can see the ball" means the ball's body-frame bearing is within
+# the head's yaw reach and it is within range. Shared (single source of truth) by
+# this action term, the ball perception model, and the ball-lost termination so
+# all three agree on what "visible" means.
+HEAD_FOV_HALF = 1.2  # rad
+HEAD_MAX_RANGE = 6.0  # m
+
+
 @dataclass(kw_only=True)
 class HeadIKActionCfg(ActionTermCfg):
   """Configuration for IK-based head tracking with FOV return-to-zero."""
@@ -51,8 +60,8 @@ class HeadIKActionCfg(ActionTermCfg):
   # within ±fov_half and within max_range; otherwise it returns to (0, 0).
   # fov_half sits just inside yaw_limit so there is a clear "lost" zone, and
   # max_range matches the ball perception model's max_range.
-  fov_half: float = 1.2
-  max_range: float = 6.0
+  fov_half: float = HEAD_FOV_HALF
+  max_range: float = HEAD_MAX_RANGE
 
   def build(self, env: ManagerBasedRlEnv) -> HeadIKAction:
     return HeadIKAction(self, env)

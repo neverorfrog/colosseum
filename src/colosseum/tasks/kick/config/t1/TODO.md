@@ -1,0 +1,7 @@
+- simply track direction and speed of the ball (change also the command)
+- discrete and odometry noise on the ball
+- random ball resets during episode (even while kicking)
+- multiple collision models of the sole
+- kick pose?
+- style flags?
+- bumpy terrain (maybe)

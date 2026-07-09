@@ -1,5 +1,3 @@
-import math
-
 from mjlab.envs.mdp import (
   action_rate_l2,
   is_alive,
@@ -11,37 +9,39 @@ from mjlab.tasks.velocity.mdp import (
   body_angular_velocity_penalty,
   soft_landing,
 )
-
+from colosseum.mdp.rewards import pose_deviation_penalty
+from colosseum.tasks.kick.mdp.ball_rewards import (
+  ball_vel_angle_body,
+  ball_vel_norm,
+  foot_ball_contact,
+  robot_ball_yaw_body,
+  feet_phase_ball_gated,
+  feet_swing_ball_gated,
+  ball_kick_impulse,
+  foot_ball_contact,
+  stance_foot_placement_penalty,
+)
+from colosseum.tasks.kick.mdp.terminations import ball_kicked_away_bonus
 from colosseum.mdp.rewards import (
   arm_phase,
   base_height_penalty,
   dof_acc_penalty,
   dof_vel_penalty,
   feet_distance_penalty,
-  feet_phase,
   feet_slip,
-  feet_swing,
-  feet_yaw_diff_penalty,
-  feet_yaw_mean_penalty,
-  foot_orientation_penalty,
-  lin_vel_z_filtered_penalty,
   orientation_penalty,
-  pose_deviation_penalty,
   power_penalty,
   torque_tiredness_penalty,
   torques_penalty,
-  track_ang_vel_yaw_filtered,
-  track_lin_vel_axis_filtered,
 )
 from colosseum.robots.t1.constants import (
   BASE_BODY_NAME,
   FOOT_BODY_NAMES,
   FOOT_SITE_NAMES,
 )
+from colosseum.tasks.kick.mdp.terminations import ball_lost_penalty
 
 LEG_JOINT_PATTERNS = (".*Hip.*", ".*Knee.*", ".*Ankle.*")
-LOWER_BODY_JOINT_PATTERNS = (".*Hip.*", ".*Knee.*", ".*Ankle.*", "Waist")
-ALL_JOINTS_PATTERNS = ("^(?!AAHead_yaw$|Head_pitch$).*$",)
 
 # Leg torque limits (Nm), matching LOCOMOTION_ACTUATORS (booster_gym URDF efforts).
 LEG_EFFORT_LIMITS = {
@@ -58,30 +58,70 @@ LEG_EFFORT_LIMITS = {
 }
 
 rewards = {
-  # =======================
-  # Task Tracking Rewards
-  # =======================
-  # Per-axis kernels (booster_gym form): each axis earns reward and gradient
-  # independently. The combined-product form (track_*_velocity_filtered) zeroes
-  # the gradient on every axis whenever one axis is far off.
-  "track_lin_vel_x": RewardTermCfg(
-    func=track_lin_vel_axis_filtered,
-    weight=4.0,
-    params={"command_name": "twist", "std": math.sqrt(0.25), "axis": 0},
-  ),
-  "track_lin_vel_y": RewardTermCfg(
-    func=track_lin_vel_axis_filtered,
-    weight=4.0,
-    params={"command_name": "twist", "std": math.sqrt(0.25), "axis": 1},
-  ),
-  "track_ang_vel_yaw": RewardTermCfg(
-    func=track_ang_vel_yaw_filtered,
+  # ==============================
+  # Kick task rewards
+  # ==============================
+  "ball_vel_norm": RewardTermCfg(
+    func=ball_vel_norm,
     weight=2.0,
-    params={"command_name": "twist", "std": math.sqrt(0.25)},
+    params={"command_name": "ball_vel", "sharpness": 5.0},
   ),
+  "ball_vel_angle": RewardTermCfg(
+    func=ball_vel_angle_body,
+    weight=1.0,
+    params={"command_name": "ball_vel"},
+  ),
+  "foot_ball_contact": RewardTermCfg(
+    func=foot_ball_contact,
+    weight=0.1,
+    params={
+      "sensor_name": "foot_ball_contact",
+      "command_name": "ball_vel",
+    },
+  ),
+  "robot_ball_yaw": RewardTermCfg(
+    func=robot_ball_yaw_body,
+    weight=2.0,
+    params={"command_name": "ball_vel"},
+  ),
+  "ball_lost": RewardTermCfg(
+    func=ball_lost_penalty,
+    weight=-10.0,
+    params={"term_name": "ball_lost"},
+  ),
+  "ball_kicked_away": RewardTermCfg(
+    func=ball_kicked_away_bonus,
+    weight=1.0,
+    params={"term_name": "ball_kicked_away"},
+  ),
+  "stance_foot_placement": RewardTermCfg(
+    func=stance_foot_placement_penalty,
+    weight=-3.0,
+    params={
+      "command_name": "ball_vel",
+      "asset_cfg": SceneEntityCfg("robot", body_names=r"^(left|right)_foot_link$"),
+      "sensor_name": "feet_ground_contact",
+      "engage_distance": 0.6,
+      "lateral_margin": 0.15,
+    },
+  ),
+  "ball_kick_impulse": RewardTermCfg(
+    func=ball_kick_impulse,
+    weight=2.0,
+    params={
+      "sensor_name": "foot_inner_ball_contact",
+      "command_name": "ball_vel",
+      "speed_ref": 3.0,
+      "min_contact_force": 50.0,
+      "credit_steps": 15,
+    },
+  ),
+  # =======================
+  # Locomotion Task Rewards
+  # =======================
   "feet_swing": RewardTermCfg(
-    func=feet_swing,
-    weight=3.0,
+    func=feet_swing_ball_gated,
+    weight=1.0,
     params={
       "phase_command_name": "gait_phase",
       "sensor_name": "feet_ground_contact",
@@ -89,25 +129,48 @@ rewards = {
       "contact_threshold": 0.1,
       "command_name": "twist",
       "command_threshold": 0.05,
+      "gate_distance": 1.0,
     },
   ),
   "feet_phase": RewardTermCfg(
-    func=feet_phase,
-    weight=3.0,
+    func=feet_phase_ball_gated,
+    weight=1.0,
     params={
       "phase_command_name": "gait_phase",
       "height_sensor_name": "foot_height_scan",
-      "swing_height": 0.08,
+      "swing_height": 0.15,
       "tracking_sigma": 0.001,
       "command_name": "twist",
       "command_threshold": 0.05,
-      "max_speed": 1.5,
-      "min_height_scale": 0.5,
+      "gate_distance": 1.0,
+    },
+  ),
+  "penalty_hip_pose": RewardTermCfg(
+    func=pose_deviation_penalty,
+    weight=-0.5,
+    params={
+      "asset_cfg": SceneEntityCfg(
+        "robot",
+        joint_names=(
+          ".*Hip_Roll",
+          ".*Hip_Yaw",
+          ".*Hip_Pitch",
+          ".*Knee_Pitch",
+          ".*Ankle_Roll",
+        ),
+      ),
+      "weights_standing": {
+        ".*Hip_Yaw": 5.0,
+        ".*Hip_Roll": 1.0,
+        ".*Hip_Pitch": 1.0,
+        ".*Knee_Pitch": 1.0,
+        ".*Ankle_Roll": 4.0,
+      },
     },
   ),
   "arm_phase": RewardTermCfg(
     func=arm_phase,
-    weight=3.0,
+    weight=0.5,
     params={
       "phase_command_name": "gait_phase",
       # (left, right) pairs; shoulder swings wide, elbow follows with a smaller amplitude.
@@ -147,58 +210,18 @@ rewards = {
   ),
   "penalty_body_ang_vel": RewardTermCfg(
     func=body_angular_velocity_penalty,
-    weight=-2.0,
+    weight=-1.0,
     params={"asset_cfg": SceneEntityCfg("robot", body_names=(BASE_BODY_NAME))},
-  ),
-  "penalty_lin_vel_z": RewardTermCfg(
-    func=lin_vel_z_filtered_penalty,
-    weight=-0.1,
-    params={"command_name": "twist"},
   ),
   "penalty_orientation": RewardTermCfg(
     func=orientation_penalty,
-    weight=-20.0,
+    weight=-5.0,
     params={"asset_cfg": SceneEntityCfg("robot", body_names=(BASE_BODY_NAME))},
   ),
   "penalty_base_height": RewardTermCfg(
     func=base_height_penalty,
-    weight=-25.0,
+    weight=-30.0,
     params={"target_height": 0.62},
-  ),
-  "penalty_feet_ori": RewardTermCfg(
-    func=foot_orientation_penalty,
-    weight=-2.0,
-    params={"asset_cfg": SceneEntityCfg("robot", body_names=(FOOT_BODY_NAMES))},
-  ),
-  "penalty_feet_yaw_diff": RewardTermCfg(
-    func=feet_yaw_diff_penalty,
-    weight=-1.0,
-    params={"asset_cfg": SceneEntityCfg("robot", body_names=(FOOT_BODY_NAMES))},
-  ),
-  "penalty_feet_yaw_mean": RewardTermCfg(
-    func=feet_yaw_mean_penalty,
-    weight=-1.0,
-    params={"asset_cfg": SceneEntityCfg("robot", body_names=(FOOT_BODY_NAMES))},
-  ),
-  "penalty_pose_deviation": RewardTermCfg(
-    func=pose_deviation_penalty,
-    weight=-1.0,
-    params={
-      "asset_cfg": SceneEntityCfg("robot", joint_names=ALL_JOINTS_PATTERNS),
-      "weights_standing": {
-        ".*Shoulder_Pitch": 1.0,
-        ".*Shoulder_Roll": 20.0,
-        ".*Elbow_Pitch": 1.0,
-        ".*Elbow_Yaw": 20.0,
-        "Waist": 5.0,
-        ".*Hip_Pitch": 0.01,
-        ".*Hip_Roll": 5.0,
-        ".*Hip_Yaw": 5.0,
-        ".*Knee_Pitch": 0.01,
-        ".*Ankle_Pitch": 5.0,
-        ".*Ankle_Roll": 5.0,
-      },
-    },
   ),
   "penalty_action_rate": RewardTermCfg(func=action_rate_l2, weight=-1.0),
   "dof_pos_limits": RewardTermCfg(func=joint_pos_limits, weight=-1.0),
@@ -210,10 +233,9 @@ rewards = {
       "min_dist": 0.15,
     },
   ),
-  # site_names → linear slip; body_names → foot yaw-rate for the rotational scrub.
   "penalty_feet_slip": RewardTermCfg(
     func=feet_slip,
-    weight=-2.0,
+    weight=-1.0,
     params={
       "asset_cfg": SceneEntityCfg("robot", site_names=(FOOT_SITE_NAMES)),
       "sensor_name": "feet_ground_contact",
@@ -223,20 +245,17 @@ rewards = {
   "penalty_dof_vel": RewardTermCfg(
     func=dof_vel_penalty,
     weight=-1e-3,
-    params={"asset_cfg": SceneEntityCfg("robot", joint_names=ALL_JOINTS_PATTERNS)},
+    params={"asset_cfg": SceneEntityCfg("robot", joint_names=(".*",))},
   ),
   "penalty_dof_acc": RewardTermCfg(
     func=dof_acc_penalty,
     weight=-1e-6,
-    params={"asset_cfg": SceneEntityCfg("robot", joint_names=ALL_JOINTS_PATTERNS)},
+    params={"asset_cfg": SceneEntityCfg("robot", joint_names=(".*",))},
   ),
-  # Effort penalties (booster_gym weights): price torque magnitude, proximity to
-  # the torque limit, and positive mechanical power. Legs only (upper body is
-  # PD-held and its holding torque is not under policy control).
   "penalty_torques": RewardTermCfg(
     func=torques_penalty,
     weight=-2e-5,
-    params={"asset_cfg": SceneEntityCfg("robot", joint_names=ALL_JOINTS_PATTERNS)},
+    params={"asset_cfg": SceneEntityCfg("robot", joint_names=LEG_JOINT_PATTERNS)},
   ),
   "penalty_torque_tiredness": RewardTermCfg(
     func=torque_tiredness_penalty,
@@ -249,6 +268,7 @@ rewards = {
   "penalty_power": RewardTermCfg(
     func=power_penalty,
     weight=-2e-5,
-    params={"asset_cfg": SceneEntityCfg("robot", joint_names=ALL_JOINTS_PATTERNS)},
+    params={"asset_cfg": SceneEntityCfg("robot", joint_names=LEG_JOINT_PATTERNS)},
   ),
 }
+
