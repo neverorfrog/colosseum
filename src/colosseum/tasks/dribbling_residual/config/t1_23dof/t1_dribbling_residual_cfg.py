@@ -31,11 +31,11 @@ from mjlab.viewer import ViewerConfig
 from colosseum.assets.ball.ball_spec import get_ball_cfg
 from colosseum.config.types.task import TaskConfig, register_task
 from colosseum.envs.colosseum_env import ColosseumEnvCfg
-from colosseum.robots.t1_23dof.constants import (
+from colosseum.robots.t1.constants import (
   BASE_BODY_NAME,
   get_robot_cfg,
 )
-from colosseum.robots.t1_23dof.sensors import (
+from colosseum.robots.t1.sensors import (
   FEET_GROUND_CONTACT_SENSOR,
   FOOT_BALL_CONTACT_SENSOR,
   FOOT_HEIGHT_SCAN,

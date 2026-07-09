@@ -22,7 +22,7 @@ from colosseum.mdp.rewards import (
   lateral_velocity_penalty,
   orientation_penalty,
 )
-from colosseum.robots.t1_23dof.constants import (
+from colosseum.robots.t1.constants import (
   BASE_BODY_NAME,
   FOOT_BODY_NAMES,
   FOOT_SITE_NAMES,

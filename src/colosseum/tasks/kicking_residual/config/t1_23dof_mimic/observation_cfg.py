@@ -1,6 +1,6 @@
 """Observation configuration for t1-kicking-residual-mimic.
 
-Identical to the ``t1_23dof`` residual task's observation layout, plus 4
+Identical to the ``t1`` residual task's observation layout, plus 4
 reference-motion terms (``motion_command``, ``motion_anchor_pos_b``,
 ``motion_anchor_ori_b``, ``motion_triggered``) added to ``kick_actor`` and
 ``critic``. These establish "how to move" once ``GatedHoldMotionCommand``
@@ -23,13 +23,13 @@ from mjlab.utils.noise import UniformNoiseCfg as Unoise
 from colosseum.mdp.motion_command import motion_triggered
 from colosseum.mdp.symmetry import MirrorableObservationTermCfg
 
-from ..t1_23dof.observation_cfg import (
+from ..t1.observation_cfg import (
   critic_terms as _base_critic_terms,
 )
-from ..t1_23dof.observation_cfg import (
+from ..t1.observation_cfg import (
   kick_actor_terms as _base_kick_actor_terms,
 )
-from ..t1_23dof.observation_cfg import (
+from ..t1.observation_cfg import (
   loco_actor_terms,
 )
 

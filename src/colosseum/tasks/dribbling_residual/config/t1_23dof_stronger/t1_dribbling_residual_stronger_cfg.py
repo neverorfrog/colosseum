@@ -20,7 +20,7 @@ from mjlab.scene import SceneCfg
 
 from colosseum.config.types.task import TaskConfig, register_task
 from colosseum.envs.colosseum_env import ColosseumEnvCfg
-from colosseum.robots.t1_23dof.sensors import FOOT5_BALL_CONTACT_SENSOR
+from colosseum.robots.t1.sensors import FOOT5_BALL_CONTACT_SENSOR
 from colosseum.tasks.dribbling_residual.mdp.ball_twist_command import (
   BallTwistCommandCfg,
 )
@@ -28,12 +28,12 @@ from colosseum.tasks.dribbling_residual.mdp.ball_velocity_command import (
   BallVelocityCommandCfg,
 )
 
-from ..t1_23dof.algo_cfg import booster_t1_residual_ppo_cfg
-from ..t1_23dof.cat_cfg import actions, terminations
-from ..t1_23dof.curriculum_cfg import curriculum
-from ..t1_23dof.event_cfg import events
-from ..t1_23dof.observation_cfg import observations
-from ..t1_23dof.t1_dribbling_residual_cfg import (
+from ..t1.algo_cfg import booster_t1_residual_ppo_cfg
+from ..t1.cat_cfg import actions, terminations
+from ..t1.curriculum_cfg import curriculum
+from ..t1.event_cfg import events
+from ..t1.observation_cfg import observations
+from ..t1.t1_dribbling_residual_cfg import (
   booster_t1_dribbling_residual_env_cfg,
   sim_cfg,
   viewer_cfg,

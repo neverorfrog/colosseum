@@ -1,6 +1,6 @@
 """Reward configuration for t1-kicking-residual-mimic.
 
-Reuses the ``t1_23dof`` residual task's full reward set unchanged (locomotion
+Reuses the ``t1`` residual task's full reward set unchanged (locomotion
 + kick rewards), and adds 6 motion-tracking terms that reward following the
 reference kick clip (``models/trajectories/t1_motion.npz``). Each term is
 wrapped in ``gated_motion_tracking_error``, which zeroes the reward until
@@ -21,11 +21,11 @@ from mjlab.managers import RewardTermCfg
 
 from colosseum.mdp.rewards import gated_motion_tracking_error
 
-from ..t1_23dof.reward_cfg import rewards as _base_rewards
+from ..t1.reward_cfg import rewards as _base_rewards
 
 from colosseum.tasks.kicking_5.mdp.rewards import head_height_reward
 from mjlab.managers.scene_entity_config import SceneEntityCfg
-from colosseum.robots.t1_23dof.constants import HEAD_BODY_NAME
+from colosseum.robots.t1.constants import HEAD_BODY_NAME
 from colosseum.tasks.dribbling.mdp.rewards import robot_ball_distance
 
 

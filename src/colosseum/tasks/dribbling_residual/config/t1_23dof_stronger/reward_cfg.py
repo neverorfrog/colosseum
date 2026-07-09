@@ -6,7 +6,7 @@ from colosseum.mdp.ball_rewards import (
   robot_wrong_side_penalty,
 )
 
-from ..t1_23dof.reward_cfg import rewards as _base
+from ..t1.reward_cfg import rewards as _base
 
 rewards = dict(_base)
 

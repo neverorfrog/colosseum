@@ -18,10 +18,10 @@ from colosseum.tasks.dribbling.mdp.obstacle_commands import (
 )
 from colosseum.tasks.dribbling.obstacle_spec import NUM_OBSTACLES, get_obstacle_cfg
 
-from ..t1_23dof.cat_cfg import actions, terminations
-from ..t1_23dof.curriculum_cfg import curriculum
-from ..t1_23dof.event_cfg import events
-from ..t1_23dof.t1_dribbling_residual_cfg import (
+from ..t1.cat_cfg import actions, terminations
+from ..t1.curriculum_cfg import curriculum
+from ..t1.event_cfg import events
+from ..t1.t1_dribbling_residual_cfg import (
   booster_t1_dribbling_residual_env_cfg,
   sim_cfg,
   viewer_cfg,

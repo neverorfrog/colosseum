@@ -12,9 +12,9 @@ from colosseum.tasks.dribbling_residual.mdp.ball_velocity_command import (
 )
 from colosseum.tasks.dribbling_residual.mdp.terminations import BallKickedAway
 
-from ..t1_23dof.cat_cfg import actions
-from ..t1_23dof.cat_cfg import commands as _base_commands
-from ..t1_23dof.cat_cfg import terminations as _base_terminations
+from ..t1.cat_cfg import actions
+from ..t1.cat_cfg import commands as _base_commands
+from ..t1.cat_cfg import terminations as _base_terminations
 
 # Fixed-velocity kick: one constant speed per episode in the target direction,
 # so following the commanded velocity means "kick the ball to this steady

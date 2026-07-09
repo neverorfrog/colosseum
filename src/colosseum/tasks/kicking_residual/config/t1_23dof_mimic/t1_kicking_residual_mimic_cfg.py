@@ -11,7 +11,7 @@ motion-tracking rewards give the residual an imitation signal for *how* to
 kick, active only once near the ball.
 
 ``scene_cfg``/``viewer_cfg``/``sim_cfg``/``algo_cfg``/``curriculum``/``events``
-are unchanged, imported from the ``t1_23dof`` sibling.
+are unchanged, imported from the ``t1`` sibling.
 """
 
 import math
@@ -28,9 +28,9 @@ from mjlab.managers import (
 from colosseum.config.types.task import TaskConfig, register_task
 from colosseum.envs.colosseum_env import ColosseumEnvCfg
 
-from ..t1_23dof.algo_cfg import booster_t1_residual_ppo_cfg
-from ..t1_23dof.event_cfg import events
-from ..t1_23dof.t1_kicking_residual_cfg import scene_cfg, sim_cfg, viewer_cfg
+from ..t1.algo_cfg import booster_t1_residual_ppo_cfg
+from ..t1.event_cfg import events
+from ..t1.t1_kicking_residual_cfg import scene_cfg, sim_cfg, viewer_cfg
 from .cat_cfg import actions, commands, terminations
 from .observation_cfg import observations
 from .reward_cfg import rewards

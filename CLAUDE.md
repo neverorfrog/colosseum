@@ -100,13 +100,13 @@ Located in `src/colosseum/robots/booster_t1/`:
 
 #### XML Models
 
-- **23 DOF model** ([T1_23dof.xml](src/colosseum/robots/t1_23dof/xmls/T1_23dof.xml)): Full body including arms, waist, and neck, used for all tasks
+- **23 DOF model** ([t1.xml](src/colosseum/robots/t1/xmls/t1.xml)): Full body including arms, waist, and neck, used for all tasks
 
 #### Configuration Modules
 
 The T1 configuration is organized into three modules:
 
-**[actuators.py](src/colosseum/robots/t1_23dof/actuators.py)**: Motor specifications and actuator configurations
+**[actuators.py](src/colosseum/robots/t1/actuators.py)**: Motor specifications and actuator configurations
 - `MOTOR_SPECS`: Dictionary of motor specifications from manufacturer data (gear ratio, torque, speed, inertia)
 - Actuator configs for 12-DOF locomotion:
   - `T1_ACTUATOR_HIP_PITCH`, `T1_ACTUATOR_HIP_ROLL`, `T1_ACTUATOR_HIP_YAW`
@@ -115,7 +115,7 @@ The T1 configuration is organized into three modules:
 - Actuator configs for 23-DOF full body:
   - `T1_ACTUATOR_NECK`, `T1_ACTUATOR_ARM`, `T1_ACTUATOR_WAIST`
 
-**[contacts.py](src/colosseum/robots/t1_23dof/contacts.py)**: Collision and contact sensor configurations
+**[contacts.py](src/colosseum/robots/t1/contacts.py)**: Collision and contact sensor configurations
 - Collision configs (modify geom properties):
   - `FEET_ONLY_COLLISION`: Only foot geoms collide (recommended for training)
   - `FULL_COLLISION_WITHOUT_SELF`: All parts collide with environment, no self-collision
@@ -127,14 +127,14 @@ The T1 configuration is organized into three modules:
   - `HAND_CONTACT_SENSOR`: Tracks hand contact for manipulation
 - `T1_FOOT_GEOM_NAMES`: Tuple of all foot geometry names for events
 
-**[constants.py](src/colosseum/robots/t1_23dof/constants.py)**: Spec loaders and entity configurations
-- XML paths: `T1_12DOF_XML`, `T1_23DOF_XML`
+**[constants.py](src/colosseum/robots/t1/constants.py)**: Spec loaders and entity configurations
+- XML paths: `T1_12DOF_XML`, `t1_XML`
 - Spec loaders:
   - `get_t1_12dof_spec()`: Returns MjSpec for 12-DOF locomotion model
-  - `get_t1_23dof_spec()`: Returns MjSpec for 23-DOF full body model
+  - `get_t1_spec()`: Returns MjSpec for 23-DOF full body model
 - Pre-configured entity configs:
   - `T1_12DOF_ENTITY_CFG`: Complete entity config for locomotion training
-  - `T1_23DOF_ENTITY_CFG`: Complete entity config for full body deployment
+  - `t1_ENTITY_CFG`: Complete entity config for full body deployment
 
 ### Entity Configuration
 

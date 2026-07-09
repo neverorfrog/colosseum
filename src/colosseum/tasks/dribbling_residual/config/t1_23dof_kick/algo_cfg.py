@@ -11,7 +11,7 @@ changes for the single-strong-kick variant:
 
 from dataclasses import replace
 
-from ..t1_23dof.algo_cfg import booster_t1_residual_ppo_cfg as _base_cfg
+from ..t1.algo_cfg import booster_t1_residual_ppo_cfg as _base_cfg
 
 
 def booster_t1_residual_ppo_cfg():

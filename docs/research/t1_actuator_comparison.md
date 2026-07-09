@@ -1,7 +1,7 @@
 # T1 Actuator Comparison: colosseum vs booster_train
 
 Comparison of the Booster T1 actuator modeling in this repo
-(`src/colosseum/robots/t1_23dof/`) against the manufacturer's own Isaac Lab
+(`src/colosseum/robots/t1/`) against the manufacturer's own Isaac Lab
 training repo (`external/booster_train`). Written ahead of porting the
 booster_train actuator data into colosseum as the single canonical set, and
 ahead of refactoring colosseum's actuator class to add the speed-dependent
@@ -225,7 +225,7 @@ delay_update_period, delay_per_env_phase, stiffness, damping, effort_limit
 
 ## 5. Implemented (actuator class + single set)
 
-The refactor has landed in `robots/t1_23dof/actuators.py`:
+The refactor has landed in `robots/t1/actuators.py`:
 
 - **`BoosterPdActuator` / `BoosterPdActuatorCfg`** subclass mjlab's explicit
   `IdealPdActuator`. They add `velocity_limit` + `knee_point_velocity` and

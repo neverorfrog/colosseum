@@ -1,7 +1,7 @@
 """Commands, actions, and terminations for t1-kicking-residual-mimic.
 
 ``actions``/``terminations`` are re-exported unchanged from the
-``t1_23dof`` sibling. ``commands`` extends the base ``{"twist", "ball_angle",
+``t1`` sibling. ``commands`` extends the base ``{"twist", "ball_angle",
 "gait_phase"}`` with a ``"motion"`` entry: a ``GatedHoldMotionCommand`` that
 stays on frame 0 (no tracking signal) until the robot is within
 ``trigger_distance`` of the ball — the same 0.25 m threshold at which
@@ -16,8 +16,8 @@ from mjlab.managers import CommandTermCfg
 from colosseum.mdp.motion_command import GatedHoldMotionCommandCfg
 from colosseum.utils import project_root
 
-from ..t1_23dof.cat_cfg import actions, terminations
-from ..t1_23dof.cat_cfg import commands as _base_commands
+from ..t1.cat_cfg import actions, terminations
+from ..t1.cat_cfg import commands as _base_commands
 
 # Bodies tracked by the motion-mimic reward/observation terms. Must all be
 # present in `t1_motion.npz`'s body_names. Copied locally (matches

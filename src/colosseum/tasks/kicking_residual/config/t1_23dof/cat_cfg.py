@@ -8,7 +8,7 @@ from mjlab.managers.action_manager import ActionTermCfg
 from mjlab.managers.termination_manager import TerminationTermCfg
 
 from colosseum.mdp.velocity_command import CurriculumVelocityCommandCfg
-from colosseum.robots.t1_23dof.constants import MANUFACTURER_ACTION_SCALE
+from colosseum.robots.t1.constants import ACTION_SCALE
 from colosseum.tasks.dribbling.mdp.gait_phase_command import GaitPhaseCommandCfg
 from colosseum.tasks.kicking_residual.mdp.ball_twist_command import (
   BallTwistCommandCfg,
@@ -57,7 +57,7 @@ UNACTUATED_JOINTS = ("AAHead_yaw", "Head_pitch")
 # move the arms.
 VELOCITY_ACTION_SCALE = {
   name: (0.0 if name in ARM_JOINT_NAMES else scale)
-  for name, scale in MANUFACTURER_ACTION_SCALE.items()
+  for name, scale in ACTION_SCALE.items()
   if name not in UNACTUATED_JOINTS
 }
 

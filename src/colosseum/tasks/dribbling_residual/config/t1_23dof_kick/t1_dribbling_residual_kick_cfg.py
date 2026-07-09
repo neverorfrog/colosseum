@@ -10,9 +10,9 @@ from dataclasses import dataclass, field
 
 from colosseum.config.types.task import TaskConfig, register_task
 from colosseum.envs.colosseum_env import ColosseumEnvCfg
-from colosseum.robots.t1_23dof.sensors import FOOT5_BALL_CONTACT_SENSOR
+from colosseum.robots.t1.sensors import FOOT5_BALL_CONTACT_SENSOR
 
-from ..t1_23dof.t1_dribbling_residual_cfg import (
+from ..t1.t1_dribbling_residual_cfg import (
   booster_t1_dribbling_residual_env_cfg as _base_env_cfg,
 )
 from .algo_cfg import booster_t1_residual_ppo_cfg

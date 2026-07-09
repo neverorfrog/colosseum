@@ -13,7 +13,7 @@ from dataclasses import replace
 from mjlab.managers.event_manager import EventTermCfg
 
 from ...mdp.ball_events import reset_ball_random_velocity
-from ..t1_23dof.event_cfg import events as _base_events
+from ..t1.event_cfg import events as _base_events
 
 events = dict(_base_events)
 

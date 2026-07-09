@@ -33,7 +33,7 @@ from colosseum.tasks.dribbling_residual.mdp.rewards import (
 )
 from colosseum.tasks.dribbling_residual.mdp.terminations import ball_kicked_away_bonus
 
-from ..t1_23dof.reward_cfg import rewards as _base_rewards
+from ..t1.reward_cfg import rewards as _base_rewards
 
 rewards = dict(_base_rewards)
 

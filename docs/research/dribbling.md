@@ -75,7 +75,7 @@ avoidance.
 
 ```
 src/colosseum/tasks/dribbling/
-├── config/t1_23dof/
+├── config/t1/
 │   ├── t1_dribbling_cfg.py     # ColosseumEnvCfg assembly + task registration
 │   ├── scene_cfg.py            # robot + ball + obstacles
 │   ├── observation_cfg.py      # actor, privileged_ball, privileged_obstacles, depth_frames

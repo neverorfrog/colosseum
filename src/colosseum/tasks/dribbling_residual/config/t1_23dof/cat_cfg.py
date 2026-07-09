@@ -8,7 +8,7 @@ from mjlab.managers.action_manager import ActionTermCfg
 from mjlab.managers.termination_manager import TerminationTermCfg
 
 from colosseum.mdp.velocity_command import CurriculumVelocityCommandCfg
-from colosseum.robots.t1_23dof.constants import JOINT_NAMES, MANUFACTURER_ACTION_SCALE
+from colosseum.robots.t1ants import JOINT_NAMES, ACTION_SCALE
 from colosseum.tasks.dribbling.mdp.gait_phase_command import GaitPhaseCommandCfg
 from colosseum.tasks.dribbling_residual.mdp.ball_twist_command import (
   BallTwistCommandCfg,
@@ -37,7 +37,7 @@ FIXED_JOINTS = {}
 UNACTUATED_JOINTS = {"AAHead_yaw", "Head_pitch"}
 ACTION_SCALE: dict[str, float] = {
   name: (0.0 if name in FIXED_JOINTS else value)
-  for name, value in MANUFACTURER_ACTION_SCALE.items()
+  for name, value in ACTION_SCALE.items()
   if name not in UNACTUATED_JOINTS
 }
 

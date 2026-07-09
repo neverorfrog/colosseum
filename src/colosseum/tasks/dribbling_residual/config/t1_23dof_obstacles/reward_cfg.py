@@ -2,7 +2,7 @@ from mjlab.managers import RewardTermCfg
 
 from colosseum.tasks.dribbling.mdp.rewards import robot_obstacle_collision
 
-from ..t1_23dof.reward_cfg import rewards as _base
+from ..t1.reward_cfg import rewards as _base
 
 rewards = dict(_base)
 rewards["robot_obstacle_collision"] = RewardTermCfg(

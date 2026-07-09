@@ -18,7 +18,7 @@ from colosseum.tasks.dribbling.mdp.obstacle_perception import (
   obstacle_state_gt,
 )
 
-from ..t1_23dof.observation_cfg import (
+from ..t1.observation_cfg import (
   dribble_actor_terms,
   observations as _base_observations,
   orchestrator_terms as _base_orchestrator_terms,

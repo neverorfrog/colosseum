@@ -25,7 +25,7 @@ from mjlab.utils.torch import configure_torch_backends
 
 import colosseum.tasks  # noqa: F401 — populate task registry
 from colosseum.config.types.task import get_task
-from colosseum.tasks.dribbling.config.t1_23dof.t1_dribbling_cfg import (
+from colosseum.tasks.dribbling.config.t1.t1_dribbling_cfg import (
   booster_t1_dribbling_env_cfg,
 )
 from colosseum.utils.torch import get_device

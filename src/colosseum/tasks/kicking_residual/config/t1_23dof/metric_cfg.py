@@ -20,7 +20,7 @@ from colosseum.mdp.metrics import (
   lin_vel_error,
   root_height,
 )
-from colosseum.robots.t1_23dof.constants import FOOT_SITE_NAMES
+from colosseum.robots.t1.constants import FOOT_SITE_NAMES
 
 # Joint name patterns per group (mirrors the T1 actuator groupings).
 JOINT_GROUPS = {

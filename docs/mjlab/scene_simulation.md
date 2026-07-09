@@ -41,13 +41,13 @@ In short:
 ## Colosseum-specific scene setup
 
 The T1 scene used by all humanoid tasks is assembled in
-`src/colosseum/robots/t1_23dof/constants.py`. The key call is
+`src/colosseum/robots/t1/constants.py`. The key call is
 `get_robot_cfg()`, which returns an `EntityCfg` with:
 
-- **XML**: `robots/booster_t1/T1_23dof.xml`
+- **XML**: `robots/booster_t1/t1.xml`
 - **Actuators**: PDActuator specs from `t1_actuators.py`
 - **Sensors**: selectable contact and height-scan sensors from `t1_sensors.py`
 - **Articulation info**: `CollisionCfg` and armature values
 
 The dribbling scene additionally includes a soccer ball entity and up to
-three obstacle entities (see `tasks/dribbling/config/t1_23dof/t1_dribbling_cfg.py`).
+three obstacle entities (see `tasks/dribbling/config/t1/t1_dribbling_cfg.py`).

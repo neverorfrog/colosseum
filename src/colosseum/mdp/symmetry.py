@@ -11,7 +11,7 @@ Usage pattern
 1. Declare mirror_fn on obs terms in observation_cfg.py:
 
     from colosseum.mdp.symmetry import MirrorableObservationTermCfg, mirror_ang_vel
-    from colosseum.robots.t1_23dof.mdp.symmetry import mirror_joints
+    from colosseum.robots.t1.mdp.symmetry import mirror_joints
 
     "base_ang_vel": MirrorableObservationTermCfg(
         func=builtin_sensor,

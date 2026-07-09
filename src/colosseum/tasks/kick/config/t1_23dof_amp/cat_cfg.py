@@ -7,7 +7,7 @@ from mjlab.managers import CommandTermCfg
 from mjlab.managers.action_manager import ActionTermCfg
 from mjlab.managers.termination_manager import TerminationTermCfg
 from colosseum.mdp.velocity_command import CurriculumVelocityCommandCfg
-from colosseum.robots.t1_23dof.constants import JOINT_NAMES
+from colosseum.robots.t1.constants import JOINT_NAMES
 from colosseum.tasks.dribbling.mdp.gait_phase_command import GaitPhaseCommandCfg
 from colosseum.tasks.kick.mdp.ball_twist_command_forward import (
   BallForwardTwistCommandCfg,

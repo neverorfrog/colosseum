@@ -26,7 +26,7 @@ from colosseum.mdp.symmetry import (
   mirror_velocity_command,
   mirror_xy,
 )
-from colosseum.robots.t1_23dof.mdp.symmetry import mirror_actions, mirror_joints
+from colosseum.robots.t1.mdp.symmetry import mirror_actions, mirror_joints
 from colosseum.tasks.dribbling.mdp.observations import (
   ball_vel_command_body,
 )
