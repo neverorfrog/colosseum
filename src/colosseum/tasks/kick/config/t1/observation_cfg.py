@@ -25,14 +25,11 @@ from colosseum.mdp.symmetry import (
 )
 from colosseum.robots.t1.mdp.symmetry import mirror_actions, mirror_joints
 from colosseum.tasks.kick.mdp.observations import (
-  # ball_position,
   ball_vel_command_body,
-  # ball_velocity_xy,
 )
 from colosseum.tasks.kick.mdp.ball_perception import (
   BallPerceptionModel,
   ball_state_gt,
-  ball_velocity_xy,
 )
 
 # ---------------------------------------------------------------------------
@@ -97,9 +94,9 @@ ball_terms = {
       "outage_frac_range": (0.1, 0.5),
       "p_miss_range": (0.02, 0.1),
       "close_range_dropout": 0.3,
-      "max_range": 6.0,
+      "max_range": 5.0,
       "fov_half_angle": 0.6,
-      "latency_steps": 2,
+      "latency_steps": 4,
     },
     # 5 steps (0.1 s @ 50 Hz) of past ball estimates so the actor can track the
     # velocity ramp and spot a stale/coasting estimate (position stops moving).
@@ -120,10 +117,10 @@ loco_actor_terms = {
   "gait_phase": gait_phase_term,
 }
 
-# Trainable residual branch: proprio + gait phase + ball state + dribble
-# setpoint, no twist command. The dribble command key must differ from loco's
+# Trainable residual branch: proprio + gait phase + ball state + kick
+# setpoint, no twist command. The kick command key must differ from loco's
 # "command" so the orchestrator union keeps both.
-dribble_actor_terms = {
+kick_actor_terms = {
   **proprio_terms,
   "gait_phase": gait_phase_term,
   **ball_terms,
@@ -135,7 +132,7 @@ dribble_actor_terms = {
 
 # Orchestrator (gating net): deduplicated union of all skill observations.
 # Dict merge collapses shared term names, so each term appears once.
-orchestrator_terms = {**loco_actor_terms, **dribble_actor_terms}
+orchestrator_terms = {**loco_actor_terms, **kick_actor_terms}
 
 # ---------------------------------------------------------------------------
 # Critic: actor terms + privileged ground-truth state (asymmetric actor-critic).
@@ -143,9 +140,6 @@ orchestrator_terms = {**loco_actor_terms, **dribble_actor_terms}
 
 critic_terms = {
   **orchestrator_terms,
-  # Override the actor's noisy ball estimate with clean GT (keeps the union's
-  # slot position, swaps only the value). The critic is train-only and may use
-  # privileged truth for lower-variance value estimates.
   "ball_state": ObservationTermCfg(func=ball_state_gt),
   "base_lin_vel": MirrorableObservationTermCfg(
     func=builtin_sensor,
@@ -177,8 +171,8 @@ observations = {
     concatenate_terms=True,
     enable_corruption=True,
   ),
-  "dribble_actor": ObservationGroupCfg(
-    terms=dribble_actor_terms,
+  "kick_actor": ObservationGroupCfg(
+    terms=kick_actor_terms,
     concatenate_terms=True,
     enable_corruption=True,
   ),

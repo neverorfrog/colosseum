@@ -1,15 +1,3 @@
-"""Events for the single-kick dribbling variant.
-
-Reuses the base t1-dribbling-residual events but spawns the ball near the robot
-(within ~2 m) so each episode is a short approach + one kick, not a long walk-in.
-
-The robot resets in a +-0.5 m box (``reset_base``); a +-0.9 m ball box keeps the
-worst-case robot->ball separation at sqrt(2) * (0.9 + 0.5) ~= 1.98 m <= 2 m
-(env_origins cancel, so only the two sampled offsets matter).
-"""
-
-from dataclasses import replace
-
 from mjlab.managers.event_manager import EventTermCfg
 
 from colosseum.tasks.kick.mdp.ball_events import reset_ball_random_velocity

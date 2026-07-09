@@ -4,16 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING
-
-import torch
-from mjlab.actuator import DcMotorActuatorCfg, IdealPdActuator, IdealPdActuatorCfg
-
-if TYPE_CHECKING:
-  import mujoco
-  import mujoco_warp as mjwarp
-  from mjlab.actuator.actuator import ActuatorCmd
-
+from mjlab.actuator import DcMotorActuatorCfg
 
 ##
 # Manufacturer datasheet motor models (Booster T1 official spec sheet).

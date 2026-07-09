@@ -318,7 +318,7 @@ class ResidualActorCfg:
   residual_actor: PpoActorConfig = field(default_factory=PpoActorConfig)
   """Trainable residual branch architecture."""
 
-  residual_obs_group: str = "dribble_actor"
+  residual_obs_group: str = "kick_actor"
   """Observation group the residual branch reads."""
 
   orchestrator_obs_group: str = "orchestrator"

@@ -1,7 +1,7 @@
 """Algorithm config for t1-dribbling-residual: ResidualPPO.
 
 Frozen v4 walk skill (reads `loco_actor`, steered toward the ball via the twist
-trick) + a trainable residual (reads `dribble_actor`) blended by an orchestrator
+trick) + a trainable residual (reads `kick_actor`) blended by an orchestrator
 (reads `orchestrator`). Asymmetric critic over the privileged `critic` group.
 
 Per-group symmetry (data augmentation + symmetry loss) matches the walk skill's
@@ -68,7 +68,7 @@ def booster_t1_residual_ppo_cfg() -> ResidualPpoConfig:
         init_noise_std=0.8,
         min_noise_std=0.01,
       ),
-      residual_obs_group="dribble_actor",
+      residual_obs_group="kick_actor",
       orchestrator=OrchestratorConfig(hidden_layers=[512, 256], activation="elu", per_joint=True),
       init_favored_logit=3.0,
     ),

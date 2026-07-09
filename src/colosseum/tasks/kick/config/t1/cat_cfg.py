@@ -7,11 +7,8 @@ episode ends when the ball leaves a radius around the robot (it got kicked away)
 
 from mjlab.managers.termination_manager import TerminationTermCfg
 
-from colosseum.tasks.kick.mdp.ball_velocity_command import (
-  BallVelocityCommandCfg,
-)
+from colosseum.tasks.kick.mdp.ball_velocity_command import BallVelocityCommandCfg
 from colosseum.tasks.kick.mdp.terminations import BallKickedAway
-
 
 import math
 from typing import Dict
@@ -36,7 +33,7 @@ from colosseum.tasks.kick.mdp.terminations import BallLostTermination
 commands: Dict[str, CommandTermCfg] = {
   "twist": BallTwistCommandCfg(stop_distance=0.25, approach_offset=0.4),
   "ball_vel": BallVelocityCommandCfg(
-    speed_range=(2.0, 5.0),
+    speed_range=(2.0, 10.0),
   ),
   "gait_phase": GaitPhaseCommandCfg(
     gait_freq_range=(1.5, 2.0),

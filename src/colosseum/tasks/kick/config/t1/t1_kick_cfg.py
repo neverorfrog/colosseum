@@ -108,7 +108,7 @@ def booster_t1_dribbling_residual_env_cfg(play: bool = False) -> ColosseumEnvCfg
     cfg.episode_length_s = int(1e9)
 
     cfg.observations["loco_actor"].enable_corruption = False
-    cfg.observations["dribble_actor"].enable_corruption = False
+    cfg.observations["kick_actor"].enable_corruption = False
     cfg.curriculum = {}
 
     gait = cfg.commands["gait_phase"]
