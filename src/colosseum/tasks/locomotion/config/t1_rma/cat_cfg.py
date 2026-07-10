@@ -6,10 +6,11 @@ from mjlab.envs.mdp.terminations import bad_orientation, nan_detection, time_out
 from mjlab.managers import CommandTermCfg
 from mjlab.managers.action_manager import ActionTermCfg
 from mjlab.managers.termination_manager import TerminationTermCfg
+from mjlab.tasks.velocity.mdp import UniformVelocityCommandCfg
 
 from colosseum.mdp.actions import HeadPerturbActionCfg
 from colosseum.tasks.locomotion.mdp.velocity_command import TrueErrorVelocityCommandCfg
-from colosseum.robots.t1.constants import JOINT_NAMES, ACTION_SCALE
+from colosseum.robots.t1.constants import ACTION_SCALE
 from colosseum.tasks.locomotion.mdp.gait_phase_command import GaitPhaseCommandCfg
 
 commands: Dict[str, CommandTermCfg] = {
@@ -22,6 +23,12 @@ commands: Dict[str, CommandTermCfg] = {
     heading_control_stiffness=0.5,
     debug_vis=True,
     resampling_time_range=(7.0, 10.0),
+    ranges=UniformVelocityCommandCfg.Ranges(
+      lin_vel_x=(-1.5, 1.5),
+      lin_vel_y=(-1.0, 1.0),
+      ang_vel_z=(-1.0, 1.0),
+      heading=(-math.pi, math.pi),
+    ),
   ),
   "gait_phase": GaitPhaseCommandCfg(
     gait_freq_range=(1.5, 2.0),

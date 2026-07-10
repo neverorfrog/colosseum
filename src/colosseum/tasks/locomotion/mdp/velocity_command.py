@@ -33,6 +33,12 @@ class TrueErrorVelocityCommand(UniformVelocityCommand):
   the filtered tracking rewards read, so the logged error matches what the reward
   sees. Marching-in-place averages to ~0 and so earns neither tracking reward nor
   a low logged error, forcing sustained directed locomotion.
+
+  Optional stop-cycle mode (``stop_cycle_period`` > 0): after walking for
+  ``stop_cycle_period`` seconds the command is force-set to zero for
+  ``stop_cycle_duration`` seconds, then a new walking command is sampled.
+  This teaches the policy to handle standing→walking transitions from
+  non-default joint configurations.
   """
 
   def __init__(self, cfg: TrueErrorVelocityCommandCfg, env: ManagerBasedRlEnv):
@@ -43,6 +49,60 @@ class TrueErrorVelocityCommand(UniformVelocityCommand):
     self.filtered_lin_vel = torch.zeros(self.num_envs, 3, device=self.device)
     self.filtered_ang_vel = torch.zeros(self.num_envs, 3, device=self.device)
 
+    sc = cfg.stop_cycle_period
+    if sc > 0:
+      dt = self._env.step_dt
+      self._sc_period_steps = int(sc / dt)
+      self._sc_dur_steps = int(cfg.stop_cycle_duration / dt)
+      self._sc_prob = cfg.stop_cycle_probability
+      self._sc_timer = torch.randint(
+        0, self._sc_period_steps + 1, (self.num_envs,), device=self.device
+      )
+      self._sc_stop_timer = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
+      self._sc_forced_stop = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+    else:
+      self._sc_period_steps = None
+
+  def _update_command(self) -> None:
+    sc = self._sc_period_steps
+    if sc is not None:
+      self._sc_timer -= 1
+      triggered = (self._sc_timer <= 0) & ~self._sc_forced_stop
+      if self._sc_prob < 1.0:
+        triggered &= (
+          torch.rand(self.num_envs, device=self.device) < self._sc_prob
+        )
+      if triggered.any():
+        t_ids = triggered.nonzero(as_tuple=False).flatten()
+        self._sc_forced_stop[t_ids] = True
+        self._sc_stop_timer[t_ids] = self._sc_dur_steps
+        self.vel_command_b[t_ids] = 0.0
+        self.vel_command_w[t_ids] = 0.0
+        self.is_standing_env[t_ids] = True
+
+      still_stopped = self._sc_forced_stop & (self._sc_stop_timer > 0)
+      if still_stopped.any():
+        self._sc_stop_timer[still_stopped] -= 1
+        self.vel_command_b[still_stopped] = 0.0
+        self.vel_command_w[still_stopped] = 0.0
+        self.is_standing_env[still_stopped] = True
+
+      resumed = self._sc_forced_stop & (self._sc_stop_timer <= 0)
+      if resumed.any():
+        r_ids = resumed.nonzero(as_tuple=False).flatten()
+        nj = len(r_ids)
+        self._sc_forced_stop[r_ids] = False
+        jitter = max(1, sc // 4)
+        self._sc_timer[r_ids] = sc + torch.randint(
+          0, jitter, (nj,), device=self.device
+        )
+        self._resample_command(r_ids)
+        self.time_left[r_ids] = self.time_left[r_ids].uniform_(
+          *self.cfg.resampling_time_range
+        )
+
+    super()._update_command()
+
   def _tracking_lin_vel_b(self) -> torch.Tensor:
     return self.filtered_lin_vel
 
@@ -52,6 +112,12 @@ class TrueErrorVelocityCommand(UniformVelocityCommand):
   def reset(self, env_ids):
     self.filtered_lin_vel[env_ids] = 0.0
     self.filtered_ang_vel[env_ids] = 0.0
+    if self._sc_period_steps is not None:
+      self._sc_forced_stop[env_ids] = False
+      self._sc_timer[env_ids] = torch.randint(
+        0, self._sc_period_steps + 1, (len(env_ids),), device=self.device
+      )
+      self._sc_stop_timer[env_ids] = 0
     return super().reset(env_ids)
 
   def _update_metrics(self) -> None:
@@ -77,6 +143,8 @@ class TrueErrorVelocityCommand(UniformVelocityCommand):
     self.metrics["error_vel_y"] += (instant_y - self.metrics["error_vel_y"]) / n
     self.metrics["error_vel_xy"] += (instant_xy - self.metrics["error_vel_xy"]) / n
     self.metrics["error_vel_yaw"] += (instant_yaw - self.metrics["error_vel_yaw"]) / n
+    if self._sc_period_steps is not None:
+      self.metrics["in_forced_stop"] = self._sc_forced_stop.float()
 
   def _resample_command(self, env_ids: torch.Tensor) -> None:
     super()._resample_command(env_ids)
@@ -94,6 +162,15 @@ class TrueErrorVelocityCommand(UniformVelocityCommand):
 class TrueErrorVelocityCommandCfg(UniformVelocityCommandCfg):
   # EMA weight for the base-velocity low-pass: filtered = w*raw + (1-w)*filtered.
   filter_weight: float = 0.10
+
+  stop_cycle_period: float = 0.0
+  """If > 0, seconds of walking before forcing a standing period (0 disables)."""
+
+  stop_cycle_duration: float = 0.0
+  """Seconds to stand before resampling a new walking command."""
+
+  stop_cycle_probability: float = 1.0
+  """Probability that a cycle-timer expiry actually triggers a forced stop."""
 
   def build(self, env: ManagerBasedRlEnv) -> TrueErrorVelocityCommand:
     return TrueErrorVelocityCommand(self, env)

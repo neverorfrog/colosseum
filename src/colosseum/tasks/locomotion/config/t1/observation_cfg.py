@@ -9,14 +9,19 @@ from mjlab.envs.mdp.observations import (
   projected_gravity,
 )
 from mjlab.managers.observation_manager import ObservationGroupCfg, ObservationTermCfg
+from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.tasks.velocity.mdp.observations import (
   foot_contact,
   foot_contact_forces,
-  foot_height,
 )
 from mjlab.utils.noise import UniformNoiseCfg as Unoise
 
-from colosseum.mdp.observations import base_height
+from colosseum.mdp.observations import (
+  base_external_force,
+  base_external_torque,
+  base_mass_com_offset,
+  terrain_clearance,
+)
 from colosseum.mdp.symmetry import (
   MirrorableObservationTermCfg,
   mirror_ang_vel,
@@ -25,6 +30,7 @@ from colosseum.mdp.symmetry import (
   mirror_projected_gravity,
   mirror_velocity_command,
 )
+from colosseum.robots.t1.constants import BASE_BODY_NAME
 from colosseum.robots.t1.mdp.symmetry import mirror_actions, mirror_joints
 
 # ---------------------------------------------------------------------------
@@ -101,13 +107,27 @@ critic_terms = {
     mirror_fn=mirror_base_lin_vel,
   ),
   "base_height": ObservationTermCfg(
-    func=base_height,
+    func=terrain_clearance,
+    params={"sensor_name": "base_height_scan"},
     noise=Unoise(n_min=-0.02, n_max=0.02),
   ),
   "foot_height": ObservationTermCfg(
-    func=foot_height,
+    func=terrain_clearance,
     params={"sensor_name": "foot_height_scan"},
   ),
+  # Privileged physics — mirror the DR events; critic-only.
+  "base_mass_com_offset": ObservationTermCfg(
+    func=base_mass_com_offset,
+    params={"asset_cfg": SceneEntityCfg("robot", body_names=BASE_BODY_NAME)},
+  ),  # [N,4]
+  "base_external_force": ObservationTermCfg(
+    func=base_external_force,
+    params={"asset_cfg": SceneEntityCfg("robot", body_names=BASE_BODY_NAME)},
+  ),  # [N,3]
+  "base_external_torque": ObservationTermCfg(
+    func=base_external_torque,
+    params={"asset_cfg": SceneEntityCfg("robot", body_names=BASE_BODY_NAME)},
+  ),  # [N,3]
   "foot_contact": ObservationTermCfg(
     func=foot_contact,
     params={"sensor_name": "feet_ground_contact"},

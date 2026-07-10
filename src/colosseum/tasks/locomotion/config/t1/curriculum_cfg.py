@@ -2,7 +2,6 @@ from mjlab.managers.curriculum_manager import CurriculumTermCfg
 
 from colosseum.mdp.curriculums import (
   command_vel_curriculum,
-  command_vel_curriculum,
   penalty_curriculum,
   push_force_curriculum_by_transitions,
 )
@@ -33,8 +32,8 @@ curriculum = {
         },
         {
           "transitions": 150_000_000,
-          "force_range": (-35.0, 35.0),
-          "torque_range": (-7.0, 7.0),
+          "force_range": (-50.0, 50.0),
+          "torque_range": (-10.0, 10.0),
         },
       ],
     },
@@ -88,8 +87,8 @@ curriculum = {
         },
         {
           "transitions": 150_000_000,
-          "lin_vel_x": (-1.2, 1.2),
-          "lin_vel_y": (-1.0, 1.0),
+          "lin_vel_x": (-1.5, 1.5),
+          "lin_vel_y": (-1.25, 1.25),
           "ang_vel_z": (-1.5, 1.5),
         },
       ],

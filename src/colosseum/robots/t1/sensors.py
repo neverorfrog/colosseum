@@ -148,6 +148,20 @@ FOOT_HEIGHT_SCAN = TerrainHeightSensorCfg(
   include_geom_groups=(0,),  # Terrain only.
 )
 
+# Base height above the terrain directly under the robot (terrain-relative, so it
+# stays correct on bumpy ground unlike an env-origin-relative height). Scalar
+# clearance per env; privileged critic obs only.
+BASE_HEIGHT_SCAN = TerrainHeightSensorCfg(
+  name="base_height_scan",
+  frame=(ObjRef(type="body", name=BASE_BODY_NAME, entity="robot"),),
+  pattern=RingPatternCfg.single_ring(radius=0.05, num_samples=4),
+  ray_alignment="yaw",
+  reduction="min",  # -> [B, 1] scalar clearance
+  max_distance=1.0,
+  exclude_parent_body=True,
+  include_geom_groups=(0,),  # Terrain only.
+)
+
 WALL_COLLISION_SENSOR = ContactSensorCfg(
   name="wall_collision",
   primary=ContactMatch(

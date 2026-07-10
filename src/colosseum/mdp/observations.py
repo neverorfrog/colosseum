@@ -94,6 +94,18 @@ def base_height(
   return height.unsqueeze(-1)
 
 
+def terrain_clearance(
+  env: ManagerBasedRlEnv,
+  sensor_name: str,
+) -> torch.Tensor:
+  """Vertical clearance of a TerrainHeightSensor's frame(s) above the terrain.
+
+  Generic reader over ``sensor.data.heights``; the sensor's ``frame`` decides
+  what is measured (feet, base, ...). Returns [B, F] (or [B, F, N] if the sensor
+  uses ``reduction="none"``)."""
+  return env.scene[sensor_name].data.heights
+
+
 def gait_clock(
   env: ManagerBasedRlEnv,
   command_name: str = "gait_phase",
@@ -118,9 +130,8 @@ def gait_clock(
 
 
 # ---------------------------------------------------------------------------
-# Privileged critic observations (booster_gym parity)
+# Privileged critic observations
 # ---------------------------------------------------------------------------
-
 
 def base_external_force(
   env: ManagerBasedRlEnv,

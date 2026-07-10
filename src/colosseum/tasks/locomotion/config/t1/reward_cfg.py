@@ -97,7 +97,7 @@ rewards = {
     params={
       "phase_command_name": "gait_phase",
       "height_sensor_name": "foot_height_scan",
-      "swing_height": 0.08,
+      "swing_height": 0.1,
       "tracking_sigma": 0.001,
       "command_name": "twist",
       "command_threshold": 0.05,
