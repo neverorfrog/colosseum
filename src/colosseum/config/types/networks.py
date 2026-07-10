@@ -24,7 +24,7 @@ class NetworkConfig:
 class PpoActorConfig(NetworkConfig):
     """Configuration for PPO actor (Gaussian policy) network."""
 
-    init_noise_std: float = 1.0
+    init_noise_std: float = 0.8
     """Initial standard deviation of the action noise (state-independent)."""
 
     min_noise_std: float = 0.01
@@ -36,3 +36,18 @@ class PpoCriticConfig(NetworkConfig):
     """Configuration for PPO critic (value function) network."""
 
     pass
+
+
+@dataclass(frozen=True)
+class OrchestratorConfig(NetworkConfig):
+    """Configuration for the residual orchestrator (gating) network.
+
+    learning_rate is inherited but unused: the orchestrator shares the actor
+    optimizer (same pattern as PpoCriticConfig sharing the critic optimizer).
+    """
+
+    per_joint: bool = False
+    """If True, the gate outputs per-joint blend weights [B, num_skills, A]
+    (softmax over skills independently for each joint, SkillBlender-style) instead
+    of one global weight vector per skill. Lets the residual take authority on
+    individual joints (e.g. the swing leg) without a global all-or-nothing blend."""

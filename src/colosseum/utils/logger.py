@@ -12,20 +12,38 @@ import time
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import torch
 from loguru import logger
 from rich.console import Console
+from rich.live import Live
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
 import wandb
-from colosseum.config.types.experiment import BaseExperimentConfig
 from colosseum.config.types.logger import LoggerConfig
 
+if TYPE_CHECKING:
+  from colosseum.config.types.experiment import BaseExperimentConfig
+
 console = Console()
+_live: Live | None = None
+
+
+def start_live_display() -> None:
+  global _live
+  if _live is None:
+    _live = Live(console=console, auto_refresh=False)
+    _live.start()
+
+
+def stop_live_display() -> None:
+  global _live
+  if _live is not None:
+    _live.stop()
+    _live = None
 
 
 def generate_run_name(
@@ -43,7 +61,7 @@ def generate_run_name(
         seed: Optional seed for reproducibility
 
     Returns:
-        Run name in format: <task>_<algo>_<scenario>_<seed>_YYYYMMDD_HHMMSS
+        Run name in format: <task>-<algo>-<scenario>-<seed>-YYYYMMDD-HHMMSS
     """
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -54,7 +72,7 @@ def generate_run_name(
         parts.append(str(seed))
     parts.append(timestamp)
 
-    return "_".join(parts)
+    return "-".join(parts)
 
 
 def setup_loguru(
@@ -436,8 +454,12 @@ def log_training_step(
             padding=(1, 2),
         )
 
-        # Print to console
-        console.print(panel)
+        # Print to console (or update in-place if live display is active)
+        if _live is not None:
+          _live.update(panel)
+          _live.refresh()
+        else:
+          console.print(panel)
     else:
         # Loguru text output (traditional)
         progress_pct = (step / total_steps * 100) if total_steps > 0 else 0

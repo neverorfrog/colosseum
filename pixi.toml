@@ -28,10 +28,15 @@ train-rsl-rl = { cmd = "python -m colosseum.scripts.train_rsl_rl", description =
 train-mjlab = { cmd = "python -m mjlab.scripts.train", description = "Train with RSL-RL (mjlab built-in tasks)" }
 train = { cmd = "python -m colosseum.scripts.train", description = "Train with custom PPO" }
 play = { cmd = "python -m colosseum.scripts.play", description = "Evaluate trained policy in simulation" }
+play-rsl-rl = { cmd = "python -m colosseum.scripts.play_rsl_rl", description = "Evaluate RSL-RL trained policy in simulation" }
 export-onnx = { cmd = "python -m colosseum.scripts.export_onnx", description = "Export checkpoint to ONNX" }
+export-model = { cmd = "src/colosseum/scripts/export_model.sh", description = "Export checkpoint to model registry in external repo" }
+export-gains = { cmd = "python -m colosseum.scripts.export_gains", description = "Distill deploy gains.yaml from a model's config.yaml" }
+import-run = { cmd = "python -m colosseum.scripts.import_run", description = "Import a run from W&B into the model registry" }
 
 # Dribbling tasks
-train-phase2 = { cmd = "python research/dribbling/scripts/train_phase2.py", description = "RMA Phase 2 adaptation encoder training" }
+rma-train = { cmd = "python -m colosseum.scripts.rma_train", description = "Integrated RMA pipeline: Phase 1 → Phase 2 → Phase 3" }
+train-phase2-dribbling = { cmd = "python research/dribbling/scripts/train_phase2.py", description = "RMA Phase 2 adaptation encoder training (dribbling-specific)" }
 pipeline-dribbling = { cmd = "python research/dribbling/scripts/pipeline_dribbling.py", description = "Full dribbling curriculum pipeline (Phase 1 + Phase 2 per stage)" }
 eval-dribbling = { cmd = "python research/dribbling/scripts/evaluate_dribbling.py", description = "Run the dribbling evaluation protocol" }
 obstacle-ablation = { cmd = "python research/dribbling/scripts/obstacle_ablation.py", description = "Ablation of obstacle presence in dribbling curriculum" }
@@ -57,6 +62,7 @@ pytest = ">=9.0.3,<10"
 wandb = ">=0.26.1,<0.27"
 ipykernel = ">=7.2.0,<8"
 loguru = ">=0.7.3,<0.8"
+ruff = ">=0.15.20,<0.16"
 
 [pypi-dependencies]
 colosseum = {path = ".", editable = true}
@@ -67,6 +73,7 @@ up-symk = ">=1.4.2, <2"
 unified-planning = {git = "https://github.com/speckdavid/unified-planning", branch = "master", editable = true}
 tyro = ">=1.0.13, <2"
 onnxruntime = ">=1.22.2,<2"
+dvc = ">=3.67.1, <4"
 
 # ============================================
 # DOCS FEATURE

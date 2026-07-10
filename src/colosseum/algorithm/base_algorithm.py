@@ -708,6 +708,7 @@ class BaseAlgorithm(ABC):
       opset_version=18,
       input_names=["obs"],
       output_names=["actions"],
+      external_data=False,
     )
 
     if was_training:
@@ -765,6 +766,14 @@ class BaseAlgorithm(ABC):
     if algo_name is not None:
       state_dict.setdefault("algo_name", algo_name)
 
+    # Persist any command-term state (e.g. a performance-gated curriculum grid).
+    # Generic: the command manager decides what, if anything, to serialize.
+    command_manager = getattr(self.env.unwrapped, "command_manager", None)
+    if command_manager is not None:
+      command_state = command_manager.state_dict()
+      if command_state:
+        state_dict.setdefault("command_manager", command_state)
+
     cpu_dict = {}
     for key, value in state_dict.items():
       if isinstance(value, dict):
@@ -786,12 +795,14 @@ class BaseAlgorithm(ABC):
   ) -> None:
     """Average gradients across all distributed workers.
 
-    This implements synchronous data-parallel optimization without wrapping the
-    model in DDP, which keeps custom actor methods and checkpoint format intact.
+    Concatenates all gradient tensors into a single flat tensor for a single
+    all_reduce call (holosoma-style), which is significantly faster than issuing
+    one collective per parameter.
     """
     if not self.is_distributed:
       return
 
+    grad_views: list[torch.Tensor] = []
     seen: set[int] = set()
     for group in optimizer.param_groups:
       for param in group["params"]:
@@ -801,9 +812,59 @@ class BaseAlgorithm(ABC):
         if param_id in seen:
           continue
         seen.add(param_id)
+        grad_views.append(param.grad.view(-1))
 
-        torch.distributed.all_reduce(param.grad.data, op=torch.distributed.ReduceOp.SUM)
-        param.grad.data.div_(self.world_size)
+    if not grad_views:
+      return
+
+    all_grads = torch.cat(grad_views)
+    torch.distributed.all_reduce(all_grads, op=torch.distributed.ReduceOp.SUM)
+    all_grads.div_(self.world_size)
+
+    offset = 0
+    for grad_view in grad_views:
+      numel = grad_view.numel()
+      grad_view.copy_(all_grads[offset : offset + numel].view_as(grad_view))
+      offset += numel
+
+  def _synchronize_model_weights(
+    self, *modules: torch.nn.Module
+  ) -> None:
+    """Broadcast model parameters from rank 0 to all workers after init.
+
+    Without this, random initialization produces different starting weights on
+    each GPU, which corrupts training from the first gradient step.
+    """
+    if not self.is_distributed:
+      return
+
+    for module in modules:
+      for param in module.parameters():
+        torch.distributed.broadcast(param.data, src=0)
+
+    logger.info(f"Synchronized model weights across {self.world_size} GPUs")
+
+  def _normalize_advantages_multi_gpu(
+    self, advantages: torch.Tensor
+  ) -> torch.Tensor:
+    """Normalize advantages using global statistics across all GPUs.
+
+    Standard local per-buffer normalization gives each GPU slightly different
+    advantage scales. This computes the global mean and variance so all workers
+    see identical advantages.
+    """
+    if not self.is_distributed:
+      return (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+
+    local_stats = torch.stack(
+      [advantages.mean(), (advantages**2).mean()]
+    )
+    torch.distributed.all_reduce(local_stats, op=torch.distributed.ReduceOp.SUM)
+    global_mean = local_stats[0] / self.world_size
+    global_sq_mean = local_stats[1] / self.world_size
+    global_std = torch.sqrt(global_sq_mean - global_mean**2 + 1e-8)
+
+    return (advantages - global_mean) / global_std
 
   def _distributed_mean_scalar(self, value: float) -> float:
     """Compute cross-rank mean for a scalar float."""
@@ -840,6 +901,12 @@ class BaseAlgorithm(ABC):
 
     checkpoint = torch.load(path, map_location=map_location, weights_only=False)
     logger.success(f"Checkpoint loaded: {path}")
+
+    command_state = checkpoint.get("command_manager")
+    if command_state:
+      command_manager = getattr(self.env.unwrapped, "command_manager", None)
+      if command_manager is not None:
+        command_manager.load_state_dict(command_state)
 
     return checkpoint
 

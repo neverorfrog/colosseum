@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from pydantic import ConfigDict
 from pydantic.dataclasses import dataclass
 
 from colosseum.config.types.experiment import BaseExperimentConfig
+from colosseum.scripts.export_gains import export_gains
 from colosseum.utils.checkpoint import resolve_checkpoint
 from colosseum.utils.export import export_policy_to_onnx
 from colosseum.utils.model_registry import ModelRegistry
@@ -58,6 +60,14 @@ class ExportConfig(BaseExperimentConfig):
 
   out_dir: str | None = None
   """Output directory (default: models/<task_name>/)."""
+
+  destination_root: str | None = None
+  """Absolute path to an arena checkout. After export, calls export_model.sh to copy the
+  model and update the destination's model registry."""
+
+  def __post_init__(self) -> None:
+    if self.destination_root is not None and not Path(self.destination_root).is_absolute():
+      raise ValueError("--destination-root must be an absolute path")
 
 
 def main() -> None:
@@ -112,6 +122,9 @@ def main() -> None:
     if config_path.exists():
       shutil.copy2(config_path, out_dir / "config.yaml")
       logger.info(f"Copied config: {out_dir / 'config.yaml'}")
+      # Distill the deploy gains.yaml (PD gains, default pose, action scale) so the
+      # C++ deploy repos load them by name instead of hardcoding.
+      export_gains(out_dir)
 
   # Register in models/registry.yaml
   rel_file = f"{config.name}/{result.name}"
@@ -124,6 +137,19 @@ def main() -> None:
     step=step if step >= 0 else 0,
   )
   _set_default_symlink(task_dir, rel_file)
+
+  if config.destination_root:
+    script = Path(__file__).resolve().parent / "export_model.sh"
+    subprocess.run(
+      [
+        str(script),
+        "--policy", task_name,
+        "--version", config.name,
+        "--destination-root", config.destination_root,
+      ],
+      check=True,
+    )
+    logger.info(f"Exported to destination: {config.destination_root}")
 
   logger.success(f"Exported + registered '{config.name}': {result}")
 

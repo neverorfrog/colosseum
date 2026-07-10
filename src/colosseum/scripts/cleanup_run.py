@@ -51,6 +51,29 @@ def cleanup(
   """
   run_dir = Path(log_dir) / run_name
 
+  # Local dirs and W&B now both use hyphens (from generate_run_name).
+  # Still try alternative naming for backward compatibility with old runs
+  # that used underscores as separators.
+  if not run_dir.exists():
+    alt_run_name = run_name.replace("-", "_")
+    alt_dir = Path(log_dir) / alt_run_name
+    if alt_dir.exists():
+      logger.info(
+        f"Local dir '{run_dir}' not found, using '{alt_dir}' instead "
+        "(underscore naming convention)."
+      )
+      run_dir = alt_dir
+    else:
+      # Also try the reverse: W&B name from underscore-form local name
+      alt_run_name = run_name.replace("_", "-")
+      alt_dir = Path(log_dir) / alt_run_name
+      if alt_dir.exists():
+        logger.info(
+          f"Local dir '{run_dir}' not found, using '{alt_dir}' instead "
+          "(hyphen naming convention)."
+        )
+        run_dir = alt_dir
+
   # Read project/entity from config if not explicitly provided
   config_project, config_entity = _read_wandb_config(run_dir)
   if project is None:

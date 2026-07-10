@@ -38,6 +38,8 @@ from colosseum.utils.logger import (
   save_experiment_config,
   setup_loguru,
   setup_wandb,
+  start_live_display,
+  stop_live_display,
   teardown_wandb,
 )
 from colosseum.utils.torch import get_device, set_seed
@@ -310,6 +312,9 @@ def main() -> None:
 
         logger.info("Starting training...")
 
+        if is_main_process:
+            start_live_display()
+
         try:
             algo.train()
         except KeyboardInterrupt:
@@ -325,6 +330,7 @@ def main() -> None:
                     logger.error(f"Failed to save checkpoint: {e}")
 
         if is_main_process:
+            stop_live_display()
             teardown_wandb()
         logger.success("Training complete!")
     finally:

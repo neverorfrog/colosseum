@@ -115,6 +115,16 @@ class RmaTerm(ManagerTermBase):
     """
     return None
 
+  @property
+  def odom_head(self) -> nn.Module | None:
+    """Optional decoder mapping the adaptation latent to an odometry estimate.
+
+    Returns None if this term has no odom head. Override in subclasses that
+    train an auxiliary odometry regression head and want it exported alongside
+    the policy (consumed on the robot to integrate base velocity into pose).
+    """
+    return None
+
   # ------------------------------------------------------------------
   # Encoding interface
   # ------------------------------------------------------------------
@@ -262,7 +272,6 @@ class RmaManager(ManagerBase):
   def __init__(self, cfg: dict[str, RmaTermCfg], env: ManagerBasedRlEnv) -> None:
     self.cfg = cfg
     self._terms: dict[str, RmaTerm] = {}
-    self._training: bool = True
     super().__init__(env)
 
   # ------------------------------------------------------------------
@@ -313,22 +322,26 @@ class RmaManager(ManagerBase):
     self,
     obs_dict: dict[str, torch.Tensor],
     *,
-    phase: int = 1,
+    use_adaptation: bool = False,
+    apply_noise: bool = False,
   ) -> torch.Tensor:
     """Run all terms and return concatenated latents.
 
     Args:
-      obs_dict: Full obs dict (each term reads the key(s) it needs).
-      phase:    1 → privileged encoders, 2 → adaptation encoders.
+      obs_dict:       Full obs dict (each term reads the key(s) it needs).
+      use_adaptation: True → adaptation encoders (Phase 3 / deploy),
+                      False → privileged encoders (Phase 1 / Phase 2 rollout).
+      apply_noise:    Add Gaussian noise to privileged latents (Phase 1 learning
+                      step only). Ignored when use_adaptation=True.
 
     Returns:
       z: (N, total_latent_dim) concatenated latents in declaration order.
     """
-    encode_fn = "encode_privileged" if phase == 1 else "encode_adaptation"
+    encode_fn = "encode_adaptation" if use_adaptation else "encode_privileged"
     latents: list[torch.Tensor] = []
     for term in self._terms.values():
       z = getattr(term, encode_fn)(obs_dict)
-      if phase == 1 and self._training and term.cfg.latent_noise_std > 0.0:
+      if apply_noise and not use_adaptation and term.cfg.latent_noise_std > 0.0:
         z = z + torch.randn_like(z) * term.cfg.latent_noise_std
       latents.append(z)
     return torch.cat(latents, dim=-1)
@@ -399,20 +412,20 @@ class RmaManager(ManagerBase):
     Returns:
       z: (N, total_latent_dim) blended latent tensor.
     """
-    z_adapt = self.encode(adapt_obs, phase=2)
+    z_adapt = self.encode(adapt_obs, use_adaptation=True)
     mask = self.get_adaptation_mask()
 
     # --- DEBUG (Check B): compare adapt latent vs priv latent ---------
     if priv_obs:
       with torch.no_grad():
-        z_priv_debug = self.encode(priv_obs, phase=1)
+        z_priv_debug = self.encode(priv_obs)
       self._check_b_debug(z_adapt, z_priv_debug, mask)
     # -------------------------------------------------------------------
 
     if mask is None or not priv_obs:
       return z_adapt
     with torch.no_grad():
-      z_priv = self.encode(priv_obs, phase=1)
+      z_priv = self.encode(priv_obs)
     return torch.where(mask.unsqueeze(-1), z_adapt, z_priv)
 
   _check_b_counter: int = 0
@@ -573,7 +586,6 @@ class RmaManager(ManagerBase):
     return {}
 
   def train(self, mode: bool = True) -> None:
-    self._training = mode
     for term in self._terms.values():
       term.privileged_encoder.train(mode)
       if term.adaptation_encoder is not None:

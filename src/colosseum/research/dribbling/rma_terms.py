@@ -139,6 +139,12 @@ class DribblingRmaTerm(RmaTerm):
 
     self._obstacle_head = ObstacleHead(latent_dim=cfg.latent_dim).to(device)
 
+    # Stable ModuleList so adaptation_encoder property returns the same object
+    # every call (required for .train()/.eval() and state_dict() correctness).
+    self._adaptation_enc_module = nn.ModuleList([
+      self._depth_encoder, self._ball_head, self._obstacle_head,
+    ]).to(device)
+
     # ------------------------------------------------------------------
     # Runtime state
     # ------------------------------------------------------------------
@@ -172,7 +178,7 @@ class DribblingRmaTerm(RmaTerm):
 
   @property
   def adaptation_encoder(self) -> nn.Module:
-    return nn.ModuleList([self._depth_encoder, self._ball_head, self._obstacle_head])
+    return self._adaptation_enc_module
 
   # ------------------------------------------------------------------
   # Encoding

@@ -14,7 +14,7 @@ env.bak/
 venv.bak/
 */.clangd
 resources/
-external/TensorRT
+external/
 
 # Ignore distribution/build directories and files
 build/

@@ -17,107 +17,114 @@ from colosseum.config.types.task import TaskConfig, get_task_class
 
 @dataclass(frozen=True, config=ConfigDict(arbitrary_types_allowed=True))
 class BaseExperimentConfig:
-    """Base configuration shared between training and playing."""
+  """Base configuration shared between training and playing."""
 
-    use_cuda: bool = True
-    cuda: str = "0"
-    checkpoint: str | None = None
+  use_cuda: bool = True
+  cuda: str = "0"
+  checkpoint: str | None = None
 
-    task: Annotated[
-        TaskConfig,
-        tyro.conf.arg(
-            constructor=tyro.extras.subcommand_type_from_defaults(
-                colosseum.config.values.task.DEFAULTS
-            )
-        ),
-    ] = dataclasses.field(default_factory=lambda: list(colosseum.config.values.task.DEFAULTS.values())[0])
+  task: Annotated[
+    TaskConfig,
+    tyro.conf.arg(
+      constructor=tyro.extras.subcommand_type_from_defaults(
+        colosseum.config.values.task.DEFAULTS
+      )
+    ),
+  ] = dataclasses.field(
+    default_factory=lambda: list(colosseum.config.values.task.DEFAULTS.values())[0]
+  )
 
 
 @dataclass(frozen=True, config=ConfigDict(arbitrary_types_allowed=True))
 class TrainConfig(BaseExperimentConfig):
-    """Training-specific configuration."""
+  """Training-specific configuration."""
 
-    name: str = "EXPERIMENT"
-    seed: int = 42
+  name: str = "EXPERIMENT"
+  seed: int = 123
 
-    learning_steps: int | None = None
-    """Override algo_cfg.learning_steps for this run. Useful in pipeline scripts."""
+  learning_steps: int | None = None
+  """Override algo_cfg.learning_steps for this run. Useful in pipeline scripts."""
 
-    warm_start: str | None = None
-    """Path to a checkpoint to warm-start from (loads weights, resets step counter).
+  warm_start: str | None = None
+  """Path to a checkpoint to warm-start from (loads weights, resets step counter).
     Distinct from --checkpoint which fully resumes including global_step."""
 
-    logger: Annotated[
-        LoggerConfig,
-        tyro.conf.arg(
-            constructor=tyro.extras.subcommand_type_from_defaults(
-                colosseum.config.values.logger.DEFAULTS
-            )
-        ),
-    ] = dataclasses.field(default_factory=lambda: colosseum.config.values.logger.WANDB)
+  logger: Annotated[
+    LoggerConfig,
+    tyro.conf.arg(
+      constructor=tyro.extras.subcommand_type_from_defaults(
+        colosseum.config.values.logger.DEFAULTS
+      )
+    ),
+  ] = dataclasses.field(default_factory=lambda: colosseum.config.values.logger.WANDB)
 
-    def save_config(self, path: str) -> None:
-        with open(path, "w") as f:
-            yaml.safe_dump(
-                self.to_serializable_dict(), f, default_flow_style=False, sort_keys=False
-            )
+  def save_config(self, path: str) -> None:
+    with open(path, "w") as f:
+      yaml.safe_dump(
+        self.to_serializable_dict(), f, default_flow_style=False, sort_keys=False
+      )
 
-    def to_serializable_dict(self) -> dict:
-        from enum import Enum
-        from typing import cast
+  def to_serializable_dict(self) -> dict:
+    from enum import Enum
+    from typing import cast
 
-        def is_serializable(obj):
-            if obj is None:
-                return True
-            if isinstance(obj, (str, int, float, bool)):
-                return True
-            if isinstance(obj, Enum):
-                return True
-            if isinstance(obj, (list, tuple, dict)):
-                return True
-            if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
-                return True
-            return False
+    def is_serializable(obj):
+      if obj is None:
+        return True
+      if isinstance(obj, (str, int, float, bool)):
+        return True
+      if isinstance(obj, Enum):
+        return True
+      if isinstance(obj, (list, tuple, dict)):
+        return True
+      if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+        return True
+      return False
 
-        def convert(obj):
-            if isinstance(obj, Enum):
-                return obj.value
-            elif dataclasses.is_dataclass(obj) and not isinstance(obj, type):
-                result = {}
-                for k, v in obj.__dict__.items():
-                    if is_serializable(v):
-                        result[k] = convert(v)
-                    elif isinstance(v, (list, tuple)):
-                        converted_items = [
-                            convert(item) for item in v if is_serializable(item)
-                        ]
-                        if converted_items:
-                            result[k] = converted_items
-                return result
-            elif isinstance(obj, (list, tuple)):
-                return type(obj)(convert(item) for item in obj if is_serializable(item))
-            elif isinstance(obj, dict):
-                return {k: convert(v) for k, v in obj.items() if is_serializable(v)}
-            else:
-                return obj
+    def convert(obj):
+      if isinstance(obj, Enum):
+        return obj.value
+      elif dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+        result = {}
+        for k, v in obj.__dict__.items():
+          if is_serializable(v):
+            result[k] = convert(v)
+          elif isinstance(v, (list, tuple)):
+            converted_items = [convert(item) for item in v if is_serializable(item)]
+            if converted_items:
+              result[k] = converted_items
+        return result
+      elif isinstance(obj, (list, tuple)):
+        return type(obj)(convert(item) for item in obj if is_serializable(item))
+      elif isinstance(obj, dict):
+        return {k: convert(v) for k, v in obj.items() if is_serializable(v)}
+      else:
+        return obj
 
-        return cast(dict, convert(self))
+    result = cast(dict, convert(self))
 
-    @classmethod
-    def from_yaml(cls, path: str | Path) -> "TrainConfig":
-        with open(path, "r") as f:
-            data = yaml.safe_load(f)
+    if self.task.algo_cfg is not None:
+      result["algo_cfg"] = convert(self.task.algo_cfg)
 
-        if "task" in data:
-            task_data = data["task"]
-            task_name = task_data["name"]
-            TaskClass = get_task_class(task_name)
-            data["task"] = TaskClass.reconstruct_from_dict(task_data)
+    return result
 
-        if "logger" in data:
-            data["logger"] = LoggerConfig(**data["logger"])
+  @classmethod
+  def from_yaml(cls, path: str | Path) -> "TrainConfig":
+    with open(path, "r") as f:
+      data = yaml.safe_load(f)
 
-        return cls(**data)
+    if "task" in data:
+      task_data = data["task"]
+      task_name = task_data["name"]
+      TaskClass = get_task_class(task_name)
+      data["task"] = TaskClass.reconstruct_from_dict(task_data)
+
+    if "logger" in data:
+      data["logger"] = LoggerConfig(**data["logger"])
+
+    data.pop("algo_cfg", None)
+
+    return cls(**data)
 
 
 ExperimentConfig = TrainConfig

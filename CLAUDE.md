@@ -92,23 +92,6 @@ rewards = {
 
 During initialization, `SceneEntityCfg.resolve()` converts `body_names="torso"` → `body_ids=[3]` (global MuJoCo index). At runtime, term functions use these pre-resolved indices for efficient tensor operations.
 
-## Creating Tasks
-
-Tasks are registered via the `mjlab.tasks` entry point in `pyproject.toml`:
-
-```toml
-[project.entry-points."mjlab.tasks"]
-cartpole = "colosseum.tasks.cartpole"
-```
-
-Each task module must:
-1. Define scene configuration (`SceneCfg`)
-2. Define MDP components (actions, observations, rewards, terminations, events)
-3. Create `ManagerBasedRlEnvCfg` combining all components
-4. Call `register_mjlab_task()` with a unique `task_id`
-
-See `src/colosseum/train/tasks/cartpole/` for a complete minimal example.
-
 ## Working with Robots
 
 ### Booster T1 Humanoid
@@ -117,16 +100,14 @@ Located in `src/colosseum/robots/booster_t1/`:
 
 #### XML Models
 
-- **12 DOF model** ([T1_12dof.xml](src/colosseum/robots/booster_t1/xmls/T1_12dof.xml)): Legs only (6 DOF per leg), used for locomotion training
-- **23 DOF model** ([T1_23dof.xml](src/colosseum/robots/booster_t1/xmls/T1_23dof.xml)): Full body including arms, waist, and neck, for deployment
+- **23 DOF model** ([t1.xml](src/colosseum/robots/t1/xmls/t1.xml)): Full body including arms, waist, and neck, used for all tasks
 
 #### Configuration Modules
 
 The T1 configuration is organized into three modules:
 
-**[t1_actuators.py](src/colosseum/robots/booster_t1/t1_actuators.py)**: Motor specifications and actuator configurations
+**[actuators.py](src/colosseum/robots/t1/actuators.py)**: Motor specifications and actuator configurations
 - `MOTOR_SPECS`: Dictionary of motor specifications from manufacturer data (gear ratio, torque, speed, inertia)
-- `compute_pd_gains()`: Computes PD controller gains using Unitree G1 method (natural frequency + damping ratio)
 - Actuator configs for 12-DOF locomotion:
   - `T1_ACTUATOR_HIP_PITCH`, `T1_ACTUATOR_HIP_ROLL`, `T1_ACTUATOR_HIP_YAW`
   - `T1_ACTUATOR_KNEE`
@@ -134,7 +115,7 @@ The T1 configuration is organized into three modules:
 - Actuator configs for 23-DOF full body:
   - `T1_ACTUATOR_NECK`, `T1_ACTUATOR_ARM`, `T1_ACTUATOR_WAIST`
 
-**[t1_contacts.py](src/colosseum/robots/booster_t1/t1_contacts.py)**: Collision and contact sensor configurations
+**[contacts.py](src/colosseum/robots/t1/contacts.py)**: Collision and contact sensor configurations
 - Collision configs (modify geom properties):
   - `FEET_ONLY_COLLISION`: Only foot geoms collide (recommended for training)
   - `FULL_COLLISION_WITHOUT_SELF`: All parts collide with environment, no self-collision
@@ -146,30 +127,14 @@ The T1 configuration is organized into three modules:
   - `HAND_CONTACT_SENSOR`: Tracks hand contact for manipulation
 - `T1_FOOT_GEOM_NAMES`: Tuple of all foot geometry names for events
 
-**[t1_constants.py](src/colosseum/robots/booster_t1/t1_constants.py)**: Spec loaders and entity configurations
-- XML paths: `T1_12DOF_XML`, `T1_23DOF_XML`
+**[constants.py](src/colosseum/robots/t1/constants.py)**: Spec loaders and entity configurations
+- XML paths: `T1_12DOF_XML`, `t1_XML`
 - Spec loaders:
   - `get_t1_12dof_spec()`: Returns MjSpec for 12-DOF locomotion model
-  - `get_t1_23dof_spec()`: Returns MjSpec for 23-DOF full body model
+  - `get_t1_spec()`: Returns MjSpec for 23-DOF full body model
 - Pre-configured entity configs:
   - `T1_12DOF_ENTITY_CFG`: Complete entity config for locomotion training
-  - `T1_23DOF_ENTITY_CFG`: Complete entity config for full body deployment
-
-#### PD Gain Computation
-
-T1 uses the Unitree G1 method for computing actuator gains:
-
-```python
-# Natural frequency and damping ratio (same as G1)
-natural_freq = 10.0 * 2π  # 10Hz in rad/s
-damping_ratio = 2.0  # Overdamped (prevents oscillations)
-
-# Compute gains from motor reflected inertia
-stiffness = reflected_inertia × ω_n²
-damping = 2 × ζ × reflected_inertia × ω_n
-```
-
-This ensures stable, overdamped control appropriate for each joint's mechanical properties.
+  - `t1_ENTITY_CFG`: Complete entity config for full body deployment
 
 ### Entity Configuration
 
@@ -235,3 +200,64 @@ def my_reward(env: ManagerBasedRlEnv, asset_cfg: SceneEntityCfg) -> torch.Tensor
     data = entity.data.body_pos_w[:, asset_cfg.body_ids]  # Pre-resolved indices
     return compute_reward(data)
 ```
+
+
+## Guidelines for Claude Code
+
+When working with code in this repository, please keep the following guidelines in mind:
+
+### 1. Think Before Coding
+
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
+
+Before implementing:
+- State your assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them - don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
+
+### 2. Simplicity First
+
+**Minimum code that solves the problem. Nothing speculative.**
+
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If you write 200 lines and it could be 50, rewrite it.
+
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+
+### 3. Surgical Changes
+
+**Touch only what you must. Clean up only your own mess.**
+
+When editing existing code:
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it - don't delete it.
+
+When your changes create orphans:
+- Remove imports/variables/functions that YOUR changes made unused.
+- Don't remove pre-existing dead code unless asked.
+
+The test: Every changed line should trace directly to the user's request.
+
+### 4. Goal-Driven Execution
+
+**Define success criteria. Loop until verified.**
+
+Transform tasks into verifiable goals:
+- "Add validation" → "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- "Refactor X" → "Ensure tests pass before and after"
+
+For multi-step tasks, state a brief plan:
+```
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
+```
+
+Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
