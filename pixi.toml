@@ -74,6 +74,7 @@ unified-planning = {git = "https://github.com/speckdavid/unified-planning", bran
 tyro = ">=1.0.13, <2"
 onnxruntime = ">=1.22.2,<2"
 dvc = ">=3.67.1, <4"
+dvc-gdrive = ">=3.0.1, <4"
 
 # ============================================
 # DOCS FEATURE

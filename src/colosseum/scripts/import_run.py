@@ -1,17 +1,24 @@
 #!/usr/bin/env python3
-"""Import the most recent checkpoint and run metadata from a remote machine via SCP.
+"""Import the latest checkpoint from a remote machine, export to ONNX, and push to DVC.
 
 Usage:
-  pixi run import-run --remote gin --root /home/phd_student/Maiorana/colosseum --run t1-vel_ppo_20260101_120000
+  pixi run import-run --remote gin --root /home/phd_student/Maiorana/colosseum --run t1-vel_ppo_20260101_120000 --task t1-velocity
 
-With ONNX export:
-  pixi run import-run --remote gin --root /home/phd_student/Maiorana/colosseum --run t1-vel_ppo_20260101_120000 --task t1-velocity --name jun14_2 --destination-root ~/code/spqr/arena
+  # Named version (defaults to "latest"):
+  pixi run import-run --remote gin --root ... --run ... --task t1-velocity --name v2
+
+  # Skip DVC:
+  pixi run import-run ... --task t1-velocity --no-dvc
+
+  # Keep raw checkpoint in logs/:
+  pixi run import-run ... --task t1-velocity --keep-checkpoint
 """
 
 from __future__ import annotations
 
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import tyro
@@ -36,23 +43,26 @@ class ImportRunConfig:
   run: str = ""
   """Run name (directory under <root>/logs/)."""
 
+  task: str = ""
+  """Task name for ONNX export (e.g. 't1-velocity'). Triggers export + DVC push."""
+
+  name: str = "latest"
+  """Registration name for the exported model (default: 'latest')."""
+
   log_dir: str = "./logs"
   """Local log directory (default: ./logs)."""
 
-  no_wandb: bool = False
-  """Skip importing wandb run data."""
+  keep_checkpoint: bool = False
+  """Keep the raw .pt checkpoint in logs/ after export."""
 
-  task: str = ""
-  """Task name for ONNX export (e.g. 't1-velocity')."""
+  no_dvc: bool = False
+  """Skip DVC add and push."""
 
-  name: str = ""
-  """Registration name for ONNX export (e.g. 'jun14_2')."""
+  wandb: bool = False
+  """Import wandb run data from the remote."""
 
   destination_root: str | None = None
   """Absolute path to an arena checkout. Copies model and updates registry."""
-
-
-RUN_FILES = ["config.yaml", "train.log", "wandb_id.txt"]
 
 
 def main() -> None:
@@ -81,63 +91,83 @@ def main() -> None:
   ckpt_name = Path(latest).name
   logger.info(f"Latest checkpoint: {ckpt_name}")
 
+  ckpt_path = local_ckpt_dir / ckpt_name
+
   # Import checkpoint
   subprocess.run(
-    ["scp", f"{config.remote}:{latest}", str(local_ckpt_dir / ckpt_name)],
+    ["scp", f"{config.remote}:{latest}", str(ckpt_path)],
     check=True,
   )
 
-  # Import run metadata files (best-effort)
-  for fname in RUN_FILES:
-    result = subprocess.run(
-      ["scp", f"{config.remote}:{remote_run / fname}", str(local_run / fname)],
-      capture_output=True,
-      text=True,
-    )
-    if result.returncode == 0:
-      logger.info(f"Imported {fname}")
-    else:
-      logger.warning(f"Skipped {fname} (not found on remote)")
+  # Import config.yaml (needed for ONNX export gains)
+  subprocess.run(
+    ["scp", f"{config.remote}:{remote_run / 'config.yaml'}", str(local_run / "config.yaml")],
+    capture_output=True,
+    text=True,
+  )
 
-  # Import wandb run data
-  if not config.no_wandb:
-    wandb_id_path = local_run / "wandb_id.txt"
-    if wandb_id_path.exists():
-      wandb_id = wandb_id_path.read_text().strip()
-      logger.info(f"W&B run ID: {wandb_id}")
-
-      remote_wandb_dir = remote_root / "logs" / "wandb"
-      result = subprocess.run(
-        ["ssh", config.remote, f"ls -d {remote_wandb_dir}/run-*-{wandb_id} 2>/dev/null"],
-        capture_output=True,
-        text=True,
-      )
-      if result.returncode == 0 and result.stdout.strip():
-        remote_dir = result.stdout.strip().split("\n")[0]
-        dir_name = Path(remote_dir).name
-        local_wandb_dir = Path(config.log_dir) / "wandb"
-        local_wandb_dir.mkdir(parents=True, exist_ok=True)
-        logger.info(f"Importing wandb run from {config.remote}:{remote_dir}")
-        subprocess.run(
-          ["scp", "-r", f"{config.remote}:{remote_dir}", str(local_wandb_dir / dir_name)],
-          check=True,
-        )
-      else:
-        logger.warning(f"No wandb run directory found for ID '{wandb_id}' on remote")
-    else:
-      logger.warning("No wandb_id.txt found, skipping wandb data import")
-  else:
-    logger.info("Skipping wandb import (--no-wandb)")
+  # Wandb import
+  if config.wandb:
+    _import_wandb(config, remote_root, local_run)
 
   logger.success(f"Imported '{config.run}' from {config.remote}")
 
-  # ONNX export
-  if config.task and config.name:
-    logger.info("Starting ONNX export...")
-    _export_onnx(config, local_run, local_ckpt_dir / ckpt_name)
+  # ONNX export + DVC
+  if config.task:
+    if not config.no_dvc:
+      _check_dvc_remote()
+
+    _export_onnx(config, local_run, ckpt_path)
+
+    if not config.no_dvc:
+      _dvc_push(config)
+
     logger.success(f"Exported '{config.name}' for task '{config.task}'")
-  elif config.task or config.name:
-    logger.warning("Both --task and --name are required for ONNX export, skipping")
+
+    if not config.keep_checkpoint:
+      shutil.rmtree(local_run)
+      logger.info(f"Cleaned up {local_run}")
+
+
+def _import_wandb(config: ImportRunConfig, remote_root: Path, local_run: Path) -> None:
+  wandb_id_path = local_run / "wandb_id.txt"
+  subprocess.run(
+    ["scp", f"{config.remote}:{remote_root / 'logs' / config.run / 'wandb_id.txt'}", str(wandb_id_path)],
+    capture_output=True,
+    text=True,
+  )
+  if not wandb_id_path.exists():
+    logger.warning("No wandb_id.txt found on remote, skipping wandb import")
+    return
+
+  wandb_id = wandb_id_path.read_text().strip()
+  logger.info(f"W&B run ID: {wandb_id}")
+
+  remote_wandb_dir = remote_root / "logs" / "wandb"
+  result = subprocess.run(
+    ["ssh", config.remote, f"ls -d {remote_wandb_dir}/run-*-{wandb_id} 2>/dev/null"],
+    capture_output=True,
+    text=True,
+  )
+  if result.returncode == 0 and result.stdout.strip():
+    remote_dir = result.stdout.strip().split("\n")[0]
+    dir_name = Path(remote_dir).name
+    local_wandb_dir = Path(config.log_dir) / "wandb"
+    local_wandb_dir.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Importing wandb run from {config.remote}:{remote_dir}")
+    subprocess.run(
+      ["scp", "-r", f"{config.remote}:{remote_dir}", str(local_wandb_dir / dir_name)],
+      check=True,
+    )
+  else:
+    logger.warning(f"No wandb run directory found for ID '{wandb_id}' on remote")
+
+
+def _check_dvc_remote() -> None:
+  result = subprocess.run(["dvc", "remote", "list"], capture_output=True, text=True)
+  if not result.stdout.strip():
+    logger.error("No DVC remote configured. Run: dvc remote add -d myremote <url>")
+    sys.exit(1)
 
 
 def _export_onnx(config: ImportRunConfig, run_dir: Path, ckpt_path: Path) -> None:
@@ -170,20 +200,16 @@ def _export_onnx(config: ImportRunConfig, run_dir: Path, ckpt_path: Path) -> Non
   exp_cfg = BaseExperimentConfig(task=task_cfg)
   result = export_policy_to_onnx(exp_cfg, ckpt_path, output_path)
 
-  # Copy .pt checkpoint into the subfolder
   pt_name = result.stem + ".pt"
   shutil.copy2(ckpt_path, out_dir / pt_name)
   logger.info(f"Copied checkpoint: {out_dir / pt_name}")
 
-  # Copy config.yaml from the run directory
   config_path = run_dir / "config.yaml"
   if config_path.exists():
     shutil.copy2(config_path, out_dir / "config.yaml")
     logger.info(f"Copied config: {out_dir / 'config.yaml'}")
-    # Regenerate the deploy gains.yaml from the fresh config (never leave it stale).
     export_gains(out_dir)
 
-  # Register in models/registry.yaml
   rel_file = f"{config.name}/{result.name}"
   ModelRegistry.register(
     task=task_name,
@@ -193,6 +219,18 @@ def _export_onnx(config: ImportRunConfig, run_dir: Path, ckpt_path: Path) -> Non
     step=step if step >= 0 else 0,
   )
   _set_default_symlink(task_dir, rel_file)
+
+  remote_out = config.root and Path(config.root) / "models" / task_name / config.name
+  if config.remote and remote_out:
+    subprocess.run(
+      ["ssh", config.remote, f"mkdir -p {remote_out}"],
+      check=True,
+    )
+    subprocess.run(
+      ["scp", "-r", f"{out_dir}/", f"{config.remote}:{remote_out.parent}/"],
+      check=True,
+    )
+    logger.info(f"Uploaded to remote: {config.remote}:{remote_out}")
 
   if config.destination_root:
     script = Path(__file__).resolve().parent / "export_model.sh"
@@ -206,6 +244,19 @@ def _export_onnx(config: ImportRunConfig, run_dir: Path, ckpt_path: Path) -> Non
       check=True,
     )
     logger.info(f"Exported to destination: {config.destination_root}")
+
+
+def _dvc_push(config: ImportRunConfig) -> None:
+  logger.info("Running dvc add models/ ...")
+  subprocess.run(["dvc", "add", "models/"], check=True)
+  logger.info("Running dvc push ...")
+  subprocess.run(["dvc", "push"], check=True)
+  logger.info(
+    "Done. Now commit the metadata and push to git:\n"
+    "  git add models.dvc && git commit -m 'update {} {}' && git push",
+    config.task,
+    config.name,
+  )
 
 
 def _set_default_symlink(task_dir: Path, rel_file: str) -> None:
