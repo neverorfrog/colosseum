@@ -1095,7 +1095,7 @@ simplified version of the full dribbling task (no obstacles, no curriculum).</p>
 <pre><code>src/colosseum/tasks/my_task/
 ├── __init__.py
 └── config/
-    └── t1_23dof/
+    └── t1/
         ├── scene_cfg.py          # robot + ball
         ├── observation_cfg.py    # actor and privileged obs groups
         ├── reward_cfg.py         # task + regularization rewards
@@ -1113,19 +1113,19 @@ and the <code>@register_task</code> decorator takes care of the rest.</p>
 It can be empty, or import the task class to make it easier to use from other
 modules:</p>
 <pre><code class="language-python"># src/colosseum/tasks/my_task/__init__.py
-from colosseum.tasks.my_task.config.t1_23dof.t1_my_task_cfg import MyTask  # noqa: F401
+from colosseum.tasks.my_task.config.t1.t1_my_task_cfg import MyTask  # noqa: F401
 </code></pre>
 <hr />
 <h2 id="step-2-scene-configuration">Step 2 — Scene configuration</h2>
 <p>The scene declares entities (robot, ball), terrain, and sensors. All T1
-tasks share the same robot entity config from <code>t1_23dof/constants.py</code>.</p>
-<pre><code class="language-python"># config/t1_23dof/scene_cfg.py
+tasks share the same robot entity config from <code>t1/constants.py</code>.</p>
+<pre><code class="language-python"># config/t1/scene_cfg.py
 from mjlab.scene import SceneCfg
 from mjlab.terrains import TerrainEntityCfg
 from mjlab.viewer import ViewerConfig
 from mjlab.sim import MujocoCfg, SimulationCfg
-from colosseum.robots.t1_23dof.constants import BASE_BODY_NAME, get_robot_cfg
-from colosseum.robots.t1_23dof.sensors import (
+from colosseum.robots.t1.constants import BASE_BODY_NAME, get_robot_cfg
+from colosseum.robots.t1.sensors import (
     FEET_GROUND_CONTACT_SENSOR,
     NONFOOT_GROUND_CONTACT_SENSOR,
 )
@@ -1177,7 +1177,7 @@ def sim_cfg() -&gt; SimulationCfg:
 <p>The ball-velocity command computes a desired ball velocity at each step
 toward a persistent world-frame target. It is reusable directly from the
 dribbling task:</p>
-<pre><code class="language-python"># config/t1_23dof/command_cfg.py
+<pre><code class="language-python"># config/t1/command_cfg.py
 from colosseum.tasks.dribbling.mdp.ball_velocity_command import BallVelocityCommandCfg
 
 commands = {
@@ -1197,7 +1197,7 @@ commands = {
 policy sees. The <code>privileged_ball</code> group is ground-truth consumed by the
 RMA privileged encoder during Phase 1 — it must <strong>not</strong> appear in the actor
 group.</p>
-<pre><code class="language-python"># config/t1_23dof/observation_cfg.py
+<pre><code class="language-python"># config/t1/observation_cfg.py
 from mjlab.managers import ObservationGroupCfg, ObservationTermCfg
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.envs.mdp import (
@@ -1263,7 +1263,7 @@ observations = {
 <h2 id="step-5-rewards">Step 5 — Rewards</h2>
 <p>Minimal reward set — task tracking rewards plus the standard locomotion
 regularization terms shared across all T1 tasks:</p>
-<pre><code class="language-python"># config/t1_23dof/reward_cfg.py
+<pre><code class="language-python"># config/t1/reward_cfg.py
 from mjlab.managers import RewardTermCfg
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.envs.mdp import action_rate_l2, joint_pos_limits
@@ -1274,7 +1274,7 @@ from colosseum.tasks.dribbling.mdp.rewards import (
     robot_ball_distance,
     robot_ball_yaw_body,
 )
-from colosseum.robots.t1_23dof.constants import BASE_BODY_NAME
+from colosseum.robots.t1.constants import BASE_BODY_NAME
 
 rewards = {
     &quot;ball_vel_tracking&quot;: RewardTermCfg(
@@ -1320,7 +1320,7 @@ rewards = {
 <p>Everything is assembled in one file. The <code>@register_task</code> decorator from
 <code>colosseum.config.types.task</code> instantiates the class and adds it to the
 registry at import time — no further wiring is needed.</p>
-<pre><code class="language-python"># config/t1_23dof/t1_my_task_cfg.py
+<pre><code class="language-python"># config/t1/t1_my_task_cfg.py
 from dataclasses import dataclass, field
 from colosseum.config.types.task import TaskConfig, register_task
 from colosseum.envs.colosseum_env import ColosseumEnvCfg

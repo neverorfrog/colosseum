@@ -2,54 +2,58 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://neverorfrog.github.io/colosseum/</loc>
-         <lastmod>2026-05-04</lastmod>
+         <lastmod>2026-07-10</lastmod>
     </url>
     <url>
          <loc>https://neverorfrog.github.io/colosseum/colosseum/cartpole/</loc>
-         <lastmod>2026-05-04</lastmod>
+         <lastmod>2026-07-10</lastmod>
     </url>
     <url>
          <loc>https://neverorfrog.github.io/colosseum/colosseum/deployment/</loc>
-         <lastmod>2026-05-04</lastmod>
+         <lastmod>2026-07-10</lastmod>
     </url>
     <url>
          <loc>https://neverorfrog.github.io/colosseum/colosseum/dribbling_tutorial/</loc>
-         <lastmod>2026-05-04</lastmod>
+         <lastmod>2026-07-10</lastmod>
     </url>
     <url>
          <loc>https://neverorfrog.github.io/colosseum/colosseum/getting_started/</loc>
-         <lastmod>2026-05-04</lastmod>
+         <lastmod>2026-07-10</lastmod>
     </url>
     <url>
          <loc>https://neverorfrog.github.io/colosseum/colosseum/internals/</loc>
-         <lastmod>2026-05-04</lastmod>
+         <lastmod>2026-07-10</lastmod>
     </url>
     <url>
          <loc>https://neverorfrog.github.io/colosseum/colosseum/setup/</loc>
-         <lastmod>2026-05-04</lastmod>
+         <lastmod>2026-07-10</lastmod>
     </url>
     <url>
          <loc>https://neverorfrog.github.io/colosseum/colosseum/training/</loc>
-         <lastmod>2026-05-04</lastmod>
+         <lastmod>2026-07-10</lastmod>
     </url>
     <url>
          <loc>https://neverorfrog.github.io/colosseum/mjlab/overview/</loc>
-         <lastmod>2026-05-04</lastmod>
+         <lastmod>2026-07-10</lastmod>
     </url>
     <url>
          <loc>https://neverorfrog.github.io/colosseum/mjlab/scene_simulation/</loc>
-         <lastmod>2026-05-04</lastmod>
+         <lastmod>2026-07-10</lastmod>
     </url>
     <url>
          <loc>https://neverorfrog.github.io/colosseum/mjlab/task_layer/</loc>
-         <lastmod>2026-05-04</lastmod>
+         <lastmod>2026-07-10</lastmod>
     </url>
     <url>
          <loc>https://neverorfrog.github.io/colosseum/research/dribbling/</loc>
-         <lastmod>2026-05-04</lastmod>
+         <lastmod>2026-07-10</lastmod>
     </url>
     <url>
          <loc>https://neverorfrog.github.io/colosseum/research/soccer-maze/</loc>
-         <lastmod>2026-05-04</lastmod>
+         <lastmod>2026-07-10</lastmod>
+    </url>
+    <url>
+         <loc>https://neverorfrog.github.io/colosseum/research/t1_actuator_comparison/</loc>
+         <lastmod>2026-07-10</lastmod>
     </url>
 </urlset>

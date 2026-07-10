@@ -10,13 +10,9 @@
       
       
       
-        <link rel="canonical" href="https://neverorfrog.github.io/colosseum/research/dribbling/">
+        <link rel="canonical" href="https://neverorfrog.github.io/colosseum/research/t1_actuator_comparison/">
       
       
-        <link rel="prev" href="../../mjlab/scene_simulation/">
-      
-      
-        <link rel="next" href="../soccer-maze/">
       
       
         
@@ -27,7 +23,7 @@
     
     
       
-        <title>Dribbling - Colosseum</title>
+        <title>T1 Actuator Comparison: colosseum vs booster_train - Colosseum</title>
       
     
     
@@ -80,7 +76,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#dribbling-with-obstacle-avoidance" class="md-skip">
+        <a href="#t1-actuator-comparison-colosseum-vs-booster_train" class="md-skip">
           Skip to content
         </a>
       
@@ -115,7 +111,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Dribbling
+              T1 Actuator Comparison: colosseum vs booster_train
             
           </span>
         </div>
@@ -692,8 +688,6 @@
       
   
   
-    
-  
   
   
     
@@ -706,11 +700,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
         
           
           <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
@@ -731,7 +725,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -746,37 +740,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Dribbling
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../dribbling/" class="md-nav__link">
         
   
   
@@ -792,81 +759,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#what-this-is" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What this is
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#key-design-choices" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Key design choices
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#observation-and-action-space" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Observation and action space
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#code-structure" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Code structure
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#quick-start" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Quick start
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -934,10 +826,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#what-this-is" class="md-nav__link">
+  <a href="#1-how-each-side-derives-gains" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What this is
+        1. How each side derives gains
       
     </span>
   </a>
@@ -945,43 +837,160 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#key-design-choices" class="md-nav__link">
+  <a href="#2-per-joint-parameter-comparison" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Key design choices
+        2. Per-joint parameter comparison
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Per-joint parameter comparison">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-armature" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 Armature
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#observation-and-action-space" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#22-stiffness-damping" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Observation and action space
+        2.2 Stiffness / damping
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#code-structure" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#23-effort-limit-the-largest-substantive-gap" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Code structure
+        2.3 Effort limit — the largest substantive gap
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#quick-start" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#24-velocity-limit-torque-speed-t-n-curve" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Quick start
+        2.4 Velocity limit + torque-speed (T-N) curve
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-action-scale-coupling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Action scale coupling
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Action scale coupling">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-identity-that-makes-this-matter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The identity that makes this matter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#torque-per-action-kp-scale-what-the-policy-actually-feels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Torque-per-action (kp · scale) — what the policy actually feels
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-what-ports-as-data-vs-what-needs-the-class-refactor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. What ports as data vs what needs the class refactor
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. What ports as data vs what needs the class refactor">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ports-1-to-1-as-data-into-builtinpositionactuatorcfg" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ports 1-to-1 as data (into BuiltinPositionActuatorCfg)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cannot-be-expressed-as-data-needs-the-class-refactor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cannot be expressed as data — needs the class refactor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#delay-now-at-the-actuator-level-matching-booster_train" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Delay — now at the actuator level (matching booster_train)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-implemented-actuator-class-single-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Implemented (actuator class + single set)
       
     </span>
   </a>
@@ -1005,7 +1014,7 @@
 
 
   
-    <a href="https://github.com/neverorfrog/colosseum.git/edit/master/docs/research/dribbling.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/neverorfrog/colosseum.git/edit/master/docs/research/t1_actuator_comparison.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75z"/></svg>
     </a>
@@ -1013,165 +1022,530 @@
   
 
 
-<h1 id="dribbling-with-obstacle-avoidance">Dribbling with Obstacle Avoidance</h1>
-<blockquote>
-<p>Humanoid robot soccer dribbling with curriculum-based dynamic obstacle avoidance
-and visual adaptation via RMA (Rapid Motor Adaptation).</p>
-</blockquote>
-<p><strong>Project page:</strong> <a href="https://lab-rococo-sapienza.github.io/learning-to-dribble/">lab-rococo-sapienza.github.io/learning-to-dribble</a></p>
+<h1 id="t1-actuator-comparison-colosseum-vs-booster_train">T1 Actuator Comparison: colosseum vs booster_train</h1>
+<p>Comparison of the Booster T1 actuator modeling in this repo
+(<code>src/colosseum/robots/t1/</code>) against the manufacturer's own Isaac Lab
+training repo (<code>external/booster_train</code>). Written ahead of porting the
+booster_train actuator data into colosseum as the single canonical set, and
+ahead of refactoring colosseum's actuator class to add the speed-dependent
+torque modeling that booster_train has and we currently lack.</p>
+<p>Sources:
+- colosseum: <code>actuators.py</code> (<code>DEPLOY_ACTUATORS</code>, <code>MJLAB_ACTUATORS</code>), <code>constants.py</code> (<code>ACTION_SCALE</code>)
+- booster_train: <code>source/booster_train/booster_train/assets/robots/actuator.py</code>, <code>.../booster.py</code> (<code>BOOSTER_T1_CFG</code>)</p>
 <hr />
-<h2 id="what-this-is">What this is</h2>
-<p>The dribbling project trains a Booster T1 humanoid to dribble a soccer ball
-toward a persistent world-frame target while avoiding moving obstacles.</p>
-<p>Training uses a two-phase RMA pipeline:</p>
+<h2 id="1-how-each-side-derives-gains">1. How each side derives gains</h2>
+<table>
+<thead>
+<tr>
+<th>Source</th>
+<th>stiffness / damping</th>
+<th>natural freq</th>
+<th>effort source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>colosseum <code>DEPLOY_ACTUATORS</code></td>
+<td>hand-tuned firmware deploy gains</td>
+<td>—</td>
+<td>conservative deploy limits</td>
+</tr>
+<tr>
+<td>colosseum <code>MJLAB_ACTUATORS</code></td>
+<td><code>kp = I·ω²</code>, <code>kd = 2ζIω</code></td>
+<td><strong>5 Hz</strong>, ζ=2</td>
+<td><code>MOTOR_SPECS.peak_torque</code></td>
+</tr>
+<tr>
+<td><strong>booster_train T1</strong></td>
+<td><code>kp = I·ω²</code>, <code>kd = 2ζIω</code> (identical formula)</td>
+<td><strong>10 Hz</strong>, ζ=2</td>
+<td>motor-model datasheet (<code>BoosterJoint*</code>)</td>
+</tr>
+</tbody>
+</table>
+<p><code>MJLAB_ACTUATORS</code> and booster_train use the <strong>same formula</strong>. The only
+derivation difference is the natural frequency: booster_train T1 leaves
+<code>natural_freq</code> at its <strong>10 Hz</strong> default (<code>BoosterJointCfg.natural_freq = 10.</code>),
+while <code>MJLAB_ACTUATORS</code> uses 5 Hz. That is a clean <strong>4× stiffness</strong> factor for
+equal inertia.</p>
+<blockquote>
+<p>Note: booster_train's <em>K1</em> config overrides <code>natural_freq=4.0</code>, but the <strong>T1</strong>
+config passes no override, so every T1 group runs at the 10 Hz / ζ=2 default.</p>
+</blockquote>
+<hr />
+<h2 id="2-per-joint-parameter-comparison">2. Per-joint parameter comparison</h2>
+<p>booster_train T1 values, computed with <code>ω = 2π·10 = 62.832</code>, <code>ω² = 3947.84</code>,
+<code>kd = armature · 2ζω = armature · 251.33</code>:</p>
+<table>
+<thead>
+<tr>
+<th>group</th>
+<th>motor model</th>
+<th>armature</th>
+<th>stiffness</th>
+<th>damping</th>
+<th>effort</th>
+<th>vel limit</th>
+<th>knee vel (T-N)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>head (neck)</td>
+<td>DM4310</td>
+<td>0.00180</td>
+<td>7.11</td>
+<td>0.45</td>
+<td>7.0</td>
+<td>12.57</td>
+<td>41.89</td>
+</tr>
+<tr>
+<td>arms</td>
+<td>E4310</td>
+<td>0.02825</td>
+<td>111.54</td>
+<td>7.10</td>
+<td>38.3</td>
+<td>17.59</td>
+<td>7.85</td>
+</tr>
+<tr>
+<td>waist</td>
+<td>E6408</td>
+<td>0.04781</td>
+<td>188.76</td>
+<td>12.02</td>
+<td>68.0</td>
+<td>14.66</td>
+<td>1.88</td>
+</tr>
+<tr>
+<td>hip_pitch</td>
+<td>E8112</td>
+<td>0.05239</td>
+<td>206.83</td>
+<td>13.17</td>
+<td>96.0</td>
+<td>16.76</td>
+<td>7.54</td>
+</tr>
+<tr>
+<td>hip_roll</td>
+<td>E6408</td>
+<td>0.04781</td>
+<td>188.76</td>
+<td>12.02</td>
+<td>68.0</td>
+<td>14.66</td>
+<td>1.88</td>
+</tr>
+<tr>
+<td>hip_yaw</td>
+<td>E6408</td>
+<td>0.04781</td>
+<td>188.76</td>
+<td>12.02</td>
+<td>68.0</td>
+<td>14.66</td>
+<td>1.88</td>
+</tr>
+<tr>
+<td>knee</td>
+<td>E8116</td>
+<td>0.06360</td>
+<td>251.08</td>
+<td>15.98</td>
+<td>130.0</td>
+<td>14.66</td>
+<td>6.28</td>
+</tr>
+<tr>
+<td>ankle_pitch</td>
+<td>E4315 × para(2.0)</td>
+<td>0.06791</td>
+<td>268.11</td>
+<td>17.07</td>
+<td>76.0</td>
+<td>12.57</td>
+<td>2.62</td>
+</tr>
+<tr>
+<td>ankle_roll</td>
+<td>E4315 × para(2.0)</td>
+<td>0.06791</td>
+<td>268.11</td>
+<td>17.07</td>
+<td>76.0</td>
+<td>12.57</td>
+<td>2.62</td>
+</tr>
+</tbody>
+</table>
+<p>colosseum's two existing sets, for the same joints:</p>
+<table>
+<thead>
+<tr>
+<th>group</th>
+<th>DEPLOY kp / kd / eff</th>
+<th>MJLAB kp / kd / eff</th>
+<th>MJLAB armature</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>head (neck)</td>
+<td>4 / 1 / 7</td>
+<td>1.78 / 0.23 / 7</td>
+<td>0.00180</td>
+</tr>
+<tr>
+<td>arms</td>
+<td>50 / 1 / 18</td>
+<td>27.9 / 3.56 / 36</td>
+<td>0.02825</td>
+</tr>
+<tr>
+<td>waist</td>
+<td>200 / 5 / 30</td>
+<td>47.2 / 6.01 / 40</td>
+<td>0.04781</td>
+</tr>
+<tr>
+<td>hip_pitch</td>
+<td>200 / 5 / 45</td>
+<td>51.7 / 6.58 / 55</td>
+<td>0.05239</td>
+</tr>
+<tr>
+<td>hip_roll</td>
+<td>200 / 5 / 30</td>
+<td>47.2 / 6.01 / 40</td>
+<td>0.04781</td>
+</tr>
+<tr>
+<td>hip_yaw</td>
+<td>200 / 5 / 30</td>
+<td>47.2 / 6.01 / 40</td>
+<td>0.04781</td>
+</tr>
+<tr>
+<td>knee</td>
+<td>200 / 5 / 65</td>
+<td>62.8 / 7.99 / 65</td>
+<td>0.06360</td>
+</tr>
+<tr>
+<td>ankle_pitch</td>
+<td>50 / 2 / 24</td>
+<td>33.6 / 4.27 / 50</td>
+<td>0.03396</td>
+</tr>
+<tr>
+<td>ankle_roll</td>
+<td>50 / 2 / 15</td>
+<td>33.6 / 4.27 / 50</td>
+<td>0.03396</td>
+</tr>
+</tbody>
+</table>
+<h3 id="21-armature">2.1 Armature</h3>
+<p>colosseum's reflected-inertia calc reproduces the booster_train base-motor
+armatures almost exactly (0.00180, 0.02825, 0.04781, 0.05239, 0.06360 all line
+up). <strong>One exception — the ankles.</strong> booster_train wraps each ankle in a
+<code>BoosterT1AnkleParaWrapperCfg</code> with <code>armature_ratio = (2.0, 2.0)</code>, doubling the
+base E4315 armature: <strong>0.0340 → 0.0679</strong>. This models the parallel ankle
+linkage's reflected inertia. colosseum does not double it.</p>
+<h3 id="22-stiffness-damping">2.2 Stiffness / damping</h3>
+<p><code>DEPLOY</code> legs (kp=200) are loosely in range of booster's 10 Hz values
+(189–268) but flat and hand-set. <code>MJLAB</code> is exactly ¼ of booster (5 Hz vs
+10 Hz). booster's damping is higher than DEPLOY's kd=5 everywhere on the legs
+(12–17).</p>
+<h3 id="23-effort-limit-the-largest-substantive-gap">2.3 Effort limit — the largest substantive gap</h3>
+<p>booster_train's effort limits are well above <em>either</em> colosseum set:</p>
+<table>
+<thead>
+<tr>
+<th>joint</th>
+<th>DEPLOY</th>
+<th>MJLAB (<code>peak_torque</code>)</th>
+<th>booster_train</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>hip_pitch</td>
+<td>45</td>
+<td>55</td>
+<td><strong>96</strong></td>
+</tr>
+<tr>
+<td>hip_roll / yaw</td>
+<td>30</td>
+<td>40</td>
+<td><strong>68</strong></td>
+</tr>
+<tr>
+<td>knee</td>
+<td>65</td>
+<td>65</td>
+<td><strong>130</strong> (exactly 2×)</td>
+</tr>
+<tr>
+<td>ankle_pitch</td>
+<td>24</td>
+<td>50</td>
+<td><strong>76</strong></td>
+</tr>
+<tr>
+<td>ankle_roll</td>
+<td>15</td>
+<td>50</td>
+<td><strong>76</strong></td>
+</tr>
+<tr>
+<td>arm</td>
+<td>18</td>
+<td>36</td>
+<td>38.3</td>
+</tr>
+<tr>
+<td>waist</td>
+<td>30</td>
+<td>40</td>
+<td><strong>68</strong></td>
+</tr>
+<tr>
+<td>neck</td>
+<td>7</td>
+<td>7</td>
+<td>7</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Open question:</strong> colosseum's <code>MOTOR_SPECS.peak_torque</code> is consistently below
+booster_train's datasheet effort limits — knee a clean 2×, hip_pitch ~1.75×.
+Either colosseum's figures are a rated/continuous reading vs booster's true
+peak, or they come from a different datasheet revision. <strong>Resolve which effort
+is correct before treating the ported numbers as ground truth</strong>, since effort
+drives both the torque clamp and (via the action-scale identity below) the
+policy's torque authority.</p>
+<h3 id="24-velocity-limit-torque-speed-t-n-curve">2.4 Velocity limit + torque-speed (T-N) curve</h3>
+<p>colosseum has <strong>no velocity-dependent torque limit at all</strong>. booster_train's
+<code>BoosterDelayedPDActuator._clip_effort</code> applies a piecewise-linear T-N curve:
+full <code>effort_limit</code> up to <code>knee_point_velocity</code>, then linear down to zero at
+<code>velocity_limit</code>. Relevant at the knee/hip during fast swing — a real motor
+cannot hold peak torque at high joint speed, and our sim currently lets it.
+This is the main piece that cannot be expressed as data in the current
+colosseum actuator (see §4).</p>
+<hr />
+<h2 id="3-action-scale-coupling">3. Action scale coupling</h2>
+<p>booster_train's <code>T1_ACTION_SCALE</code> (booster.py) uses <code>0.25 · effort / stiffness</code>
+per joint — the <strong>same formula</strong> as colosseum's <code>mjlab_action_scale</code>.
+colosseum's default <code>ACTION_SCALE</code> (constants.py) is instead a flat <strong>0.25</strong>.</p>
+<h3 id="the-identity-that-makes-this-matter">The identity that makes this matter</h3>
+<p>With <code>target = scale·action + default</code>, the action's torque contribution is:</p>
+<pre><code>τ_action = kp·(target − q) ≈ kp · scale · action
+</code></pre>
+<p>so <strong>torque-per-unit-action = <code>kp · scale</code></strong>. Substituting the booster scale:</p>
+<pre><code>kp · scale = stiffness · (0.25 · effort / stiffness) = 0.25 · effort
+</code></pre>
+<p>The stiffness cancels — the effort/stiffness recipe <strong>decouples the policy's
+torque authority from <code>kp</code></strong>. booster's per-action torque is exactly
+<code>0.25 · effort</code>. colosseum's flat-0.25 deploy model does <em>not</em> have this:
+there <code>kp·scale = 0.25·kp</code>, so authority tracks the chosen gain, not the motor.</p>
+<h3 id="torque-per-action-kp-scale-what-the-policy-actually-feels">Torque-per-action (<code>kp · scale</code>) — what the policy actually feels</h3>
+<table>
+<thead>
+<tr>
+<th>joint</th>
+<th>DEPLOY (<code>0.25·kp</code>)</th>
+<th>booster_train (<code>0.25·effort</code>)</th>
+<th>MJLAB (<code>0.25·peak</code>)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>hip_pitch</td>
+<td>50.0</td>
+<td>24.0</td>
+<td>13.75</td>
+</tr>
+<tr>
+<td>hip_roll</td>
+<td>50.0</td>
+<td>17.0</td>
+<td>10.0</td>
+</tr>
+<tr>
+<td>hip_yaw</td>
+<td>50.0</td>
+<td>17.0</td>
+<td>10.0</td>
+</tr>
+<tr>
+<td>knee</td>
+<td>50.0</td>
+<td>32.5</td>
+<td>16.25</td>
+</tr>
+<tr>
+<td>ankle_pitch</td>
+<td>12.5</td>
+<td>19.0</td>
+<td>12.5</td>
+</tr>
+<tr>
+<td>ankle_roll</td>
+<td>12.5</td>
+<td>19.0</td>
+<td>12.5</td>
+</tr>
+<tr>
+<td>waist</td>
+<td>50.0</td>
+<td>17.0</td>
+<td>10.0</td>
+</tr>
+<tr>
+<td>arm</td>
+<td>12.5</td>
+<td>9.6</td>
+<td>9.0</td>
+</tr>
+<tr>
+<td>neck</td>
+<td>1.0</td>
+<td>1.75</td>
+<td>1.75</td>
+</tr>
+</tbody>
+</table>
+<p>Three different authority <em>profiles</em>: DEPLOY is flat (50 across the whole leg,
+because kp and scale are both uniform); booster is <strong>effort-shaped</strong> (knee 32.5</p>
+<blockquote>
+<p>hip_pitch 24 &gt; hip_roll 17 — more authority where the motor is genuinely
+stronger); MJLAB has booster's shape but lower magnitude (lower <code>peak_torque</code>
+efforts).</p>
+</blockquote>
+<p>booster_train T1 action-scale dict, computed with their armatures/efforts:</p>
+<table>
+<thead>
+<tr>
+<th>joint(s)</th>
+<th>action scale</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AAHead_yaw, Head_pitch</td>
+<td>0.2463</td>
+</tr>
+<tr>
+<td><em><em>Shoulder</em></em>, <em><em>Elbow</em></em></td>
+<td>0.0859</td>
+</tr>
+<tr>
+<td>Waist</td>
+<td>0.0901</td>
+</tr>
+<tr>
+<td>*_Hip_Pitch</td>
+<td>0.1160</td>
+</tr>
+<tr>
+<td><em>_Hip_Roll, </em>_Hip_Yaw</td>
+<td>0.0901</td>
+</tr>
+<tr>
+<td>*_Knee_Pitch</td>
+<td>0.1294</td>
+</tr>
+<tr>
+<td><em>_Ankle_Pitch, </em>_Ankle_Roll</td>
+<td>0.0709</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>These scales are inseparable from booster's efforts <strong>and</strong> their
+doubled-armature ankle. Computed against colosseum's current ankle armature
+(0.0340) the ankle scale would be 0.1418, not 0.0709. Scale and actuator set
+are not independent.</p>
+</blockquote>
+<hr />
+<h2 id="4-what-ports-as-data-vs-what-needs-the-class-refactor">4. What ports as data vs what needs the class refactor</h2>
+<blockquote>
+<p>This section is the pre-refactor analysis that motivated §5. At the time,
+colosseum used <code>BuiltinPositionActuatorCfg</code>; the conclusion (<code>velocity_limit</code>
+and the T-N curve need a custom actuator) is what §5 implements.</p>
+</blockquote>
+<p>colosseum's actuator was mjlab's <code>BuiltinPositionActuatorCfg</code>: an <strong>implicit</strong>
+PD servo computed inside MuJoCo. Its fields are:</p>
+<pre><code>target_names_expr, transmission_type, armature, frictionloss,
+viscous_damping, delay_min_lag, delay_max_lag, delay_hold_prob,
+delay_update_period, delay_per_env_phase, stiffness, damping, effort_limit
+</code></pre>
+<h3 id="ports-1-to-1-as-data-into-builtinpositionactuatorcfg">Ports 1-to-1 as data (into BuiltinPositionActuatorCfg)</h3>
 <ul>
-<li><strong>Phase 1</strong> — policy trained with privileged observations (ball position,
-  obstacle states) across a staged obstacle curriculum (0 → 4 obstacle stages).</li>
-<li><strong>Phase 2</strong> — visual adaptation encoder trained on top of the frozen Phase 1
-  policy, replacing privileged inputs with depth-camera features.</li>
+<li><code>stiffness</code> ← booster computed kp (10 Hz)</li>
+<li><code>damping</code> ← booster computed kd (10 Hz, ζ=2)</li>
+<li><code>effort_limit</code> ← booster datasheet effort</li>
+<li><code>armature</code> ← booster armature (including the doubled ankle)</li>
+</ul>
+<h3 id="cannot-be-expressed-as-data-needs-the-class-refactor">Cannot be expressed as data — needs the class refactor</h3>
+<ul>
+<li><strong><code>velocity_limit</code></strong>: no field on <code>BuiltinPositionActuatorCfg</code>.</li>
+<li><strong><code>knee_point_velocity</code> / T-N torque-speed clipping</strong>: no field and no
+  mechanism. This is the core of booster's <code>BoosterDelayedPDActuator</code> and the
+  most physically meaningful gap.</li>
+</ul>
+<h3 id="delay-now-at-the-actuator-level-matching-booster_train">Delay — now at the actuator level (matching booster_train)</h3>
+<ul>
+<li>booster_train: <code>DelayBuffer</code> at the <strong>actuator</strong> level on pos+vel+effort,
+  <code>min_delay=2</code>, <code>max_delay=8</code> <em>physics steps</em>, resampled per reset.</li>
+<li>colosseum: mjlab's base <code>Actuator</code> already buffers and delays the command
+  (<code>apply_delay</code>, called per physics substep by the entity) via the
+  <code>delay_min_lag</code>/<code>delay_max_lag</code>/<code>delay_hold_prob</code>/<code>delay_update_period</code> cfg
+  fields. <code>BoosterPdActuatorCfg</code> defaults these to 2–8 substeps, so the delay is
+  the same layer and lag as booster_train.</li>
+<li>The old action-level <code>DelayedJointPositionAction</code> was <strong>removed</strong> as redundant:
+  it modeled the same policy→motor latency one layer up (stacking two delays
+  would double-count). Its only loss was the steady-per-episode + sub-step
+  resolution regime; mjlab's buffer resamples per substep instead.</li>
 </ul>
 <hr />
-<h2 id="key-design-choices">Key design choices</h2>
-<p><strong>Target-driven ball command</strong> — a persistent world-frame target is sampled
-each episode from the current ball position at a random distance and heading.
-The desired ball velocity is recomputed every step from <code>ball → target</code>. This
-gives the policy a stable long-horizon objective throughout each episode,
-rather than a free velocity that can be satisfied trivially in any direction.</p>
-<p><strong>Closest-obstacle representation</strong> — the policy tracks only the single nearest
-active obstacle (position + velocity in robot body frame). Up to three physical
-obstacles exist in the scene; only the closest one is exposed. This
-representation is compact and generalises across different numbers of active
-obstacles.</p>
-<p><strong>DAgger teacher</strong> — the Stage-0 (no obstacles) PPO checkpoint acts as a
-teacher for later curriculum stages. The student minimises a mix of PPO loss
-and imitation loss toward the teacher's action distribution. This keeps the
-nominal dribbling gait stable while the student learns avoidance behaviour.</p>
-<p><strong>Relaxed tracking near obstacles</strong> — the ball-velocity tracking reward is
-scaled down when an obstacle is blocking the direct path to the target. This
-prevents the policy from being penalised for detours that are necessary for
-avoidance.</p>
-<hr />
-<h2 id="observation-and-action-space">Observation and action space</h2>
-<p><strong>Actor observations</strong> (proprioceptive, available at deployment):</p>
-<table>
-<thead>
-<tr>
-<th>Group</th>
-<th>Terms</th>
-<th>Dim</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Base state</td>
-<td>lin_vel, ang_vel, projected_gravity</td>
-<td>9</td>
-</tr>
-<tr>
-<td>Joints</td>
-<td>pos_rel, vel_rel</td>
-<td>46</td>
-</tr>
-<tr>
-<td>Last action</td>
-<td>—</td>
-<td>23</td>
-</tr>
-<tr>
-<td>Ball velocity command</td>
-<td>—</td>
-<td>3</td>
-</tr>
-<tr>
-<td>RMA latent</td>
-<td>from encoder</td>
-<td>64</td>
-</tr>
-<tr>
-<td><strong>Total</strong></td>
-<td></td>
-<td><strong>145</strong></td>
-</tr>
-</tbody>
-</table>
-<p><strong>Privileged observations</strong> (Phase 1 only):</p>
-<table>
-<thead>
-<tr>
-<th>Group</th>
-<th>Terms</th>
-<th>Dim</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>privileged_ball</code></td>
-<td>ball pos + vel in robot frame</td>
-<td>4</td>
-</tr>
-<tr>
-<td><code>privileged_obstacles</code></td>
-<td>nearest obstacle pos + vel in robot frame</td>
-<td>4</td>
-</tr>
-</tbody>
-</table>
-<p><strong>Actions</strong>: 23-DOF joint position targets</p>
-<hr />
-<h2 id="code-structure">Code structure</h2>
-<pre><code>src/colosseum/tasks/dribbling/
-├── config/t1/
-│   ├── t1_dribbling_cfg.py     # ColosseumEnvCfg assembly + task registration
-│   ├── scene_cfg.py            # robot + ball + obstacles
-│   ├── observation_cfg.py      # actor, privileged_ball, privileged_obstacles, depth_frames
-│   ├── reward_cfg.py           # ball tracking + locomotion regularization
-│   ├── event_cfg.py            # ball + obstacle reset events
-│   └── command_cfg.py          # BallVelocityCommand, AdversaryCommand, GaitPhaseCommand
-└── mdp/
-    ├── rewards.py              # ball_vel_tracking_relaxed, robot_ball_distance, ...
-    ├── observations.py         # ball_pos_robot_frame, obstacle_pos_robot_frame, ...
-    ├── ball_velocity_command.py # BallVelocityCommand (persistent target)
-    └── adversary_command.py    # AdversaryCommand (obstacle position/velocity)
-
-src/colosseum/research/dribbling/
-├── encoders.py                 # DepthEncoder, BallHead, ObstacleHead
-├── rma_terms.py                # DribblingRmaTerm, DribblingRmaTermCfg
-└── scripts/
-    ├── pipeline_dribbling.py   # Full curriculum (Phase 1 + Phase 2 per stage)
-    ├── train_phase2.py         # Phase 2 visual encoder training
-    ├── evaluate_dribbling.py   # Evaluation protocol runner
-    └── obstacle_ablation.py    # Ablation of obstacle presence
-</code></pre>
-<hr />
-<h2 id="quick-start">Quick start</h2>
-<pre><code class="language-bash"># 1. Train nominal dribbling — Phase 1, no obstacles
-pixi run train task:t1-dribbling --task.obstacle-stage-index 0
-
-# 2. Train obstacle stage i with DAgger (Stage-0 checkpoint as teacher)
-pixi run train task:t1-dribbling \
-  --task.use-dagger \
-  --task.teacher-checkpoint ./logs/&lt;stage0-run&gt;/checkpoints/latest.pt \
-  --task.obstacle-stage-index i
-
-# 3. Train visual adaptation encoder — Phase 2
-pixi run train-phase2 task:t1-dribbling \
-  --checkpoint ./logs/&lt;phase1-run&gt;/checkpoints/latest.pt
-
-# 4. Full curriculum pipeline (Phase 1 + Phase 2 per stage, automated)
-pixi run pipeline-dribbling
-
-# 5. Evaluate across all obstacle conditions
-pixi run eval-dribbling task:t1-dribbling \
-  --checkpoint ./logs/&lt;run&gt;/checkpoints/latest.pt \
-  --episodes-per-condition 1000 --num-envs 128
-
-# 6. Obstacle presence ablation
-pixi run obstacle-ablation
-
-# 7. Export for deployment
-pixi run export-onnx task:t1-dribbling \
-  --checkpoint ./logs/&lt;run&gt;/checkpoints/latest.pt
-</code></pre>
+<h2 id="5-implemented-actuator-class-single-set">5. Implemented (actuator class + single set)</h2>
+<p>The refactor has landed in <code>robots/t1/actuators.py</code>:</p>
+<ul>
+<li><strong><code>BoosterPdActuator</code> / <code>BoosterPdActuatorCfg</code></strong> subclass mjlab's explicit
+  <code>IdealPdActuator</code>. They add <code>velocity_limit</code> + <code>knee_point_velocity</code> and
+  override <code>_clip_effort</code> with booster's flat-top T-N curve (full <code>effort_limit</code>
+  for <code>|v| &lt;= knee_point_velocity</code>, linear to zero at <code>velocity_limit</code>). This is
+  the one piece the built-in position actuator cannot express.</li>
+<li><strong><code>BoosterJoint</code></strong> is the lean datasheet motor model (effort / velocity_limit /
+  knee_point_velocity / armature, with <code>kp = I·(2πf)²</code>, <code>kd = 2ζI·(2πf)</code> derived
+  at f = 10 Hz, ζ = 2). It ports the <em>concept</em> of booster_train's
+  <code>BoosterJointCfg</code>, not its multi-robot class hierarchy. The six T1 motors are
+  named instances (<code>E4310</code>, <code>E6408</code>, <code>E8112</code>, <code>E8116</code>, <code>DM4310</code>, <code>E4315</code>).</li>
+<li><strong>The ankles are parallel.</strong> <code>parallel()</code> reproduces
+  <code>ParallelJointWrapperCfg</code>'s ratio math; the T1 ankle pitch/roll are built from
+  the <code>E4315</code> base with the T1 armature ratio (×2), as distinct <code>serial_index</code>
+  specs.</li>
+<li><strong>One mjlab actuator per joint</strong> (23 total): a <code>{joint: BoosterJoint}</code> map
+  expands to 23 <code>BoosterPdActuatorCfg</code>. booster_train's limb-grouping is not
+  replicable in mjlab (its <code>ActuatorCfg</code> gains are scalar, one cfg = one gain
+  set), so per-joint is the natural and cleanest structure.</li>
+<li><strong><code>action_scale()</code></strong> lives here too, computing booster's <code>0.25 · effort /
+  stiffness</code> directly off the actuator set.</li>
+</ul>
+<p><code>BoosterDelayedActuatorCfg</code> was deliberately <strong>not</strong> ported — it is an IsaacLab
+adapter that unpacks motor objects into per-regex gain dicts, which the
+per-joint <code>BoosterPdActuatorCfg</code> makes unnecessary.</p>
+<p><code>MotorSpec</code>/<code>MOTOR_SPECS</code>, <code>DEPLOY_ACTUATORS</code>, <code>MJLAB_ACTUATORS</code>, and the
+<code>BuiltinPositionActuatorCfg</code> set are removed. <code>constants.py</code> exposes the single
+<code>ACTUATORS</code> and <code>ACTION_SCALE = action_scale()</code>.</p>
 
 
 
@@ -1204,44 +1578,6 @@ pixi run export-onnx task:t1-dribbling \
       
         <footer class="md-footer">
   
-    
-      
-      <nav class="md-footer__inner md-grid" aria-label="Footer" >
-        
-          
-          <a href="../../mjlab/scene_simulation/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Scene &amp; Simulation">
-            <div class="md-footer__button md-icon">
-              
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
-            </div>
-            <div class="md-footer__title">
-              <span class="md-footer__direction">
-                Previous
-              </span>
-              <div class="md-ellipsis">
-                Scene & Simulation
-              </div>
-            </div>
-          </a>
-        
-        
-          
-          <a href="../soccer-maze/" class="md-footer__link md-footer__link--next" aria-label="Next: Soccer Maze">
-            <div class="md-footer__title">
-              <span class="md-footer__direction">
-                Next
-              </span>
-              <div class="md-ellipsis">
-                Soccer Maze
-              </div>
-            </div>
-            <div class="md-footer__button md-icon">
-              
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
-            </div>
-          </a>
-        
-      </nav>
     
   
   <div class="md-footer-meta md-typeset">
