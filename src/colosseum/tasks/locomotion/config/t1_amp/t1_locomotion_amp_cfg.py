@@ -136,16 +136,6 @@ def booster_t1_velocity_env_cfg(play: bool = False) -> ColosseumEnvCfg:
 
   return cfg
 
-
-def get_t1_velocity_checkpoint(version: int) -> Path:
-  """Return the .pt checkpoint path for the given version number."""
-  version_dir = project_root() / "models" / "t1-velocity" / f"v{version}"
-  pts = list(version_dir.glob("*.pt"))
-  if not pts:
-    raise FileNotFoundError(f"No .pt checkpoint found in {version_dir}")
-  return pts[0]
-
-
 @register_task("t1-velocity-amp")
 @dataclass(frozen=True)
 class T1VelocityAmpTask(TaskConfig):
