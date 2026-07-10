@@ -8,4 +8,3 @@ built on top of [mjlab](https://github.com/neverorfrog/mjlab) (GPU-accelerated R
 ## Research Projects
 
 - [Learning Vision-Based Dribbling for Humanoid Soccer via Privileged Representation Learning](https://neverorfrog.github.io/colosseum/research/dribbling/) — Maiorana, Spagnoli, Bugli, Volpi, Affinita, Suriani, Nardi, Iocchi *(under submission, RoboCup Symposium 2026)*
-- [HumanoidSoccerMaze: a novel benchmark and a hierarchical solution approach](https://neverorfrog.github.io/colosseum/research/soccer-maze/) — Maiorana, Gigliotti, Iocchi *(under submission, RoboCup Symposium 2026)*
