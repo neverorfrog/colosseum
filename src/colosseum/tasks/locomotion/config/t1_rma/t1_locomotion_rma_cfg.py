@@ -27,7 +27,7 @@ from colosseum.robots.t1.sensors import (
   SELF_COLLISION_SENSOR,
 )
 from colosseum.tasks.locomotion.mdp.gait_phase_command import GaitPhaseCommandCfg
-from colosseum.utils import project_root
+from colosseum.tasks.locomotion.mdp.rma_term import VelocityRmaTermCfg
 
 from .algo_cfg import booster_t1_ppo_cfg, booster_t1_rsl_rl_runner_cfg
 from .cat_cfg import actions, commands, terminations
@@ -96,7 +96,9 @@ def booster_t1_velocity_env_cfg(play: bool = False) -> ColosseumEnvCfg:
     sim=sim_cfg(),
     decimation=4,
     episode_length_s=30.0,
-    encoders={},
+    encoders={
+      "env_params": VelocityRmaTermCfg(),
+    },
   )
 
   if cfg.scene.terrain is not None and cfg.scene.terrain.terrain_generator is not None:
