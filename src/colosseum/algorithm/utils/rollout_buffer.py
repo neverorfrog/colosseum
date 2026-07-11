@@ -37,8 +37,6 @@ class RolloutBuffer:
         action_dim: int,
         device: torch.device,
         extras: dict[str, int] | None = None,
-        privileged_obs_dims: dict[str, int] | None = None,
-        adaptation_obs_dims: dict[str, int] | None = None,
     ) -> None:
         self.num_envs = num_envs
         self.num_steps = num_steps
@@ -60,32 +58,14 @@ class RolloutBuffer:
         self.returns = torch.zeros(num_steps, num_envs, 1, device=device)
         self.advantages = torch.zeros(num_steps, num_envs, 1, device=device)
 
-        # Optional extra tensors (e.g., GT directions for auxiliary losses)
-        # Maps name → pre-allocated [T, N, dim] tensor
+        # Optional extra tensors (e.g., subclass-specific inputs consumed by
+        # an actor-input composition hook, or GT directions for auxiliary
+        # losses). Each group stored separately so callers can re-run encoders
+        # with gradients during learning. Maps name → [T, N, group_dim] tensor.
         self._extras: dict[str, torch.Tensor] = {}
         if extras:
             for name, dim in extras.items():
                 self._extras[name] = torch.zeros(
-                    num_steps, num_envs, dim, device=device
-                )
-
-        # Privileged obs storage (RMA): each group stored separately so
-        # encoders can re-run with gradients during learning.
-        # Maps group_name → [T, N, group_dim] tensor.
-        self._privileged_obs: dict[str, torch.Tensor] = {}
-        if privileged_obs_dims:
-            for group_name, dim in privileged_obs_dims.items():
-                self._privileged_obs[group_name] = torch.zeros(
-                    num_steps, num_envs, dim, device=device
-                )
-
-        # Adaptation obs storage (Phase 3): proprio windows stored flattened as
-        # [T, N, W*D] so the mini-batch generator can index them with the same
-        # permutation used for all other tensors.
-        self._adaptation_obs: dict[str, torch.Tensor] = {}
-        if adaptation_obs_dims:
-            for group_name, dim in adaptation_obs_dims.items():
-                self._adaptation_obs[group_name] = torch.zeros(
                     num_steps, num_envs, dim, device=device
                 )
 
@@ -101,19 +81,18 @@ class RolloutBuffer:
         action_means: torch.Tensor,
         action_stds: torch.Tensor,
         extras: dict[str, torch.Tensor] | None = None,
-        privileged_obs: dict[str, torch.Tensor] | None = None,
-        adaptation_obs: dict[str, torch.Tensor] | None = None,
     ) -> None:
         """Store one step of transition data.
 
         All inputs are [num_envs, dim] and get stored at self.step.
 
         Args:
-            extras: Optional dict of extra tensors to store (e.g., GT directions).
-                    Keys must match names registered in __init__ extras parameter.
-            privileged_obs: Optional dict of privileged obs tensors (RMA).
-                    Keys must match groups registered in __init__ privileged_obs_dims.
-                    Stored raw so encoders can re-run with gradients at learning time.
+            extras: Optional dict of extra tensors to store (e.g., subclass-specific
+                    actor-input groups, GT directions for auxiliary losses). Keys must
+                    match names registered in __init__ extras parameter. Tensors with
+                    more than 2 dims (e.g. a [N, W, D] window) are flattened to [N, W*D]
+                    before storage. Stored raw so callers can re-run encoders with
+                    gradients at learning time.
         """
         self.actor_obs[self.step].copy_(actor_obs)
         self.critic_obs[self.step].copy_(critic_obs)
@@ -130,17 +109,7 @@ class RolloutBuffer:
         # Store any extra tensors passed alongside standard fields
         if extras:
             for name, data in extras.items():
-                self._extras[name][self.step].copy_(data)
-
-        # Store privileged obs groups separately (RMA)
-        if privileged_obs:
-            for group_name, data in privileged_obs.items():
-                self._privileged_obs[group_name][self.step].copy_(data)
-
-        # Store adaptation obs (Phase 3): window flattened to [N, W*D]
-        if adaptation_obs:
-            for group_name, data in adaptation_obs.items():
-                self._adaptation_obs[group_name][self.step].copy_(
+                self._extras[name][self.step].copy_(
                     data.flatten(1) if data.dim() > 2 else data
                 )
 
@@ -224,16 +193,6 @@ class RolloutBuffer:
             name: tensor.flatten(0, 1) for name, tensor in self._extras.items()
         }
 
-        # Flatten privileged obs groups (RMA)
-        flat_privileged_obs = {
-            group: tensor.flatten(0, 1) for group, tensor in self._privileged_obs.items()
-        }
-
-        # Flatten adaptation obs groups (Phase 3)
-        flat_adaptation_obs = {
-            group: tensor.flatten(0, 1) for group, tensor in self._adaptation_obs.items()
-        }
-
         # Single permutation reused across epochs (RSL-RL pattern)
         indices = torch.randperm(
             num_mini_batches * mini_batch_size, device=self.device
@@ -266,22 +225,6 @@ class RolloutBuffer:
                 # Include extras in batch (shuffled with same indices)
                 for name, flat_tensor in flat_extras.items():
                     batch[name] = flat_tensor[batch_idx]
-
-                # Include privileged obs groups (RMA) — re-encoded with
-                # gradients during learning, never pre-composed with actor obs
-                if flat_privileged_obs:
-                    batch["privileged_obs"] = {
-                        group: flat_tensor[batch_idx]
-                        for group, flat_tensor in flat_privileged_obs.items()
-                    }
-
-                # Include adaptation obs groups (Phase 3) — stored flattened,
-                # reshaped to (B, W, D) by _compose_actor_input in RmaPPO
-                if flat_adaptation_obs:
-                    batch["adaptation_obs"] = {
-                        group: flat_tensor[batch_idx]
-                        for group, flat_tensor in flat_adaptation_obs.items()
-                    }
 
                 yield batch
 

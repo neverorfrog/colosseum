@@ -10,6 +10,10 @@ On-policy actor-critic algorithm following RSL-RL patterns:
 
 Integrates with BaseAlgorithm for checkpoint management, logging, and
 episode tracking.
+
+Algorithm design follows conventions from RSL-RL
+(https://github.com/leggedrobotics/rsl_rl, BSD-3-Clause,
+Copyright (c) 2021-2026 ETH Zurich, NVIDIA CORPORATION & AFFILIATES);
 """
 
 from __future__ import annotations
@@ -47,7 +51,7 @@ from colosseum.utils.torch import get_obs_dims
 
 @register_algorithm("ppo", config_class=PpoConfig)
 class PPO(BaseAlgorithm):
-  """On-policy PPO (RSL-RL/holosoma/CleanRL-inspired).
+  """On-policy PPO.
 
   Training loop per iteration:
   1. Collect num_steps_per_env steps from all envs -> rollout buffer
@@ -61,6 +65,14 @@ class PPO(BaseAlgorithm):
   5. Log metrics
   6. Maybe save checkpoint
   """
+
+  # Keys the rollout buffer always includes in a mini-batch. Anything else in
+  # the batch is a subclass-registered extra (see RolloutBuffer's `extras`
+  # param) and gets routed to _compose_actor_input/_mirror_actor_input.
+  _STANDARD_BATCH_KEYS = frozenset({
+    "actor_obs", "critic_obs", "actions", "returns", "advantages",
+    "old_log_probs", "old_action_means", "old_action_stds", "values",
+  })
 
   def __init__(
     self,
@@ -84,7 +96,7 @@ class PPO(BaseAlgorithm):
     self._build_networks()
     self._synchronize_model_weights(self.actor, self.value_net)
 
-    # Separate adaptive LRs for actor and critic (holosoma style)
+    # Separate adaptive LRs for actor and critic
     # Must be set before _build_optimizers which uses them.
     self.actor_learning_rate = float(config.actor_learning_rate)
     self.critic_learning_rate = float(config.critic_learning_rate)
@@ -112,8 +124,6 @@ class PPO(BaseAlgorithm):
     self._build_optimizers()
     self._build_rollout_buffer()
     self._build_normalizer()
-
-    # Symmetry (holosoma-style left-right mirror equivariance)
     self._setup_symmetry()
 
     self.episode_length_buf = torch.zeros(self.env.num_envs, device=self.device)
@@ -288,7 +298,8 @@ class PPO(BaseAlgorithm):
       collection_time_sum += collection_time
 
       # ============================================
-      # LEARNING PHASE
+      # LEARNING
+
       # ============================================
       start_learn = time.perf_counter()
 
@@ -343,16 +354,6 @@ class PPO(BaseAlgorithm):
         steps_per_log_step=self.config.num_steps_per_env,
       )
 
-  def _blend_amp_reward(
-    self,
-    prev_obs_dict: ObsType,
-    obs_dict: ObsType,
-    rewards: torch.Tensor,
-    dones: torch.Tensor,
-  ) -> torch.Tensor:
-    """Hook to fold an AMP style reward into the per-step reward (no-op here)."""
-    return rewards
-
   def _collect_rollout(
     self,
     current_actor_obs: torch.Tensor,
@@ -377,7 +378,6 @@ class PPO(BaseAlgorithm):
         values = self.value_net(norm_critic_obs)
 
         # Step environment (action clipping handled by vecenv_wrapper)
-        prev_obs_dict = obs_dict
         obs_dict, rewards, terminated, truncated, infos = self.env.step(actions)
         if terminated.is_floating_point():
           dones = torch.clamp(terminated + truncated.float(), 0.0, 1.0)
@@ -398,13 +398,7 @@ class PPO(BaseAlgorithm):
         # BEFORE bootstrapping inflates them at truncation boundaries.
         self.cur_reward_sum += rewards
 
-        # AMP hook: blend a discriminator style reward into `rewards` and stash
-        # policy transitions. No-op in base PPO; overridden by AmpPPO. Placed
-        # AFTER cur_reward_sum (so episodic logging stays task-only) and BEFORE
-        # timeout bootstrapping (so the bootstrap applies on the blend).
-        rewards = self._blend_amp_reward(prev_obs_dict, obs_dict, rewards, dones)
-
-        # Timeout bootstrapping (RSL-RL/holosoma pattern)
+        # Timeout bootstrapping
         # For infinite-horizon tasks, bootstrap value at truncation.
         # Done AFTER logging accumulation so rewbuffer sees true rewards.
         if not getattr(self.env.cfg, "is_finite_horizon", True):
@@ -509,11 +503,12 @@ class PPO(BaseAlgorithm):
       critic_obs = self.critic_obs_normalizer(critic_obs_raw)
 
       # --- Symmetry data augmentation (holosoma style) ---
-      # Augment BEFORE compose so only proprio is mirrored, not any appended
-      # encoder latents (subclasses like RmaPPO append latents in _compose_actor_input).
+      # Augment BEFORE compose so only proprio is mirrored, not any extra
+      # per-subclass inputs appended in _compose_actor_input.
       original_batch_size = actor_obs_norm.shape[0]
-      privileged_obs = batch.get("privileged_obs", {})
-      adaptation_obs = batch.get("adaptation_obs", {})
+      extra_actor_inputs = {
+        k: v for k, v in batch.items() if k not in self._STANDARD_BATCH_KEYS
+      }
       if (
         self._use_symmetry
         and self.config.symmetry_data_augmentation
@@ -528,19 +523,14 @@ class PPO(BaseAlgorithm):
         returns = returns.repeat(2, 1)
         old_action_means = old_action_means.repeat(2, 1)
         old_action_stds = old_action_stds.repeat(2, 1)
-        # Repeat privileged obs so _compose_actor_input sees a consistent batch.
+        # Repeat extra actor inputs so _compose_actor_input sees a consistent batch.
         # Latent z is left-right symmetric (physics scalars don't flip under mirroring).
-        privileged_obs = {
-          k: v.repeat(2, *([1] * (v.dim() - 1))) for k, v in privileged_obs.items()
-        }
-        adaptation_obs = {
-          k: v.repeat(2, *([1] * (v.dim() - 1))) for k, v in adaptation_obs.items()
+        extra_actor_inputs = {
+          k: v.repeat(2, *([1] * (v.dim() - 1))) for k, v in extra_actor_inputs.items()
         }
 
-      # Compose actor input (identity in PPO; RmaPPO overrides to append encoder latents)
-      actor_obs = self._compose_actor_input(
-        actor_obs_norm, privileged_obs, adaptation_obs
-      )
+      # Compose actor input (identity in PPO; subclasses override to append extras)
+      actor_obs = self._compose_actor_input(actor_obs_norm, extra_actor_inputs)
 
       # Re-evaluate actions with current policy
       new_log_probs, entropy_all = self.actor.evaluate(actor_obs, actions)
@@ -556,7 +546,7 @@ class PPO(BaseAlgorithm):
       else:
         entropy = entropy_all
 
-      # --- KL divergence (RSL-RL analytical formula) ---
+      # --- KL divergence (analytical formula) ---
       # Computed on original batch only, even when augmented (holosoma convention).
       with torch.inference_mode():
         mu_batch = self.actor.forward(actor_obs)
@@ -640,7 +630,7 @@ class PPO(BaseAlgorithm):
           else:
             mu_original = self.actor.forward(actor_obs.detach())
             mirrored_actor_obs = self._mirror_actor_input(
-              actor_obs_norm.detach(), privileged_obs, adaptation_obs
+              actor_obs_norm.detach(), extra_actor_inputs
             )
             mu_mirrored = self.actor.forward(mirrored_actor_obs)
             symmetry_actor_loss = torch.nn.functional.mse_loss(
@@ -749,21 +739,19 @@ class PPO(BaseAlgorithm):
   def _compose_actor_input(
     self,
     actor_obs: torch.Tensor,
-    privileged_obs: dict[str, torch.Tensor],
-    adaptation_obs: dict[str, torch.Tensor] | None = None,
+    extra_actor_inputs: dict[str, torch.Tensor],
   ) -> torch.Tensor:
-    """Build the full actor input. Identity in PPO; RmaPPO overrides to append encoder latents."""
+    """Build the full actor input. Identity in PPO; subclasses override to append extras."""
     return actor_obs
 
   def _mirror_actor_input(
     self,
     actor_obs_norm: torch.Tensor,
-    privileged_obs: dict[str, torch.Tensor],
-    adaptation_obs: dict[str, torch.Tensor] | None = None,
+    extra_actor_inputs: dict[str, torch.Tensor],
   ) -> torch.Tensor:
     """Mirror actor_obs_norm then recompose. Used by the non-augmentation symmetry loss path."""
     mirrored_norm = mirror_obs(actor_obs_norm, self._actor_sym_spec)
-    return self._compose_actor_input(mirrored_norm, privileged_obs, adaptation_obs)
+    return self._compose_actor_input(mirrored_norm, extra_actor_inputs)
 
   def _prewarm_actor_obs(self, actor_obs: torch.Tensor) -> torch.Tensor:
     """Transform actor obs for normalizer pre-warming. Override in subclasses."""

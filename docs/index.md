@@ -19,8 +19,6 @@ enabling fast iteration on complex locomotion and ball-manipulation tasks.
   in both training and on-robot inference
 - **Curriculum support** — curricula built into the
   task layer
-- **Research-ready** — each project lives in its own `research/` folder with a
-  dedicated training pipeline and evaluation protocol
 
 ---
 
@@ -31,5 +29,3 @@ enabling fast iteration on complex locomotion and ball-manipulation tasks.
 | Install and run a first training | [Setup](colosseum/setup.md) → [Getting Started](colosseum/getting_started.md) |
 | Understand the framework internals | [mjlab Overview](mjlab/overview.md) |
 | Build a new task from scratch | [CartPole tutorial](colosseum/cartpole.md) |
-| Read about dribbling with obstacle avoidance | [Dribbling](research/dribbling.md) |
-| Read about goal-conditioned maze navigation | [Soccer Maze](research/soccer-maze.md) |

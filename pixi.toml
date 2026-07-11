@@ -6,7 +6,6 @@ channels = [
     "https://prefix.dev/pixi-build-backends",
     "https://prefix.dev/conda-forge",
     "https://prefix.dev/spqr",
-    "robostack-staging",
 ]
 preview = ["pixi-build"]
 
@@ -25,7 +24,6 @@ docs = { features = ["docs"], no-default-feature = true, solve-group = "docs" }
 [tasks]
 # Generic train tasks
 train-rsl-rl = { cmd = "python -m colosseum.scripts.train_rsl_rl", description = "Train with RSL-RL (colosseum tasks)" }
-train-mjlab = { cmd = "python -m mjlab.scripts.train", description = "Train with RSL-RL (mjlab built-in tasks)" }
 train = { cmd = "python -m colosseum.scripts.train", description = "Train with custom PPO" }
 play = { cmd = "python -m colosseum.scripts.play", description = "Evaluate trained policy in simulation" }
 play-rsl-rl = { cmd = "python -m colosseum.scripts.play_rsl_rl", description = "Evaluate RSL-RL trained policy in simulation" }
@@ -33,13 +31,7 @@ export-onnx = { cmd = "python -m colosseum.scripts.export_onnx", description = "
 export-model = { cmd = "src/colosseum/scripts/export_model.sh", description = "Export checkpoint to model registry in external repo" }
 export-gains = { cmd = "python -m colosseum.scripts.export_gains", description = "Distill deploy gains.yaml from a model's config.yaml" }
 import-run = { cmd = "python -m colosseum.scripts.import_run", description = "Import a run from W&B into the model registry" }
-
-# Dribbling tasks
 rma-train = { cmd = "python -m colosseum.scripts.rma_train", description = "Integrated RMA pipeline: Phase 1 → Phase 2 → Phase 3" }
-train-phase2-dribbling = { cmd = "python research/dribbling/scripts/train_phase2.py", description = "RMA Phase 2 adaptation encoder training (dribbling-specific)" }
-pipeline-dribbling = { cmd = "python research/dribbling/scripts/pipeline_dribbling.py", description = "Full dribbling curriculum pipeline (Phase 1 + Phase 2 per stage)" }
-eval-dribbling = { cmd = "python research/dribbling/scripts/evaluate_dribbling.py", description = "Run the dribbling evaluation protocol" }
-obstacle-ablation = { cmd = "python research/dribbling/scripts/obstacle_ablation.py", description = "Ablation of obstacle presence in dribbling curriculum" }
 cleanup-run = { cmd = "python -m colosseum.scripts.cleanup_run", description = "Delete a run from local disk and W&B" }
 model-registry = { cmd = "python -m colosseum.scripts.model_registry_cli", description = "Manage the model registry" }
 
@@ -63,6 +55,7 @@ wandb = ">=0.26.1,<0.27"
 ipykernel = ">=7.2.0,<8"
 loguru = ">=0.7.3,<0.8"
 ruff = ">=0.15.20,<0.16"
+onnx = ">=1.22.0,<2"
 
 [pypi-dependencies]
 colosseum = {path = ".", editable = true}

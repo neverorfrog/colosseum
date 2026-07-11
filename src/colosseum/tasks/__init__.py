@@ -9,7 +9,4 @@ for _info in pkgutil.iter_modules(__path__, __name__ + "."):
   _short = _info.name.rsplit(".", 1)[-1]
   if _short in _BLACKLIST:
     continue
-  try:
-    importlib.import_module(_info.name)
-  except ImportError:
-    pass
+  importlib.import_module(_info.name)

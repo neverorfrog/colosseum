@@ -3,11 +3,11 @@ from mjlab.managers.observation_manager import ObservationGroupCfg, ObservationT
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 
 from colosseum.robots.t1.constants import BASE_BODY_NAME, FOOT_GEOM_NAMES
-from colosseum.tasks.velocity.config.t1.observation_cfg import (
+from colosseum.tasks.locomotion.config.t1.observation_cfg import (
   actor_terms,
   critic_terms,
 )
-from colosseum.tasks.velocity.mdp.observations import (
+from colosseum.tasks.locomotion.mdp.observations import (
   actuator_kd_scale_obs,
   actuator_kp_scale_obs,
   base_com_obs,

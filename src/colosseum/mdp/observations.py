@@ -105,30 +105,6 @@ def terrain_clearance(
   uses ``reduction="none"``)."""
   return env.scene[sensor_name].data.heights
 
-
-def gait_clock(
-  env: ManagerBasedRlEnv,
-  command_name: str = "gait_phase",
-  twist_command_name: str = "twist",
-  speed_threshold: float = 0.05,
-) -> torch.Tensor:
-  """booster_gym's single-clock gait observation: [cos φ, sin φ]. Returns [N, 2].
-
-  Reads the left-foot phase from the 4D GaitPhaseCommand and gates it to zero
-  for standing envs (‖cmd_xy‖ and |ω_z| both below ``speed_threshold``), matching
-  booster's ``cos/sin * (gait_freq > 0)`` gate.
-  """
-  gait = env.command_manager.get_command(command_name)  # [cos_L, cos_R, sin_L, sin_R]
-  cos_phi = gait[:, 0:1]
-  sin_phi = gait[:, 2:3]
-  cmd = env.command_manager.get_command(twist_command_name)
-  moving = (torch.norm(cmd[:, :2], dim=-1, keepdim=True) > speed_threshold) | (
-    cmd[:, 2:3].abs() > speed_threshold
-  )
-  gate = moving.float()
-  return torch.cat([cos_phi * gate, sin_phi * gate], dim=-1)
-
-
 # ---------------------------------------------------------------------------
 # Privileged critic observations
 # ---------------------------------------------------------------------------
@@ -152,7 +128,6 @@ def base_external_torque(
 
 
 _BASE_NOMINAL_CACHE: dict = {}
-
 
 def base_mass_com_offset(
   env: ManagerBasedRlEnv,
@@ -253,23 +228,3 @@ def agent_z_vel(
   if site_vel_w.ndim == 2:
     site_vel_w = site_vel_w[:, 0]
   return site_vel_w.unsqueeze(-1)
-
-
-def goal_pos(env: ManagerBasedRlEnv) -> torch.Tensor:
-  """Goal position in world coordinates from command manager. Returns [num_envs, 2]."""
-  pos: torch.Tensor = env.command_manager.get_command("goal")
-  assert pos is not None, "Command 'goal' not found in command manager"
-  return pos
-
-
-def goal_pos_local(env: ManagerBasedRlEnv) -> torch.Tensor:
-  """Goal position in environment-local (maze-centered) coordinates. Returns [num_envs, 2]."""
-  return goal_pos(env) - env.scene.env_origins[:, :2]
-
-
-def agent_to_goal_vector(
-  env: ManagerBasedRlEnv,
-  asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-) -> torch.Tensor:
-  """Vector from agent to goal (goal - agent) in world frame. Returns [num_envs, 2]."""
-  return goal_pos(env) - agent_pos(env, asset_cfg)

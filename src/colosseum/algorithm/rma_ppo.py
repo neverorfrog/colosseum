@@ -103,11 +103,16 @@ class RmaPPO(PPO):
     )
 
   def _build_rollout_buffer(self) -> None:
-    """Allocate buffer with privileged obs and adaptation obs storage."""
+    """Allocate buffer with storage for privileged and adaptation obs groups.
+
+    Both are registered via the buffer's generic `extras` mechanism — the
+    buffer itself has no notion of "privileged" vs "adaptation".
+    """
     assert isinstance(self.config, PpoConfig)
 
     obs_mgr = self.env.observation_manager
-    privileged_obs_dims = {
+    self._privileged_group_names = frozenset(self.rma_manager.privileged_group_names)
+    extra_obs_dims = {
       group: obs_mgr.group_obs_dim[group][0]
       for group in self.rma_manager.privileged_group_names
     }
@@ -115,7 +120,6 @@ class RmaPPO(PPO):
     # Pre-compute adaptation window shapes for Phase 3 reshape.
     # Stored as flat [N, W*D] in the buffer; reshaped at learning time.
     self._adaptation_window_shapes: dict[str, tuple[int, int]] = {}
-    adaptation_obs_dims: dict[str, int] = {}
     for term in self.rma_manager._terms.values():
       if term.cfg.adaptation_obs_group is None or term.adaptation_encoder is None:
         continue
@@ -123,7 +127,7 @@ class RmaPPO(PPO):
       W = term._window.shape[1]
       D = term._window.shape[2]
       self._adaptation_window_shapes[group] = (W, D)
-      adaptation_obs_dims[group] = W * D
+      extra_obs_dims[group] = W * D
 
     self.rollout_buffer = RolloutBuffer(
       num_envs=self.env.num_envs,
@@ -132,8 +136,7 @@ class RmaPPO(PPO):
       critic_obs_dim=self.critic_obs_dim,
       action_dim=self.action_dim,
       device=self.device,
-      privileged_obs_dims=privileged_obs_dims,
-      adaptation_obs_dims=adaptation_obs_dims or None,
+      extras=extra_obs_dims or None,
     )
 
   # ------------------------------------------------------------------
@@ -159,15 +162,10 @@ class RmaPPO(PPO):
 
         # Snapshot adaptation obs BEFORE composing so the stored window aligns
         # with the action taken at this step (fixes Phase 3 mini-batch staleness).
-        current_privileged_obs = self.get_privileged_obs(obs_dict)
-        current_adaptation_obs = (
-          self.rma_manager.get_adaptation_obs()
-          if self.phase == RmaPhase.POLICY_FINETUNE
-          else None
-        )
-        norm_actor_obs = self._compose_actor_input(
-          norm_actor_obs_base, current_privileged_obs, current_adaptation_obs
-        )
+        current_extra_obs = self.get_privileged_obs(obs_dict)
+        if self.phase == RmaPhase.POLICY_FINETUNE:
+          current_extra_obs = {**current_extra_obs, **self.rma_manager.get_adaptation_obs()}
+        norm_actor_obs = self._compose_actor_input(norm_actor_obs_base, current_extra_obs)
 
         actions, log_probs, action_means, action_stds = self.actor.act_with_log_prob(
           norm_actor_obs
@@ -224,8 +222,7 @@ class RmaPPO(PPO):
           log_probs=log_probs,
           action_means=action_means,
           action_stds=action_stds,
-          privileged_obs=current_privileged_obs,
-          adaptation_obs=current_adaptation_obs,
+          extras=current_extra_obs,
         )
 
         current_actor_obs = next_actor_obs
@@ -614,8 +611,7 @@ class RmaPPO(PPO):
   def _compose_actor_input(
     self,
     actor_obs: torch.Tensor,
-    privileged_obs: dict[str, torch.Tensor],
-    adaptation_obs: dict[str, torch.Tensor] | None = None,
+    extra_actor_inputs: dict[str, torch.Tensor],
   ) -> torch.Tensor:
     """Concatenate normalised proprio with encoder latents.
 
@@ -627,30 +623,32 @@ class RmaPPO(PPO):
                        in the rollout buffer (fixes mini-batch staleness).
 
     Args:
-      actor_obs:       (N, actor_obs_dim) normalised proprioceptive obs.
-      privileged_obs:  Dict of GT privileged groups (unused in POLICY_FINETUNE).
-      adaptation_obs:  Dict of adaptation obs groups. During Phase 3 collection
-                       this is a live snapshot; during the learning step it holds
-                       per-step windows from the buffer (flat (B, W*D), reshaped here).
+      actor_obs:          (N, actor_obs_dim) normalised proprioceptive obs.
+      extra_actor_inputs: Dict keyed by observation group name — a mix of
+                          privileged and adaptation groups (see
+                          `_build_rollout_buffer`); only the groups relevant to
+                          the active phase are used. Adaptation windows may
+                          arrive flat (B, W*D) from the rollout buffer or
+                          already (N, W, D) from a live snapshot; reshape is a
+                          no-op in the latter case.
 
     Returns:
       (N, actor_obs_dim + total_latent_dim) actor input tensor.
     """
     if self.phase == RmaPhase.POLICY_FINETUNE:
-      if adaptation_obs:
-        # Learning step: reshape flat (B, W*D) → (B, W, D) per group.
-        reshaped = {
-          group: flat.reshape(flat.shape[0], *self._adaptation_window_shapes[group])
-          for group, flat in adaptation_obs.items()
-          if group in self._adaptation_window_shapes
-        }
-        z = self.rma_manager.encode(reshaped, use_adaptation=True, apply_noise=False)
-      else:
-        # Collection step: live window snapshot already has shape (N, W, D).
-        adapt_obs = self.rma_manager.get_adaptation_obs()
-        z = self.rma_manager.encode(adapt_obs, use_adaptation=True, apply_noise=False)
+      reshaped = {
+        group: extra_actor_inputs[group].reshape(
+          extra_actor_inputs[group].shape[0], *shape
+        )
+        for group, shape in self._adaptation_window_shapes.items()
+        if group in extra_actor_inputs
+      }
+      z = self.rma_manager.encode(reshaped, use_adaptation=True, apply_noise=False)
     else:
       # Noise only during the Phase 1 learning step (gradients enabled).
+      privileged_obs = {
+        k: v for k, v in extra_actor_inputs.items() if k in self._privileged_group_names
+      }
       apply_noise = torch.is_grad_enabled() and self.phase == RmaPhase.PRIVILEGED
       z = self.rma_manager.encode(privileged_obs, apply_noise=apply_noise)
     return torch.cat([actor_obs, z], dim=-1)

@@ -19,9 +19,6 @@ nav:
       - Overview: mjlab/overview.md
       - Task Layer: mjlab/task_layer.md
       - Scene & Simulation: mjlab/scene_simulation.md
-  - Research:
-      - Dribbling: research/dribbling.md
-      - Soccer Maze: research/soccer-maze.md
 
 theme:
   name: material
