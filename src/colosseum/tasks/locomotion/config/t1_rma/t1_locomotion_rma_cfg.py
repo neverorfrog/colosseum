@@ -20,6 +20,7 @@ from colosseum.robots.t1.constants import (
   get_robot_cfg,
 )
 from colosseum.robots.t1.sensors import (
+  BASE_HEIGHT_SCAN,
   FEET_GROUND_CONTACT_SENSOR,
   FOOT_HEIGHT_SCAN,
   NONFOOT_GROUND_CONTACT_SENSOR,
@@ -44,6 +45,7 @@ def scene_cfg(play: bool = False) -> SceneCfg:
     sensors=(
       FEET_GROUND_CONTACT_SENSOR,
       FOOT_HEIGHT_SCAN,
+      BASE_HEIGHT_SCAN,
       NONFOOT_GROUND_CONTACT_SENSOR,
       SELF_COLLISION_SENSOR,
     ),
